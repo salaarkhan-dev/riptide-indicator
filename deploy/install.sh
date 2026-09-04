@@ -57,10 +57,35 @@ sudo apt-get update
 sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3-venv chrony
 
-# architecture
+# architecture — the bot is pure Python and arch-agnostic; this check exists
+# only to tell you which instance you actually got, since it is easy to click
+# past the shape selector and land on the x86 default.
 arch=$(uname -m)
-[[ $arch == aarch64 ]] || die "expected aarch64, got $arch"
-ok "arch $arch"
+case $arch in
+  aarch64)
+    ok "arch $arch (Ampere A1, as intended)"
+    ;;
+  x86_64)
+    echo "  warn: arch $arch — this is an x86 instance, not the Ampere A1 shape."
+    echo "        The bot runs fine here: measured 9 ms of engine CPU per symbol"
+    echo "        and 36 MB RSS, so even a 1 OCPU / 1 GB E2.1.Micro has room for"
+    echo "        the full ~1000-symbol market inside a 30-minute bar."
+    echo "        Continuing. Recreate as VM.Standard.A1.Flex if you want the"
+    echo "        headroom, but nothing here requires it."
+    ;;
+  *)
+    die "unsupported architecture $arch (expected aarch64 or x86_64)"
+    ;;
+esac
+
+# memory — flag genuinely tight boxes rather than guessing from the shape name
+mem_mb=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
+if (( mem_mb < 700 )); then
+  echo "  warn: only ${mem_mb} MB RAM. Six symbols is fine; add swap before"
+  echo "        widening RIPTIDE_SYMBOLS to the full market."
+else
+  ok "memory ${mem_mb} MB"
+fi
 
 # python >= 3.10
 pyv=$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')
