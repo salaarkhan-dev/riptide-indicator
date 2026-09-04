@@ -47,13 +47,22 @@ MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
 ALERT_ON_FIRST_RUN = os.getenv("RIPTIDE_ALERT_FIRST_RUN", "0") == "1"
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
-SWEEP_FRESH_BARS = int(os.getenv("RIPTIDE_SWEEP_FRESH_BARS", "1"))
-# Which pool types raise a heads-up. Measured over 12.5 days on 20 symbols,
-# the share of sweeps that went on to produce a setup was Pivot 28%, Day 9%,
-# Week 2% — so the default keeps the highest-converting source and drops
-# roughly a third of the daily volume. "Pivot,Day,Week" for everything.
-SWEEP_SRC = {s.strip() for s in os.getenv("RIPTIDE_SWEEP_SRC", "Pivot").split(",")
-             if s.strip()}
+# Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
+# closed is already one full step old, and the scan wakes another 10s after
+# that. A window of 1 * step can never contain the sweep that just confirmed,
+# so 1 silently suppresses every alert.
+SWEEP_FRESH_BARS = int(os.getenv("RIPTIDE_SWEEP_FRESH_BARS", "2"))
+# Which pool types raise a heads-up. Unset means all of them — the right
+# default while the output is being checked against the chart, since
+# filtering would hide part of what is being verified.
+#
+# For reference when tuning later: over 12.5 days on 20 symbols the share of
+# sweeps that went on to produce a setup was Pivot 28%, Day 9%, Week 2%. The
+# intuition that daily and weekly levels are the significant ones is not what
+# the numbers show.
+_sweep_src = os.getenv("RIPTIDE_SWEEP_SRC", "").strip()
+SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
+             if _sweep_src else None)
 
 
 @dataclass
@@ -698,7 +707,7 @@ async def cycle(sess, db, symbols):
     swept = 0
     for _, sweeps in results:
         for w in sweeps:
-            if w.src not in SWEEP_SRC:
+            if SWEEP_SRC is not None and w.src not in SWEEP_SRC:
                 continue
             fresh = (now - w.sweep_time) <= SWEEP_FRESH_BARS * step
             sid = sweep_sig(w)

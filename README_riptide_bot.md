@@ -59,10 +59,22 @@ and the share that goes on to produce a setup varies sharply by pool type:
 | Day | 353 | 32 | 9% | 28.3 |
 | Week | 50 | 1 | 2% | 4.0 |
 
-`RIPTIDE_SWEEP_SRC` defaults to `Pivot` for that reason — the intuition that
-daily and weekly levels are the significant ones is not what the numbers
-show. Expect roughly 60 sweep messages a day on 20 symbols even so; cut the
-symbol list, not the source filter, if that is too many.
+The intuition that daily and weekly levels are the significant ones is not
+what the numbers show. Keep that in mind if you ever narrow
+`RIPTIDE_SWEEP_SRC`; it is unset by default, which alerts on all of them.
+
+Expect roughly 95 sweep messages a day on 20 symbols, against 20 setups. Cut
+the symbol list, not the source filter, if that is too many.
+
+### Why `RIPTIDE_SWEEP_FRESH_BARS` cannot be 1
+
+`Candle.t` is the bar's **open** time, so a bar that has just closed is
+already one full step old, and the scan wakes a further 10s after the close.
+At `Min30` a sweep that just confirmed is 1810s old, against a window of
+1×1800s. Setting this to 1 therefore suppresses every sweep alert silently —
+no error, just nothing arriving. 2 is the minimum, and means "the bar that
+just closed": the previous bar lands at 3610s and is correctly excluded, so
+each sweep alerts exactly once.
 
 ## 3. Run it as a service
 
@@ -105,8 +117,8 @@ them there, not in the engine body.
 | `RIPTIDE_SYMBOLS` | all USDT perps | comma separated |
 | `RIPTIDE_FRESH_BARS` | `3` | only alert if the shift is this recent |
 | `RIPTIDE_SWEEP_ALERTS` | `1` | heads-up when a pool is swept, ahead of the shift. `0` disables |
-| `RIPTIDE_SWEEP_SRC` | `Pivot` | which pools raise a heads-up. `Pivot,Day,Week` for all |
-| `RIPTIDE_SWEEP_FRESH_BARS` | `1` | only alert on sweeps this recent. `1` = the bar that just closed |
+| `RIPTIDE_SWEEP_SRC` | unset | which pools raise a heads-up. Unset = all. e.g. `Pivot` |
+| `RIPTIDE_SWEEP_FRESH_BARS` | `2` | sweep freshness window. **Minimum 2** — see below |
 | `RIPTIDE_LOOKBACK` | `600` | bars fetched per symbol |
 | `RIPTIDE_CONCURRENCY` | `8` | parallel requests |
 | `RIPTIDE_MIN_VOL` | `3000000` | min 24h turnover (USDT). Only applies when `RIPTIDE_SYMBOLS` is unset; an explicit list is never filtered. `0` disables. At the default this cuts ~1019 perps to ~96 |
