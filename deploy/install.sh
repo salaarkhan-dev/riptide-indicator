@@ -20,6 +20,37 @@ ok()  { echo "  ok: $*"; }
 [[ $EUID -ne 0 ]] || die "run as the ubuntu user, not root"
 [[ $(id -un) == ubuntu ]] || echo "  warn: expected user 'ubuntu', got '$(id -un)'"
 
+echo "== 0. exchange reachability =="
+
+# MEXC geo-blocks by IP. As of 2026 that covers the US, Canada, the UK, the
+# whole EU/EEA (no MiCA licence since 1 Jul 2026), Singapore, Hong Kong and
+# mainland China. An instance in any of those cannot reach the API at all, and
+# the Oracle home region cannot be changed afterwards — so fail here, loudly,
+# before anything else is installed.
+mexc_body=$(mktemp)
+mexc_code=$(curl -sS -o "$mexc_body" -w '%{http_code}' -m 20 \
+  "https://api.mexc.com/api/v1/contract/detail" 2>/dev/null || echo 000)
+
+if [[ $mexc_code != 200 ]] || ! grep -q '"success":true' "$mexc_body" 2>/dev/null; then
+  echo "  HTTP $mexc_code"
+  head -c 300 "$mexc_body" 2>/dev/null; echo
+  rm -f "$mexc_body"
+  die "MEXC futures API unreachable from this instance.
+
+     The usual cause is that this region's jurisdiction is geo-blocked.
+     Blocked as of 2026: US, Canada, UK, EU/EEA, Singapore, Hong Kong,
+     mainland China.
+
+     The Oracle home region is permanent, so if that is the cause you need a
+     new tenancy in a permitted region. See ORACLE_SETUP.md for which ones.
+     Do not work around this with a VPN — it breaches MEXC's terms."
+fi
+
+contracts=$(grep -o '"symbol"' "$mexc_body" | wc -l)
+rm -f "$mexc_body"
+ok "MEXC reachable ($contracts contracts listed)"
+
+echo
 echo "== 1. prepare the box =="
 
 sudo apt-get update

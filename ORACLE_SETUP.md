@@ -36,10 +36,9 @@ Keep both values somewhere safe. You will type them once, on the server.
 2. Country + email → verify the email.
 3. Set a password and a company name (anything).
 4. **Home region — choose carefully. It cannot be changed, ever.** All your
-   Always Free resources must live in it. Pick one geographically near you,
-   but be aware some regions are permanently starved of ARM capacity. If you
-   have a choice between a large region and a small one, the large one is
-   usually the better bet.
+   Always Free resources must live in it. **Do not pick for proximity** — see
+   the section below. Latency is irrelevant to a bot that polls every 30
+   minutes, and the wrong jurisdiction breaks it outright.
 5. Add a credit or debit card. Oracle places a small temporary authorisation
    (~$1, reversed) to verify identity. **You are not charged** and the account
    cannot exceed free limits unless you explicitly upgrade.
@@ -48,6 +47,74 @@ Keep both values somewhere safe. You will type them once, on the server.
 You land on a 30-day Free Trial with $300 of credits. When that expires the
 account drops to Always Free only, and anything beyond the free limits is
 reclaimed. The bot fits inside Always Free permanently, so this is fine.
+
+---
+
+## Choosing a home region
+
+Two independent constraints, and the second one eliminates most of the
+regions the internet will tell you to use.
+
+### 1. MEXC must not geo-block the jurisdiction
+
+MEXC blocks by **IP address**, so an instance in a blocked country cannot
+reach the API at all. The bot will not work, and the home region is
+permanent. Blocked as of 2026:
+
+| Blocked | Oracle regions this rules out |
+|---|---|
+| United States | Ashburn, Phoenix, Chicago, San Jose, Salt Lake City |
+| Canada | Toronto, Montreal |
+| United Kingdom | London, Newport — upgraded to a **full** ban in 2026 |
+| EU / EEA | Frankfurt, Amsterdam, Paris, Marseille, Madrid, Milan, Stockholm |
+| Singapore | Singapore |
+| Hong Kong, mainland China | Hong Kong |
+| North Korea, Iran, Cuba, Sudan, occupied Ukrainian oblasts | — |
+
+The EU exclusion is recent and catches people out: MEXC holds **no MiCA
+licence**, and the transitional period ended **1 July 2026**, so it cannot
+legally serve EEA residents. Frankfurt and Amsterdam are the two regions most
+commonly recommended for A1 capacity, and both are now dead ends for this bot.
+
+Do not route around any of this with a VPN. It breaches MEXC's terms and the
+documented outcome is a frozen account.
+
+### 2. Ampere A1 capacity must actually exist
+
+Capacity is not published, varies by the hour, and no list stays accurate.
+The structural rules that do hold:
+
+- Ask for **less**. 1 OCPU / 6 GB provisions far more often than the maximum.
+- Multi-AD regions give you three chances instead of one.
+- Newer, less fashionable regions are less contended than the famous ones.
+
+### The intersection
+
+Ranked, best first:
+
+| Region | Why |
+|---|---|
+| **ap-tokyo-1** (Japan) | Permitted; large; widely reported as one of the fastest to provision |
+| **ap-osaka-1** (Japan) | Same jurisdiction, less contended than Tokyo |
+| **ap-seoul-1** / **ap-chuncheon-1** (South Korea) | Permitted; Chuncheon is the quieter of the two |
+| **eu-zurich-1** (Switzerland) | **Not EU or EEA**, so MiCA does not apply — the `eu-` prefix is only Oracle's naming. Crypto-friendly jurisdiction |
+| **me-dubai-1** / **me-abudhabi-1** (UAE) | Permitted, crypto-friendly, newer regions tend to have headroom |
+| **ap-mumbai-1** / **ap-hyderabad-1** (India) | Permitted — only the mobile apps are restricted there, the API is not |
+| **sa-saopaulo-1** / **sa-vinhedo-1** (Brazil), **mx-queretaro-1** (Mexico) | Permitted, newer, good capacity odds |
+| **ap-sydney-1** / **ap-melbourne-1** (Australia) | Permitted |
+
+**Tokyo or Osaka is the pick** unless you have a reason to prefer another —
+permitted jurisdiction, and the capacity reputation is the best of the
+permitted set. Japan restricts MEXC's *mobile apps* only; the website and API
+are unaffected, which is all this bot uses.
+
+Capacity claims are community anecdote and shift constantly — treat the
+ranking as a starting order, not a guarantee. Jurisdiction is the hard
+constraint; capacity is just a queue.
+
+`deploy/install.sh` checks MEXC reachability as its very first action and
+stops with an explanation if the region is blocked, so you will find out in
+seconds rather than after a full install.
 
 ---
 
@@ -92,9 +159,11 @@ paste, or share it.
 6. **Image and shape** → **Edit**:
    - **Change shape** → **Ampere** → `VM.Standard.A1.Flex`
    - **OCPUs: 1**, **Memory: 6 GB**
-     Always Free gives you 4 OCPUs / 24 GB total across all A1 instances. The
-     bot needs a tiny fraction of that, and **smaller shapes are noticeably
-     easier to get when capacity is tight.** Take 1/6.
+     Always Free gives you **2 OCPUs / 12 GB** total across all A1 instances.
+     Oracle halved this from 4 / 24 on **15 June 2026** with no announcement,
+     so most guides you will find still quote the old figure. The bot needs a
+     tiny fraction either way, and **smaller shapes are noticeably easier to
+     get when capacity is tight.** Take 1/6.
    - **Change image** → **Canonical Ubuntu** → **24.04**
      Once the Ampere shape is selected the list filters to `aarch64` builds
      automatically. Confirm the image says aarch64 — `install.sh` hard-fails
@@ -190,7 +259,8 @@ journalctl -u riptide -f
 By far the most common blocker. Ampere A1 is heavily oversubscribed in most
 regions. In rough order of effectiveness:
 
-1. **Ask for less.** 1 OCPU / 6 GB succeeds far more often than 4 / 24.
+1. **Ask for less.** 1 OCPU / 6 GB succeeds far more often than the 2 / 12
+   maximum.
 2. **Try each availability domain.** In multi-AD regions, AD-2 and AD-3 are
    often less contended than AD-1. Just re-run Create instance with a
    different one.
@@ -242,7 +312,13 @@ from the start avoids it.
 
 ## What this costs
 
-Nothing, if you stay inside Always Free: 4 OCPUs / 24 GB of Ampere A1, 200 GB
-block storage, 10 TB/month outbound transfer. The bot uses ~1 OCPU-equivalent
-of nothing, a few hundred MB of RAM, and negligible bandwidth — six symbols
-polled every 30 minutes is a rounding error against 10 TB.
+Nothing, if you stay inside Always Free: **2 OCPUs / 12 GB** of Ampere A1
+(halved from 4 / 24 on 15 June 2026), 200 GB block storage, 10 TB/month
+outbound transfer. At 1 OCPU / 6 GB the bot sits at half the compute
+allowance, uses a few hundred MB of RAM, and moves negligible traffic — six
+symbols polled every 30 minutes is a rounding error against 10 TB.
+
+One trap from that June change: a free-tier instance **above** the new limits
+gets shut down until resized, and Oracle support has indicated a resource
+terminated above the new cap may not be recreatable. Provisioning at 1 / 6
+keeps you clear of all of it.
