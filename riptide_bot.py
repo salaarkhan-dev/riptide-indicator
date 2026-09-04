@@ -429,6 +429,7 @@ async def get_json(sess, url, params=None, tries=3):
 
 
 async def list_symbols(sess) -> list[str]:
+    # An explicit list is a deliberate choice; never second-guess it.
     if SYMBOLS_ENV:
         return [s.strip() for s in SYMBOLS_ENV.split(",") if s.strip()]
     d = await get_json(sess, f"{BASE}/api/v1/contract/detail")
@@ -443,7 +444,49 @@ async def list_symbols(sess) -> list[str]:
         if c.get("apiAllowed") is False:
             continue
         out.append(c["symbol"])
-    return out
+    return await filter_by_turnover(sess, out)
+
+
+async def filter_by_turnover(sess, symbols: list[str]) -> list[str]:
+    """
+    Drop symbols below MIN_VOL_USDT of 24h turnover.
+
+    contract/detail carries no volume, so this needs contract/ticker, where
+    amount24 is turnover in the quote currency (volume24 is contract count,
+    which is not comparable across symbols).
+
+    Falls back to the unfiltered list on any failure. This runs at startup
+    and on the 6-hourly refresh, and an alerting service that stays up on a
+    stale symbol list is better than one that exits because a secondary
+    endpoint blipped.
+    """
+    if MIN_VOL_USDT <= 0 or not symbols:
+        return symbols
+
+    t = await get_json(sess, f"{BASE}/api/v1/contract/ticker")
+    rows = (t or {}).get("data") or []
+    if not rows:
+        log.warning("ticker unavailable; volume filter skipped, keeping %d symbols",
+                    len(symbols))
+        return symbols
+
+    turnover = {}
+    for r in rows:
+        try:
+            turnover[r["symbol"]] = float(r.get("amount24") or 0.0)
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    kept = [s for s in symbols if turnover.get(s, 0.0) >= MIN_VOL_USDT]
+    if not kept:
+        log.warning("volume filter (%.0f USDT) matched no symbols; "
+                    "threshold looks too high, keeping %d unfiltered",
+                    MIN_VOL_USDT, len(symbols))
+        return symbols
+
+    log.info("volume filter: %d/%d symbols at or above %.0f USDT 24h turnover",
+             len(kept), len(symbols), MIN_VOL_USDT)
+    return kept
 
 
 async def fetch_candles(sess, symbol: str) -> list[Candle]:

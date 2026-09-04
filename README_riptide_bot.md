@@ -81,6 +81,7 @@ them there, not in the engine body.
 | `RIPTIDE_FRESH_BARS` | `3` | only alert if the shift is this recent |
 | `RIPTIDE_LOOKBACK` | `600` | bars fetched per symbol |
 | `RIPTIDE_CONCURRENCY` | `8` | parallel requests |
+| `RIPTIDE_MIN_VOL` | `3000000` | min 24h turnover (USDT). Only applies when `RIPTIDE_SYMBOLS` is unset; an explicit list is never filtered. `0` disables. At the default this cuts ~1019 perps to ~96 |
 | `RIPTIDE_DB` | `riptide.db` | dedupe and signal history |
 | `MEXC_BASE` | `https://api.mexc.com` | futures moved here in Jan 2026 |
 
