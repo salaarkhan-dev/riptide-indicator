@@ -1,0 +1,15 @@
+[Unit]
+Description=Riptide scanner (alerts only)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/riptide
+EnvironmentFile=/home/ubuntu/riptide/.env
+ExecStart=/home/ubuntu/riptide/.venv/bin/python riptide_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
