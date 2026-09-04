@@ -1,0 +1,636 @@
+#!/usr/bin/env python3
+"""
+Riptide scanner - phase 1 (alerts only, no API key, no orders).
+
+Port of the Riptide Pine indicator: liquidity pool -> sweep -> market structure
+shift -> fair value gap. Polls MEXC futures candles just after each bar close,
+runs the same engine, and sends new setups to Telegram.
+
+Deliberately read-only. There is no exchange key anywhere in this file and no
+code path that can place an order.
+
+Sources: pivot pools, previous day high/low, previous week high/low. Sessions
+are not implemented here; they are off by default in the indicator too.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import sqlite3
+import sys
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+
+import aiohttp
+
+# ── configuration ───────────────────────────────────────────────────────────
+# Futures API moved from contract.mexc.com to api.mexc.com in Jan 2026.
+BASE = os.getenv("MEXC_BASE", "https://api.mexc.com")
+
+TG_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+TG_CHAT = os.getenv("TELEGRAM_CHAT_ID", "")
+
+INTERVAL = os.getenv("RIPTIDE_INTERVAL", "Min30")     # Min15 Min30 Min60 Hour4
+BAR_SECONDS = {"Min1": 60, "Min5": 300, "Min15": 900, "Min30": 1800,
+               "Min60": 3600, "Hour4": 14400, "Hour8": 28800, "Day1": 86400}
+LOOKBACK = int(os.getenv("RIPTIDE_LOOKBACK", "600"))   # bars fetched per symbol
+FRESH_BARS = int(os.getenv("RIPTIDE_FRESH_BARS", "3"))  # only alert if the shift
+                                                        # is this recent
+DB_PATH = os.getenv("RIPTIDE_DB", "riptide.db")
+CONCURRENCY = int(os.getenv("RIPTIDE_CONCURRENCY", "8"))
+QUOTE = os.getenv("RIPTIDE_QUOTE", "USDT")
+SYMBOLS_ENV = os.getenv("RIPTIDE_SYMBOLS", "")          # comma list, or blank
+MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
+ALERT_ON_FIRST_RUN = os.getenv("RIPTIDE_ALERT_FIRST_RUN", "0") == "1"
+
+
+@dataclass
+class Cfg:
+    """Defaults mirror the Pine inputs. Change here, not in the engine."""
+    pivot_left: int = 1
+    pivot_right: int = 2
+    atr_len: int = 28
+    tol_atr: float = 0.25
+    max_pool_span_bars: int = 60
+    max_cluster_span_atr: float = 0.80
+    min_pivots: int = 2
+    max_overshoot_atr: float = 0.25
+    allow_join_after_sweep: bool = True
+    pending_expiry_bars: int = 500
+    pending_invalidate_atr: float = 0.50
+    grab_buffer_atr: float = 0.0
+    trail_grab_extreme: bool = True
+    max_bars_after_grab: int = 50
+    mss_close: bool = True
+    mss_cooldown_bars: int = 5
+    min_fvg_atr: float = 0.05
+    max_fvg_atr: float = 2.0
+    max_risk_atr: float = 4.0
+    max_bars_after_mss: int = 10
+    sl_buffer_atr: float = 0.0
+    entry_mode: str = "proximal"          # proximal | mid | distal
+    use_pivot: bool = True
+    use_daily: bool = True
+    use_weekly: bool = True
+    be_arm_r: float = 1.5
+
+
+CFG = Cfg()
+
+log = logging.getLogger("riptide")
+
+
+# ── engine ──────────────────────────────────────────────────────────────────
+@dataclass
+class Candle:
+    t: int
+    o: float
+    h: float
+    l: float
+    c: float
+
+
+@dataclass
+class Cluster:
+    is_high: bool
+    level: float
+    oldest_bar: int
+    created_bar: int
+    src: str = "Pivot"
+    prices: list = field(default_factory=list)
+    bars: list = field(default_factory=list)
+    active: bool = False
+    swept: bool = False
+    mss: bool = False
+    done: bool = False
+    expired: bool = False
+    sweep_bar: int = -1
+    grab_bar: int = -1
+    grab_high: float = 0.0
+    grab_low: float = 0.0
+    grab_close: float = 0.0
+    run_min: float = 0.0
+    run_max: float = 0.0
+    run_min_bar: int = -1
+    run_max_bar: int = -1
+    struct_level: float = 0.0
+    mss_bar: int = -1
+
+
+@dataclass
+class Setup:
+    symbol: str
+    is_long: bool
+    src: str
+    level: float
+    entry: float
+    stop: float
+    risk: float
+    grab_bar: int
+    mss_bar: int
+    mss_time: int
+    anchor_time: int
+    pivots: int
+
+
+def rma(values: list[float], length: int) -> list[float]:
+    """Wilder's smoothing, as used by ta.atr."""
+    out: list[float] = []
+    acc = 0.0
+    for i, v in enumerate(values):
+        if i < length:
+            acc += v
+            out.append(acc / (i + 1))
+        else:
+            out.append((out[-1] * (length - 1) + v) / length)
+    return out
+
+
+def atr_series(cs: list[Candle], length: int) -> list[float]:
+    tr = []
+    for i, c in enumerate(cs):
+        if i == 0:
+            tr.append(c.h - c.l)
+        else:
+            pc = cs[i - 1].c
+            tr.append(max(c.h - c.l, abs(c.h - pc), abs(c.l - pc)))
+    return rma(tr, length)
+
+
+def is_pivot_high(cs: list[Candle], i: int, left: int, right: int) -> bool:
+    if i - left < 0 or i + right >= len(cs):
+        return False
+    h = cs[i].h
+    for j in range(i - left, i):
+        if cs[j].h >= h:
+            return False
+    for j in range(i + 1, i + right + 1):
+        if cs[j].h >= h:
+            return False
+    return True
+
+
+def is_pivot_low(cs: list[Candle], i: int, left: int, right: int) -> bool:
+    if i - left < 0 or i + right >= len(cs):
+        return False
+    l = cs[i].l
+    for j in range(i - left, i):
+        if cs[j].l <= l:
+            return False
+    for j in range(i + 1, i + right + 1):
+        if cs[j].l <= l:
+            return False
+    return True
+
+
+def entry_of(is_long: bool, top: float, bot: float, mode: str) -> float:
+    if mode == "mid":
+        return (top + bot) / 2.0
+    if mode == "distal":
+        return bot if is_long else top
+    return top if is_long else bot
+
+
+def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG) -> list[Setup]:
+    """
+    Single pass over closed candles, mirroring the Pine bar loop. Returns every
+    setup found in the window; the caller decides which are recent enough to
+    send.
+    """
+    n = len(cs)
+    if n < cfg.atr_len + cfg.pivot_left + cfg.pivot_right + 10:
+        return []
+
+    atr = atr_series(cs, cfg.atr_len)
+    clusters: list[Cluster] = []
+    setups: list[Setup] = []
+    last_mss = {True: -10 ** 9, False: -10 ** 9}   # keyed by is_high
+
+    # previous day / week trackers: extreme, its bar, and the opposing extreme
+    # since that bar (which is the structure level for that level).
+    def new_tracker(i):
+        return {"hi": cs[i].h, "hi_bar": i, "lo": cs[i].l, "lo_bar": i,
+                "min_since_hi": cs[i].l, "min_bar": i,
+                "max_since_lo": cs[i].h, "max_bar": i}
+
+    day = new_tracker(0)
+    week = new_tracker(0)
+
+    def inject(is_high, price, anchor, opp, opp_bar, src, i):
+        c = Cluster(is_high=is_high, level=price, oldest_bar=anchor,
+                    created_bar=i, src=src, active=True)
+        c.run_min = opp if is_high else price
+        c.run_max = price if is_high else opp
+        c.run_min_bar = opp_bar if is_high else anchor
+        c.run_max_bar = anchor if is_high else opp_bar
+        clusters.append(c)
+
+    def close_period(tr, src, i):
+        inject(True, tr["hi"], tr["hi_bar"], tr["min_since_hi"], tr["min_bar"], src, i)
+        inject(False, tr["lo"], tr["lo_bar"], tr["max_since_lo"], tr["max_bar"], src, i)
+
+    def track(tr, i):
+        if cs[i].h > tr["hi"]:
+            tr["hi"], tr["hi_bar"] = cs[i].h, i
+            tr["min_since_hi"], tr["min_bar"] = cs[i].l, i
+        elif cs[i].l < tr["min_since_hi"]:
+            tr["min_since_hi"], tr["min_bar"] = cs[i].l, i
+        if cs[i].l < tr["lo"]:
+            tr["lo"], tr["lo_bar"] = cs[i].l, i
+            tr["max_since_lo"], tr["max_bar"] = cs[i].h, i
+        elif cs[i].h > tr["max_since_lo"]:
+            tr["max_since_lo"], tr["max_bar"] = cs[i].h, i
+
+    def register_pivot(is_high, price, pbar, i, a):
+        tol = a * cfg.tol_atr
+        best, target = None, None
+        for c in clusters:
+            if c.src != "Pivot" or c.expired or c.mss:
+                continue
+            if c.swept and not cfg.allow_join_after_sweep:
+                continue
+            if c.is_high != is_high:
+                continue
+            d = min(abs(p - price) for p in c.prices) if c.prices else abs(c.level - price)
+            if d > tol:
+                continue
+            lo = min(c.prices + [price])
+            hi = max(c.prices + [price])
+            if hi - lo > a * cfg.max_cluster_span_atr:
+                continue
+            ext = max(c.prices) if is_high else min(c.prices)
+            allow = a * cfg.max_overshoot_atr
+            if is_high and price > ext + allow:
+                continue
+            if not is_high and price < ext - allow:
+                continue
+            if pbar - c.oldest_bar > cfg.max_pool_span_bars:
+                continue
+            if best is None or d < best:
+                best, target = d, c
+        if target is None:
+            c = Cluster(is_high=is_high, level=price, oldest_bar=pbar, created_bar=i)
+            c.prices, c.bars = [price], [pbar]
+            lo = max(0, i - cfg.pivot_right)
+            c.run_min = min(x.l for x in cs[lo:i + 1])
+            c.run_max = max(x.h for x in cs[lo:i + 1])
+            c.run_min_bar = min(range(lo, i + 1), key=lambda k: cs[k].l)
+            c.run_max_bar = max(range(lo, i + 1), key=lambda k: cs[k].h)
+            clusters.append(c)
+        else:
+            target.prices.append(price)
+            target.bars.append(pbar)
+            target.level = sum(target.prices) / len(target.prices)
+            if not target.active and len(target.prices) >= cfg.min_pivots:
+                target.active = True
+
+    def scan_leg(c, frm, to, i, a):
+        """Newest window first; returns (top, bot, tradeable) or None."""
+        for off in range(0, min(to - frm, 120) + 1):
+            j = to - off
+            if j - 2 < 0 or j < frm:
+                break
+            is_bull = not c.is_high
+            if is_bull:
+                top, bot = cs[j].l, cs[j - 2].h
+                ok = cs[j].l > cs[j - 2].h
+            else:
+                top, bot = cs[j - 2].l, cs[j].h
+                ok = cs[j].h < cs[j - 2].l
+            if not ok or top - bot < a * cfg.min_fvg_atr:
+                continue
+            if cfg.max_fvg_atr > 0 and top - bot > a * cfg.max_fvg_atr:
+                continue
+            ent = entry_of(is_bull, top, bot, cfg.entry_mode)
+            sl = (c.grab_low - a * cfg.sl_buffer_atr) if is_bull else \
+                 (c.grab_high + a * cfg.sl_buffer_atr)
+            if cfg.max_risk_atr > 0 and abs(ent - sl) > a * cfg.max_risk_atr:
+                continue
+            return ent, sl
+        return None
+
+    start = cfg.atr_len
+    for i in range(start, n):
+        a = atr[i]
+        if a <= 0:
+            continue
+
+        # period levels
+        d_prev = datetime.fromtimestamp(cs[i - 1].t, timezone.utc)
+        d_now = datetime.fromtimestamp(cs[i].t, timezone.utc)
+        if cfg.use_daily and d_now.date() != d_prev.date():
+            close_period(day, "Day", i)
+            day = new_tracker(i)
+        elif cfg.use_daily:
+            track(day, i)
+        if cfg.use_weekly and d_now.isocalendar()[1] != d_prev.isocalendar()[1]:
+            close_period(week, "Week", i)
+            week = new_tracker(i)
+        elif cfg.use_weekly:
+            track(week, i)
+
+        # pivots confirmed on this bar
+        if cfg.use_pivot:
+            pb = i - cfg.pivot_right
+            if pb >= 0:
+                if is_pivot_high(cs, pb, cfg.pivot_left, cfg.pivot_right):
+                    register_pivot(True, cs[pb].h, pb, i, a)
+                if is_pivot_low(cs, pb, cfg.pivot_left, cfg.pivot_right):
+                    register_pivot(False, cs[pb].l, pb, i, a)
+
+        for c in clusters:
+            if c.expired or c.done:
+                continue
+
+            if not c.swept:
+                if cs[i].l < c.run_min:
+                    c.run_min, c.run_min_bar = cs[i].l, i
+                if cs[i].h > c.run_max:
+                    c.run_max, c.run_max_bar = cs[i].h, i
+
+            was_active, was_swept, was_mss = c.active, c.swept, c.mss
+
+            if not was_active:
+                buf = a * cfg.pending_invalidate_atr
+                ran = cs[i].h > c.level + buf if c.is_high else cs[i].l < c.level - buf
+                if ran or i - c.created_bar > cfg.pending_expiry_bars:
+                    c.expired = True
+
+            if was_active and not was_swept and not c.expired:
+                b = a * cfg.grab_buffer_atr
+                hit = cs[i].h > c.level + b if c.is_high else cs[i].l < c.level - b
+                if hit:
+                    c.swept = True
+                    c.sweep_bar = c.grab_bar = i
+                    c.grab_high, c.grab_low, c.grab_close = cs[i].h, cs[i].l, cs[i].c
+                    c.struct_level = c.run_min if c.is_high else c.run_max
+
+            if was_swept and not was_mss and not c.expired:
+                if i - c.sweep_bar > cfg.max_bars_after_grab:
+                    c.expired = True
+                else:
+                    if cfg.trail_grab_extreme:
+                        if c.is_high and cs[i].h > c.grab_high:
+                            c.grab_bar, c.grab_high, c.grab_low = i, cs[i].h, cs[i].l
+                            c.grab_close = cs[i].c
+                        if not c.is_high and cs[i].l < c.grab_low:
+                            c.grab_bar, c.grab_low, c.grab_high = i, cs[i].l, cs[i].h
+                            c.grab_close = cs[i].c
+                    px = cs[i].c if cfg.mss_close else (cs[i].l if c.is_high else cs[i].h)
+                    broke = px < c.struct_level if c.is_high else px > c.struct_level
+                    if broke:
+                        c.mss, c.mss_bar = True, i
+                        if i - last_mss[c.is_high] < cfg.mss_cooldown_bars:
+                            c.done = True
+                        else:
+                            last_mss[c.is_high] = i
+                            for o in clusters:
+                                if (o is not c and o.src == c.src and o.is_high == c.is_high
+                                        and o.active and not o.mss and not o.expired
+                                        and abs(o.level - c.level) <= a * cfg.tol_atr * 2):
+                                    o.expired = True
+
+            if c.mss and not c.done and not c.expired:
+                found = scan_leg(c, c.grab_bar, i, i, a)
+                if found:
+                    ent, sl = found
+                    setups.append(Setup(
+                        symbol=symbol, is_long=not c.is_high, src=c.src,
+                        level=c.level, entry=ent, stop=sl, risk=abs(ent - sl),
+                        grab_bar=c.grab_bar, mss_bar=c.mss_bar,
+                        mss_time=cs[c.mss_bar].t, anchor_time=cs[c.oldest_bar].t,
+                        pivots=len(c.prices) or 1))
+                    c.done = True
+                elif i - c.mss_bar >= cfg.max_bars_after_mss:
+                    c.done = True
+
+    return setups
+
+
+# ── exchange ────────────────────────────────────────────────────────────────
+async def get_json(sess, url, params=None, tries=3):
+    for k in range(tries):
+        try:
+            async with sess.get(url, params=params, timeout=aiohttp.ClientTimeout(total=20)) as r:
+                if r.status == 429:
+                    await asyncio.sleep(2 * (k + 1))
+                    continue
+                r.raise_for_status()
+                return await r.json()
+        except Exception as e:
+            if k == tries - 1:
+                log.warning("GET %s failed: %s", url, e)
+                return None
+            await asyncio.sleep(1.5 * (k + 1))
+    return None
+
+
+async def list_symbols(sess) -> list[str]:
+    if SYMBOLS_ENV:
+        return [s.strip() for s in SYMBOLS_ENV.split(",") if s.strip()]
+    d = await get_json(sess, f"{BASE}/api/v1/contract/detail")
+    if not d or not d.get("data"):
+        return []
+    out = []
+    for c in d["data"]:
+        if c.get("quoteCoin") != QUOTE:
+            continue
+        if c.get("state") != 0:            # 0 = enabled
+            continue
+        if c.get("apiAllowed") is False:
+            continue
+        out.append(c["symbol"])
+    return out
+
+
+async def fetch_candles(sess, symbol: str) -> list[Candle]:
+    step = BAR_SECONDS[INTERVAL]
+    now = int(time.time())
+    params = {"interval": INTERVAL, "start": now - LOOKBACK * step, "end": now}
+    d = await get_json(sess, f"{BASE}/api/v1/contract/kline/{symbol}", params)
+    if not d or not d.get("data"):
+        return []
+    k = d["data"]
+    try:
+        rows = list(zip(k["time"], k["open"], k["high"], k["low"], k["close"]))
+    except (KeyError, TypeError):
+        return []
+    # Drop the forming bar. This is the confirmOnBarClose rule: the engine only
+    # ever sees finished candles, so its output matches the chart.
+    return [Candle(int(t), float(o), float(h), float(l), float(c))
+            for t, o, h, l, c in rows if int(t) + step <= now]
+
+
+# ── storage ─────────────────────────────────────────────────────────────────
+def db_init():
+    db = sqlite3.connect(DB_PATH)
+    db.execute("""CREATE TABLE IF NOT EXISTS seen(
+        sig TEXT PRIMARY KEY, symbol TEXT, side TEXT, src TEXT,
+        entry REAL, stop REAL, level REAL, mss_time INT, sent_at INT)""")
+    db.execute("CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT)")
+    db.commit()
+    return db
+
+
+def sig_id(s: Setup) -> str:
+    return f"{s.symbol}|{INTERVAL}|{s.anchor_time}|{s.mss_time}|{'L' if s.is_long else 'S'}"
+
+
+def already_sent(db, sid) -> bool:
+    return db.execute("SELECT 1 FROM seen WHERE sig=?", (sid,)).fetchone() is not None
+
+
+def record(db, sid, s: Setup):
+    db.execute("INSERT OR IGNORE INTO seen VALUES(?,?,?,?,?,?,?,?,?)",
+               (sid, s.symbol, "long" if s.is_long else "short", s.src,
+                s.entry, s.stop, s.level, s.mss_time, int(time.time())))
+    db.commit()
+
+
+def first_run(db) -> bool:
+    return db.execute("SELECT COUNT(*) FROM seen").fetchone()[0] == 0
+
+
+# ── telegram ────────────────────────────────────────────────────────────────
+async def tg_send(sess, text: str):
+    if not TG_TOKEN or not TG_CHAT:
+        log.info("[no telegram configured]\n%s", text)
+        return
+    url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+    payload = {"chat_id": TG_CHAT, "text": text, "parse_mode": "HTML",
+               "disable_web_page_preview": True}
+    try:
+        async with sess.post(url, json=payload,
+                             timeout=aiohttp.ClientTimeout(total=15)) as r:
+            if r.status != 200:
+                log.warning("telegram %s: %s", r.status, await r.text())
+    except Exception as e:
+        log.warning("telegram failed: %s", e)
+
+
+def fmt(v: float) -> str:
+    if v >= 1000:
+        return f"{v:,.1f}"
+    if v >= 1:
+        return f"{v:.4g}"
+    return f"{v:.8g}"
+
+
+def setup_message(s: Setup) -> str:
+    side = "LONG" if s.is_long else "SHORT"
+    sign = 1 if s.is_long else -1
+    t1 = s.entry + sign * s.risk
+    t15 = s.entry + sign * s.risk * CFG.be_arm_r
+    t3 = s.entry + sign * s.risk * 3
+    riskpct = s.risk / s.entry * 100 if s.entry else 0
+    tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{s.symbol.replace('_', '')}.P"
+    return (
+        f"<b>{side}  {s.symbol}</b>  ({INTERVAL})\n"
+        f"{s.src} liquidity @ {fmt(s.level)}"
+        f"{f' · {s.pivots} swings' if s.src == 'Pivot' else ''}\n\n"
+        f"Entry  <code>{fmt(s.entry)}</code>\n"
+        f"Stop   <code>{fmt(s.stop)}</code>   ({riskpct:.2f}% risk)\n"
+        f"1R     {fmt(t1)}\n"
+        f"BE at  {fmt(t15)}  ({CFG.be_arm_r}R)\n"
+        f"3R     {fmt(t3)}\n\n"
+        f"<a href='{tv}'>chart</a>"
+    )
+
+
+# ── scan cycle ──────────────────────────────────────────────────────────────
+async def scan_symbol(sess, sem, symbol):
+    async with sem:
+        cs = await fetch_candles(sess, symbol)
+        if len(cs) < 100:
+            return []
+        try:
+            return run_engine(symbol, cs)
+        except Exception as e:
+            log.warning("engine failed on %s: %s", symbol, e)
+            return []
+
+
+async def cycle(sess, db, symbols):
+    sem = asyncio.Semaphore(CONCURRENCY)
+    results = await asyncio.gather(*(scan_symbol(sess, sem, s) for s in symbols))
+
+    bootstrap = first_run(db) and not ALERT_ON_FIRST_RUN
+    step = BAR_SECONDS[INTERVAL]
+    now = int(time.time())
+    sent = 0
+    for setups in results:
+        for s in setups:
+            # Only shifts from the last few bars are actionable. Older ones are
+            # recorded so a restart cannot re-alert the whole history.
+            fresh = (now - s.mss_time) <= FRESH_BARS * step
+            sid = sig_id(s)
+            if already_sent(db, sid):
+                continue
+            record(db, sid, s)
+            if fresh and not bootstrap:
+                await tg_send(sess, setup_message(s))
+                sent += 1
+    if bootstrap:
+        log.info("first run: history recorded, nothing sent")
+    log.info("scanned %d symbols, sent %d alerts", len(symbols), sent)
+    return sent
+
+
+def seconds_to_next_close(step: int, pad: int = 10) -> float:
+    now = time.time()
+    return (step - (now % step)) + pad
+
+
+async def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        stream=sys.stdout)
+    if INTERVAL not in BAR_SECONDS:
+        log.error("bad interval %s", INTERVAL)
+        return
+    db = db_init()
+    step = BAR_SECONDS[INTERVAL]
+
+    async with aiohttp.ClientSession() as sess:
+        symbols = await list_symbols(sess)
+        if not symbols:
+            log.error("no symbols; check MEXC_BASE or RIPTIDE_SYMBOLS")
+            return
+        log.info("riptide up: %d symbols, %s bars", len(symbols), INTERVAL)
+        await tg_send(sess, f"Riptide scanner started\n"
+                            f"{len(symbols)} symbols · {INTERVAL} bars")
+
+        last_symbol_refresh = time.time()
+        last_heartbeat = 0.0
+        while True:
+            try:
+                await asyncio.sleep(seconds_to_next_close(step))
+                await cycle(sess, db, symbols)
+
+                if time.time() - last_symbol_refresh > 21600:      # 6h
+                    fresh = await list_symbols(sess)
+                    if fresh:
+                        symbols = fresh
+                    last_symbol_refresh = time.time()
+
+                # Daily heartbeat, so silence means something is broken rather
+                # than that nothing set up.
+                if time.time() - last_heartbeat > 86400:
+                    await tg_send(sess, f"Riptide alive · {len(symbols)} symbols")
+                    last_heartbeat = time.time()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.exception("cycle error: %s", e)
+                await asyncio.sleep(30)
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
