@@ -66,6 +66,22 @@ what the numbers show. Keep that in mind if you ever narrow
 Expect roughly 95 sweep messages a day on 20 symbols, against 20 setups. Cut
 the symbol list, not the source filter, if that is too many.
 
+### Restarts
+
+The scan loop sleeps before it scans, so without `RIPTIDE_SCAN_ON_START` a
+restart is blind until the next bar close — up to a full bar. That also
+loses signal rather than merely delaying it: a sweep on the bar that closed
+just before the restart is `2 * step + 10s` old by the first scheduled
+cycle, past its 2-bar window, so it is never sent.
+
+Scanning on startup fixes both. Repeating work is safe — dedupe skips
+anything the previous process recorded, the freshness gate still applies,
+and an empty database still bootstraps silently.
+
+The daily heartbeat is separate and still fires once per restart:
+`last_heartbeat` lives in memory and resets to `0.0` on every start, so
+"Riptide alive" is a restart marker as much as a daily one.
+
 ### Why `RIPTIDE_SWEEP_FRESH_BARS` cannot be 1
 
 `Candle.t` is the bar's **open** time, so a bar that has just closed is
@@ -116,6 +132,7 @@ them there, not in the engine body.
 | `RIPTIDE_INTERVAL` | `Min30` | `Min15`, `Min30`, `Min60`, `Hour4` |
 | `RIPTIDE_SYMBOLS` | all USDT perps | comma separated |
 | `RIPTIDE_FRESH_BARS` | `3` | only alert if the shift is this recent |
+| `RIPTIDE_SCAN_ON_START` | `1` | scan immediately on startup instead of waiting for the next close |
 | `RIPTIDE_SWEEP_ALERTS` | `1` | heads-up when a pool is swept, ahead of the shift. `0` disables |
 | `RIPTIDE_SWEEP_SRC` | unset | which pools raise a heads-up. Unset = all. e.g. `Pivot` |
 | `RIPTIDE_SWEEP_FRESH_BARS` | `2` | sweep freshness window. **Minimum 2** — see below |

@@ -46,6 +46,8 @@ SYMBOLS_ENV = os.getenv("RIPTIDE_SYMBOLS", "")          # comma list, or blank
 MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
 ALERT_ON_FIRST_RUN = os.getenv("RIPTIDE_ALERT_FIRST_RUN", "0") == "1"
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
+# Scan immediately on startup instead of waiting for the next bar close.
+SCAN_ON_START = os.getenv("RIPTIDE_SCAN_ON_START", "1") == "1"
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
 # closed is already one full step old, and the scan wakes another 10s after
@@ -764,6 +766,18 @@ async def main():
         log.info("riptide up: %d symbols, %s bars", len(symbols), INTERVAL)
         await tg_send(sess, f"Riptide scanner started\n"
                             f"{len(symbols)} symbols · {INTERVAL} bars")
+
+        # Scan once before entering the loop. The loop sleeps first, so without
+        # this a restart is blind until the next close — up to a full bar. That
+        # is not just a delay: a sweep on the bar that closed just before the
+        # restart is 2*step + pad old by the first scheduled cycle, past the
+        # 2-bar window, so it would never be sent at all.
+        #
+        # Safe to repeat work: dedupe skips anything the previous process
+        # already recorded, the freshness gate still applies, and an empty
+        # database still bootstraps silently.
+        if SCAN_ON_START:
+            await cycle(sess, db, symbols)
 
         last_symbol_refresh = time.time()
         last_heartbeat = 0.0
