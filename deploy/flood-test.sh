@@ -40,6 +40,10 @@ export RIPTIDE_FRESH_BARS=100000
 
 trap 'echo; echo "resetting state..."; rm -f "$APP_DIR/riptide.db"; \
       echo "riptide.db deleted. Overrides were process-local; .env is unchanged."; \
-      echo "Normal behaviour resumes on the next start."' EXIT
+      echo "Normal behaviour resumes when you start the service."' EXIT
 
-.venv/bin/python riptide_bot.py
+# flood_test.py runs one cycle immediately and exits. Running riptide_bot.py
+# directly would sleep until the next bar close first — up to 30 minutes of
+# apparent silence before the test does anything.
+cp "$SRC_DIR/deploy/flood_test.py" "$APP_DIR/flood_test.py"
+.venv/bin/python flood_test.py
