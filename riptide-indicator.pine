@@ -1,0 +1,1344 @@
+//@version=6
+// =============================================================================
+//  Riptide - Liquidity Sweep & Reversal Engine
+// -----------------------------------------------------------------------------
+//  Trades one sequence:
+//
+//      liquidity pool -> sweep -> market structure shift -> fair value gap
+//
+//  A pool is two or more swing points at the same price (within an ATR-scaled
+//  tolerance), or a previous day/week/session high or low. Price running that
+//  pool is a sweep. The structure level is the opposing extreme measured from
+//  the OLDEST member of the pool; a close through it is the shift. Imbalances
+//  left across the sweep-to-shift leg become entry zones. Stop sits beyond the
+//  sweep candle.
+//
+//  Implementation notes
+//  --------------------
+//  Non-repainting. No request.security, no lookahead, no future references.
+//  All state mutation happens inside the `if engineOk` block, which with
+//  confirmOnBarClose runs once per closed bar. Drawings are never deleted;
+//  set_x2 / set_right only extend existing lines and boxes.
+//
+//  A pivot is only recognised after pivotRight bars have closed. That delay is
+//  inherent to swing detection.
+//
+//  Daily/weekly/session levels are injected as pre-activated clusters and reuse
+//  the same sweep -> shift -> gap path. Each period's extremes are tracked as
+//  they form, which also yields the bar the extreme printed on - needed for the
+//  structure calculation, and not available from security() without lookahead.
+//
+//  Outcome stats measure setups forward from creation. Bar data cannot resolve
+//  intrabar order, so where one bar spans both a target and a stop, the stop is
+//  taken. Fees, funding and slippage are not included.
+//
+//  Several thresholds are inferred rather than derived: pivot lengths, cluster
+//  tolerance, overshoot and span caps, sweep-to-shift and shift-to-gap windows.
+//  Defaults come from visual calibration; see the tooltips in section 9.
+// =============================================================================
+
+indicator("Riptide - Liquidity Sweep & Reversal Engine", "Riptide",
+     overlay          = true,
+     max_lines_count  = 500,
+     max_labels_count = 500,
+     max_boxes_count  = 500,
+     max_bars_back    = 500)
+
+// ═════════════════════════════ 1. INPUTS ════════════════════════════════════
+// Sections 1-4 cover normal use. Section 9 holds calibration thresholds.
+gSrc   = "1. What creates a signal"
+gSess  = "2. Trading sessions"
+gSens  = "3. Sensitivity"
+gTrade = "4. Entry, stop and targets"
+gLook  = "5. Appearance"
+gTrend = "6. Trend line (display only)"
+gAlert = "7. Alerts"
+gStats = "8. Performance stats"
+gAdv   = "9. Advanced tuning"
+gEng   = "10. Engine and debug"
+
+// ── 1. What creates a signal ────────────────────────────────────────────────
+usePivotLiq   = input.bool(true,  "Swing highs / lows", group = gSrc,
+     tooltip = "The main source. Two or more swing points at roughly the same price form a liquidity pool — a shelf of stop orders. The indicator waits for price to run that shelf and then reverse.")
+useDailyLiq   = input.bool(true,  "Yesterday's high / low", group = gSrc,
+     tooltip = "Treats the previous day's extremes as liquidity in their own right. These are watched by a lot of traders, so they get raided often.")
+useWeeklyLiq  = input.bool(true,  "Last week's high / low", group = gSrc,
+     tooltip = "Same idea on a weekly scale. Fewer signals, but the levels carry more weight.")
+useSessionLiq = input.bool(false, "Session highs / lows", group = gSrc,
+     tooltip = "Uses the high and low of each finished session below. Leave off until the timezone in section 2 matches how you actually trade — otherwise the levels are arbitrary.")
+showLongs     = input.bool(true,  "Show long setups",  inline = "dir", group = gSrc)
+showShorts    = input.bool(true,  "Show short setups", inline = "dir", group = gSrc)
+
+// ── 2. Trading sessions ─────────────────────────────────────────────────────
+sessTz    = input.string("UTC", "Timezone", group = gSess,
+     tooltip = "Sets what the session times below mean. Crypto data is natively UTC, so leave this as UTC unless you deliberately want local hours. Accepts names like America/New_York or offsets like GMT+5.")
+sess1On   = input.bool(true, "Session 1", inline = "s1", group = gSess)
+sess1Name = input.string("Asia",   "", inline = "s1", group = gSess)
+sess1Spec = input.session("0000-0800", "", inline = "s1", group = gSess,
+     tooltip = "Tick the box, name the session, set its hours. The name appears on the chart tag when that session's high or low gets raided.")
+sess2On   = input.bool(true, "Session 2", inline = "s2", group = gSess)
+sess2Name = input.string("London", "", inline = "s2", group = gSess)
+sess2Spec = input.session("0700-1600", "", inline = "s2", group = gSess)
+sess3On   = input.bool(true, "Session 3", inline = "s3", group = gSess)
+sess3Name = input.string("NY",     "", inline = "s3", group = gSess)
+sess3Spec = input.session("1200-2100", "", inline = "s3", group = gSess)
+
+// ── 3. Sensitivity ──────────────────────────────────────────────────────────
+pivotLeft  = input.int(1, "Swing detection — bars before", minval = 1, maxval = 50, group = gSens,
+     tooltip = "How many bars to the LEFT must be lower (for a high) for it to count as a swing point. 1 finds more swings, 3 or 4 finds only the obvious ones. Raise this if you get more signals than you want.")
+pivotRight = input.int(2, "Swing detection — bars after", minval = 1, maxval = 50, group = gSens,
+     tooltip = "Same on the right, and it is also the confirmation delay: a swing point is not recognised until this many bars have closed after it. Lower = faster signals, more of them wrong.")
+atrLength  = input.int(28, "Volatility length (ATR)", minval = 1, group = gSens,
+     tooltip = "Nearly every distance in this indicator is measured in ATR rather than points, so it adapts across symbols and timeframes. You rarely need to change this.")
+liquidityToleranceATR = input.float(0.25, "How close counts as 'equal' (x ATR)", minval = 0.0, step = 0.01, group = gSens,
+     tooltip = "Two swing highs within this distance are treated as one liquidity pool. THE MOST IMPORTANT SETTING HERE. Too loose and unrelated swings get bundled together, which drags the reference point far back in time and makes signals fire late. Too tight and genuine double tops never pair up. 0.2 to 0.4 is the useful range.")
+minPivotsForLiquidity = input.int(2, "Swing points needed for a pool", minval = 2, maxval = 10, group = gSens,
+     tooltip = "How many swings at the same price before it counts as liquidity worth raiding. 2 is a double top or bottom. Raising it to 3 gives far fewer, cleaner signals.")
+mssMode = input.string("close", "Structure break confirmed by",
+     options = ["close", "high/low"], group = gSens,
+     tooltip = "After the raid, price must break the opposite side of the range. 'close' waits for a candle to close through it — slower but far more reliable. 'high/low' accepts a wick.")
+minFvgSizeATR = input.float(0.05, "Smallest usable gap (x ATR)", minval = 0.0, step = 0.01, group = gSens,
+     tooltip = "Ignores tiny imbalances that are not real entry zones. Raise it if you are getting entry boxes only a tick or two tall.")
+
+// ── 4. Entry, stop and targets ──────────────────────────────────────────────
+entryMode = input.string("Proximal", "Where in the gap to enter",
+     options = ["Proximal", "Midpoint (CE)", "Distal"], group = gTrade,
+     tooltip = "Proximal = the near edge, the first price touched on the pullback: fills most often, widest stop. Midpoint = halfway in. Distal = the far edge: best price and tightest stop, but price often turns before reaching it and you miss the trade.")
+slBufferATR = input.float(0.0, "Extra room beyond the stop (x ATR)", minval = 0.0, step = 0.01, group = gTrade,
+     tooltip = "The stop sits just past the candle that raided the liquidity — the one marked with an X. This adds breathing room beyond that wick. 0 puts it exactly on the wick.")
+maxRiskATR  = input.float(4.0, "Skip setups risking more than (x ATR)", minval = 0.0, step = 0.1, group = gTrade,
+     tooltip = "Protects you from setups where the entry is a long way from the stop. One trade risking 8 ATR carries the size of eight normal ones and will dominate your results whichever way it goes. 0 turns the check off.")
+maxFvgSizeATR = input.float(2.0, "Skip gaps bigger than (x ATR)", minval = 0.0, step = 0.1, group = gTrade,
+     tooltip = "A gap torn open by one huge candle is not an entry zone — its far edge can sit several ATR from the stop. 0 turns the check off.")
+beArmR = input.float(1.5, "Move stop to break-even at (R)", minval = 0.0, step = 0.1, group = gTrade,
+     tooltip = "Once the trade is this many R in profit the stop moves up to entry, so it can no longer lose. R means one unit of risk: if your stop is 100 points away, 1.5R is 150 points of profit. Set 0 to leave the stop where it is. Worth testing both — protecting a trade also caps the ones that would have run much further.")
+beLockR = input.float(0.1, "Break-even stop locks in (R)", minval = 0.0, step = 0.05, group = gTrade,
+     tooltip = "Where that moved stop actually goes. 0 is exactly entry, which is really a small loss live once fees are paid. 0.1R puts it just into profit. Note it also sits slightly tighter, so it stops you out marginally sooner.")
+
+// ── 5. Appearance ───────────────────────────────────────────────────────────
+drawMode = input.string("On MSS confirmation", "When to draw a pattern",
+     options = ["On MSS confirmation", "Live (as they form)"], group = gLook,
+     tooltip = "On MSS confirmation: nothing appears until the whole sequence completes, then the full pattern is drawn back over the bars where it happened. Clean, and nothing on screen ever turns out to be a false start. Live: watch pools and raids form in real time — useful for trading it, much busier.")
+showLiquidity  = input.bool(true,  "Liquidity levels (dotted)",      group = gLook)
+showPivots     = input.bool(true,  "Swing markers (diamonds)",       group = gLook)
+showGrab       = input.bool(true,  "Raid marker (X)",                group = gLook)
+showGrabTag    = input.bool(true,  "Label on the raid marker",       group = gLook,
+     tooltip = "The small dark tag under the X naming what got raided: Pivot, Day, Week or a session name.")
+showMSS        = input.bool(true,  "Structure break level + label",  group = gLook)
+showFVGs       = input.bool(true,  "Entry zones (gaps)",             group = gLook)
+showFvgMidline = input.bool(true,  "Centre line in entry zones",     group = gLook)
+showEntryLine  = input.bool(true,  "Entry line",                     group = gLook)
+showStopLoss   = input.bool(true,  "Stop loss line",                 group = gLook,
+     tooltip = "Drawn from the raid candle itself and extended right, so you can see which bar the stop comes from.")
+showSetupLabels= input.bool(false, "LONG / SHORT labels",            group = gLook)
+showPrevDayHL  = input.bool(false, "Draw yesterday's high / low",    group = gLook)
+showPrevWeekHL = input.bool(false, "Draw last week's high / low",    group = gLook)
+showSessionBox = input.bool(false, "Draw session ranges",            group = gLook)
+fvgExtendBars  = input.int(6, "Entry zone width (bars)", minval = 1, group = gLook)
+extendFVG      = input.bool(false, "Stretch zones until price returns", group = gLook,
+     tooltip = "Off keeps each zone at a fixed width. On stretches it rightwards until price comes back — tidy in theory, but a zone price never revisits ends up as a band across the screen.")
+setupExtendBars  = input.int(20, "Entry / stop line length (bars)", minval = 1, maxval = 200, group = gLook)
+staticExtendBars = input.int(96, "Day / week level length (bars)",  minval = 2, group = gLook)
+bullCol   = input.color(#26a69a, "Bullish", inline = "c1", group = gLook)
+bearCol   = input.color(#ef5350, "Bearish", inline = "c1", group = gLook)
+structCol = input.color(#787b86, "Structure break line", group = gLook)
+liqDirCol = input.bool(true, "Colour liquidity lines by direction", group = gLook)
+liqCol    = input.color(color.gray, "Liquidity colour when not by direction", group = gLook)
+fvgFill   = input.int(85, "Entry zone transparency", minval = 0, maxval = 100, group = gLook)
+
+// ── 6. Trend line (display only) ────────────────────────────────────────────
+// Display only. A sweep plus a structure break is the reversal, so a trailing
+// trend line still points the old way when the signal fires; filtering on it
+// would remove the setups this looks for.
+trendMode = input.string("SuperTrend", "Trend line", options = ["Off", "SuperTrend", "EMA"], group = gTrend,
+     tooltip = "Context only. Some traders prefer taking setups that agree with the wider trend — this shows you which those are. Switching it NEVER changes which signals appear.")
+stFactor  = input.float(3.0, "SuperTrend factor", minval = 0.5, step = 0.1, group = gTrend)
+stAtrLen  = input.int(10, "SuperTrend length", minval = 1, group = gTrend)
+emaLen    = input.int(50, "EMA length", minval = 1, group = gTrend)
+
+// ── 7. Alerts ───────────────────────────────────────────────────────────────
+alertOnGrab  = input.bool(true, "Liquidity raided", group = gAlert,
+     tooltip = "Earliest warning: price has run the level and a setup may be starting. Fires on the raid bar itself, before the X appears on screen in 'On MSS confirmation' mode.")
+alertOnMss   = input.bool(true, "Structure broken", group = gAlert,
+     tooltip = "The reversal is confirmed. An entry zone is usually marked within a few bars.")
+alertOnSetup = input.bool(true, "Entry zone ready", group = gAlert,
+     tooltip = "A zone now exists and you could place a limit order in it.")
+alertOnEntry = input.bool(true, "Price entered the zone", group = gAlert,
+     tooltip = "Price has arrived at the entry — the moment a limit order would fill.")
+dynamicAlerts= input.bool(true, "Detailed alert messages", group = gAlert,
+     tooltip = "Includes the level, direction and stop in the alert text. Requires choosing 'Any alert() function call' in TradingView's alert window. Leave off to use the named conditions in the dropdown, which have fixed text.")
+
+// ── 8. Performance stats ────────────────────────────────────────────────────
+trackOutcomes = input.bool(true, "Track how setups turned out", group = gStats,
+     tooltip = "Follows every setup forward: did price reach the entry, and then how far did it get before the stop. Results appear in the table on the chart.")
+fillModel     = input.string("Same bar (optimistic)", "Fill model",
+     options = ["Same bar (optimistic)", "Retracement only (realistic)"], group = gStats,
+     tooltip = "Decides when a setup counts as entered. Same bar: counts as filled on the bar that created the zone — this fills almost everything at the best possible price, which no real order could have got, because the setup did not exist until that bar closed. Retracement only: price must come BACK to the zone on a later bar, which is what a limit order would really do. Every number in the table depends on this, so the active choice is printed at the bottom of it.")
+tradeExpiryBars = input.int(50, "Give up waiting after (bars)", minval = 1, group = gStats,
+     tooltip = "If price never returns to the entry zone within this many bars the setup is recorded as never filled, rather than counted as a trade.")
+showStats      = input.bool(true, "Show the results table", group = gStats)
+showFillMarker = input.bool(true, "Mark where price entered the zone", group = gStats)
+showTargets    = input.bool(false, "Draw 1R / 1.5R / 2R / 3R lines", group = gStats)
+maxTrades      = input.int(300, "Max setups tracked", minval = 10, group = gStats)
+
+// ── 9. Advanced tuning ──────────────────────────────────────────────────────
+// Defaults here come from visual calibration.
+// Change one at a time and use debug mode in section 10 to see the effect.
+clusterMatchMode = input.string("Nearest pivot", "Group swings by",
+     options = ["Nearest pivot", "Cluster level"], group = gAdv,
+     tooltip = "Nearest pivot lets a staircase such as 82.50 / 82.55 / 82.60 chain into a single pool. Cluster level compares against the pool's average instead and tends to split such runs in two.")
+levelMode = input.string("Average", "Liquidity price taken from",
+     options = ["Average", "Median", "Oldest", "Newest", "Extreme"], group = gAdv,
+     tooltip = "Where exactly the line sits when several swings form one pool.")
+maxPoolSpanBars = input.int(60, "Max bars between first and last swing", minval = 2, group = gAdv,
+     tooltip = "The oldest swing in a pool is the reference point for the structure break. A latecomer joining a pool from hours earlier drags that reference far back and makes the break fire late. This caps it.")
+maxClusterSpanATR = input.float(0.80, "Max total pool width (x ATR)", minval = 0.05, step = 0.05, group = gAdv,
+     tooltip = "Stops a chain of swings from drifting into a pool that spans a wide price range.")
+maxPivotOvershootATR = input.float(0.25, "Max overshoot when joining a pool (x ATR)", minval = 0.0, step = 0.05, group = gAdv,
+     tooltip = "A swing high well ABOVE the pool's highest high has already taken that high out — that is a higher high, not equal highs, so it should not join. Small overshoots stay allowed. Set very high to switch the rule off.")
+allowJoinAfterSweep = input.bool(true, "Swings may join a pool after the raid", group = gAdv,
+     tooltip = "A swing confirmed just after price ran the level still belongs to the pool. Without this the last marker of a group is often missing.")
+invalidatePending    = input.bool(true, "Drop unpaired swings once price passes them", group = gAdv)
+pendingInvalidateATR = input.float(0.50, "...by more than (x ATR)", minval = 0.0, step = 0.05, group = gAdv,
+     tooltip = "How far past a lone swing price must go before that swing is written off. A shallow dip under the first low of a forming double bottom should not kill it, which is why this is not 0.")
+pendingExpiryBars    = input.int(500, "Drop unpaired swings after (bars)", minval = 10, group = gAdv)
+grabBufferATR    = input.float(0.0, "Raid must exceed the level by (x ATR)", minval = 0.0, step = 0.01, group = gAdv,
+     tooltip = "0 means any wick through the level counts as a raid. Raise it to demand a decisive push beyond.")
+trailGrabExtreme = input.bool(true, "Mark the deepest bar of the raid", group = gAdv,
+     tooltip = "On, the X and the stop follow the furthest point of the raid. Off, they stay on the first bar that poked through, which usually leaves the stop too tight.")
+maxBarsAfterGrab = input.int(50, "Cancel if no structure break within (bars)", minval = 1, group = gAdv,
+     tooltip = "Counted from the first raid of the level. Without a limit, an old raid could produce an unrelated signal hours later.")
+mssCooldownBars  = input.int(5, "Min bars between same-direction signals", minval = 0, group = gAdv,
+     tooltip = "Stops two overlapping pools printing what is really the same trade twice.")
+fvgScanFrom      = input.string("Grab candle", "Look for entry zones from",
+     options = ["Grab candle", "MSS candle only"], group = gAdv,
+     tooltip = "Grab candle marks every imbalance across the whole move from the raid to the structure break, including those formed before the break itself. MSS candle only looks at the break bar onwards.")
+maxFvgPerSetup   = input.int(2, "Max entry zones per setup", minval = 1, maxval = 10, group = gAdv)
+skipOverlappingFvg = input.bool(true, "Skip overlapping zones", group = gAdv,
+     tooltip = "In a fast move consecutive bars often gap over each other; this keeps the first and drops the stack.")
+maxBarsAfterMss  = input.int(10, "Keep looking for zones for (bars)", minval = 0, group = gAdv)
+fvgMaxExtendBars = input.int(40, "Max zone stretch (bars)", minval = 2, group = gAdv)
+
+// ── 10. Engine and debug ────────────────────────────────────────────────────
+confirmOnBarClose = input.bool(true, "Only update on closed bars", group = gEng,
+     tooltip = "Keep this on. It means the indicator recalculates once per finished bar, so nothing on the chart can flicker or change while a bar is still forming. Turning it off makes signals unreliable and the stats meaningless.")
+maxLiquidityClusters = input.int(80,  "Max liquidity pools tracked", minval = 2, group = gEng)
+maxFVGs              = input.int(100, "Max entry zones tracked",     minval = 2, group = gEng)
+fvgScanCap           = input.int(60,  "Max bars scanned per move",   minval = 10, maxval = 300, group = gEng)
+debugMode            = input.bool(false, "Debug mode", group = gEng,
+     tooltip = "Adds a table of every liquidity pool and its current state, plus a label on each swing point. Use this when a signal you expected did not appear — it shows you exactly which stage it failed at.")
+debugJoins           = input.bool(true, "Debug: label every swing point", group = gEng,
+     tooltip = "With debug mode on, each swing is labelled with the pool it joined or the precise reason it was rejected. This is how you tell 'the swing was never detected' apart from 'it was detected and refused'.")
+
+deferred = drawMode == "On MSS confirmation"
+
+// ═════════════════════════════ 2. TYPES ═════════════════════════════════════
+type LiqPivot
+    int   bar
+    float price
+    bool  drawn = false
+
+type Cluster
+    int    id
+    bool   isHigh
+    float  level
+    int    oldestBar
+    float  oldestPrice
+    int    newestBar
+    int    createdBar
+    bool   active       = false
+    bool   swept        = false
+    bool   mssConfirmed = false
+    bool   setupDone    = false
+    bool   expired      = false
+    bool   suppressed   = false        // MSS fired but muted by the cooldown
+    int    sweepBar     = na        // FIRST bar that ran the level (clock)
+    int    grabBar      = na        // extreme bar of the sweep (marker + stop)
+    float  grabHigh     = na
+    float  grabLow      = na
+    float  grabClose    = na
+    float  runMin       = na
+    float  runMax       = na
+    int    runMinBar    = na
+    int    runMaxBar    = na
+    float  structLevel  = na
+    int    structBar    = na
+    int    mssBar        = na
+    int    src          = 0         // 0 pivot, 1 daily, 2 weekly, 3 session
+    string tag          = "Pivot"   // text of the dark tag under the grab X
+    int    fvgCount     = 0
+    float  lastFvgTop   = na
+    float  lastFvgBot   = na
+    array<LiqPivot> pivots
+    line   liqLine
+    line   mssLine
+
+type Fvg
+    int   id
+    bool  isBull
+    float top
+    float bottom
+    int   left
+    int   right
+    int   createdBar
+    bool  tested = false
+    box   bx
+    line  mid
+
+// One tracked setup, from FVG creation through fill to resolution.
+type Trade
+    int   id
+    bool  isLong
+    string tag
+    float entry
+    float stop
+    float risk
+    int   createdBar
+    int   entryBar   = na
+    bool  filled     = false
+    bool  closed     = false
+    bool  stopped    = false
+    bool  expired    = false
+    bool  hit1       = false
+    bool  hit15      = false
+    bool  hit2       = false
+    bool  hit3       = false
+    bool  beArmed    = false        // arm level printed -> stop now at entry
+    bool  beClosed   = false        // exited at entry after arming
+
+// Aggregate counters for the stats table.
+type Stats
+    int setups   = 0
+    int filled   = 0
+    int stopped  = 0
+    int t1       = 0
+    int t15      = 0
+    int t2       = 0
+    int t3       = 0
+    int unfilled = 0
+    // Stopped without having reached that target first. `stopped` overlaps
+    // with t1/t2/t3, so it cannot be used as the loss count for a target rule.
+    int skipped  = 0        // gaps rejected as too wide / too far from the stop
+    int sNo1     = 0
+    int sNo15    = 0
+    int sNo2     = 0
+    int sNo3     = 0
+    int be       = 0        // closed at the armed stop (+beLockR)
+    int beAfter2 = 0        // ...that had already reached 2R
+
+// Rolling extremes of a period, plus the opposing extreme since each printed.
+// The opposing value is the MSS threshold, tracked forward instead of looked up.
+type Tracker
+    bool  live          = false
+    int   startBar      = na
+    float hi            = na
+    int   hiBar         = na
+    float lo            = na
+    int   loBar         = na
+    float minSinceHi    = na
+    int   minSinceHiBar = na
+    float maxSinceLo    = na
+    int   maxSinceLoBar = na
+
+// Pine functions can mutate object fields but not reassign global scalars, so
+// anything a function updates lives here.
+type Counters
+    int cluster     = 0
+    int fvg         = 0
+    int lastBullMss = na
+    int lastBearMss = na
+
+// ═════════════════════════════ 3. STATE ═════════════════════════════════════
+var array<Cluster> clusters = array.new<Cluster>()
+var array<Fvg>     fvgs     = array.new<Fvg>()
+var array<Trade>   trades   = array.new<Trade>()
+var Stats          stx      = Stats.new()
+var Counters       cnt      = Counters.new()
+var Tracker        dayT     = Tracker.new()
+var Tracker        weekT    = Tracker.new()
+var Tracker        s1T      = Tracker.new()
+var Tracker        s2T      = Tracker.new()
+var Tracker        s3T      = Tracker.new()
+
+// ═════════════════════════ 4. BAR-LEVEL SERIES ══════════════════════════════
+atr = ta.atr(atrLength)
+tol = atr * liquidityToleranceATR
+
+ph = ta.pivothigh(high, pivotLeft, pivotRight)
+pl = ta.pivotlow(low,  pivotLeft, pivotRight)
+
+// ta.* calls are unconditional: they carry state and must run every bar.
+[stLine, stDir] = ta.supertrend(stFactor, stAtrLen)
+emaLine = ta.ema(close, emaLen)
+// ta.supertrend direction: -1 up, 1 down. Not read by the engine.
+
+// Period boundaries and session membership, global scope for series consistency.
+newDay   = timeframe.change("D")
+newWeek  = timeframe.change("W")
+inSess1  = sess1On and not na(time(timeframe.period, sess1Spec, sessTz))
+inSess2  = sess2On and not na(time(timeframe.period, sess2Spec, sessTz))
+inSess3  = sess3On and not na(time(timeframe.period, sess3Spec, sessTz))
+
+// Seeds a new cluster's running extremes at its oldest pivot bar
+// (bar_index - pivotRight) without dynamic history indexing.
+seedLow     = ta.lowest(low,   pivotRight + 1)
+seedHigh    = ta.highest(high, pivotRight + 1)
+seedLowBar  = bar_index + ta.lowestbars(low,   pivotRight + 1)
+seedHighBar = bar_index + ta.highestbars(high, pivotRight + 1)
+
+// ═════════════════════════ 5. HELPERS ══════════════════════════════════════
+dirCol(bool isHigh) =>
+    isHigh ? bearCol : bullCol
+
+f2s(float v) =>
+    str.tostring(v, format.mintick)
+
+stateStr(Cluster c) =>
+    c.expired ? "expired" : c.setupDone ? "SETUP" : c.suppressed ? "muted" :
+      c.mssConfirmed ? "in leg" : c.swept ? "wait MSS" : c.active ? "liquidity" : "lone pivot"
+
+calcLevel(Cluster c) =>
+    int n = c.pivots.size()
+    float res = c.level
+    if n > 0
+        if levelMode == "Oldest"
+            res := c.pivots.get(0).price
+        else if levelMode == "Newest"
+            res := c.pivots.get(n - 1).price
+        else if levelMode == "Extreme"
+            float e = c.pivots.get(0).price
+            if n > 1
+                for i = 1 to n - 1
+                    float p = c.pivots.get(i).price
+                    e := c.isHigh ? math.max(e, p) : math.min(e, p)
+            res := e
+        else if levelMode == "Median"
+            array<float> tmp = array.new<float>()
+            for i = 0 to n - 1
+                tmp.push(c.pivots.get(i).price)
+            tmp.sort()
+            res := n % 2 == 1 ? tmp.get(n / 2) : (tmp.get(n / 2 - 1) + tmp.get(n / 2)) / 2.0
+        else
+            float s = 0.0
+            for i = 0 to n - 1
+                s += c.pivots.get(i).price
+            res := s / n
+    res
+
+// Distance from a candidate price to the pool, per matching mode.
+// `for i = 1 to size - 1` on a 1-element array is `1 to 0`, which Pine runs
+// descending (1 then 0) and reads out of bounds. Guard on size, not size > 0.
+pivotDistance(Cluster c, float price) =>
+    float d = math.abs(c.level - price)
+    if clusterMatchMode == "Nearest pivot" and c.pivots.size() > 0
+        d := math.abs(c.pivots.get(0).price - price)
+        if c.pivots.size() > 1
+            for i = 1 to c.pivots.size() - 1
+                d := math.min(d, math.abs(c.pivots.get(i).price - price))
+    d
+
+// A pivot above the pool's highest high has already taken that high out: a
+// higher high, not a member of an equal-highs pool. Small overshoots allowed.
+overshootOk(Cluster c, float price) =>
+    bool ok = true
+    if c.pivots.size() > 0
+        float ext = c.pivots.get(0).price
+        if c.pivots.size() > 1
+            for i = 1 to c.pivots.size() - 1
+                float p = c.pivots.get(i).price
+                ext := c.isHigh ? math.max(ext, p) : math.min(ext, p)
+        float allow = atr * maxPivotOvershootATR
+        ok := c.isHigh ? price <= ext + allow : price >= ext - allow
+    ok
+
+// Would adding `price` push the pool wider than maxClusterSpanATR?
+spanOk(Cluster c, float price) =>
+    float lo = price
+    float hi = price
+    if c.pivots.size() > 0
+        for i = 0 to c.pivots.size() - 1
+            float p = c.pivots.get(i).price
+            lo := math.min(lo, p)
+            hi := math.max(hi, p)
+    hi - lo <= atr * maxClusterSpanATR
+
+// ═════════════════════════ 6. DRAWING ══════════════════════════════════════
+drawDiamond(Cluster c, LiqPivot p) =>
+    if showPivots and not p.drawn
+        label.new(p.bar, p.price, "",
+             xloc    = xloc.bar_index,
+             yloc    = c.isHigh ? yloc.abovebar : yloc.belowbar,
+             style   = label.style_diamond,
+             color   = dirCol(c.isHigh),
+             size    = size.tiny,
+             tooltip = "Liquidity pivot #" + str.tostring(c.id) +
+                       (c.isHigh ? " (high)" : " (low)") + "\n" + f2s(p.price))
+        p.drawn := true
+
+drawAllDiamonds(Cluster c) =>
+    if c.pivots.size() > 0
+        for i = 0 to c.pivots.size() - 1
+            drawDiamond(c, c.pivots.get(i))
+
+drawLiqLine(Cluster c, int x2) =>
+    if showLiquidity and na(c.liqLine)
+        c.liqLine := line.new(c.oldestBar, c.level, x2, c.level,
+             xloc  = xloc.bar_index,
+             color = liqDirCol ? color.new(dirCol(c.isHigh), 20) : liqCol,
+             style = line.style_dotted,
+             width = 1)
+
+drawStructLine(Cluster c, int x2) =>
+    if showMSS and na(c.mssLine)
+        c.mssLine := line.new(c.structBar, c.structLevel, x2, c.structLevel,
+             xloc  = xloc.bar_index,
+             color = structCol,
+             style = line.style_dashed,
+             width = 1)
+
+// X-cross on the sweep extreme, plus the source tag beneath it.
+drawGrab(Cluster c) =>
+    if showGrab
+        label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, "",
+             xloc    = xloc.bar_index,
+             yloc    = yloc.price,
+             style   = label.style_xcross,
+             color   = dirCol(c.isHigh),
+             size    = size.small,
+             tooltip = "Liquidity grab #" + str.tostring(c.id) +
+                       "\nlevel " + f2s(c.level) +
+                       "\npivots " + str.tostring(c.pivots.size()) +
+                       "\nMSS needed " + (c.isHigh ? "close < " : "close > ") + f2s(c.structLevel))
+    if showGrab and showGrabTag
+        label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, c.tag,
+             xloc      = xloc.bar_index,
+             yloc      = c.isHigh ? yloc.abovebar : yloc.belowbar,
+             style     = c.isHigh ? label.style_label_down : label.style_label_up,
+             color     = #2a2e39,
+             textcolor = color.white,
+             size      = size.tiny)
+
+drawMssLabel(Cluster c) =>
+    if showMSS
+        label.new(c.mssBar, c.isHigh ? low : high, "MSS",
+             xloc      = xloc.bar_index,
+             yloc      = c.isHigh ? yloc.belowbar : yloc.abovebar,
+             style     = c.isHigh ? label.style_label_up : label.style_label_down,
+             color     = dirCol(c.isHigh),
+             textcolor = color.white,
+             size      = size.tiny,
+             tooltip   = "MSS #" + str.tostring(c.id) + (c.isHigh ? " bearish" : " bullish") +
+                         "\nthreshold " + f2s(c.structLevel) +
+                         "\nfrom oldest pivot @ bar " + str.tostring(c.oldestBar))
+
+// An FVG anchored at an arbitrary (possibly historical) left bar.
+newFvgAt(bool isBull, float top, float bottom, int lft) =>
+    cnt.fvg += 1
+    Fvg f = Fvg.new(
+         id         = cnt.fvg,
+         isBull     = isBull,
+         top        = top,
+         bottom     = bottom,
+         left       = lft,
+         right      = lft + fvgExtendBars,
+         createdBar = bar_index)
+    if showFVGs
+        color base = isBull ? bullCol : bearCol
+        color bd   = color.new(base, math.max(0, fvgFill - 30))
+        f.bx := box.new(f.left, f.top, f.right, f.bottom,
+             xloc         = xloc.bar_index,
+             border_color = bd,
+             border_width = 1,
+             bgcolor      = color.new(base, fvgFill))
+        if showFvgMidline
+            float m = (f.top + f.bottom) / 2.0
+            f.mid := line.new(f.left, m, f.right, m,
+                 xloc = xloc.bar_index, color = bd, style = line.style_solid, width = 1)
+    fvgs.push(f)
+    f
+
+// Entry price implied by entryMode, from a gap's two edges.
+entryOf(bool isLong, float top, float bot) =>
+    entryMode == "Midpoint (CE)" ? (top + bot) / 2.0 :
+     entryMode == "Distal"       ? (isLong ? bot : top) :
+                                   (isLong ? top : bot)
+
+// Stop sits beyond the sweep candle - the bar the X marks, which with
+// trailGrabExtreme is the deepest bar of the raid. slBufferATR adds room.
+stopFrom(Cluster c) =>
+    not c.isHigh ? c.grabLow - atr * slBufferATR : c.grabHigh + atr * slBufferATR
+
+// Walks the sweep-to-shift leg and marks qualifying imbalances.
+// Offsets only, no future data; the newest window may end on the current bar.
+scanLeg(Cluster c, int fromBar, int toBar) =>
+    bool  isBull = not c.isHigh
+    float minSz  = atr * minFvgSizeATR
+    int   offHi  = math.min(fvgScanCap, math.max(0, bar_index - fromBar))
+    int   offLo  = math.max(0, bar_index - toBar)
+    // Newest window first, so the maxFvgPerSetup budget goes to the
+    // imbalances nearest the shift rather than the oldest in the leg.
+    if offLo <= offHi
+        for off = offLo to offHi
+            if c.fvgCount < maxFvgPerSetup
+                float gTop = isBull ? low[off]     : low[off + 2]
+                float gBot = isBull ? high[off + 2] : high[off]
+                bool  ok   = isBull ? low[off] > high[off + 2] : high[off] < low[off + 2]
+                if ok and not na(gTop) and not na(gBot) and gTop - gBot >= minSz
+                    bool clash = skipOverlappingFvg and not na(c.lastFvgTop) and
+                                 gBot <= c.lastFvgTop and gTop >= c.lastFvgBot
+                    // Checked per candidate: a closer gap later in the same
+                    // leg is still eligible after a distant one is rejected.
+                    bool  wide  = maxFvgSizeATR > 0 and gTop - gBot > atr * maxFvgSizeATR
+                    float cEnt  = entryOf(isBull, gTop, gBot)
+                    float cSl   = stopFrom(c)
+                    bool  farSl = maxRiskATR > 0 and math.abs(cEnt - cSl) > atr * maxRiskATR
+                    if wide or farSl
+                        stx.skipped += 1
+                    if not clash and not wide and not farSl
+                        newFvgAt(isBull, gTop, gBot, bar_index - off - 2)
+                        c.lastFvgTop := gTop
+                        c.lastFvgBot := gBot
+                        c.fvgCount   += 1
+
+// Entry price implied by entryMode for a finished setup.
+entryFrom(Cluster c) =>
+    entryOf(not c.isHigh, c.lastFvgTop, c.lastFvgBot)
+
+// Call after scanLeg: reads lastFvgTop/Bot, which the scan produces.
+drawSetup(Cluster c) =>
+    bool isLong = not c.isHigh
+    bool dirOk  = (isLong and showLongs) or (not isLong and showShorts)
+    if dirOk and c.fvgCount > 0
+        color col   = isLong ? bullCol : bearCol
+        float entry = entryFrom(c)
+        float sl    = stopFrom(c)
+        int   x2    = bar_index + setupExtendBars
+        if showEntryLine
+            line.new(c.mssBar, entry, x2, entry,
+                 xloc = xloc.bar_index, color = col, style = line.style_solid, width = 1)
+            label.new(x2, entry, "Entry " + f2s(entry),
+                 xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left,
+                 color = color.new(col, 75), textcolor = col, size = size.tiny)
+        if showStopLoss
+            // Anchored on the grab bar so the line starts at the X.
+            line.new(c.grabBar, sl, x2, sl,
+                 xloc = xloc.bar_index, color = color.new(col, 20), style = line.style_dashed, width = 1)
+            label.new(x2, sl, "SL " + f2s(sl),
+                 xloc      = xloc.bar_index,
+                 yloc      = yloc.price,
+                 style     = label.style_label_left,
+                 color     = col,
+                 textcolor = color.white,
+                 size      = size.tiny,
+                 tooltip   = "Stop beyond the grab candle @ bar " + str.tostring(c.grabBar) +
+                             "\ngrab " + (isLong ? "low " : "high ") + f2s(isLong ? c.grabLow : c.grabHigh) +
+                             "\nbuffer " + str.tostring(slBufferATR) + " x ATR" +
+                             "\nrisk " + f2s(math.abs(entry - sl)))
+    if showSetupLabels and dirOk and c.fvgCount > 0
+        label.new(bar_index + 2, isLong ? c.lastFvgTop : c.lastFvgBot, isLong ? "LONG" : "SHORT",
+             xloc      = xloc.bar_index,
+             yloc      = yloc.price,
+             style     = label.style_label_left,
+             color     = isLong ? bullCol : bearCol,
+             textcolor = color.white,
+             size      = size.tiny)
+
+// A rejected pivot can spawn a second pool a few ticks from the first; both
+// then get swept together and print the same trade twice. Retire same-side
+// pools on the same liquidity once one resolves. Activated pools only - a lone
+// pivot nearby may be the first half of the next pool.
+suppressSiblings(Cluster c) =>
+    if clusters.size() > 0
+        for i = 0 to clusters.size() - 1
+            Cluster o = clusters.get(i)
+            if o.id != c.id and o.src == c.src and o.isHigh == c.isHigh and o.active and not o.mssConfirmed and not o.expired
+                if math.abs(o.level - c.level) <= atr * liquidityToleranceATR * 2
+                    o.expired := true
+
+// Register a setup for forward measurement. One per cluster, on its first FVG.
+openTrade(Cluster c) =>
+    bool  isLong = not c.isHigh
+    float e      = entryFrom(c)
+    float sl     = stopFrom(c)
+    float r      = math.abs(e - sl)
+    if r > 0 and not na(e) and not na(sl)
+        trades.push(Trade.new(id = c.id, isLong = isLong, tag = c.tag,
+             entry = e, stop = sl, risk = r, createdBar = bar_index))
+        stx.setups += 1
+        if showTargets
+            color col = isLong ? bullCol : bearCol
+            array<float> mults = array.from(1.0, 1.5, 2.0, 3.0)
+            for mi = 0 to mults.size() - 1
+                float m  = mults.get(mi)
+                float tp = isLong ? e + r * m : e - r * m
+                line.new(bar_index, tp, bar_index + setupExtendBars, tp,
+                     xloc = xloc.bar_index, color = color.new(col, 55),
+                     style = line.style_dotted, width = 1)
+                label.new(bar_index + setupExtendBars, tp, str.tostring(m) + "R",
+                     xloc = xloc.bar_index, yloc = yloc.price, style = label.style_none,
+                     textcolor = color.new(col, 30), size = size.tiny)
+
+// ── period trackers ─────────────────────────────────────────────────────────
+trackerReset(Tracker t) =>
+    t.live          := true
+    t.startBar      := bar_index
+    t.hi            := high
+    t.hiBar         := bar_index
+    t.lo            := low
+    t.loBar         := bar_index
+    t.minSinceHi    := low
+    t.minSinceHiBar := bar_index
+    t.maxSinceLo    := high
+    t.maxSinceLoBar := bar_index
+
+trackerUpdate(Tracker t) =>
+    if t.live
+        bool newHi = high > t.hi
+        bool newLo = low  < t.lo
+        if newHi
+            t.hi            := high
+            t.hiBar         := bar_index
+            t.minSinceHi    := low          // opposing extreme restarts here
+            t.minSinceHiBar := bar_index
+        if not newHi and low < t.minSinceHi
+            t.minSinceHi    := low
+            t.minSinceHiBar := bar_index
+        if newLo
+            t.lo            := low
+            t.loBar         := bar_index
+            t.maxSinceLo    := high
+            t.maxSinceLoBar := bar_index
+        if not newLo and high > t.maxSinceLo
+            t.maxSinceLo    := high
+            t.maxSinceLoBar := bar_index
+
+// A completed period high/low enters as a pre-activated cluster: one known
+// price, no pivots, no clustering. Everything downstream is unchanged.
+injectLevel(bool isHigh, float price, int anchorBar, float opp, int oppBar, int src, string tag) =>
+    if not na(price) and not na(anchorBar)
+        cnt.cluster += 1
+        Cluster c = Cluster.new(
+             id          = cnt.cluster,
+             isHigh      = isHigh,
+             level       = price,
+             oldestBar   = anchorBar,
+             oldestPrice = price,
+             newestBar   = anchorBar,
+             createdBar  = bar_index,
+             active      = true,
+             runMin      = isHigh ? opp     : price,
+             runMax      = isHigh ? price   : opp,
+             runMinBar   = isHigh ? oppBar  : anchorBar,
+             runMaxBar   = isHigh ? anchorBar : oppBar,
+             src         = src,
+             tag         = tag,
+             pivots      = array.new<LiqPivot>())
+        clusters.push(c)
+        if not deferred
+            drawLiqLine(c, bar_index)
+
+// Plain reference levels (PDH/PDL/PWH/PWL), independent of the pattern engine.
+drawStaticLevel(float price, int fromBar, string txt, color col) =>
+    if not na(price)
+        line.new(fromBar, price, bar_index + staticExtendBars, price,
+             xloc = xloc.bar_index, color = color.new(col, 40), style = line.style_dotted, width = 1)
+        label.new(bar_index + staticExtendBars, price, txt,
+             xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left,
+             color = color.new(col, 70), textcolor = col, size = size.tiny)
+
+// Close out a finished period: publish its H and L, then restart the tracker.
+closePeriod(Tracker t, int src, string tag, bool showStatic, string hiTxt, string loTxt) =>
+    if t.live
+        injectLevel(true,  t.hi, t.hiBar, t.minSinceHi, t.minSinceHiBar, src, tag)
+        injectLevel(false, t.lo, t.loBar, t.maxSinceLo, t.maxSinceLoBar, src, tag)
+        if showStatic
+            drawStaticLevel(t.hi, t.hiBar, hiTxt, bearCol)
+            drawStaticLevel(t.lo, t.loBar, loTxt, bullCol)
+
+// Everything that belongs to a completed pattern, drawn at MSS time.
+renderPattern(Cluster c) =>
+    drawLiqLine(c, c.grabBar)          // no-op if Live mode already drew it
+    drawAllDiamonds(c)
+    drawStructLine(c, c.mssBar)
+    drawGrab(c)
+    drawMssLabel(c)
+    // drawSetup runs after scanLeg, which has not produced the FVG yet.
+
+// ═════════════════════════ 7. PIVOT REGISTRATION ═══════════════════════════
+// Picks the closest compatible pool, not the newest.
+registerPivot(bool isHigh, float price, int pbar, float tolerance) =>
+    Cluster target = na
+    float   best   = na
+    Cluster near   = na          // closest open pool, pass or fail (diagnostics)
+    float   nearD  = na
+    if clusters.size() > 0
+        for i = 0 to clusters.size() - 1
+            Cluster c = clusters.get(i)
+            // src 0 only: a daily/weekly/session level is a fixed price, not
+            // a pool that pivots may join.
+            bool open = c.src == 0 and not c.expired and not c.mssConfirmed and (not c.swept or allowJoinAfterSweep)
+            if open and c.isHigh == isHigh
+                float d = pivotDistance(c, price)
+                if na(nearD) or d < nearD
+                    nearD := d
+                    near  := c
+                if d <= tolerance and spanOk(c, price) and overshootOk(c, price) and pbar - c.oldestBar <= maxPoolSpanBars and (na(best) or d < best)
+                    best   := d
+                    target := c
+
+    bool isNew = na(target)
+
+    // Distinguishes "pivot never detected" from "detected and rejected".
+    if debugMode and debugJoins
+        string why = not isNew ? " join #" + str.tostring(target.id) :
+             na(near)                      ? " new pool" :
+             nearD > tolerance             ? " X dist " + f2s(nearD) + " > " + f2s(tolerance) :
+             not overshootOk(near, price)  ? " X overshoot #" + str.tostring(near.id) :
+             not spanOk(near, price)       ? " X span #" + str.tostring(near.id) :
+             pbar - near.oldestBar > maxPoolSpanBars ? " X age " + str.tostring(pbar - near.oldestBar) + " > " + str.tostring(maxPoolSpanBars) : " X ?"
+        label.new(pbar, price, (isHigh ? "PH " : "PL ") + f2s(price) + why,
+             xloc      = xloc.bar_index,
+             yloc      = isHigh ? yloc.abovebar : yloc.belowbar,
+             style     = label.style_none,
+             textcolor = isHigh ? color.new(bearCol, 25) : color.new(bullCol, 25),
+             size      = size.tiny)
+
+    // Guarded standalone ifs: Pine type-checks every branch of an if/else
+    // chain even when the value is discarded (CE10235).
+    if isNew
+        cnt.cluster += 1
+        Cluster nc = Cluster.new(
+             id          = cnt.cluster,
+             isHigh      = isHigh,
+             level       = price,
+             oldestBar   = pbar,
+             oldestPrice = price,
+             newestBar   = pbar,
+             createdBar  = bar_index,
+             runMin      = seedLow,
+             runMax      = seedHigh,
+             runMinBar   = seedLowBar,
+             runMaxBar   = seedHighBar,
+             pivots      = array.new<LiqPivot>())
+        nc.pivots.push(LiqPivot.new(bar = pbar, price = price))
+        clusters.push(nc)
+
+    if not isNew
+        target.pivots.push(LiqPivot.new(bar = pbar, price = price))
+        target.newestBar := pbar
+        bool grew = target.active
+        if grew
+            target.level := calcLevel(target)
+            if not na(target.liqLine)
+                line.set_y1(target.liqLine, target.level)
+                line.set_y2(target.liqLine, target.level)
+            if not deferred
+                drawDiamond(target, target.pivots.get(target.pivots.size() - 1))
+        if not grew and target.pivots.size() >= minPivotsForLiquidity
+            target.active := true
+            target.level  := calcLevel(target)
+            if not deferred
+                drawLiqLine(target, bar_index)
+                drawAllDiamonds(target)
+
+// ═════════════════════════ 8. ENGINE ═══════════════════════════════════════
+// Per-bar alert flags. Non-var, so they reset each bar. The engine is main
+// scope and can assign to them; a function could not.
+bool sigGrabHigh  = false
+bool sigGrabLow   = false
+bool sigMssBear   = false
+bool sigMssBull   = false
+bool sigSetupLong = false
+bool sigSetupShort= false
+bool sigEntryLong = false
+bool sigEntryShort= false
+
+engineOk = not confirmOnBarClose or barstate.isconfirmed
+
+if engineOk
+
+    // ── 8.0 period liquidity: publish finished periods, track the live one ──
+    if useDailyLiq
+        if newDay
+            closePeriod(dayT, 1, "Day", showPrevDayHL, "PDH", "PDL")
+            trackerReset(dayT)
+        if not newDay
+            trackerUpdate(dayT)
+
+    if useWeeklyLiq
+        if newWeek
+            closePeriod(weekT, 2, "Week", showPrevWeekHL, "PWH", "PWL")
+            trackerReset(weekT)
+        if not newWeek
+            trackerUpdate(weekT)
+
+    if useSessionLiq
+        // session 1
+        if inSess1 and not inSess1[1]
+            trackerReset(s1T)
+        if inSess1 and inSess1[1]
+            trackerUpdate(s1T)
+        if not inSess1 and inSess1[1]
+            if showSessionBox and s1T.live
+                box.new(s1T.startBar, s1T.hi, bar_index - 1, s1T.lo, xloc = xloc.bar_index,
+                     border_color = color.new(liqCol, 60), bgcolor = color.new(liqCol, 93))
+            closePeriod(s1T, 3, sess1Name, false, "", "")
+            s1T.live := false
+        // session 2
+        if inSess2 and not inSess2[1]
+            trackerReset(s2T)
+        if inSess2 and inSess2[1]
+            trackerUpdate(s2T)
+        if not inSess2 and inSess2[1]
+            if showSessionBox and s2T.live
+                box.new(s2T.startBar, s2T.hi, bar_index - 1, s2T.lo, xloc = xloc.bar_index,
+                     border_color = color.new(liqCol, 60), bgcolor = color.new(liqCol, 93))
+            closePeriod(s2T, 3, sess2Name, false, "", "")
+            s2T.live := false
+        // session 3
+        if inSess3 and not inSess3[1]
+            trackerReset(s3T)
+        if inSess3 and inSess3[1]
+            trackerUpdate(s3T)
+        if not inSess3 and inSess3[1]
+            if showSessionBox and s3T.live
+                box.new(s3T.startBar, s3T.hi, bar_index - 1, s3T.lo, xloc = xloc.bar_index,
+                     border_color = color.new(liqCol, 60), bgcolor = color.new(liqCol, 93))
+            closePeriod(s3T, 3, sess3Name, false, "", "")
+            s3T.live := false
+
+    // ── 8.1 register newly confirmed pivots ─────────────────────────────────
+    if usePivotLiq and not na(ph)
+        registerPivot(true,  ph, bar_index - pivotRight, tol)
+    if usePivotLiq and not na(pl)
+        registerPivot(false, pl, bar_index - pivotRight, tol)
+
+    if debugMode and not debugJoins and not na(ph)
+        label.new(bar_index - pivotRight, high[pivotRight], "PH " + f2s(ph),
+             xloc = xloc.bar_index, yloc = yloc.abovebar, style = label.style_none,
+             textcolor = color.new(bearCol, 40), size = size.tiny)
+    if debugMode and not debugJoins and not na(pl)
+        label.new(bar_index - pivotRight, low[pivotRight], "PL " + f2s(pl),
+             xloc = xloc.bar_index, yloc = yloc.belowbar, style = label.style_none,
+             textcolor = color.new(bullCol, 40), size = size.tiny)
+
+    // ── 8.2 per-cluster state machine ───────────────────────────────────────
+    if clusters.size() > 0
+        for i = 0 to clusters.size() - 1
+            Cluster c = clusters.get(i)
+            if not c.expired
+
+                // Running opposing extreme from the oldest pivot. Frozen at
+                // the sweep, or the threshold would trail price forever.
+                if not c.swept
+                    if low < c.runMin
+                        c.runMin    := low
+                        c.runMinBar := bar_index
+                    if high > c.runMax
+                        c.runMax    := high
+                        c.runMaxBar := bar_index
+
+                // Snapshot keeps the blocks below mutually exclusive: one
+                // transition per cluster per bar, without an if/else chain.
+                bool wasActive = c.active
+                bool wasSwept  = c.swept
+                bool wasMss    = c.mssConfirmed
+
+                // Lone pivot, not liquidity yet. A shallow undercut must not
+                // kill it or a forming double bottom loses its first low.
+                if not wasActive
+                    float pbuf = atr * pendingInvalidateATR
+                    bool ran = c.isHigh ? high > c.level + pbuf : low < c.level - pbuf
+                    if (invalidatePending and ran) or (bar_index - c.createdBar > pendingExpiryBars)
+                        c.expired := true
+
+                // Pool exists, waiting for the sweep.
+                if wasActive and not wasSwept and not c.expired
+                    if not na(c.liqLine)
+                        line.set_x2(c.liqLine, bar_index)
+                    float buf     = atr * grabBufferATR
+                    bool  grabbed = c.isHigh ? high > c.level + buf : low < c.level - buf
+                    if grabbed
+                        c.swept       := true
+                        c.sweepBar    := bar_index
+                        c.grabBar     := bar_index
+                        c.grabHigh    := high
+                        c.grabLow     := low
+                        c.grabClose   := close
+                        c.structLevel := c.isHigh ? c.runMin    : c.runMax
+                        c.structBar   := c.isHigh ? c.runMinBar : c.runMaxBar
+                        // Fires on the sweep bar, which in deferred draw mode
+                        // is earlier than the bar the X appears on.
+                        if c.isHigh
+                            sigGrabHigh := true
+                        if not c.isHigh
+                            sigGrabLow := true
+                        if alertOnGrab and dynamicAlerts
+                            alert(c.tag + (c.isHigh ? " buy-side" : " sell-side") +
+                                  " liquidity swept @ " + f2s(c.level) +
+                                  " — waiting for " + (c.isHigh ? "bearish" : "bullish") +
+                                  " MSS below " + f2s(c.structLevel),
+                                  alert.freq_once_per_bar_close)
+                        if not deferred
+                            drawStructLine(c, bar_index)
+
+                // Swept, waiting for the opposing structure break.
+                if wasSwept and not wasMss and not c.expired
+                    // Clock runs from the first sweep; reading the trailed
+                    // grabBar would let each new extreme reset it.
+                    bool timedOut = bar_index - c.sweepBar > maxBarsAfterGrab
+                    if timedOut
+                        c.expired := true
+                    if not timedOut
+                        if not na(c.mssLine)
+                            line.set_x2(c.mssLine, bar_index)
+                        // Grab candle follows the deepest bar of the raid.
+                        if trailGrabExtreme and c.isHigh and high > c.grabHigh
+                            c.grabBar   := bar_index
+                            c.grabHigh  := high
+                            c.grabLow   := low
+                            c.grabClose := close
+                        if trailGrabExtreme and not c.isHigh and low < c.grabLow
+                            c.grabBar   := bar_index
+                            c.grabLow   := low
+                            c.grabHigh  := high
+                            c.grabClose := close
+                        bool broke = c.isHigh
+                             ? (mssMode == "close" ? close < c.structLevel : low  < c.structLevel)
+                             : (mssMode == "close" ? close > c.structLevel : high > c.structLevel)
+                        if broke
+                            c.mssConfirmed := true
+                            c.mssBar       := bar_index
+                            int  lastSame  = c.isHigh ? cnt.lastBearMss : cnt.lastBullMss
+                            bool tooSoon   = not na(lastSame) and bar_index - lastSame < mssCooldownBars
+                            if tooSoon
+                                c.suppressed := true
+                                c.setupDone  := true
+                            if not tooSoon
+                                if c.isHigh
+                                    cnt.lastBearMss := bar_index
+                                else
+                                    cnt.lastBullMss := bar_index
+                                renderPattern(c)
+                                suppressSiblings(c)
+                                if c.isHigh
+                                    sigMssBear := true
+                                if not c.isHigh
+                                    sigMssBull := true
+                                if alertOnMss and dynamicAlerts
+                                    alert((c.isHigh ? "Bearish" : "Bullish") + " MSS confirmed (" +
+                                          c.tag + " liquidity @ " + f2s(c.level) + ") — broke " +
+                                          f2s(c.structLevel), alert.freq_once_per_bar_close)
+                                // Mark imbalances across the whole leg.
+                                int from  = fvgScanFrom == "Grab candle" ? c.grabBar : bar_index
+                                int had   = c.fvgCount
+                                scanLeg(c, from, bar_index)
+                                if c.fvgCount > had and had == 0
+                                    drawSetup(c)
+                                    if trackOutcomes
+                                        openTrade(c)
+                                if c.fvgCount > had
+                                    if c.isHigh
+                                        sigSetupShort := true
+                                    if not c.isHigh
+                                        sigSetupLong := true
+                                    if alertOnSetup and dynamicAlerts
+                                        alert((c.isHigh ? "SHORT" : "LONG") + " setup ready — " +
+                                              str.tostring(c.fvgCount) + " FVG(s) after " + c.tag +
+                                              " sweep @ " + f2s(c.level) + ", stop beyond " +
+                                              f2s(c.isHigh ? c.grabHigh : c.grabLow),
+                                              alert.freq_once_per_bar_close)
+
+                // Keep looking for zones for a few bars past the break.
+                if c.mssConfirmed and not c.setupDone and not c.expired and not c.suppressed
+                    if bar_index > c.mssBar
+                        int had2 = c.fvgCount
+                        scanLeg(c, bar_index, bar_index)
+                        if c.fvgCount > had2 and had2 == 0
+                            drawSetup(c)
+                            if trackOutcomes
+                                openTrade(c)
+                        if c.fvgCount > had2
+                            if c.isHigh
+                                sigSetupShort := true
+                            if not c.isHigh
+                                sigSetupLong := true
+                            if alertOnSetup and dynamicAlerts
+                                alert((c.isHigh ? "SHORT" : "LONG") + " setup — further FVG after " +
+                                      c.tag + " sweep @ " + f2s(c.level), alert.freq_once_per_bar_close)
+                    if bar_index - c.mssBar >= maxBarsAfterMss or c.fvgCount >= maxFvgPerSetup
+                        c.setupDone := true
+
+    // ── 8.25 walk every open setup forward ──────────────────────────────────
+    if trackOutcomes and trades.size() > 0
+        for i = 0 to trades.size() - 1
+            Trade t = trades.get(i)
+            if not t.closed
+
+                // Has price reached the zone yet?
+                if not t.filled
+                    // The optimistic/realistic difference is this guard: may a
+                    // fill happen on the bar that created the zone?
+                    bool reachable = fillModel == "Same bar (optimistic)" or bar_index > t.createdBar
+                    bool touched = reachable and (t.isLong ? low <= t.entry : high >= t.entry)
+                    if touched
+                        t.filled   := true
+                        t.entryBar := bar_index
+                        stx.filled += 1
+                        if t.isLong
+                            sigEntryLong := true
+                        if not t.isLong
+                            sigEntryShort := true
+                        if showFillMarker
+                            label.new(bar_index, t.entry, "",
+                                 xloc  = xloc.bar_index,
+                                 yloc  = yloc.price,
+                                 style = t.isLong ? label.style_triangleup : label.style_triangledown,
+                                 color = t.isLong ? bullCol : bearCol,
+                                 size  = size.tiny,
+                                 tooltip = "Entry " + f2s(t.entry) + "\nstop " + f2s(t.stop) +
+                                           "\n1R " + f2s(t.isLong ? t.entry + t.risk : t.entry - t.risk))
+                        if alertOnEntry and dynamicAlerts
+                            alert((t.isLong ? "LONG" : "SHORT") + " entry touched @ " + f2s(t.entry) +
+                                  " (" + t.tag + " setup) — stop " + f2s(t.stop),
+                                  alert.freq_once_per_bar_close)
+                    if not touched and bar_index - t.createdBar > tradeExpiryBars
+                        t.expired    := true
+                        t.closed     := true
+                        stx.unfilled += 1
+
+                // Resolve a filled setup. Stop is checked first: bar data
+                // cannot order intrabar events, so ties go to the stop.
+                if t.filled and not t.closed
+                    // Stop in force this bar: original until the arm level has
+                    // printed, entry after. Arming happens below this check, so
+                    // a bar spanning both resolves as a full stop.
+                    float liveStop = t.beArmed
+                         ? (t.isLong ? t.entry + t.risk * beLockR
+                                     : t.entry - t.risk * beLockR)
+                         : t.stop
+                    bool  hitStop  = t.isLong ? low <= liveStop : high >= liveStop
+                    if not hitStop
+                        float p1  = t.isLong ? t.entry + t.risk       : t.entry - t.risk
+                        float p15 = t.isLong ? t.entry + t.risk * 1.5 : t.entry - t.risk * 1.5
+                        float p2  = t.isLong ? t.entry + t.risk * 2   : t.entry - t.risk * 2
+                        float p3  = t.isLong ? t.entry + t.risk * 3   : t.entry - t.risk * 3
+                        if not t.hit1 and (t.isLong ? high >= p1 : low <= p1)
+                            t.hit1 := true
+                            stx.t1 += 1
+                        if not t.hit15 and (t.isLong ? high >= p15 : low <= p15)
+                            t.hit15 := true
+                            stx.t15 += 1
+                        if not t.hit2 and (t.isLong ? high >= p2 : low <= p2)
+                            t.hit2 := true
+                            stx.t2 += 1
+                        if not t.hit3 and (t.isLong ? high >= p3 : low <= p3)
+                            t.hit3 := true
+                            stx.t3  += 1
+                            t.closed := true
+                        // Armed last, so it never protects the arming bar.
+                        float pArm = t.isLong ? t.entry + t.risk * beArmR
+                                              : t.entry - t.risk * beArmR
+                        if beArmR > 0 and not t.beArmed and not t.closed and
+                           (t.isLong ? high >= pArm : low <= pArm)
+                            t.beArmed := true
+                    if hitStop
+                        t.closed := true
+                        // Armed means a break-even exit, not a loss: it must
+                        // not land in `stopped` or in any sNo counter.
+                        if t.beArmed
+                            t.beClosed := true
+                            stx.be     += 1
+                            if t.hit2
+                                stx.beAfter2 += 1
+                        if not t.beArmed
+                            t.stopped   := true
+                            stx.stopped += 1
+                            if not t.hit1
+                                stx.sNo1 += 1
+                            if not t.hit15
+                                stx.sNo15 += 1
+                            if not t.hit2
+                                stx.sNo2 += 1
+                            if not t.hit3
+                                stx.sNo3 += 1
+
+    // ── 8.3 FVG lifetime ────────────────────────────────────────────────────
+    if fvgs.size() > 0
+        for i = 0 to fvgs.size() - 1
+            Fvg f = fvgs.get(i)
+            if not f.tested
+                bool mitigated = bar_index > f.createdBar and low <= f.top and high >= f.bottom
+                if mitigated
+                    // First mitigation: state only, the drawing is kept.
+                    f.tested := true
+                if not mitigated and extendFVG
+                    int want = math.min(f.createdBar + fvgMaxExtendBars,
+                                        math.max(bar_index, f.left + fvgExtendBars))
+                    if want != f.right
+                        f.right := want
+                        if not na(f.bx)
+                            box.set_right(f.bx, f.right)
+                        if not na(f.mid)
+                            line.set_x2(f.mid, f.right)
+
+    // ── 8.4 object budget ───────────────────────────────────────────────────
+    // Oldest state objects are dropped. Drawings persist and are recycled by
+    // the max_*_count budgets in indicator().
+    while clusters.size() > maxLiquidityClusters
+        clusters.shift()
+    while fvgs.size() > maxFVGs
+        fvgs.shift()
+    while trades.size() > maxTrades
+        trades.shift()
+
+// ═════════════════════════ 9. TREND PLOT + ALERTS ══════════════════════════
+// plot() and alertcondition() are global scope only, hence the flags above.
+plot(trendMode == "SuperTrend" ? stLine : na, "SuperTrend",
+     color = stDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
+plot(trendMode == "EMA" ? emaLine : na, "EMA",
+     color = close > emaLine ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
+
+// Named conditions for the alert dropdown. Static text; the alert() calls
+// above carry the level and direction.
+alertcondition(alertOnGrab and (sigGrabHigh or sigGrabLow), "Liquidity grab (any)",
+     "Liquidity swept on {{ticker}} {{interval}} — waiting for MSS")
+alertcondition(alertOnGrab and sigGrabHigh, "Liquidity grab — buy-side (highs swept)",
+     "Buy-side liquidity swept on {{ticker}} {{interval}} — watching for bearish MSS")
+alertcondition(alertOnGrab and sigGrabLow, "Liquidity grab — sell-side (lows swept)",
+     "Sell-side liquidity swept on {{ticker}} {{interval}} — watching for bullish MSS")
+alertcondition(alertOnMss and (sigMssBull or sigMssBear), "MSS confirmed (any)",
+     "Market structure shift confirmed on {{ticker}} {{interval}}")
+alertcondition(alertOnSetup and sigSetupLong, "Long setup ready",
+     "LONG setup on {{ticker}} {{interval}} — FVG after bullish MSS")
+alertcondition(alertOnSetup and sigSetupShort, "Short setup ready",
+     "SHORT setup on {{ticker}} {{interval}} — FVG after bearish MSS")
+alertcondition(alertOnEntry and (sigEntryLong or sigEntryShort), "Entry touched (any)",
+     "Price entered the FVG on {{ticker}} {{interval}} — limit would fill now")
+alertcondition(alertOnEntry and sigEntryLong, "Entry touched — long",
+     "Price entered a bullish FVG on {{ticker}} {{interval}}")
+alertcondition(alertOnEntry and sigEntryShort, "Entry touched — short",
+     "Price entered a bearish FVG on {{ticker}} {{interval}}")
+
+// ═════════════════════════ 10. STATS TABLE ══════════════════════════════════
+// Percentages are of filled setups. Unfilled ones are counted separately so
+// the fill rate stays visible instead of inflating the hit rate.
+var table stt = table.new(position.top_right, 2, 18, border_width = 1)
+
+pct(int n, int d) =>
+    d <= 0 ? "-" : str.tostring(n * 100.0 / d, "#.#") + "%"
+
+// Net R for a fixed-target exit rule.
+//   win  = reached the target before the stop  -> +n R
+//   loss = stopped without reaching it         -> -1 R
+// No partials or trailing. Open and unfilled setups excluded.
+// Fees, funding and slippage are not included.
+// Full losers for a target of nR, given the break-even arm level. Above the
+// arm level only trades stopped before arming lose 1R; an armed trade that
+// came back is a scratch. At or below it the target is hit before the stop
+// moves, so the ordinary count applies.
+lossAt(float n, int sNoN) =>
+    beArmR > 0 and n > beArmR ? stx.stopped : sNoN
+
+// R banked by scratches under a given target. A trade that reached the target
+// before returning to the armed stop is already a win in that row and must not
+// also earn the credit. Nothing reaching 3R can be a scratch: it closed there.
+beCredit(float n) =>
+    beArmR <= 0 or n <= beArmR ? 0.0 :
+     n >= 3.0                  ? stx.be * beLockR :
+                                 (stx.be - stx.beAfter2) * beLockR
+
+// Finished trades: full stop, break-even, or 3R. Shared denominator so the
+// per-trade figures are comparable.
+finished() =>
+    stx.stopped + stx.be + stx.t3
+
+rr(int wins, int losses, float mult) =>
+    float net = wins * mult - losses + beCredit(mult)
+    int   res = finished()
+    res <= 0 ? "-" : str.tostring(net, "+#.#;-#.#") + "R  ·  " +
+                     str.tostring(net / res, "+0.00;-0.00") + "/trade"
+
+srow(int r, string k, string v) =>
+    table.cell(stt, 0, r, k, text_size = size.small)
+    table.cell(stt, 1, r, v, text_size = size.small)
+
+hrow(int r, string k, string v) =>
+    table.cell(stt, 0, r, k, bgcolor = #2a2e39, text_color = color.white, text_size = size.small)
+    table.cell(stt, 1, r, v, bgcolor = #2a2e39, text_color = color.white, text_size = size.small)
+
+if showStats and trackOutcomes and barstate.islast
+    table.clear(stt, 0, 0, 1, 17)
+    hrow(0, "Setups", str.tostring(stx.setups))
+    srow(1, "Filled",       str.tostring(stx.filled) + "  " + pct(stx.filled, stx.setups))
+    srow(2, "Never filled", str.tostring(stx.unfilled))
+    srow(3, "Skipped: wide/far", str.tostring(stx.skipped))
+    table.cell(stt, 0, 4, "Reached 1R",   text_size = size.small)
+    table.cell(stt, 1, 4, str.tostring(stx.t1)  + "  " + pct(stx.t1,  stx.filled), bgcolor = color.new(bullCol, 85), text_size = size.small)
+    table.cell(stt, 0, 5, "Reached 1.5R", text_size = size.small)
+    table.cell(stt, 1, 5, str.tostring(stx.t15) + "  " + pct(stx.t15, stx.filled), bgcolor = color.new(bullCol, 88), text_size = size.small)
+    table.cell(stt, 0, 6, "Reached 2R",   text_size = size.small)
+    table.cell(stt, 1, 6, str.tostring(stx.t2)  + "  " + pct(stx.t2,  stx.filled), bgcolor = color.new(bullCol, 90), text_size = size.small)
+    table.cell(stt, 0, 7, "Reached 3R",   text_size = size.small)
+    table.cell(stt, 1, 7, str.tostring(stx.t3)  + "  " + pct(stx.t3,  stx.filled), bgcolor = color.new(bullCol, 93), text_size = size.small)
+    table.cell(stt, 0, 8, "Stopped  -1R", text_size = size.small)
+    table.cell(stt, 1, 8, str.tostring(stx.stopped) + "  " + pct(stx.stopped, stx.filled), bgcolor = color.new(bearCol, 85), text_size = size.small)
+    table.cell(stt, 0, 9, beArmR <= 0 ? "Break-even (off)" :
+         "Break-even  " + str.tostring(beLockR, "+0.0#") + "R", text_size = size.small)
+    table.cell(stt, 1, 9, str.tostring(stx.be) + "  " + pct(stx.be, stx.filled), bgcolor = color.new(color.gray, 80), text_size = size.small)
+    srow(10, "Still open", str.tostring(stx.filled - stx.stopped - stx.be - stx.t3))
+    hrow(11, "Net @1R",   rr(stx.t1,  lossAt(1.0, stx.sNo1),  1.0))
+    hrow(12, "Net @1.5R", rr(stx.t15, lossAt(1.5, stx.sNo15), 1.5))
+    hrow(13, "Net @2R",   rr(stx.t2,  lossAt(2.0, stx.sNo2),  2.0))
+    hrow(14, "Net @3R",   rr(stx.t3,  lossAt(3.0, stx.sNo3),  3.0))
+    table.cell(stt, 0, 15, beArmR > 0 ? "BE arms " + str.tostring(beArmR) + "R, locks " +
+         str.tostring(beLockR, "0.0#") + "R" : "no break-even", text_size = size.tiny)
+    table.cell(stt, 1, 15, "", text_size = size.tiny)
+    table.cell(stt, 0, 16, "excl. fees/funding/slippage", text_size = size.tiny)
+    table.cell(stt, 1, 16, "", text_size = size.tiny)
+    // The fill model is printed with the numbers; a screenshot loses the
+    // input panel and these figures mean nothing without it.
+    bool optimistic = fillModel == "Same bar (optimistic)"
+    table.cell(stt, 0, 17, optimistic ? "SAME-BAR FILLS — upper bound" : "retracement fills", text_size = size.tiny,
+         bgcolor = color.new(optimistic ? bearCol : bullCol, 75))
+    table.cell(stt, 1, 17, "", text_size = size.tiny,
+         bgcolor = color.new(optimistic ? bearCol : bullCol, 75))
+
+// ═════════════════════════ 11. DEBUG TABLE ══════════════════════════════════
+var table dbg = table.new(position.bottom_left, 9, 13, border_width = 1)
+
+if debugMode and barstate.islast
+    table.clear(dbg, 0, 0, 8, 12)
+    table.cell(dbg, 0, 12, "ATR "  + f2s(atr),                        bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 2, 12, "tol "  + f2s(tol),                        bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 4, 12, "over " + f2s(atr * maxPivotOvershootATR), bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 6, 12, "span " + f2s(atr * maxClusterSpanATR),    bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 0, 0, "#",       bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 1, 0, "dir",     bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 2, 0, "level",   bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 3, 0, "piv",     bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 4, 0, "state",   bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 5, 0, "anchor",  bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 6, 0, "MSS lvl", bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 7, 0, "fvg",     bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 8, 0, "age",     bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    if clusters.size() > 0
+        int rows  = math.min(11, clusters.size())
+        int start = clusters.size() - rows
+        for r = 0 to rows - 1
+            Cluster c = clusters.get(start + r)
+            color bg  = c.expired ? color.new(color.gray, 70) : color.new(dirCol(c.isHigh), 80)
+            table.cell(dbg, 0, r + 1, str.tostring(c.id),            bgcolor = bg, text_size = size.tiny)
+            table.cell(dbg, 1, r + 1, c.tag + (c.isHigh ? " H" : " L"), bgcolor = bg, text_size = size.tiny)
+            table.cell(dbg, 2, r + 1, f2s(c.level),                  bgcolor = bg, text_size = size.tiny)
+            table.cell(dbg, 3, r + 1, str.tostring(c.pivots.size()), bgcolor = bg, text_size = size.tiny)
+            table.cell(dbg, 4, r + 1, stateStr(c),                   bgcolor = bg, text_size = size.tiny)
+            table.cell(dbg, 5, r + 1, str.tostring(c.oldestBar),     bgcolor = bg, text_size = size.tiny)
+            table.cell(dbg, 6, r + 1, na(c.structLevel) ? "-" : f2s(c.structLevel), bgcolor = bg, text_size = size.tiny)
+            table.cell(dbg, 7, r + 1, str.tostring(c.fvgCount),      bgcolor = bg, text_size = size.tiny)
+            table.cell(dbg, 8, r + 1, str.tostring(bar_index - c.createdBar), bgcolor = bg, text_size = size.tiny)
+
+// =============================================================================
+//  Not implemented: daily/weekly bias, premium/discount, dealing range, order
+//  blocks, breakers, partial fills, strategy.entry().
+// =============================================================================
