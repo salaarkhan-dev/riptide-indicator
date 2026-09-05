@@ -160,6 +160,8 @@ showPrevDayHL  = input.bool(false, "Draw yesterday's high / low",    group = gLo
 showPrevWeekHL = input.bool(false, "Draw last week's high / low",    group = gLook)
 showSessionBox = input.bool(false, "Draw session ranges",            group = gLook)
 fvgExtendBars  = input.int(6, "Entry zone width (bars)", minval = 1, group = gLook)
+fadeUsedFvg    = input.bool(true,  "Fade entry zones once price returns", group = gLook,
+     tooltip = "An entry zone price has already come back to has done its job — that was the fill. Until now it kept the same solid box as a zone still waiting, so live and used were indistinguishable at a glance. Fading and dashing the used ones leaves only the live zones reading as actionable.\n\nNote this is a different question from the one the context imbalance layer answers: there you care whether a gap has been FILLED, here whether a zone has been USED, so the two deliberately test different things.")
 extendFVG      = input.bool(false, "Stretch zones until price returns", group = gLook,
      tooltip = "Off keeps each zone at a fixed width. On stretches it rightwards until price comes back — tidy in theory, but a zone price never revisits ends up as a band across the screen.")
 setupExtendBars  = input.int(20, "Entry / stop line length (bars)", minval = 1, maxval = 200, group = gLook)
@@ -1425,8 +1427,22 @@ if engineOk
             if not f.tested
                 bool mitigated = bar_index > f.createdBar and low <= f.top and high >= f.bottom
                 if mitigated
-                    // First mitigation: state only, the drawing is kept.
+                    // The zone is kept — it is the record of where a setup
+                    // entered — but it must stop looking like one that is
+                    // still waiting.
                     f.tested := true
+                    if fadeUsedFvg
+                        color fbase = f.isBull ? bullCol : bearCol
+                        int   fade  = math.min(97, fvgFill + (100 - fvgFill) / 2)
+                        if not na(f.bx)
+                            box.set_bgcolor(f.bx, color.new(fbase, fade))
+                            box.set_border_color(f.bx,
+                                 color.new(fbase, math.max(0, fade - 12)))
+                            box.set_border_style(f.bx, line.style_dashed)
+                        if not na(f.mid)
+                            line.set_color(f.mid,
+                                 color.new(fbase, math.max(0, fade - 12)))
+                            line.set_style(f.mid, line.style_dashed)
                 if not mitigated and extendFVG
                     int want = math.min(f.createdBar + fvgMaxExtendBars,
                                         math.max(bar_index, f.left + fvgExtendBars))
