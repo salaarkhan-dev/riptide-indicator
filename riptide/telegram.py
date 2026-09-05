@@ -149,7 +149,7 @@ def trend_note(trend_dir: int, is_long: bool) -> str:
 
     Shown on every alert whether or not the filter is suppressing anything —
     the point is to judge a counter-trend setup, not to be spared it.
-    Measured: with the trend +0.083 R per setup, against it -0.053.
+    Measured: with the trend +0.103 R per setup, against it -0.008.
     Empty when the trend is unknown, which is honest about not knowing.
     """
     if not trend_dir:

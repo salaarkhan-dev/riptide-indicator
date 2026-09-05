@@ -209,9 +209,32 @@ Make sure the clock is synced (`timedatectl`) - bar alignment depends on it.
 Every strategy figure quoted in this repo — the trend filter, the exit
 comparison, the entry-timeframe test — comes from one 41-day backtest over
 symbols chosen by their turnover *today*. That is survivorship bias, one
-ranging regime, and no out-of-sample data. The trend-filter estimate moved 35%
-in a few hours of fresh candles, which is the sample saying how far it can be
-trusted. Testing more variants against that same window cannot fix it.
+ranging regime, and no out-of-sample data. Testing more variants against that
+same window cannot fix it.
+
+Two things found while building the tracker show why that matters more than it
+sounds.
+
+**The backtests had lookahead.** `scan_leg` searches for the gap backwards from
+the grab bar, so the gap often forms *before* the shift that makes the setup
+detectable — 56% of the time, median 4 bars earlier, up to 41. Scoring from
+the gap bar therefore counted fills from bars that had already closed before
+the setup existed. Correcting it cost **0.229 R per setup (−22 SE)**, larger
+than any effect the backtests were built to detect. The tracker starts scoring
+from the later of the gap bar and the bar that had just closed when the alert
+fired, which is exactly the bar a person could first have acted on.
+
+**A published ranking evaporated.** The exit comparison once found the far
+target clearly worst and the ordering perfectly monotonic. Re-run on a later
+window with the scoring corrected, 3R is nominally *best* and all four targets
+sit within half a standard error of each other. The ranking was one window's
+noise read as a result — which is what a backtest with no out-of-sample check
+will hand you, indefinitely, without ever looking wrong.
+
+What survived both corrections is the trend separation: +0.135, +0.095, +0.110
+across two windows, two symbol sets and two scoring methods. The absolute level
+it sits on ranged from −0.05 to +0.32 over the same comparisons. Trust the
+gap; do not size anything off the level.
 
 `tracker.py` scores live alerts forward instead. Each fresh setup is armed with
 the entry, stop and trend alignment that were alerted, and advanced every cycle

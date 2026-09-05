@@ -90,8 +90,8 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
 
         # Trend alignment is recorded on every signal, whether or not the
         # filter is suppressing anything, so the alert can say which side of
-        # the trend it is on. Measured: with the trend +0.083 R per setup,
-        # against it -0.053, a 4.2 SE difference over 1961 setups — worth
+        # the trend it is on. Measured: with the trend +0.103 R per setup,
+        # against it -0.008, a 3.8 SE difference over 2026 setups — worth
         # knowing even when taking both. Daily bars are cached for an hour,
         # so this costs one fetch per symbol per hour.
         keep_s, keep_w = [], []

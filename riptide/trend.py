@@ -2,20 +2,27 @@
 Higher-timeframe trend filter.
 
 The reference indicator exposes a "By Trend" filter driven by a daily
-Supertrend, and ships it switched off. Measured across 50 symbols over 41.6
-days, with the best exit found (1R target), it is the only thing tested in
-this project that separates winning signals from losing ones:
+Supertrend, and ships it switched off. It is the only thing tested in this
+project that separates winning signals from losing ones. Measured across 50
+symbols over 41.6 days, 1R target, fills counted only from the bar the setup
+became detectable:
 
-    with the daily trend      990 setups   +0.083 R/setup  ± 0.023
-    against the daily trend   971 setups   -0.053 R/setup  ± 0.023
-    difference                +0.135 R  (+4.2 SE)
+    with the daily trend      1011 setups   +0.103 R/setup  ± 0.021
+    against the daily trend   1015 setups   -0.008 R/setup  ± 0.020
+    difference                +0.110 R  ± 0.029  (+3.8 SE)
 
-Six engine-parameter variants and two entry timeframes all came back inside
-noise. The edge was never in the parameters; it was in which half of the
-signals get taken.
+Six engine-parameter variants, two entry timeframes, five exit families and
+four targets all came back inside noise. The edge was never in the parameters
+or the exit; it was in which half of the signals get taken.
 
-Caveats: one 41.6-day window, and no fees or slippage in those figures —
-about 0.03R per round trip would still leave the aligned half positive.
+Trust the separation, not the level it sits on. The gap has come back at
++0.135, +0.095 and +0.110 across two windows, two symbol sets and two
+scoring methods. The absolute expectancy under it has ranged from -0.05 to
++0.32 over the same comparisons — it moves with the window, and a figure
+that unstable cannot size a position.
+
+Caveats: still one regime at a time, and no fees or slippage — about 0.03R
+per round trip, which the aligned half survives and the other half does not.
 
 Supertrend here mirrors the reference's defaults: daily bars, ATR 14,
 factor 5.
