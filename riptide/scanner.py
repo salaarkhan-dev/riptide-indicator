@@ -38,7 +38,16 @@ async def scan_symbol(sess, sem, symbol):
             log.warning("engine failed on %s: %s", symbol, e)
             return [], []
 
-        if ltf:
+        # Gate on the setting, not on the data arriving. A failed lower-
+        # timeframe fetch — one rate-limited request among the two per symbol
+        # — must not silently downgrade to higher-timeframe entries: refine
+        # returns None for an empty list, so the hold below treats it as "no
+        # gap yet" and the next scan tries again.
+        if ENTRY_INTERVAL:
+            if not ltf:
+                log.warning("%s: no %s candles this cycle; setups held for a "
+                            "retry rather than sent with %s entries",
+                            symbol, ENTRY_INTERVAL, INTERVAL)
             atr = atr_series(cs, CFG.atr_len)
             now = int(time.time())
             # A gap needs three lower-timeframe candles measured from the
