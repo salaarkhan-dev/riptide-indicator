@@ -155,8 +155,9 @@ fvgFill   = input.int(85, "Entry zone transparency", minval = 0, maxval = 100, g
 // Display only. A sweep plus a structure break is the reversal, so a trailing
 // trend line still points the old way when the signal fires; filtering on it
 // would remove the setups this looks for.
-trendMode = input.string("SuperTrend", "Trend line", options = ["Off", "SuperTrend", "EMA"], group = gTrend,
-     tooltip = "Context only. Some traders prefer taking setups that agree with the wider trend — this shows you which those are. Switching it NEVER changes which signals appear.")
+trendMode = input.string("SuperTrend", "Trend line",
+     options = ["Off", "SuperTrend", "EMA", "Filter trend"], group = gTrend,
+     tooltip = "Context only — switching it NEVER changes which signals appear. 'SuperTrend' and 'EMA' are computed on the CHART timeframe and are unrelated to the filter below, so they will disagree with it. 'Filter trend' draws the exact line the filter uses, which is the one to pick when you want to see why a setup was suppressed.")
 stFactor  = input.float(3.0, "SuperTrend factor", minval = 0.5, step = 0.1, group = gTrend)
 stAtrLen  = input.int(10, "SuperTrend length", minval = 1, group = gTrend)
 emaLen    = input.int(50, "EMA length", minval = 1, group = gTrend)
@@ -408,20 +409,23 @@ emaLine = ta.ema(close, emaLen)
 // This is the only request.security in the file. The lower-timeframe kind is
 // still avoided: it needs intrabar history, which is capped by subscription
 // tier and would leave the chart patchy where it matters most.
-htfTrendDir() =>
+htfTrend() =>
     [_l, _d] = ta.supertrend(trendFilterFac, trendFilterLen)
-    _d
+    // [1] on both: the last CLOSED bar of the higher timeframe, which is what
+    // makes this non-repainting and what the bot reads.
+    [_l[1], _d[1]]
 // Called unconditionally. request.security belongs at global scope and is
 // evaluated whether or not a surrounding condition wants it, so gating the
 // call buys nothing and risks the conditional-execution surprises Pine is
 // known for. The toggle lives in trendOk instead, which is where it reads
 // clearly anyway.
-htfDir = request.security(syminfo.tickerid, trendFilterTf, htfTrendDir()[1],
-                          lookahead = barmerge.lookahead_off)
+[htfLine, htfDir] = request.security(syminfo.tickerid, trendFilterTf, htfTrend(),
+                                     lookahead = barmerge.lookahead_off)
 
-// -1 is up. na means the filter is off or the higher timeframe has no value
-// yet, and in both cases nothing is suppressed — missing data must never
-// silently remove signals.
+// -1 is up. na means the higher timeframe has no value yet — early bars, or a
+// symbol with too little daily history — and nothing is suppressed then:
+// missing data must never silently remove signals. That matches the bot, which
+// keeps a setup when its daily lookup comes back empty.
 trendOk(bool isLong) =>
     not trendFilter or na(htfDir) or (isLong ? htfDir < 0 : htfDir > 0)
 
@@ -1252,6 +1256,10 @@ plot(trendMode == "SuperTrend" ? stLine : na, "SuperTrend",
      color = stDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
 plot(trendMode == "EMA" ? emaLine : na, "EMA",
      color = close > emaLine ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
+// The line the filter actually decides on. Drawn whether or not the filter is
+// switched on, so its behaviour can be judged before committing to it.
+plot(trendMode == "Filter trend" ? htfLine : na, "Filter trend",
+     color = htfDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 2)
 
 // Named conditions for the alert dropdown. Static text; the alert() calls
 // above carry the level and direction.
