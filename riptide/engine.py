@@ -133,6 +133,8 @@ class Early:
     anchor_time: int
     pivots: int
     bars_from_sweep: int
+    pools: int = 0         # how many separate pools raided into this one gap.
+                           # Set when duplicates are collapsed, not by detection.
     trend_dir: int = 0
     last_price: float = 0.0   # display only, as on Setup
 
@@ -502,5 +504,34 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                     c.done = True
                 elif i - c.mss_bar >= cfg.max_bars_after_mss:
                     c.done = True
+
+    # One signal per gap. Every pool swept in the same area spawns its own
+    # cluster, and they all find the SAME first imbalance afterwards with the
+    # same trailed raid extreme — so a single trade arrived once per pool that
+    # happened to sit nearby. On DOGE that was seven identical alerts for one
+    # gap, and 49% of all early signals over a 12-day window were duplicates.
+    #
+    # The gap and the direction are what make it one trade; which pool led to
+    # it is a label. Keep the tightest stop, since that is the version worth
+    # taking, and record how many pools converged — several pools raided into
+    # one imbalance is information, not noise, as long as it is one message.
+    if early_out is not None and len(early_out) > 1:
+        best: dict[tuple[int, bool], Early] = {}
+        for e in early_out:
+            k = (e.fvg_bar, e.is_long)
+            cur = best.get(k)
+            # Tightest stop wins. Risks usually tie — the pools share a raid
+            # extreme — so break it on the freshest raid, otherwise the
+            # "gap N bars after the raid" line reports whichever pool the
+            # cluster list happened to reach first.
+            better = cur is not None and (
+                e.risk < cur.risk or
+                (e.risk == cur.risk and e.bars_from_sweep < cur.bars_from_sweep))
+            if cur is None or better:
+                if cur is not None:
+                    e.pools = cur.pools
+                best[k] = e
+            best[k].pools += 1
+        early_out[:] = sorted(best.values(), key=lambda e: e.fvg_bar)
 
     return setups

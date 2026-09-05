@@ -196,26 +196,35 @@ def _footer(when: int, price: float, tv_symbol: str) -> str:
     return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
 
 
-def _pool(src: str, level: float, pivots: int) -> str:
-    return (f"{src} pool @ {fmt(level)}"
-            f"{f' · {pivots} swings' if src == 'Pivot' else ''}")
+def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
+    """`pools` > 1 means several separate pools were raided into the same gap
+    — worth saying, since it is why one alert stands for what the engine saw
+    as several clusters."""
+    extra = f" · {pivots} swings" if src == "Pivot" else ""
+    if pools > 1:
+        extra += f" · {pools} pools converged"
+    return f"{src} pool @ {fmt(level)}{extra}"
 
 
 def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
     """
-    The trade, as an aligned monospace block. Kept to five short lines: the
-    numbers are what gets acted on and everything else is context around them.
+    The trade. Four plain lines, no code block.
+
+    A <pre> block buys column alignment and costs a heavy grey panel with a
+    copy button, which on a phone dominates the message. Without it the
+    columns cannot align anyway — Telegram's body font is proportional — so
+    the layout leans on line breaks and weight instead: entry and stop get a
+    line each because they are what you act on, the targets share one, and
+    break-even reads as an instruction rather than a column.
     """
     sign = 1 if is_long else -1
     riskpct = risk / entry * 100 if entry else 0
-    return ("<pre>"
-            f"entry {fmt(entry)}\n"
-            f"stop  {fmt(stop)}  {riskpct:.2f}%\n"
-            f"1R    {fmt(entry + sign * risk)}\n"
-            f"BE    {fmt(entry + sign * risk * CFG.be_arm_r)} → "
-            f"{fmt(entry + sign * risk * CFG.be_lock_r)}\n"
-            f"3R    {fmt(entry + sign * risk * 3)}"
-            "</pre>")
+    return (f"Entry  <b>{fmt(entry)}</b>\n"
+            f"Stop   <b>{fmt(stop)}</b>  <i>{riskpct:.2f}% risk</i>\n"
+            f"1R {fmt(entry + sign * risk)}  ·  "
+            f"3R {fmt(entry + sign * risk * 3)}\n"
+            f"<i>BE at {fmt(entry + sign * risk * CFG.be_arm_r)} → stop "
+            f"{fmt(entry + sign * risk * CFG.be_lock_r)}</i>")
 
 
 def setup_message(s: Setup) -> str:
@@ -253,7 +262,7 @@ def early_message(s: Early) -> str:
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         note or None,
-        _pool(s.src, s.level, s.pivots),
+        _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
     ) if x is not None)
 
