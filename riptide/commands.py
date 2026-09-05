@@ -13,8 +13,8 @@ import time
 import aiohttp
 
 from . import telegram as tg
-from .config import (BAR_SECONDS, ENTRY_INTERVAL, INTERVAL, SWEEP_ALERTS,
-                     TG_CHAT, TG_TOKEN, build_id, log)
+from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
+                     SWEEP_ALERTS, TG_CHAT, TG_TOKEN, build_id, log)
 from .scanner import cycle, seconds_to_next_close
 from .storage import meta_get, meta_set
 

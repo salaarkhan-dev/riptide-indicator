@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 # Futures API moved from contract.mexc.com to api.mexc.com in Jan 2026.
 BASE = os.getenv("MEXC_BASE", "https://api.mexc.com")
@@ -104,9 +104,44 @@ class Cfg:
     be_arm_r: float = 1.5
 
 
-CFG = Cfg()
-
 log = logging.getLogger("riptide")
+
+
+def _cfg_from_env(base: Cfg) -> tuple[Cfg, dict]:
+    """
+    Every Cfg field can be overridden as RIPTIDE_<FIELD_NAME>, e.g.
+    RIPTIDE_PIVOT_RIGHT=1. Defaults are untouched — this only adds the ability
+    to change one from riptide.conf, so the reference indicator's settings can
+    be tried live and reverted without a code change.
+    """
+    changed = {}
+    for f in fields(base):
+        raw = os.getenv("RIPTIDE_" + f.name.upper())
+        if raw is None:
+            continue
+        current = getattr(base, f.name)
+        try:
+            # bool before int: bool is a subclass of int, so the int branch
+            # would swallow it and turn "false" into a ValueError.
+            if isinstance(current, bool):
+                value = raw.strip().lower() in ("1", "true", "yes", "on")
+            elif isinstance(current, int):
+                value = int(raw)
+            elif isinstance(current, float):
+                value = float(raw)
+            else:
+                value = raw.strip()
+        except ValueError:
+            log.warning("RIPTIDE_%s=%r is not a valid %s, keeping %r",
+                        f.name.upper(), raw, type(current).__name__, current)
+            continue
+        if value != current:
+            changed[f.name] = (current, value)
+            setattr(base, f.name, value)
+    return base, changed
+
+
+CFG, CFG_OVERRIDES = _cfg_from_env(Cfg())
 
 
 def build_id() -> str:

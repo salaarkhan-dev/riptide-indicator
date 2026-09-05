@@ -10,8 +10,8 @@ import time
 import aiohttp
 
 from . import telegram as tg
-from .config import (BAR_SECONDS, ENTRY_INTERVAL, INTERVAL, SCAN_ON_START,
-                     TG_COMMANDS, build_id, log)
+from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
+                     SCAN_ON_START, TG_COMMANDS, build_id, log)
 from .commands import command_loop
 from .exchange import list_symbols
 from .scanner import cycle, scan_loop
@@ -40,6 +40,10 @@ async def main() -> None:
         if not symbols:
             log.error("no symbols; check MEXC_BASE or RIPTIDE_SYMBOLS")
             return
+        if CFG_OVERRIDES:
+            log.warning("engine defaults overridden: %s",
+                        ", ".join(f"{k} {a}->{b}"
+                                  for k, (a, b) in sorted(CFG_OVERRIDES.items())))
         log.info("riptide up: %d symbols, %s bars%s, build %s",
                  len(symbols), INTERVAL,
                  f" + {ENTRY_INTERVAL} entries" if ENTRY_INTERVAL else "",
