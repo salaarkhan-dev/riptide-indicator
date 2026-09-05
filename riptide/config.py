@@ -152,6 +152,16 @@ class Cfg:
     max_fvg_atr: float = 2.0
     max_risk_atr: float = 4.0
     max_bars_after_mss: int = 10
+    # Where the entry-gap search starts. Mirrors the Pine input "Look for
+    # entry zones from":
+    #   "grab"  every imbalance across the whole move from the raid to the
+    #           break, including gaps that formed BEFORE the break
+    #   "mss"   the break bar onwards only
+    # The Pine ships "Grab candle", so that is the default here too. Note what
+    # it costs: the stop is pinned at the raid extreme, so as price runs the
+    # newer gaps fail max_risk_atr and the search keeps walking back until one
+    # fits — which can hand back an entry from many bars ago, far below market.
+    fvg_scan_from: str = "grab"           # grab | mss
     sl_buffer_atr: float = 0.0
     entry_mode: str = "proximal"          # proximal | mid | distal
     use_pivot: bool = True
@@ -198,6 +208,22 @@ def _cfg_from_env(base: Cfg) -> tuple[Cfg, dict]:
 
 
 CFG, CFG_OVERRIDES = _cfg_from_env(Cfg())
+
+# The engine reads fvg_scan_from as `== "grab"`, so ANY other string — a typo,
+# or the Pine's own wording — silently selects the other mode instead of
+# failing. Normalise and validate here, where it can say so.
+_FVG_SCAN_FROM = {"grab": "grab", "grab candle": "grab",
+                  "mss": "mss", "mss candle only": "mss", "mss only": "mss"}
+_raw_scan = str(CFG.fvg_scan_from).strip().lower()
+if _raw_scan in _FVG_SCAN_FROM:
+    CFG.fvg_scan_from = _FVG_SCAN_FROM[_raw_scan]
+else:
+    log.warning("RIPTIDE_FVG_SCAN_FROM=%r is not 'grab' or 'mss'; using 'grab'. "
+                "Anything unrecognised would otherwise have selected 'mss' by "
+                "accident, since the engine tests for 'grab' by name.",
+                CFG.fvg_scan_from)
+    CFG.fvg_scan_from = "grab"
+    CFG_OVERRIDES.pop("fvg_scan_from", None)
 
 
 def build_id() -> str:

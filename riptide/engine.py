@@ -387,7 +387,10 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                                     o.expired = True
 
             if c.mss and not c.done and not c.expired:
-                found = scan_leg(c, c.grab_bar, i, i, a)
+                # "grab" searches the whole leg from the raid; "mss" only the
+                # break bar onwards. Mirrors fvgScanFrom in the Pine.
+                frm = c.grab_bar if cfg.fvg_scan_from == "grab" else i
+                found = scan_leg(c, frm, i, i, a)
                 if found:
                     ent, sl, fvg_bar = found
                     setups.append(Setup(

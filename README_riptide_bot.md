@@ -174,6 +174,7 @@ different questions:
 |---|---|---|
 | `Cfg.max_bars_after_grab` | 50 | how long after the **sweep** the shift may come |
 | `Cfg.max_bars_after_mss` | 10 | how long after the **shift** the gap may form |
+| `Cfg.fvg_scan_from` | `mss` | whether gaps from **before** the shift are eligible |
 | `RIPTIDE_FRESH_BARS` | 2 | how old the **setup** may be when the alert fires |
 
 A long wait between the sweep and the entry is normal and fully alerted —
@@ -191,6 +192,37 @@ thing, not that the dropped ones looked good.
 
 `detected_time` is the same bar outcome tracking starts scoring from. Both bugs
 were the same mistake about when a setup starts existing.
+
+### Where the entry gap comes from
+
+The stop is pinned at the raid extreme, so the further price runs from it, the
+larger the implied risk of any newer gap. Under the Pine's default
+(`fvg_scan_from = "grab"`) the search answers that by walking **backwards**
+through the leg until it finds a gap whose risk still fits `max_risk_atr` —
+handing back an entry from many bars ago, far below market, at the moment the
+shift confirms. PEPE on 5 Sep 2026 returned a gap from 21 bars (10.5 hours)
+earlier with price already 4.7% past it.
+
+`fvg_scan_from = "mss"` looks only at the break bar onwards, then keeps
+checking each new bar for up to `max_bars_after_mss`, so it waits for a real
+gap in the impulse rather than reaching back for a stale one — and produces no
+setup at all if none forms. Measured over 50 symbols and 41.6 days:
+
+| | setups | median distance | >2% away | >5% | fill rate |
+|---|---|---|---|---|---|
+| `grab` | 2040 | 0.91% | 24% | 7% | 50% |
+| `mss` | 1215 | 0.44% | 10% | 3% | **71%** |
+
+"distance" is how far price has already run past the entry when the alert
+fires. Expectancy is **not** better — `+0.051 ± 0.015` against `+0.051 ± 0.024`
+overall, and `+0.099 ± 0.022` against `+0.137 ± 0.033` trend-aligned, under 1
+SE apart. The reason to prefer `mss` is the fill rate, which is a count on 3255
+setups rather than a noisy estimate: `grab` spends 57% of its setups on gaps
+that formed before the shift, and a quarter of its alerts on entries price has
+already left behind.
+
+Set the Pine's "Look for entry zones from" to **"MSS candle only"** to match,
+or the chart will draw zones the bot does not alert on.
 
 ### Why the freshness windows cannot be 1
 
@@ -350,6 +382,7 @@ them there, not in the engine body.
 | `RIPTIDE_TRACK_FILL_BARS` | `10` | bars the entry limit stays live. Past this the setup counts as 0R |
 | `RIPTIDE_TRACK_HORIZON_BARS` | `60` | bars a filled setup is followed before being marked to market |
 | `RIPTIDE_TRACK_TARGET_R` | `1.0` | target for the simulated rule |
+| `RIPTIDE_FVG_SCAN_FROM` | `mss` | `grab` allows gaps formed before the shift; `mss` only from the break bar on — see *Where the entry gap comes from* |
 | `RIPTIDE_DB` | `riptide.db` | dedupe, signal history and outcomes |
 | `MEXC_BASE` | `https://api.mexc.com` | futures moved here in Jan 2026 |
 
