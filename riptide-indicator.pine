@@ -313,6 +313,8 @@ type Cluster
     array<LiqPivot> pivots
     line   liqLine
     line   mssLine
+    label  grabX                    // the raid X, kept so Live mode can move
+    label  grabTagLbl               // it as trailGrabExtreme finds a new extreme
 
 // A context imbalance. Deliberately NOT an Fvg: the engine walks the Fvg array
 // for mitigation, extension and outcome tracking, and these must never reach
@@ -582,9 +584,12 @@ drawStructLine(Cluster c, int x2) =>
              width = 1)
 
 // X-cross on the sweep extreme, plus the source tag beneath it.
+// The raid X. Idempotent: in Live draw mode this is called on the sweep bar
+// and the labels are then MOVED by moveGrab as the raid deepens, so calling
+// it again from renderPattern at MSS time must not stack a second X.
 drawGrab(Cluster c) =>
-    if showGrab
-        label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, "",
+    if showGrab and na(c.grabX)
+        c.grabX := label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, "",
              xloc    = xloc.bar_index,
              yloc    = yloc.price,
              style   = label.style_xcross,
@@ -594,8 +599,8 @@ drawGrab(Cluster c) =>
                        "\nlevel " + f2s(c.level) +
                        "\npivots " + str.tostring(c.pivots.size()) +
                        "\nMSS needed " + (c.isHigh ? "close < " : "close > ") + f2s(c.structLevel))
-    if showGrab and showGrabTag
-        label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, c.tag,
+    if showGrab and showGrabTag and na(c.grabTagLbl)
+        c.grabTagLbl := label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, c.tag,
              xloc      = xloc.bar_index,
              yloc      = c.isHigh ? yloc.abovebar : yloc.belowbar,
              style     = c.isHigh ? label.style_label_down : label.style_label_up,
@@ -615,6 +620,15 @@ drawMssLabel(Cluster c) =>
              tooltip   = "MSS #" + str.tostring(c.id) + (c.isHigh ? " bearish" : " bullish") +
                          "\nthreshold " + f2s(c.structLevel) +
                          "\nfrom oldest pivot @ bar " + str.tostring(c.oldestBar))
+
+// Follow the raid to its new extreme. Only Live mode needs this: in deferred
+// mode nothing is drawn until the extreme is already final.
+moveGrab(Cluster c) =>
+    float y = c.isHigh ? c.grabHigh : c.grabLow
+    if not na(c.grabX)
+        label.set_xy(c.grabX, c.grabBar, y)
+    if not na(c.grabTagLbl)
+        label.set_xy(c.grabTagLbl, c.grabBar, y)
 
 // An FVG anchored at an arbitrary (possibly historical) left bar.
 newFvgAt(bool isBull, float top, float bottom, int lft) =>
@@ -1120,6 +1134,12 @@ if engineOk
                                   alert.freq_once_per_bar_close)
                         if not deferred
                             drawStructLine(c, bar_index)
+                            // The raid marker itself, which Live mode was
+                            // promising and not delivering: without this the X
+                            // only ever arrived via renderPattern at MSS time,
+                            // so a sweep that never produced a shift — every
+                            // EARLY signal the bot sends — showed nothing.
+                            drawGrab(c)
 
                 // Swept, waiting for the opposing structure break.
                 if wasSwept and not wasMss and not c.expired
@@ -1132,16 +1152,24 @@ if engineOk
                         if not na(c.mssLine)
                             line.set_x2(c.mssLine, bar_index)
                         // Grab candle follows the deepest bar of the raid.
+                        bool trailed = false
                         if trailGrabExtreme and c.isHigh and high > c.grabHigh
                             c.grabBar   := bar_index
                             c.grabHigh  := high
                             c.grabLow   := low
                             c.grabClose := close
+                            trailed     := true
                         if trailGrabExtreme and not c.isHigh and low < c.grabLow
                             c.grabBar   := bar_index
                             c.grabLow   := low
                             c.grabHigh  := high
                             c.grabClose := close
+                            trailed     := true
+                        // Live mode has already drawn the X, so move it rather
+                        // than leave it on the first bar of the raid. Deferred
+                        // mode has drawn nothing yet and needs no move.
+                        if trailed and not deferred
+                            moveGrab(c)
                         bool broke = c.isHigh
                              ? (mssMode == "close" ? close < c.structLevel : low  < c.structLevel)
                              : (mssMode == "close" ? close > c.structLevel : high > c.structLevel)
