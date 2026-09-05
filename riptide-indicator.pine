@@ -15,7 +15,12 @@
 //
 //  Implementation notes
 //  --------------------
-//  Non-repainting. No request.security, no lookahead, no future references.
+//  Non-repainting. No lookahead, no future references. The only
+//  request.security is the optional higher-timeframe trend filter, which
+//  reads the last CLOSED bar of that timeframe with lookahead_off — a value
+//  that cannot change once the chart bar has printed. Lower-timeframe
+//  request.security is still avoided: it needs intrabar history, which is
+//  capped by subscription tier.
 //  All state mutation happens inside the `if engineOk` block, which with
 //  confirmOnBarClose runs once per closed bar. Drawings are never deleted;
 //  set_x2 / set_right only extend existing lines and boxes.
@@ -155,6 +160,28 @@ trendMode = input.string("SuperTrend", "Trend line", options = ["Off", "SuperTre
 stFactor  = input.float(3.0, "SuperTrend factor", minval = 0.5, step = 0.1, group = gTrend)
 stAtrLen  = input.int(10, "SuperTrend length", minval = 1, group = gTrend)
 emaLen    = input.int(50, "EMA length", minval = 1, group = gTrend)
+
+// The trend line above is display only, and the note above it is right about
+// it: a chart-timeframe SuperTrend flips at the reversal you are trading, so
+// filtering on it removes nothing useful. Measured over 50 symbols and 41.6
+// days, 1961 setups, target 1R:
+//
+//   chart Min30 (10, 3)  with +0.039  against +0.084   -1.0 SE, no separation
+//
+// A slow trend on a HIGHER timeframe is a different measurement — a regime,
+// not a trailing stop — and it does separate the signals:
+//
+//   daily (14, 5)        with +0.111  against -0.018   +4.2 SE, meaningful
+//
+// So the filter below is deliberately NOT wired to stLine. It matches
+// RIPTIDE_TREND_FILTER in the bot, so both agree on which setups survive.
+trendFilter    = input.bool(false, "Only take setups with the higher-timeframe trend",
+     group = gTrend,
+     tooltip = "Suppresses setups and raid markers that face against a slow trend on a higher timeframe. This is NOT the trend line above — that one is display only and filtering on it does nothing. Measured: with the daily trend +0.111 R per setup, against it -0.018, a 4.2 standard error separation over 1961 setups in one 41.6-day window. Off by default; turning it on roughly halves the signals.")
+trendFilterTf  = input.timeframe("D", "Filter timeframe", group = gTrend)
+trendFilterFac = input.float(5.0, "Filter SuperTrend factor", minval = 0.5, step = 0.1,
+     group = gTrend)
+trendFilterLen = input.int(14, "Filter SuperTrend length", minval = 1, group = gTrend)
 
 // ── 7. Alerts ───────────────────────────────────────────────────────────────
 alertOnGrab  = input.bool(true, "Liquidity raided", group = gAlert,
@@ -371,6 +398,29 @@ pl = ta.pivotlow(low,  pivotLeft, pivotRight)
 [stLine, stDir] = ta.supertrend(stFactor, stAtrLen)
 emaLine = ta.ema(close, emaLen)
 // ta.supertrend direction: -1 up, 1 down. Not read by the engine.
+
+// Higher-timeframe trend for the filter. request.security on a HIGHER
+// timeframe with lookahead_off, reading [1] — the last CLOSED bar of that
+// timeframe — is the non-repainting form: the value can never change once the
+// chart bar has printed. That is the same bar the bot picks, since its own
+// candle fetch drops the forming one, so the two agree.
+//
+// This is the only request.security in the file. The lower-timeframe kind is
+// still avoided: it needs intrabar history, which is capped by subscription
+// tier and would leave the chart patchy where it matters most.
+htfTrendDir() =>
+    [_l, _d] = ta.supertrend(trendFilterFac, trendFilterLen)
+    _d
+htfDir = trendFilter
+     ? request.security(syminfo.tickerid, trendFilterTf, htfTrendDir()[1],
+                        lookahead = barmerge.lookahead_off)
+     : na
+
+// -1 is up. na means the filter is off or the higher timeframe has no value
+// yet, and in both cases nothing is suppressed — missing data must never
+// silently remove signals.
+trendOk(bool isLong) =>
+    not trendFilter or na(htfDir) or (isLong ? htfDir < 0 : htfDir > 0)
 
 // Period boundaries and session membership, global scope for series consistency.
 newDay   = timeframe.change("D")
@@ -607,7 +657,8 @@ entryFrom(Cluster c) =>
 // Call after scanLeg: reads lastFvgTop/Bot, which the scan produces.
 drawSetup(Cluster c) =>
     bool isLong = not c.isHigh
-    bool dirOk  = (isLong and showLongs) or (not isLong and showShorts)
+    bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
+                  and trendOk(isLong)
     if dirOk and c.fvgCount > 0
         color col   = isLong ? bullCol : bearCol
         float entry = entryFrom(c)
@@ -1037,7 +1088,7 @@ if engineOk
                                     drawSetup(c)
                                     if trackOutcomes
                                         openTrade(c)
-                                if c.fvgCount > had
+                                if c.fvgCount > had and trendOk(not c.isHigh)
                                     if c.isHigh
                                         sigSetupShort := true
                                     if not c.isHigh
@@ -1058,7 +1109,7 @@ if engineOk
                             drawSetup(c)
                             if trackOutcomes
                                 openTrade(c)
-                        if c.fvgCount > had2
+                        if c.fvgCount > had2 and trendOk(not c.isHigh)
                             if c.isHigh
                                 sigSetupShort := true
                             if not c.isHigh
