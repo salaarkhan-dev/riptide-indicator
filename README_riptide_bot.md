@@ -173,7 +173,7 @@ different questions:
 | | | |
 |---|---|---|
 | `Cfg.max_bars_after_grab` | 50 | how long after the **sweep** the shift may come |
-| `Cfg.max_bars_after_mss` | 10, overridden to **5** in `riptide.conf` | how long after the **shift** the gap may form |
+| `Cfg.max_bars_after_mss` | 10 | how long after the **shift** the gap may form |
 | `RIPTIDE_FRESH_BARS` | 2 | how old the **setup** may be when the alert fires |
 
 A long wait between the sweep and the entry is normal and fully alerted —
