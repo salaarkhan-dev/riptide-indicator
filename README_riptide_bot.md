@@ -52,6 +52,7 @@ the systemd unit's `ExecStart` never changes.
 | `riptide/exchange.py` | MEXC reads: contracts, turnover, candles |
 | `riptide/storage.py` | SQLite dedupe and key/value bookkeeping |
 | `riptide/telegram.py` | delivery and message formatting |
+| `riptide/tracker.py` | scores alerts forward against candles already fetched. Observes only — the engine cannot see it |
 | `riptide/scanner.py` | the scan cycle and the loop that drives it |
 | `riptide/commands.py` | Telegram command handling |
 | `riptide/app.py` | startup and task supervision |
@@ -125,6 +126,7 @@ the symbol list, not the source filter, if that is too many.
 | | |
 |---|---|
 | `/status` | build, symbols, alert state, uptime, last and next scan |
+| `/stats` | how the alerts have actually scored — see *Outcome tracking* |
 | `/scan` | run a scan now instead of waiting for the close |
 | `/pause` / `/resume` | stop sending while still recording, so resuming does not replay the backlog |
 | `/update` | check GitHub for a new build now |
@@ -202,6 +204,55 @@ journalctl -u riptide -f
 
 Make sure the clock is synced (`timedatectl`) - bar alignment depends on it.
 
+## Outcome tracking
+
+Every strategy figure quoted in this repo — the trend filter, the exit
+comparison, the entry-timeframe test — comes from one 41-day backtest over
+symbols chosen by their turnover *today*. That is survivorship bias, one
+ranging regime, and no out-of-sample data. The trend-filter estimate moved 35%
+in a few hours of fresh candles, which is the sample saying how far it can be
+trusted. Testing more variants against that same window cannot fix it.
+
+`tracker.py` scores live alerts forward instead. Each fresh setup is armed with
+the entry, stop and trend alignment that were alerted, and advanced every cycle
+against candles the scan already fetched — no extra requests, no effect on what
+is sent, and nothing the engine can read.
+
+The simulated rule is the plain one the alert leads with:
+
+- a limit at the entry, fillable for `RIPTIDE_TRACK_FILL_BARS` bars after the
+  gap forms; a setup that never fills scores **0R**, so fill rate cannot be
+  gamed by widening the entry
+- the stop where the alert put it, the target at `RIPTIDE_TRACK_TARGET_R`
+- **stop first** when one bar contains both — the reading that cannot flatter
+  the result
+- marked to market at the close after `RIPTIDE_TRACK_HORIZON_BARS`
+
+MFE and MAE are stored in R per setup, so a different fixed target can be
+scored from the same rows later without re-running anything.
+
+Only setups that passed the freshness gate are tracked, **whether or not the
+alert was sent** — a `/pause` or a delivery failure must not put a hole in the
+sample. That gate is also what keeps this forward-only: on a first run the 600
+bars of recorded history are all stale, so none of them arm.
+
+A row whose symbol later leaves the scan list stops receiving candles and is
+retired as `stale` past the point where it could resolve. Those are excluded
+from the figures and counted separately in `/stats`, because a sample with an
+invisible hole is worse than a smaller honest one.
+
+Two things it does not model, both of which flatter the numbers: fees, and
+slippage on the stop. Read `/stats` as an upper bound.
+
+```
+/stats
+```
+
+`update()` resumes from the last bar it processed, so a re-scan, a restart or a
+manual `/scan` cannot double-count an excursion. Verified against an
+independent one-shot scorer on 130 real setups across 10 symbols: bar-by-bar
+replay and whole-history scoring agree exactly, and a repeat scan is a no-op.
+
 ## Settings
 
 Engine defaults live in the `Cfg` dataclass and match the Pine inputs. Change
@@ -223,7 +274,11 @@ them there, not in the engine body.
 | `RIPTIDE_LOOKBACK` | `600` | bars fetched per symbol |
 | `RIPTIDE_CONCURRENCY` | `8` | parallel requests |
 | `RIPTIDE_MIN_VOL` | `3000000` | min 24h turnover (USDT). Only applies when `RIPTIDE_SYMBOLS` is unset; an explicit list is never filtered. `0` disables. At the default this cuts ~1019 perps to ~96 |
-| `RIPTIDE_DB` | `riptide.db` | dedupe and signal history |
+| `RIPTIDE_TRACK` | `1` | score alerts forward and report with `/stats`. `0` disables |
+| `RIPTIDE_TRACK_FILL_BARS` | `10` | bars the entry limit stays live. Past this the setup counts as 0R |
+| `RIPTIDE_TRACK_HORIZON_BARS` | `60` | bars a filled setup is followed before being marked to market |
+| `RIPTIDE_TRACK_TARGET_R` | `1.0` | target for the simulated rule |
+| `RIPTIDE_DB` | `riptide.db` | dedupe, signal history and outcomes |
 | `MEXC_BASE` | `https://api.mexc.com` | futures moved here in Jan 2026 |
 
 ## Verifying against the chart

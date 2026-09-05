@@ -11,6 +11,7 @@ import time
 
 from . import mtf
 from . import telegram as tg
+from . import tracker
 from . import trend
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      ENTRY_INTERVAL, FRESH_BARS, INTERVAL, MTF_GRACE_BARS,
@@ -24,7 +25,9 @@ from .storage import (already_sent, first_run, meta_get, meta_set, record,
 
 async def scan_symbol(sess, sem, symbol, trend_on=None):
     """
-    Returns (setups, sweeps). sweeps is empty unless RIPTIDE_SWEEP_ALERTS.
+    Returns (setups, sweeps, candles). sweeps is empty unless
+    RIPTIDE_SWEEP_ALERTS; the candles are handed back so outcome tracking can
+    score open setups against the same fetch rather than repeating it.
 
     trend_on defaults to the configured setting; cycle() passes the live
     value so /trend takes effect on the next scan without a restart.
@@ -34,7 +37,7 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
     async with sem:
         cs = await fetch_candles(sess, symbol)
         if len(cs) < 100:
-            return [], []
+            return [], [], cs
         # Structure always comes from the higher timeframe; only the entry can
         # move. Fetched inside the semaphore so the pair counts as one slot.
         ltf = await fetch_candles(sess, symbol, ENTRY_INTERVAL) \
@@ -45,7 +48,7 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
             setups = run_engine(symbol, cs, sweeps_out=sweeps)
         except Exception as e:
             log.warning("engine failed on %s: %s", symbol, e)
-            return [], []
+            return [], [], cs
 
         # Gate on the setting, not on the data arriving. A failed lower-
         # timeframe fetch — one rate-limited request among the two per symbol
@@ -110,7 +113,7 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
         if dropped:
             log.debug("%s: %d setup(s) dropped against the %s trend",
                       symbol, dropped, TREND_INTERVAL)
-        return keep_s, keep_w
+        return keep_s, keep_w, cs
 
 
 def trend_on(db) -> bool:
@@ -135,10 +138,24 @@ async def cycle(sess, db, symbols):
     now = int(time.time())
     sent = 0
 
+    # Score already-open setups before arming new ones, against the candles
+    # this cycle just fetched. Ordering matters only in that a setup armed
+    # below cannot resolve on the bar that created it — its fill window starts
+    # after the gap bar, and update() walks each bar once per row.
+    for symbol, (_, _, cs) in zip(symbols, results):
+        try:
+            tracker.update(db, symbol, cs)
+        except Exception as e:
+            log.warning("outcome tracking failed on %s: %s", symbol, e)
+    try:
+        tracker.expire_stale(db)
+    except Exception as e:
+        log.warning("stale outcome sweep failed: %s", e)
+
     # Sweeps first: the grab precedes the shift, so the heads-up should land
     # before the setup message when both fall in the same cycle.
     swept = 0
-    for _, sweeps in results:
+    for _, sweeps, _ in results:
         for w in sweeps:
             if SWEEP_SRC is not None and w.src not in SWEEP_SRC:
                 continue
@@ -151,7 +168,7 @@ async def cycle(sess, db, symbols):
                 if await tg.tg_send(sess, tg.sweep_message(w)):
                     swept += 1
 
-    for setups, _ in results:
+    for setups, _, _ in results:
         for s in setups:
             # Only shifts from the last few bars are actionable. Older ones are
             # recorded so a restart cannot re-alert the whole history.
@@ -160,6 +177,12 @@ async def cycle(sess, db, symbols):
             if already_sent(db, sid):
                 continue
             record(db, sid, s)
+            # Track what was actionable, sent or not: a pause or a delivery
+            # failure must not put a hole in the sample. The freshness gate
+            # is also what keeps this forward-only — on a first run the 600
+            # bars of recorded history are all stale, so none of them arm.
+            if fresh:
+                tracker.arm(db, sid, s)
             if fresh and not mute:
                 if await tg.tg_send(sess, tg.setup_message(s)):
                     sent += 1

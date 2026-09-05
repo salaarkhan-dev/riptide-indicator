@@ -25,6 +25,11 @@ import time
 os.environ.setdefault("RIPTIDE_ALERT_FIRST_RUN", "1")
 os.environ.setdefault("RIPTIDE_FRESH_BARS", "100000")
 os.environ.setdefault("RIPTIDE_SWEEP_FRESH_BARS", "100000")
+# This is a delivery test, not a measurement. The freshness overrides above
+# make every historical setup look actionable, which would arm 600 bars of
+# backtest into the outcome table and defeat the point of it being forward
+# data. The wrapper deletes riptide.db anyway; this is belt and braces.
+os.environ.setdefault("RIPTIDE_TRACK", "0")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

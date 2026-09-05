@@ -10,6 +10,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
+from . import tracker
 from .config import DB_PATH, INTERVAL
 from .engine import Setup, Sweep
 
@@ -25,6 +26,7 @@ def db_init():
         sig TEXT PRIMARY KEY, symbol TEXT, side TEXT, src TEXT,
         level REAL, struct_level REAL, sweep_time INT, sent_at INT)""")
     db.commit()
+    tracker.init(db)
     return db
 
 

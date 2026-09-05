@@ -60,6 +60,21 @@ TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Day1")
 TREND_LEN = int(os.getenv("RIPTIDE_TREND_LEN", "14"))
 TREND_FACTOR = float(os.getenv("RIPTIDE_TREND_FACTOR", "5.0"))
 
+# Outcome tracking. Scores every fresh setup forward against candles the
+# scanner already fetches — no extra requests, no effect on what is alerted,
+# and still no exchange key or order path. See tracker.py; read it with /stats.
+TRACK = os.getenv("RIPTIDE_TRACK", "1") == "1"
+# Bars after the gap forms in which a limit at the entry may fill. Past this
+# the setup is recorded as never filled, which is a result, not a discard.
+TRACK_FILL_BARS = int(os.getenv("RIPTIDE_TRACK_FILL_BARS", "10"))
+# Bars a filled setup is followed before being marked to market. 60 Min30 bars
+# is 30 hours — long enough that the target is reached or the trade is dead.
+TRACK_HORIZON_BARS = int(os.getenv("RIPTIDE_TRACK_HORIZON_BARS", "60"))
+# Target in R for the simulated rule. 1.0 is what measured best; MFE and MAE
+# are stored per setup so another fixed target can be scored from the same
+# rows afterwards.
+TRACK_TARGET_R = float(os.getenv("RIPTIDE_TRACK_TARGET_R", "1.0"))
+
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just

@@ -13,15 +13,19 @@ import time
 import aiohttp
 
 from . import telegram as tg
+from . import tracker
 from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
-                     SWEEP_ALERTS, TG_CHAT, TG_TOKEN, TREND_FACTOR,
-                     TREND_FILTER, TREND_INTERVAL, TREND_LEN, build_id, log)
+                     SWEEP_ALERTS, TG_CHAT, TG_TOKEN, TRACK,
+                     TRACK_FILL_BARS, TRACK_HORIZON_BARS, TRACK_TARGET_R,
+                     TREND_FACTOR, TREND_FILTER, TREND_INTERVAL, TREND_LEN,
+                     build_id, log)
 from .scanner import cycle, seconds_to_next_close, trend_on
 from .storage import meta_get, meta_set
 
 HELP = (
     "<b>Riptide</b>\n\n"
     "/status — build, symbols, last and next scan\n"
+    "/stats — how the alerts have actually scored\n"
     "/scan — run a scan now\n"
     "/trend on|off — filter setups by the daily trend\n"
     "/pause — record setups but stop sending\n"
@@ -63,6 +67,14 @@ def status_text(db, state) -> str:
         scan_line = f"{_fmt_ago(time.time() - last)} ago · {state.get('last_sent', 0)} sent"
     else:
         scan_line = "none yet"
+    if TRACK:
+        live = db.execute("SELECT COUNT(*) FROM outcomes WHERE status IN "
+                          "('pending','open')").fetchone()[0]
+        done = db.execute("SELECT COUNT(*) FROM outcomes WHERE status NOT IN "
+                          "('pending','open','stale')").fetchone()[0]
+        track_line = f"{done} settled · {live} live · /stats"
+    else:
+        track_line = "off"
     sweeps = "on" if SWEEP_ALERTS else "off"
     live = trend_on(db)
     src = "" if (meta_get(db, "trend_filter", "") not in ("0", "1")) else " (/trend)"
@@ -75,12 +87,75 @@ def status_text(db, state) -> str:
         f"{f' → {ENTRY_INTERVAL} entries' if ENTRY_INTERVAL else ''}\n"
         f"alerts     {'PAUSED' if paused else 'on'} · sweeps {sweeps}\n"
         f"trend      {trend_line}\n"
+        f"outcomes   {track_line}\n"
         f"uptime     {_fmt_ago(time.time() - state.get('started', time.time()))}\n"
         f"last scan  {scan_line}\n"
         f"next scan  in {int(seconds_to_next_close(step) // 60)}m\n"
         f"recorded   {seen_n} setups · {swp_n} sweeps\n"
         f"clock      {tg.local_clock() or 'UTC only'}"
     )
+
+
+def _bucket_line(name: str, b: dict) -> str:
+    if not b["setups"]:
+        return f"{name:<12}—"
+    # The standard error is the whole point of showing this: a mean without
+    # one invites a decision the sample cannot support.
+    return (f"{name:<12}{b['r_setup']:+.3f} ± {b['se_setup']:.3f}   "
+            f"{b['setups']:>3} setups · {b['win_pct']:.0f}% win")
+
+
+def stats_text(db) -> str:
+    if not TRACK:
+        return ("Outcome tracking is off.\n\n"
+                "Set <code>RIPTIDE_TRACK=1</code> in riptide.conf to score "
+                "alerts forward.")
+    s = tracker.summary(db)
+    if not s.get("armed"):
+        return ("<b>Outcomes</b>\n\nNothing tracked yet. Scoring starts with "
+                "the next alert — a setup needs to fill and then run its "
+                "course, so the first results are hours away and a sample "
+                "worth reading is weeks away.")
+
+    days = max(0.0, (time.time() - s["since"]) / 86400)
+    a = s["all"]
+    settled = a["setups"]
+    fill_pct = 100.0 * a["trades"] / settled if settled else 0.0
+
+    body = (
+        f"<b>Outcomes</b>\n"
+        f"<i>{TRACK_TARGET_R:g}R target · {TRACK_FILL_BARS} bar fill window · "
+        f"{TRACK_HORIZON_BARS} bar horizon · stop taken first</i>\n\n"
+        f"tracked    {s['armed']} setups over {days:.1f} days\n"
+        f"settled    {settled} · {a['trades']} filled ({fill_pct:.0f}%)\n"
+        f"live       {s['pending']} pending · {s['open']} open\n"
+        # Unscoreable rows are named rather than quietly dropped: a sample
+        # with an invisible hole in it is worse than a smaller honest one.
+        + (f"unscored   {s['stale']} · symbol left the scan\n" if s["stale"]
+           else "")
+        + "\n"
+        f"<b>R per setup</b>  <i>(unfilled counts as zero)</i>\n"
+        f"<code>{_bucket_line('all', a)}</code>\n"
+        f"<code>{_bucket_line('with trend', s['aligned'])}</code>\n"
+        f"<code>{_bucket_line('against', s['against'])}</code>\n"
+    )
+    if a["trades"]:
+        body += (f"\nper filled trade  {a['r_trade']:+.3f} ± {a['se_trade']:.3f}\n"
+                 f"avg excursion     +{s['mfe']:.2f}R best · "
+                 f"{s['mae']:.2f}R worst\n")
+
+    # Twenty settled setups cannot separate anything; saying so is the point.
+    if settled < 20:
+        body += "\n<i>Far too few to read. Let it run.</i>"
+    elif settled < 200:
+        body += ("\n<i>Still thin — the standard errors above are wide enough "
+                 "to contain almost any conclusion. The backtest that produced "
+                 "the trend filter used 1961 setups.</i>")
+    else:
+        body += ("\n<i>This is out-of-sample: live alerts, in whatever regime "
+                 "has actually occurred. Where it disagrees with the backtest, "
+                 "believe this.</i>")
+    return body
 
 
 async def handle_command(sess, db, state, text: str) -> None:
@@ -91,6 +166,9 @@ async def handle_command(sess, db, state, text: str) -> None:
 
     elif cmd == "status":
         await tg.tg_send(sess, status_text(db, state))
+
+    elif cmd == "stats":
+        await tg.tg_send(sess, stats_text(db))
 
     elif cmd == "scan":
         await tg.tg_send(sess, "Scanning…")
