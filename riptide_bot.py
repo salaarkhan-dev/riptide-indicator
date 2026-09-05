@@ -103,6 +103,16 @@ CFG = Cfg()
 log = logging.getLogger("riptide")
 
 
+def build_id() -> str:
+    """Short commit the running file came from, written by deploy/update.sh."""
+    try:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "BUILD")
+        with open(p) as f:
+            return f.read().strip()[:12] or "unknown"
+    except OSError:
+        return "unknown"
+
+
 # ── engine ──────────────────────────────────────────────────────────────────
 @dataclass
 class Candle:
@@ -775,7 +785,8 @@ async def main():
         if not symbols:
             log.error("no symbols; check MEXC_BASE or RIPTIDE_SYMBOLS")
             return
-        log.info("riptide up: %d symbols, %s bars", len(symbols), INTERVAL)
+        log.info("riptide up: %d symbols, %s bars, build %s",
+                 len(symbols), INTERVAL, build_id())
         await tg_send(sess, f"Riptide scanner started\n"
                             f"{len(symbols)} symbols · {INTERVAL} bars")
 
