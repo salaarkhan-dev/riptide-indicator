@@ -62,7 +62,7 @@ fi
 echo
 echo "== 3. permission to restart the service =="
 sudo tee /etc/sudoers.d/riptide-update >/dev/null <<'EOF'
-ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl restart riptide, /bin/systemctl restart riptide
+ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl restart riptide, /bin/systemctl restart riptide, /usr/bin/systemctl start riptide-update.service, /bin/systemctl start riptide-update.service
 EOF
 sudo chmod 440 /etc/sudoers.d/riptide-update
 sudo visudo -c -f /etc/sudoers.d/riptide-update >/dev/null || die "bad sudoers file"

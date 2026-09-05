@@ -66,6 +66,32 @@ what the numbers show. Keep that in mind if you ever narrow
 Expect roughly 95 sweep messages a day on 20 symbols, against 20 setups. Cut
 the symbol list, not the source filter, if that is too many.
 
+## Telegram commands
+
+| | |
+|---|---|
+| `/status` | build, symbols, alert state, uptime, last and next scan |
+| `/scan` | run a scan now instead of waiting for the close |
+| `/pause` / `/resume` | stop sending while still recording, so resuming does not replay the backlog |
+| `/update` | check GitHub for a new build now |
+| `/restart` | restart the service |
+| `/help` | the list |
+
+Only `TELEGRAM_CHAT_ID` is obeyed. Both the chat and the sender must match it;
+anything else is logged and ignored without a reply, so the bot never confirms
+it exists to a stranger.
+
+The update offset is persisted and advanced **before** a command runs.
+Otherwise `/restart` would be redelivered to the process it just started, and
+restart forever.
+
+Symbols and settings are not editable from Telegram on purpose — they live in
+`riptide.conf` on GitHub, which stays the single source of truth. A second
+place to change them would drift out of sync.
+
+This adds no trading capability. There is still no exchange key and no code
+path that can place an order.
+
 ### Restarts
 
 The scan loop sleeps before it scans, so without `RIPTIDE_SCAN_ON_START` a
@@ -135,6 +161,7 @@ them there, not in the engine body.
 | `RIPTIDE_SCAN_ON_START` | `1` | scan immediately on startup instead of waiting for the next close |
 | `RIPTIDE_TG_RETRIES` | `4` | Telegram send attempts. Only provably-undelivered failures are retried |
 | `RIPTIDE_TZ` | unset | IANA zone for the heartbeat's clock. Display only |
+| `RIPTIDE_TG_COMMANDS` | `1` | accept commands from `TELEGRAM_CHAT_ID`. `0` disables |
 | `RIPTIDE_SWEEP_ALERTS` | `1` | heads-up when a pool is swept, ahead of the shift. `0` disables |
 | `RIPTIDE_SWEEP_SRC` | unset | which pools raise a heads-up. Unset = all. e.g. `Pivot` |
 | `RIPTIDE_SWEEP_FRESH_BARS` | `2` | sweep freshness window. **Minimum 2** — see below |

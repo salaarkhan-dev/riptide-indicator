@@ -47,13 +47,16 @@ QUOTE = os.getenv("RIPTIDE_QUOTE", "USDT")
 SYMBOLS_ENV = os.getenv("RIPTIDE_SYMBOLS", "")          # comma list, or blank
 MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
 ALERT_ON_FIRST_RUN = os.getenv("RIPTIDE_ALERT_FIRST_RUN", "0") == "1"
-# Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 # Scan immediately on startup instead of waiting for the next bar close.
 SCAN_ON_START = os.getenv("RIPTIDE_SCAN_ON_START", "1") == "1"
 TG_RETRIES = int(os.getenv("RIPTIDE_TG_RETRIES", "4"))
+# Listen for commands from TELEGRAM_CHAT_ID. Read-only status plus service
+# control; there is still no exchange key and no order path anywhere.
+TG_COMMANDS = os.getenv("RIPTIDE_TG_COMMANDS", "1") == "1"
 # IANA name, e.g. Asia/Karachi. Display only — every internal calculation
 # stays on UTC epoch seconds.
 DISPLAY_TZ = os.getenv("RIPTIDE_TZ", "")
+# Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
 # closed is already one full step old, and the scan wakes another 10s after
@@ -814,6 +817,10 @@ async def cycle(sess, db, symbols):
     results = await asyncio.gather(*(scan_symbol(sess, sem, s) for s in symbols))
 
     bootstrap = first_run(db) and not ALERT_ON_FIRST_RUN
+    # /pause records everything as usual but sends nothing, so resuming does
+    # not replay the backlog.
+    paused = meta_get(db, "alerts_paused", "0") == "1"
+    mute = bootstrap or paused
     step = BAR_SECONDS[INTERVAL]
     now = int(time.time())
     sent = 0
@@ -830,7 +837,7 @@ async def cycle(sess, db, symbols):
             if sweep_already_sent(db, sid):
                 continue
             record_sweep(db, sid, w)
-            if fresh and not bootstrap:
+            if fresh and not mute:
                 if await tg_send(sess, sweep_message(w)):
                     swept += 1
 
@@ -843,17 +850,193 @@ async def cycle(sess, db, symbols):
             if already_sent(db, sid):
                 continue
             record(db, sid, s)
-            if fresh and not bootstrap:
+            if fresh and not mute:
                 if await tg_send(sess, setup_message(s)):
                     sent += 1
     if bootstrap:
         log.info("first run: history recorded, nothing sent")
+    elif paused:
+        log.info("alerts paused; recorded but not sent")
     if SWEEP_ALERTS:
         log.info("scanned %d symbols, sent %d alerts, %d sweep heads-ups",
                  len(symbols), sent, swept)
     else:
         log.info("scanned %d symbols, sent %d alerts", len(symbols), sent)
     return sent + swept
+
+
+# ── telegram commands ───────────────────────────────────────────────────────
+HELP = (
+    "<b>Riptide</b>\n\n"
+    "/status — build, symbols, last and next scan\n"
+    "/scan — run a scan now\n"
+    "/pause — record setups but stop sending\n"
+    "/resume — start sending again\n"
+    "/update — check GitHub for a new build now\n"
+    "/restart — restart the service\n"
+    "/help — this\n\n"
+    "<i>Symbols and settings are edited in riptide.conf on GitHub; the box "
+    "picks them up within about five minutes.</i>"
+)
+
+
+def _fmt_ago(seconds: float) -> str:
+    seconds = int(max(seconds, 0))
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h {(seconds % 3600) // 60}m"
+    return f"{seconds // 86400}d {(seconds % 86400) // 3600}h"
+
+
+async def _run(*argv) -> tuple[int, str]:
+    """Run a command, capturing output. Used only for systemctl."""
+    p = await asyncio.create_subprocess_exec(
+        *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    out, _ = await p.communicate()
+    return p.returncode, out.decode(errors="replace").strip()
+
+
+def status_text(db, state) -> str:
+    step = BAR_SECONDS[INTERVAL]
+    paused = meta_get(db, "alerts_paused", "0") == "1"
+    seen_n = db.execute("SELECT COUNT(*) FROM seen").fetchone()[0]
+    swp_n = db.execute("SELECT COUNT(*) FROM seen_sweeps").fetchone()[0]
+    last = state.get("last_cycle", 0)
+    if last:
+        scan_line = f"{_fmt_ago(time.time() - last)} ago · {state.get('last_sent', 0)} sent"
+    else:
+        scan_line = "none yet"
+    sweeps = "on" if SWEEP_ALERTS else "off"
+    return (
+        f"<b>Riptide status</b>\n\n"
+        f"build      <code>{build_id()}</code>\n"
+        f"symbols    {len(state.get('symbols', []))} · {INTERVAL}\n"
+        f"alerts     {'PAUSED' if paused else 'on'} · sweeps {sweeps}\n"
+        f"uptime     {_fmt_ago(time.time() - state.get('started', time.time()))}\n"
+        f"last scan  {scan_line}\n"
+        f"next scan  in {int(seconds_to_next_close(step) // 60)}m\n"
+        f"recorded   {seen_n} setups · {swp_n} sweeps\n"
+        f"clock      {local_clock() or 'UTC only'}"
+    )
+
+
+async def handle_command(sess, db, state, text: str) -> None:
+    cmd = text.strip().split()[0].lower().lstrip("/").split("@")[0]
+
+    if cmd in ("start", "help"):
+        await tg_send(sess, HELP)
+
+    elif cmd == "status":
+        await tg_send(sess, status_text(db, state))
+
+    elif cmd == "scan":
+        await tg_send(sess, "Scanning…")
+        n = await cycle(sess, db, state.get("symbols", []))
+        state["last_cycle"] = time.time()
+        state["last_sent"] = n
+        await tg_send(sess, f"Scan done · {n} alert(s) sent")
+
+    elif cmd == "pause":
+        meta_set(db, "alerts_paused", "1")
+        await tg_send(sess, "Paused. Setups are still recorded, so /resume "
+                            "will not replay the backlog.")
+
+    elif cmd == "resume":
+        meta_set(db, "alerts_paused", "0")
+        await tg_send(sess, "Resumed.")
+
+    elif cmd == "update":
+        await tg_send(sess, "Checking GitHub…")
+        rc, out = await _run("sudo", "-n", "systemctl", "start",
+                             "riptide-update.service")
+        if rc != 0:
+            await tg_send(sess, f"Could not start the updater:\n<code>"
+                                f"{out[:300]}</code>")
+        # A real update restarts the service and reports separately. Silence
+        # here means the branch had nothing new.
+
+    elif cmd == "restart":
+        # Reply first — the restart kills this process.
+        await tg_send(sess, "Restarting…")
+        rc, out = await _run("sudo", "-n", "systemctl", "restart", "riptide")
+        if rc != 0:
+            await tg_send(sess, f"Restart failed:\n<code>{out[:300]}</code>")
+
+    else:
+        await tg_send(sess, f"Unknown command /{cmd}\n\n{HELP}")
+
+
+async def command_loop(sess, db, state) -> None:
+    """
+    Long-poll getUpdates and act on commands from TELEGRAM_CHAT_ID only.
+
+    The offset is persisted and advanced BEFORE the command runs. /restart
+    would otherwise be replayed by the process it just started, forever.
+    """
+    if not (TG_TOKEN and TG_CHAT):
+        return
+    url = f"https://api.telegram.org/bot{TG_TOKEN}/getUpdates"
+    offset = int(meta_get(db, "tg_offset", "0") or 0)
+
+    # No stored offset means a fresh database. Skip whatever is already queued
+    # rather than acting on commands sent before this process existed.
+    if offset == 0:
+        try:
+            async with sess.get(url, params={"offset": -1, "timeout": 0},
+                                timeout=aiohttp.ClientTimeout(total=20)) as r:
+                for u in (await r.json()).get("result", []):
+                    offset = max(offset, int(u["update_id"]))
+        except Exception as e:
+            log.warning("telegram command backlog check failed: %s", e)
+        meta_set(db, "tg_offset", offset)
+        log.info("telegram commands ready (backlog skipped to %d)", offset)
+
+    while True:
+        try:
+            async with sess.get(url,
+                                params={"offset": offset + 1, "timeout": 25},
+                                timeout=aiohttp.ClientTimeout(total=45)) as r:
+                if r.status != 200:
+                    log.warning("getUpdates %s", r.status)
+                    await asyncio.sleep(10)
+                    continue
+                updates = (await r.json()).get("result", [])
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("getUpdates failed: %s", e)
+            await asyncio.sleep(15)
+            continue
+
+        for u in updates:
+            offset = max(offset, int(u["update_id"]))
+            meta_set(db, "tg_offset", offset)      # commit before acting
+
+            msg = u.get("message") or u.get("edited_message") or {}
+            text = (msg.get("text") or "").strip()
+            chat = str((msg.get("chat") or {}).get("id", ""))
+            who = str((msg.get("from") or {}).get("id", ""))
+
+            if not text.startswith("/"):
+                continue
+            # Both must match: the configured chat, and a sender who is that
+            # same account. Anyone else is ignored without a reply, so the bot
+            # does not confirm it exists.
+            if chat != str(TG_CHAT) or who != str(TG_CHAT):
+                log.warning("ignoring command from chat=%s user=%s", chat, who)
+                continue
+
+            log.info("telegram command: %s", text.split()[0])
+            try:
+                await handle_command(sess, db, state, text)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.exception("command failed: %s", e)
+                await tg_send(sess, f"Command failed: {e}")
 
 
 def seconds_to_next_close(step: int, pad: int = 10) -> float:
@@ -891,41 +1074,69 @@ async def main():
         # Safe to repeat work: dedupe skips anything the previous process
         # already recorded, the freshness gate still applies, and an empty
         # database still bootstraps silently.
+        # Shared with the command listener so /status reports live values.
+        state = {"symbols": symbols, "started": time.time(),
+                 "last_cycle": 0.0, "last_sent": 0}
+
         if SCAN_ON_START:
-            await cycle(sess, db, symbols)
+            n = await cycle(sess, db, symbols)
+            state["last_cycle"], state["last_sent"] = time.time(), n
 
-        last_symbol_refresh = time.time()
-        # Persisted, so "alive" means a day has genuinely passed rather than
-        # "the process restarted". Survives updates; a deleted riptide.db
-        # resets it, which only costs one extra heartbeat.
+        tasks = [asyncio.create_task(scan_loop(sess, db, state), name="scan")]
+        if TG_COMMANDS:
+            tasks.append(asyncio.create_task(
+                command_loop(sess, db, state), name="commands"))
+            log.info("telegram commands enabled")
+
+        # If either loop dies the process should exit and let systemd restart
+        # it, rather than limp along with half its behaviour missing.
         try:
-            last_heartbeat = float(meta_get(db, "last_heartbeat", "0") or 0)
-        except ValueError:
-            last_heartbeat = 0.0
-        while True:
-            try:
-                await asyncio.sleep(seconds_to_next_close(step))
-                await cycle(sess, db, symbols)
+            done, pending = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+            for t in done:
+                t.result()          # re-raise whatever stopped it
+        except asyncio.CancelledError:
+            raise
 
-                if time.time() - last_symbol_refresh > 21600:      # 6h
-                    fresh = await list_symbols(sess)
-                    if fresh:
-                        symbols = fresh
-                    last_symbol_refresh = time.time()
 
-                # Daily heartbeat, so silence means something is broken rather
-                # than that nothing set up.
-                if time.time() - last_heartbeat > 86400:
-                    when = local_clock()
-                    await tg_send(sess, f"Riptide alive · {len(symbols)} symbols"
-                                        + (f" · {when}" if when else ""))
-                    last_heartbeat = time.time()
-                    meta_set(db, "last_heartbeat", last_heartbeat)
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                log.exception("cycle error: %s", e)
-                await asyncio.sleep(30)
+async def scan_loop(sess, db, state) -> None:
+    step = BAR_SECONDS[INTERVAL]
+    last_symbol_refresh = time.time()
+    # Persisted, so "alive" means a day has genuinely passed rather than
+    # "the process restarted". Survives updates; a deleted riptide.db
+    # resets it, which only costs one extra heartbeat.
+    try:
+        last_heartbeat = float(meta_get(db, "last_heartbeat", "0") or 0)
+    except ValueError:
+        last_heartbeat = 0.0
+
+    while True:
+        try:
+            await asyncio.sleep(seconds_to_next_close(step))
+            n = await cycle(sess, db, state["symbols"])
+            state["last_cycle"], state["last_sent"] = time.time(), n
+
+            if time.time() - last_symbol_refresh > 21600:      # 6h
+                fresh = await list_symbols(sess)
+                if fresh:
+                    state["symbols"] = fresh
+                last_symbol_refresh = time.time()
+
+            # Daily heartbeat, so silence means something is broken rather
+            # than that nothing set up.
+            if time.time() - last_heartbeat > 86400:
+                when = local_clock()
+                await tg_send(sess, f"Riptide alive · {len(state['symbols'])} symbols"
+                                    + (f" · {when}" if when else ""))
+                last_heartbeat = time.time()
+                meta_set(db, "last_heartbeat", last_heartbeat)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.exception("cycle error: %s", e)
+            await asyncio.sleep(30)
 
 
 if __name__ == "__main__":
