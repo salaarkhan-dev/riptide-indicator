@@ -142,9 +142,11 @@ allFvgMinATR   = input.float(0.10, "  min size (ATR)", minval = 0, step = 0.05, 
 allFvgKeep     = input.int(40,    "  how many to keep", minval = 5, maxval = 200, group = gLook,
      tooltip = "Only the most recent this-many context imbalances stay on the chart. TradingView allows 500 drawings in total and entry zones, liquidity lines and labels share that budget.")
 allFvgFill     = input.int(93,    "  transparency", minval = 50, maxval = 99, group = gLook)
-allFvgRemove   = input.string("Filled", "  remove when",
-     options = ["Touched", "Filled", "Never"], group = gLook,
-     tooltip = "Filled: the box disappears once price has traded all the way through the gap, so what stays on the chart is unmitigated imbalance only — the reading most people want. Touched: it goes the moment price enters the zone at all. Never: keep every box until the budget above recycles it.")
+allFvgRemove   = input.string("Body close", "  mitigated when",
+     options = ["Body close", "50% (CE)", "Wick", "Touched", "Never"], group = gLook,
+     tooltip = "How much of the gap price must take back before the box goes.\n\nBody close: a candle BODY closes through the far edge. Ignores wicks, so a single spike through the zone does not kill it — the steadiest reading and the default.\n\n50% (CE): consequent encroachment, the midpoint. The classic ICT reading of a mitigated gap.\n\nWick: any wick through the far edge. Strictest, and the noisiest.\n\nTouched: price merely entered the zone.\n\nNever: keep every box until the count above recycles it.")
+allFvgOverlap  = input.bool(true, "  hide overlapping", group = gLook,
+     tooltip = "When a new imbalance overlaps an older one in price, drop the older box. Stacked half-transparent boxes are what turns this layer into a smear; one box per price area keeps it readable.")
 showEntryLine  = input.bool(true,  "Entry line",                     group = gLook)
 showStopLoss   = input.bool(true,  "Stop loss line",                 group = gLook,
      tooltip = "Drawn from the raid candle itself and extended right, so you can see which bar the stop comes from.")
@@ -321,8 +323,10 @@ type Cluster
 // any of that. Top and bottom are kept only so the box can retire itself.
 type CtxFvg
     box   bx
+    line  mid
     float top
     float bottom
+    float avg
     bool  isBull
     int   createdBar
 
@@ -659,20 +663,44 @@ newFvgAt(bool isBull, float top, float bottom, int lft) =>
 // A context imbalance: same three-bar geometry as an entry zone, drawn faintly
 // and forgotten. No id, no mitigation tracking, no effect on any signal —
 // purely so the chart shows the imbalances the entry rules passed over.
+// Drop every stored context box, drawings included.
+dropCtx(int i) =>
+    CtxFvg f = ctxFvgs.get(i)
+    box.delete(f.bx)
+    line.delete(f.mid)
+    ctxFvgs.remove(i)
+
 drawCtxFvg(bool isBull, float top, float bottom, int lft) =>
+    // Overlapping half-transparent boxes stack into a smear and stop reading
+    // as levels. One box per price area: the newer gap wins, since it is the
+    // one price has just left behind.
+    if allFvgOverlap and ctxFvgs.size() > 0
+        for i = ctxFvgs.size() - 1 to 0
+            CtxFvg o = ctxFvgs.get(i)
+            if not (bottom >= o.top or top <= o.bottom)
+                dropCtx(i)
+
     color base = isBull ? bullCol : bearCol
+    float av = math.avg(top, bottom)
     box b = box.new(lft, top, lft + fvgExtendBars, bottom,
          xloc         = xloc.bar_index,
          border_color = color.new(base, math.max(0, allFvgFill - 8)),
          border_width = 1,
          border_style = line.style_dotted,
          bgcolor      = color.new(base, allFvgFill))
-    ctxFvgs.push(CtxFvg.new(bx = b, top = top, bottom = bottom,
-         isBull = isBull, createdBar = bar_index))
+    // The midpoint is not decoration: it is where "50% (CE)" mitigates, and
+    // the level price most often reacts to inside a gap.
+    line m = showFvgMidline
+         ? line.new(lft, av, lft + fvgExtendBars, av,
+              xloc = xloc.bar_index, style = line.style_dotted,
+              color = color.new(base, math.max(0, allFvgFill - 15)))
+         : na
+    ctxFvgs.push(CtxFvg.new(bx = b, mid = m, top = top, bottom = bottom,
+         avg = av, isBull = isBull, createdBar = bar_index))
     // Kept short so entry zones, liquidity lines and labels are not starved
     // out of TradingView's 500-drawing budget by chart context.
     while ctxFvgs.size() > allFvgKeep
-        box.delete(ctxFvgs.shift().bx)
+        dropCtx(0)
 
 // Entry price implied by entryMode, from a gap's two edges.
 entryOf(bool isLong, float top, float bot) =>
@@ -983,24 +1011,33 @@ if engineOk
     // Retire mitigated boxes first, so a gap created below cannot retire
     // itself on the bar that formed it. Backwards, because remove() shifts
     // every index above it.
-    if allFvgRemove != "Never" and ctxFvgs.size() > 0
+    if ctxFvgs.size() > 0
         for i = ctxFvgs.size() - 1 to 0
             CtxFvg f = ctxFvgs.get(i)
             if bar_index > f.createdBar
-                // Touched: price entered the zone at all. Filled: price has
-                // traded all the way through, which is the reading that
-                // leaves only unmitigated imbalance on the chart.
-                bool gone = allFvgRemove == "Touched"
-                     ? low <= f.top and high >= f.bottom
-                     : (f.isBull ? low <= f.bottom : high >= f.top)
+                // A bullish gap is taken back from ABOVE, a bearish one from
+                // below, so each mode tests the far edge in the right
+                // direction. "Body close" uses the body rather than the wick:
+                // one spike through a zone is not the same as price accepting
+                // through it, and treating them alike deletes zones that are
+                // still live.
+                float body = f.isBull ? math.min(close, open)
+                     : math.max(close, open)
+                bool gone = switch allFvgRemove
+                     "Body close" => f.isBull ? body < f.bottom : body > f.top
+                     "50% (CE)"   => f.isBull ? low  < f.avg    : high > f.avg
+                     "Wick"       => f.isBull ? low  < f.bottom : high > f.top
+                     "Touched"    => low <= f.top and high >= f.bottom
+                     => false
                 if gone
-                    box.delete(f.bx)
-                    ctxFvgs.remove(i)
-                // Still unmitigated: carry the box forward to the current bar,
-                // so its width reads as "how long this gap has gone unfilled"
-                // rather than a fixed stub.
+                    dropCtx(i)
+                // Still unmitigated: carry it forward to the current bar, so
+                // width reads as "how long this gap has gone unfilled" rather
+                // than a fixed stub.
                 if not gone and bar_index > f.createdBar + fvgExtendBars
                     box.set_right(f.bx, bar_index)
+                    if not na(f.mid)
+                        line.set_x2(f.mid, bar_index)
 
     if showAllFvg and bar_index > 2
         bool ctxBull = low > high[2]
