@@ -46,6 +46,7 @@ class Cluster:
     run_max_bar: int = -1
     struct_level: float = 0.0
     mss_bar: int = -1
+    early_done: bool = False      # the no-shift signal has fired, or timed out
 
 
 @dataclass
@@ -91,6 +92,52 @@ class Setup:
         instead silently drops the slow-gap setups and back-dates the rest.
         """
         return max(self.mss_time, self.fvg_time)
+
+
+@dataclass
+class Early:
+    """
+    Sweep -> first imbalance, with NO structure shift.
+
+    A deliberately more aggressive pattern than Setup. The engine's normal
+    path waits for the shift to confirm the reversal, which is the safer
+    read and also the slow one: by the time the shift prints, the move it
+    confirms has already happened, and the gap left behind is often far from
+    price. This fires on the first imbalance inside cfg.early_max_bars of the
+    raid instead, entering at the gap edge with the stop just beyond the raid
+    extreme.
+
+    The trade-off is not subtle. There is no confirmation that the sweep
+    reversed anything, so a pool taken in a trend keeps going and the signal
+    is simply wrong. What buys that back is geometry: the stop sits at the
+    raid extreme, a few candles away rather than a whole leg, so risk per
+    signal is small and the winners are worth many multiples of it.
+
+    Emitted alongside Setup, never instead of it. The two are independent
+    reads of the same sweep and both may fire.
+    """
+    symbol: str
+    is_long: bool          # a swept low implies a long, and vice versa
+    src: str
+    level: float           # the pool that was taken
+    entry: float           # proximal edge of the gap
+    stop: float            # beyond the raid extreme
+    risk: float
+    sweep_bar: int
+    sweep_time: int
+    grab_time: int         # the trailed raid extreme the stop is measured from
+    fvg_bar: int
+    fvg_time: int          # the bar the gap completed on — this IS the signal
+    anchor_time: int
+    pivots: int
+    bars_from_sweep: int
+    trend_dir: int = 0
+
+    @property
+    def detected_time(self) -> int:
+        """The gap bar. Nothing else has to happen for this signal to exist,
+        so unlike Setup there is no second condition to take the later of."""
+        return self.fvg_time
 
 
 @dataclass
@@ -175,15 +222,17 @@ def entry_of(is_long: bool, top: float, bot: float, mode: str) -> float:
 
 
 def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
-               sweeps_out: list | None = None) -> list[Setup]:
+               sweeps_out: list | None = None,
+               early_out: list | None = None) -> list[Setup]:
     """
     Single pass over closed candles, mirroring the Pine bar loop. Returns every
     setup found in the window; the caller decides which are recent enough to
     send.
 
-    Pass a list as sweeps_out to also collect every liquidity grab. That is
-    pure observation: it appends to the list and changes no decision, so the
-    setups returned are identical whether or not it is supplied.
+    Pass a list as sweeps_out to also collect every liquidity grab, or
+    early_out to collect the no-shift entries described on Early. Both are
+    pure observation: they append to a list and change no decision, so the
+    setups returned are identical whether or not either is supplied.
     """
     n = len(cs)
     if n < cfg.atr_len + cfg.pivot_left + cfg.pivot_right + 10:
@@ -385,6 +434,51 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                                         and o.active and not o.mss and not o.expired
                                         and abs(o.level - c.level) <= a * cfg.tol_atr * 2):
                                     o.expired = True
+
+            # No-shift entry: the FIRST imbalance within early_max_bars of the
+            # raid, entered at the gap edge with the stop beyond the raid
+            # extreme. Runs after the block above so grab_low/grab_high have
+            # already trailed for this bar, and only ever looks at a gap
+            # ending on bar i — the point is to fire as it forms, not to hunt
+            # backwards through the leg for one that fits.
+            if (early_out is not None and c.swept and not c.early_done
+                    and not c.expired and i - 2 >= 0):
+                if i - c.sweep_bar > cfg.early_max_bars:
+                    c.early_done = True
+                else:
+                    is_bull = not c.is_high
+                    if is_bull:
+                        top, bot = cs[i].l, cs[i - 2].h
+                        ok = cs[i].l > cs[i - 2].h
+                    else:
+                        top, bot = cs[i - 2].l, cs[i].h
+                        ok = cs[i].h < cs[i - 2].l
+                    size = top - bot
+                    fits = (ok and size >= a * cfg.min_fvg_atr
+                            and (cfg.max_fvg_atr <= 0
+                                 or size <= a * cfg.max_fvg_atr))
+                    if fits:
+                        ent = entry_of(is_bull, top, bot, cfg.entry_mode)
+                        sl = (c.grab_low - a * cfg.sl_buffer_atr) if is_bull \
+                            else (c.grab_high + a * cfg.sl_buffer_atr)
+                        risk = abs(ent - sl)
+                        # A gap sitting on the wrong side of the raid extreme
+                        # would give a zero or inverted stop.
+                        sane = (ent > sl) if is_bull else (ent < sl)
+                        if sane and risk > 0 and (
+                                cfg.max_risk_atr <= 0
+                                or risk <= a * cfg.max_risk_atr):
+                            early_out.append(Early(
+                                symbol=symbol, is_long=is_bull, src=c.src,
+                                level=c.level, entry=ent, stop=sl, risk=risk,
+                                sweep_bar=c.sweep_bar,
+                                sweep_time=cs[c.sweep_bar].t,
+                                grab_time=cs[c.grab_bar].t,
+                                fvg_bar=i, fvg_time=cs[i].t,
+                                anchor_time=cs[c.oldest_bar].t,
+                                pivots=len(c.prices) or 1,
+                                bars_from_sweep=i - c.sweep_bar))
+                            c.early_done = True
 
             if c.mss and not c.done and not c.expired:
                 # "grab" searches the whole leg from the raid; "mss" only the

@@ -17,7 +17,7 @@ import aiohttp
 
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TREND_INTERVAL, log)
-from .engine import Setup, Sweep
+from .engine import Early, Setup, Sweep
 
 async def tg_send(sess, text: str) -> bool:
     """
@@ -182,7 +182,8 @@ def setup_message(s: Setup) -> str:
     note = trend_note(s.trend_dir, s.is_long)
     note_line = f"{note}\n" if note else ""
     return (
-        f"<b>{side}  {s.symbol}</b>  ({tf})\n"
+        f"🅑 <b>CONFIRMED {side}  {s.symbol}</b>  ({tf})\n"
+        f"<i>sweep → shift → FVG</i>\n"
         f"{s.src} liquidity @ {fmt(s.level)}"
         f"{f' · {s.pivots} swings' if s.src == 'Pivot' else ''}\n"
         f"{note_line}\n"
@@ -192,6 +193,44 @@ def setup_message(s: Setup) -> str:
         f"BE at  {fmt(t15)}  \u2192 stop {fmt(be_stop)}\n"
         f"3R     {fmt(t3)}\n\n"
         f"<i>{signal_age(s.detected_time + gap_step)}</i>\n"
+        f"<a href='{tv}'>chart</a>"
+    )
+
+
+def early_message(s: Early) -> str:
+    """
+    The no-shift entry. Labelled distinctly from the confirmed setup because
+    it is a different bet, not an earlier version of the same one: no shift
+    has confirmed the reversal, so the sweep may simply be a trend continuing.
+    What it buys is the stop sitting a few candles away at the raid extreme
+    rather than a whole leg back.
+    """
+    side = "LONG" if s.is_long else "SHORT"
+    sign = 1 if s.is_long else -1
+    t1 = s.entry + sign * s.risk
+    t15 = s.entry + sign * s.risk * CFG.be_arm_r
+    be_stop = s.entry + sign * s.risk * CFG.be_lock_r
+    t3 = s.entry + sign * s.risk * 3
+    riskpct = s.risk / s.entry * 100 if s.entry else 0
+    tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{s.symbol.replace('_', '')}.P"
+    note = trend_note(s.trend_dir, s.is_long)
+    note_line = f"{note}\n" if note else ""
+    bars = s.bars_from_sweep
+    return (
+        f"⚡ <b>EARLY {side}  {s.symbol}</b>  ({INTERVAL})\n"
+        f"<i>sweep → FVG · no shift yet</i>\n"
+        f"{s.src} liquidity @ {fmt(s.level)}"
+        f"{f' · {s.pivots} swings' if s.src == 'Pivot' else ''}\n"
+        f"{note_line}\n"
+        f"Entry  <code>{fmt(s.entry)}</code>   <i>gap edge</i>\n"
+        f"Stop   <code>{fmt(s.stop)}</code>   ({riskpct:.2f}% risk, "
+        f"beyond the sweep)\n"
+        f"1R     {fmt(t1)}\n"
+        f"BE at  {fmt(t15)}  → stop {fmt(be_stop)}\n"
+        f"3R     {fmt(t3)}\n\n"
+        f"<i>first gap {bars} bar{'' if bars == 1 else 's'} after the sweep · "
+        f"unconfirmed</i>\n"
+        f"<i>{signal_age(s.fvg_time + BAR_SECONDS[INTERVAL])}</i>\n"
         f"<a href='{tv}'>chart</a>"
     )
 

@@ -95,15 +95,54 @@ samples per variant, no fees, no slippage, and no break-even rule. Enough to
 justify running it, not enough to size a position on. `riptide/mtf.py` carries
 the same caveat at the top.
 
-## Two kinds of alert
+## Three kinds of alert
 
-**Sweep** — the liquidity grab on its own, the X on the chart, sent on the
+**⚠️ Sweep** — the liquidity grab on its own, the X on the chart, sent on the
 close of the bar that took the pool. No entry or stop, because there is no
-setup yet: it is a heads-up to open the chart and watch for the shift and
-then the FVG. Most sweeps never become setups.
+setup yet: it is a heads-up to open the chart. Most sweeps never become
+setups.
 
-**Setup** — the finished pattern: sweep, structure shift, fair value gap.
-Carries entry, stop and targets.
+**⚡ EARLY** — sweep → first imbalance, **no structure shift**. Entry at the
+gap edge, stop just beyond the raid extreme. Fires as the gap forms, a median
+5 bars after the sweep.
+
+**🅑 CONFIRMED** — the full pattern: sweep, structure shift, fair value gap.
+The safer read, and the slower one.
+
+The two entry strategies run side by side and both may fire on the same
+sweep — they are independent reads, not stages of one signal, and every alert
+says which it is. `RIPTIDE_EARLY_ALERTS=0` leaves only the confirmed path.
+
+### Early vs confirmed
+
+Waiting for the shift is safer and also slower: by the time the shift prints,
+the move it confirms has already happened. On PEPE, 5 Sep 2026, the confirmed
+alert arrived at 23:00 with 1.76% risk; the early one fired at 09:30, four
+bars after the raid, at 0.78% risk — and price reached roughly 9R from there.
+
+Measured over 50 symbols and 41.6 days:
+
+| | signals | filled | median risk | 1R target | 3R target |
+|---|---|---|---|---|---|
+| ⚡ early | 4666 | 79% | 1.19% | +0.032 ± 0.013 | +0.023 ± 0.021 |
+| 🅑 confirmed | 2040 | 50% | 1.53% | +0.051 ± 0.015 | +0.043 ± 0.024 |
+
+Trend-aligned at a 3R target: early `+0.098 ± 0.031`, confirmed
+`+0.081 ± 0.036` — level. At a 1R target: early `+0.035`, confirmed `+0.099`.
+
+**Early is not better per signal.** At a 1R target it is worse, clearly so on
+trend-aligned signals. It fires 2.3× as often and fills 79% against 50%, so it
+produces about 3.6× as many actual trades, and it loses 37% of them against
+21%. Nothing has confirmed the reversal — a pool taken mid-trend simply keeps
+going.
+
+Two consequences. It wants a **far target**: median MFE is 1.00R and its
+trend-aligned edge only shows at 3R. And **fees bite harder** — at 1.19% risk
+a ~0.06% round trip costs 0.05R against 0.04R at 1.53%, paid on 79% of signals
+instead of 50%. At a 1R target that is most of the edge.
+
+`/stats` reports the two separately, so live data settles this rather than one
+41-day window.
 
 Measured over 12.5 days on 20 symbols, sweeps outnumber setups roughly 5:1,
 and the share that goes on to produce a setup varies sharply by pool type:
@@ -372,6 +411,7 @@ them there, not in the engine body.
 | `RIPTIDE_TG_RETRIES` | `4` | Telegram send attempts. Only provably-undelivered failures are retried |
 | `RIPTIDE_TZ` | unset | IANA zone for the heartbeat's clock. Display only |
 | `RIPTIDE_TG_COMMANDS` | `1` | accept commands from `TELEGRAM_CHAT_ID`. `0` disables |
+| `RIPTIDE_EARLY_ALERTS` | `1` | the no-shift strategy: sweep → first FVG. Runs beside the confirmed one — see *Early vs confirmed*. `0` disables |
 | `RIPTIDE_SWEEP_ALERTS` | `1` | heads-up when a pool is swept, ahead of the shift. `0` disables |
 | `RIPTIDE_SWEEP_SRC` | unset | which pools raise a heads-up. Unset = all. e.g. `Pivot` |
 | `RIPTIDE_SWEEP_FRESH_BARS` | `2` | sweep freshness window. **Minimum 2**, clamped — see below |

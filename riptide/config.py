@@ -83,6 +83,11 @@ TRACK_HORIZON_BARS = int(os.getenv("RIPTIDE_TRACK_HORIZON_BARS", "60"))
 # rows afterwards.
 TRACK_TARGET_R = float(os.getenv("RIPTIDE_TRACK_TARGET_R", "1.0"))
 
+# The no-shift entry: sweep -> first imbalance, no structure shift required.
+# A second strategy running beside the confirmed one, not a replacement — both
+# fire independently on the same sweep and each alert says which it is.
+EARLY_ALERTS = os.getenv("RIPTIDE_EARLY_ALERTS", "1") == "1"
+
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
@@ -162,6 +167,10 @@ class Cfg:
     # newer gaps fail max_risk_atr and the search keeps walking back until one
     # fits — which can hand back an entry from many bars ago, far below market.
     fvg_scan_from: str = "grab"           # grab | mss
+    # No-shift entry: how many bars after the raid to keep watching for the
+    # first imbalance. Has no counterpart in the Pine — this pattern is not in
+    # the reference indicator. See Early in engine.py.
+    early_max_bars: int = 10
     sl_buffer_atr: float = 0.0
     entry_mode: str = "proximal"          # proximal | mid | distal
     use_pivot: bool = True

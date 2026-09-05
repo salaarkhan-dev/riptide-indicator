@@ -14,20 +14,22 @@ from . import telegram as tg
 from . import tracker
 from . import trend
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
-                     ENTRY_INTERVAL, FRESH_BARS, INTERVAL, MTF_GRACE_BARS,
-                     SCAN_INTERVAL,
+                     EARLY_ALERTS, ENTRY_INTERVAL, FRESH_BARS, INTERVAL,
+                     MTF_GRACE_BARS, SCAN_INTERVAL,
                      SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC,
                      TREND_FILTER, TREND_INTERVAL, log)
-from .engine import Sweep, atr_series, run_engine
+from .engine import Early, Sweep, atr_series, run_engine
 from .exchange import fetch_candles, list_symbols
-from .storage import (already_sent, first_run, meta_get, meta_set, record,
+from .storage import (already_sent, early_already_sent, early_sig, first_run,
+                      meta_get, meta_set, record, record_early,
                       record_sweep, sweep_already_sent, sweep_sig, sig_id)
 
 async def scan_symbol(sess, sem, symbol, trend_on=None):
     """
-    Returns (setups, sweeps, candles). sweeps is empty unless
-    RIPTIDE_SWEEP_ALERTS; the candles are handed back so outcome tracking can
-    score open setups against the same fetch rather than repeating it.
+    Returns (setups, sweeps, early, candles). sweeps and early are empty
+    unless their alerts are enabled; the candles are handed back so outcome
+    tracking can score open signals against the same fetch rather than
+    repeating it.
 
     trend_on defaults to the configured setting; cycle() passes the live
     value so /trend takes effect on the next scan without a restart.
@@ -37,18 +39,20 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
     async with sem:
         cs = await fetch_candles(sess, symbol)
         if len(cs) < 100:
-            return [], [], cs
+            return [], [], [], cs
         # Structure always comes from the higher timeframe; only the entry can
         # move. Fetched inside the semaphore so the pair counts as one slot.
         ltf = await fetch_candles(sess, symbol, ENTRY_INTERVAL) \
             if ENTRY_INTERVAL else []
 
         sweeps: list[Sweep] = [] if SWEEP_ALERTS else None
+        early: list[Early] = [] if EARLY_ALERTS else None
         try:
-            setups = run_engine(symbol, cs, sweeps_out=sweeps)
+            setups = run_engine(symbol, cs, sweeps_out=sweeps,
+                                early_out=early)
         except Exception as e:
             log.warning("engine failed on %s: %s", symbol, e)
-            return [], [], cs
+            return [], [], [], cs
 
         # Gate on the setting, not on the data arriving. A failed lower-
         # timeframe fetch — one rate-limited request among the two per symbol
@@ -94,7 +98,7 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
         # against it -0.008, a 3.8 SE difference over 2026 setups — worth
         # knowing even when taking both. Daily bars are cached for an hour,
         # so this costs one fetch per symbol per hour.
-        keep_s, keep_w = [], []
+        keep_s, keep_w, keep_e = [], [], []
         for x in setups:
             d = await trend.direction_at(sess, symbol, x.mss_time, fetch_candles)
             x.trend_dir = d or 0
@@ -108,12 +112,18 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
             with_trend = d is None or (d < 0) == w.is_high
             if with_trend or not trend_on:
                 keep_w.append(w)
+        for e in (early or []):
+            d = await trend.direction_at(sess, symbol, e.fvg_time, fetch_candles)
+            e.trend_dir = d or 0
+            with_trend = d is None or (d > 0) == e.is_long
+            if with_trend or not trend_on:
+                keep_e.append(e)
 
         dropped = len(setups) - len(keep_s)
         if dropped:
             log.debug("%s: %d setup(s) dropped against the %s trend",
                       symbol, dropped, TREND_INTERVAL)
-        return keep_s, keep_w, cs
+        return keep_s, keep_w, keep_e, cs
 
 
 def trend_on(db) -> bool:
@@ -142,7 +152,7 @@ async def cycle(sess, db, symbols):
     # this cycle just fetched. Ordering matters only in that a setup armed
     # below cannot resolve on the bar that created it — its fill window starts
     # after the gap bar, and update() walks each bar once per row.
-    for symbol, (_, _, cs) in zip(symbols, results):
+    for symbol, (_, _, _, cs) in zip(symbols, results):
         try:
             tracker.update(db, symbol, cs)
         except Exception as e:
@@ -155,7 +165,7 @@ async def cycle(sess, db, symbols):
     # Sweeps first: the grab precedes the shift, so the heads-up should land
     # before the setup message when both fall in the same cycle.
     swept = 0
-    for _, sweeps, _ in results:
+    for _, sweeps, _, _ in results:
         for w in sweeps:
             if SWEEP_SRC is not None and w.src not in SWEEP_SRC:
                 continue
@@ -168,7 +178,24 @@ async def cycle(sess, db, symbols):
                 if await tg.tg_send(sess, tg.sweep_message(w)):
                     swept += 1
 
-    for setups, _, _ in results:
+    # The no-shift strategy. Fires on the gap bar with no confirmation, so it
+    # lands before the confirmed setup on the same sweep — often bars before,
+    # sometimes instead of, since most sweeps never produce a shift at all.
+    quick = 0
+    for _, _, early, _ in results:
+        for e in early:
+            fresh = (now - e.detected_time) <= FRESH_BARS * step
+            sid = early_sig(e)
+            if early_already_sent(db, sid):
+                continue
+            record_early(db, sid, e)
+            if fresh:
+                tracker.arm(db, sid, e, kind=tracker.EARLY)
+            if fresh and not mute:
+                if await tg.tg_send(sess, tg.early_message(e)):
+                    quick += 1
+
+    for setups, _, _, _ in results:
         for s in setups:
             # Only setups from the last few bars are actionable. Older ones
             # are recorded so a restart cannot re-alert the whole history.
@@ -188,7 +215,7 @@ async def cycle(sess, db, symbols):
             # is also what keeps this forward-only — on a first run the 600
             # bars of recorded history are all stale, so none of them arm.
             if fresh:
-                tracker.arm(db, sid, s)
+                tracker.arm(db, sid, s, kind=tracker.CONFIRMED)
             if fresh and not mute:
                 if await tg.tg_send(sess, tg.setup_message(s)):
                     sent += 1
@@ -196,12 +223,9 @@ async def cycle(sess, db, symbols):
         log.info("first run: history recorded, nothing sent")
     elif paused:
         log.info("alerts paused; recorded but not sent")
-    if SWEEP_ALERTS:
-        log.info("scanned %d symbols, sent %d alerts, %d sweep heads-ups",
-                 len(symbols), sent, swept)
-    else:
-        log.info("scanned %d symbols, sent %d alerts", len(symbols), sent)
-    return sent + swept
+    log.info("scanned %d symbols, sent %d confirmed, %d early, "
+             "%d sweep heads-ups", len(symbols), sent, quick, swept)
+    return sent + quick + swept
 
 
 def seconds_to_next_close(step: int, pad: int = 10) -> float:

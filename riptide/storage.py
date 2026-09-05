@@ -12,7 +12,7 @@ import time
 
 from . import tracker
 from .config import DB_PATH, INTERVAL
-from .engine import Setup, Sweep
+from .engine import Early, Setup, Sweep
 
 def db_init():
     db = sqlite3.connect(DB_PATH)
@@ -25,6 +25,12 @@ def db_init():
     db.execute("""CREATE TABLE IF NOT EXISTS seen_sweeps(
         sig TEXT PRIMARY KEY, symbol TEXT, side TEXT, src TEXT,
         level REAL, struct_level REAL, sweep_time INT, sent_at INT)""")
+    # The no-shift strategy dedupes separately: it and the confirmed setup can
+    # both fire off one sweep, and neither should suppress the other.
+    db.execute("""CREATE TABLE IF NOT EXISTS seen_early(
+        sig TEXT PRIMARY KEY, symbol TEXT, side TEXT, src TEXT,
+        entry REAL, stop REAL, level REAL, sweep_time INT, fvg_time INT,
+        sent_at INT)""")
     db.commit()
     tracker.init(db)
     return db
@@ -68,6 +74,24 @@ def sweep_sig(s: Sweep) -> str:
 def sweep_already_sent(db, sid) -> bool:
     return db.execute("SELECT 1 FROM seen_sweeps WHERE sig=?",
                       (sid,)).fetchone() is not None
+
+
+def early_sig(s: Early) -> str:
+    return (f"EAR|{s.symbol}|{INTERVAL}|{s.anchor_time}|{s.sweep_time}|"
+            f"{s.fvg_time}|{'L' if s.is_long else 'S'}")
+
+
+def early_already_sent(db, sid) -> bool:
+    return db.execute("SELECT 1 FROM seen_early WHERE sig=?",
+                      (sid,)).fetchone() is not None
+
+
+def record_early(db, sid, s: Early):
+    db.execute("INSERT OR IGNORE INTO seen_early VALUES(?,?,?,?,?,?,?,?,?,?)",
+               (sid, s.symbol, "long" if s.is_long else "short", s.src,
+                s.entry, s.stop, s.level, s.sweep_time, s.fvg_time,
+                int(time.time())))
+    db.commit()
 
 
 def record_sweep(db, sid, s: Sweep):

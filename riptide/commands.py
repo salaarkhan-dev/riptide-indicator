@@ -126,7 +126,7 @@ def stats_text(db) -> str:
         f"<b>Outcomes</b>\n"
         f"<i>{TRACK_TARGET_R:g}R target · {TRACK_FILL_BARS} bar fill window · "
         f"{TRACK_HORIZON_BARS} bar horizon · stop taken first</i>\n\n"
-        f"tracked    {s['armed']} setups over {days:.1f} days\n"
+        f"tracked    {s['armed']} signals over {days:.1f} days\n"
         f"settled    {settled} · {a['trades']} filled ({fill_pct:.0f}%)\n"
         f"live       {s['pending']} pending · {s['open']} open\n"
         # Unscoreable rows are named rather than quietly dropped: a sample
@@ -134,11 +134,29 @@ def stats_text(db) -> str:
         + (f"unscored   {s['stale']} · symbol left the scan\n" if s["stale"]
            else "")
         + "\n"
-        f"<b>R per setup</b>  <i>(unfilled counts as zero)</i>\n"
-        f"<code>{_bucket_line('all', a)}</code>\n"
-        f"<code>{_bucket_line('with trend', s['aligned'])}</code>\n"
-        f"<code>{_bucket_line('against', s['against'])}</code>\n"
     )
+
+    # The two strategies first, since that is the open question they exist to
+    # answer. Each is then split by trend, which is the one thing measured to
+    # separate winners from losers.
+    body += "<b>R per signal</b>  <i>(unfilled counts as zero)</i>\n"
+    for kind, label in ((tracker.CONFIRMED, "confirmed"), (tracker.EARLY, "early")):
+        k = tracker.summary(db, kind)
+        if not k.get("armed"):
+            continue
+        ka = k["all"]
+        kfill = 100.0 * ka["trades"] / ka["setups"] if ka["setups"] else 0.0
+        body += (f"\n<b>{'🅑 confirmed' if kind == tracker.CONFIRMED else '⚡ early'}"
+                 f"</b>  <i>{ka['trades']}/{ka['setups']} filled "
+                 f"({kfill:.0f}%)</i>\n"
+                 f"<code>{_bucket_line('  all', ka)}</code>\n"
+                 f"<code>{_bucket_line('  with trend', k['aligned'])}</code>\n"
+                 f"<code>{_bucket_line('  against', k['against'])}</code>\n")
+
+    body += (f"\n<b>both together</b>\n"
+             f"<code>{_bucket_line('  all', a)}</code>\n"
+             f"<code>{_bucket_line('  with trend', s['aligned'])}</code>\n"
+             f"<code>{_bucket_line('  against', s['against'])}</code>\n")
     if a["trades"]:
         body += (f"\nper filled trade  {a['r_trade']:+.3f} ± {a['se_trade']:.3f}\n"
                  f"avg excursion     +{s['mfe']:.2f}R best · "

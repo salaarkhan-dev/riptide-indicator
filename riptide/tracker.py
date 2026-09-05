@@ -50,19 +50,29 @@ RESOLVED = (WON, LOST, TIMEOUT)
 
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
-            "r, mfe_r, mae_r, last_bar, updated_at")
+            "r, mfe_r, mae_r, last_bar, updated_at, kind")
+
+CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
 
 def init(db) -> None:
     """Created alongside the dedupe tables, so an existing riptide.db picks
-    this up on the next restart without a migration."""
+    this up on the next restart."""
     db.execute("""CREATE TABLE IF NOT EXISTS outcomes(
         sig TEXT PRIMARY KEY, symbol TEXT, side TEXT, src TEXT,
         entry REAL, stop REAL, risk REAL, trend_dir INT,
         mss_time INT, armed_time INT, armed_at INT,
         status TEXT, fill_time INT, exit_time INT,
         r REAL, mfe_r REAL, mae_r REAL,
-        last_bar INT, updated_at INT)""")
+        last_bar INT, updated_at INT,
+        kind TEXT DEFAULT 'setup')""")
+    # Databases created before the no-shift strategy existed have no `kind`.
+    # Everything already in them came from the confirmed path, which is what
+    # the default backfills.
+    have = {r[1] for r in db.execute("PRAGMA table_info(outcomes)")}
+    if "kind" not in have:
+        db.execute("ALTER TABLE outcomes ADD COLUMN kind TEXT DEFAULT 'setup'")
+        log.info("outcomes: added the kind column, existing rows are 'setup'")
     db.execute("CREATE INDEX IF NOT EXISTS outcomes_live "
                "ON outcomes(symbol, status)")
     db.commit()
@@ -75,7 +85,8 @@ def last_closed_bar(now: int | None = None) -> int:
     return now - (now % step) - step
 
 
-def arm(db, sid: str, s: Setup, from_bar: int | None = None) -> None:
+def arm(db, sid: str, s, from_bar: int | None = None,
+        kind: str = CONFIRMED) -> None:
     """
     Start scoring one setup.
 
@@ -108,11 +119,12 @@ def arm(db, sid: str, s: Setup, from_bar: int | None = None) -> None:
     start = from_bar if from_bar is not None \
         else max(detected, last_closed_bar(now))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
-                s.mss_time, detected, now,
-                PENDING, 0, 0, None, 0.0, 0.0, start, now))
+                # Early has no shift; its sweep bar is the comparable anchor.
+                getattr(s, "mss_time", 0) or s.sweep_time, detected, now,
+                PENDING, 0, 0, None, 0.0, 0.0, start, now, kind))
     db.commit()
 
 
@@ -254,29 +266,31 @@ def _bucket(rows) -> dict:
             "win_pct": 100.0 * wins / len(trades) if trades else 0.0}
 
 
-def summary(db) -> dict:
-    rows = db.execute(
-        "SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at "
-        "FROM outcomes").fetchall()
+def summary(db, kind: str | None = None) -> dict:
+    """Pass a kind to describe one strategy alone; omit it for both together."""
+    sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind "
+           "FROM outcomes")
+    rows = (db.execute(sql + " WHERE kind=?", (kind,)).fetchall() if kind
+            else db.execute(sql).fetchall())
     if not rows:
         return {"armed": 0}
 
     aligned, against = [], []
-    for st, r, td, side, _, _, _ in rows:
+    for st, r, td, side, _, _, _, _ in rows:
         if not td:
             continue
         (aligned if (td > 0) == (side == "long") else against).append((st, r))
 
-    filled = [(mfe, mae) for st, _, _, _, mfe, mae, _ in rows
+    filled = [(mfe, mae) for st, _, _, _, mfe, mae, _, _ in rows
               if st in RESOLVED]
     return {
         "armed": len(rows),
-        "since": min(a for *_, a in rows),
-        "pending": sum(1 for st, *_ in rows if st == PENDING),
-        "open": sum(1 for st, *_ in rows if st == OPEN),
-        "expired": sum(1 for st, *_ in rows if st == EXPIRED),
-        "stale": sum(1 for st, *_ in rows if st == STALE),
-        "all": _bucket([(st, r) for st, r, *_ in rows]),
+        "since": min(r[6] for r in rows),
+        "pending": sum(1 for r in rows if r[0] == PENDING),
+        "open": sum(1 for r in rows if r[0] == OPEN),
+        "expired": sum(1 for r in rows if r[0] == EXPIRED),
+        "stale": sum(1 for r in rows if r[0] == STALE),
+        "all": _bucket([(r[0], r[1]) for r in rows]),
         "aligned": _bucket(aligned),
         "against": _bucket(against),
         "mfe": statistics.fmean([m for m, _ in filled]) if filled else 0.0,
