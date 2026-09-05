@@ -11,6 +11,8 @@ import logging
 import os
 from dataclasses import dataclass, fields
 
+log = logging.getLogger("riptide")
+
 # Futures API moved from contract.mexc.com to api.mexc.com in Jan 2026.
 BASE = os.getenv("MEXC_BASE", "https://api.mexc.com")
 
@@ -25,7 +27,10 @@ LOOKBACK = int(os.getenv("RIPTIDE_LOOKBACK", "600"))   # bars fetched per symbol
 # Setup.detected_time, not from the shift. A shift-based window binned every
 # setup whose gap was slow to arrive, which Cfg.max_bars_after_mss explicitly
 # allows for up to 10 bars.
-FRESH_BARS = int(os.getenv("RIPTIDE_FRESH_BARS", "3"))
+#
+# Minimum 2; see _min_fresh below. 2 means "only the scan that fires right
+# after the setup appears", which is the tightest setting that sends anything.
+FRESH_BARS = int(os.getenv("RIPTIDE_FRESH_BARS", "2"))
 DB_PATH = os.getenv("RIPTIDE_DB", "riptide.db")
 CONCURRENCY = int(os.getenv("RIPTIDE_CONCURRENCY", "8"))
 QUOTE = os.getenv("RIPTIDE_QUOTE", "USDT")
@@ -98,6 +103,32 @@ SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
              if _sweep_src else None)
 
 
+def _min_fresh(name: str, value: int) -> int:
+    """
+    Freshness windows below 2 bars send nothing at all, ever.
+
+    Candle.t is the bar's OPEN time, so a bar that has just closed is already
+    one full step old, and the scan wakes another 10s after that: the age of
+    the freshest possible signal is step + 10s. A window of 1 * step is
+    smaller than that, so every signal fails the gate and the bot goes
+    silent while looking perfectly healthy — no error, full logs, no alerts.
+
+    Clamping loudly is better than honouring a value whose only effect is to
+    mute the thing. 2 is the tightest window that sends anything, and it means
+    "only the scan that fires immediately after the signal appears".
+    """
+    if value >= 2:
+        return value
+    log.warning("%s=%d would suppress every alert — a just-closed bar is "
+                "already step+10s old, which no 1-bar window can contain. "
+                "Using 2, the tightest window that sends anything.", name, value)
+    return 2
+
+
+FRESH_BARS = _min_fresh("RIPTIDE_FRESH_BARS", FRESH_BARS)
+SWEEP_FRESH_BARS = _min_fresh("RIPTIDE_SWEEP_FRESH_BARS", SWEEP_FRESH_BARS)
+
+
 @dataclass
 class Cfg:
     """Defaults mirror the Pine inputs. Change here, not in the engine."""
@@ -130,9 +161,6 @@ class Cfg:
     be_lock_r: float = 0.1     # break-even stop locks in this much,
                                # so a 'scratch' still covers fees.
                                # Mirrors beLockR in the Pine.
-
-
-log = logging.getLogger("riptide")
 
 
 def _cfg_from_env(base: Cfg) -> tuple[Cfg, dict]:

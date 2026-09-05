@@ -173,8 +173,8 @@ different questions:
 | | | |
 |---|---|---|
 | `Cfg.max_bars_after_grab` | 50 | how long after the **sweep** the shift may come |
-| `Cfg.max_bars_after_mss` | 10 | how long after the **shift** the gap may form |
-| `RIPTIDE_FRESH_BARS` | 3 | how old the **setup** may be when the alert fires |
+| `Cfg.max_bars_after_mss` | 10, overridden to **5** in `riptide.conf` | how long after the **shift** the gap may form |
+| `RIPTIDE_FRESH_BARS` | 2 | how old the **setup** may be when the alert fires |
 
 A long wait between the sweep and the entry is normal and fully alerted —
 median 14 bars, quartiles 7 and 25, up to the 50-bar limit. Only the third
@@ -192,15 +192,36 @@ thing, not that the dropped ones looked good.
 `detected_time` is the same bar outcome tracking starts scoring from. Both bugs
 were the same mistake about when a setup starts existing.
 
-### Why `RIPTIDE_SWEEP_FRESH_BARS` cannot be 1
+### Why the freshness windows cannot be 1
 
 `Candle.t` is the bar's **open** time, so a bar that has just closed is
 already one full step old, and the scan wakes a further 10s after the close.
-At `Min30` a sweep that just confirmed is 1810s old, against a window of
-1×1800s. Setting this to 1 therefore suppresses every sweep alert silently —
-no error, just nothing arriving. 2 is the minimum, and means "the bar that
-just closed": the previous bar lands at 3610s and is correctly excluded, so
-each sweep alerts exactly once.
+At `Min30` a signal that just confirmed is 1810s old, against a window of
+1×1800s. Setting either `RIPTIDE_FRESH_BARS` or `RIPTIDE_SWEEP_FRESH_BARS` to
+1 therefore suppresses every alert silently — no error, full logs, nothing
+arriving.
+
+`config._min_fresh` now clamps both to 2 and logs a warning, rather than
+honouring a value whose only effect is to mute the bot.
+
+2 is the minimum and means "only the scan that fires right after the signal
+appears": the previous bar lands at 3610s and is correctly excluded, so each
+signal alerts exactly once and never late. 3 additionally forgives one missed
+scan. The cost of 2 is that a signal found while the bot is down is lost
+permanently — it is still recorded, and dedupe then blocks it forever. An
+ordinary restart is unaffected, since `RIPTIDE_SCAN_ON_START` scans
+immediately and the bar that just closed is under two bars old however the
+restart is timed.
+
+### How late is an alert, really?
+
+Measured on the live 20-symbol list: a scan takes **0.9s warm, 2.7s cold**,
+and 4.0s across 100 symbols. Adding the 10s post-close pad and the Telegram
+round trip, an alert lands **11–15s after the bar closes**. The scan cadence
+is not a source of delay; the freshness window was the only one.
+
+Every setup alert also carries its own age (`signal_age`, measured from
+`detected_time`), so a message that did arrive late says so on its face.
 
 ## 3. Run it as a service
 
@@ -314,14 +335,14 @@ them there, not in the engine body.
 | `RIPTIDE_INTERVAL` | `Min30` | `Min15`, `Min30`, `Min60`, `Hour4` |
 | `RIPTIDE_SYMBOLS` | all USDT perps | comma separated |
 | `RIPTIDE_ENTRY_INTERVAL` | unset | lower timeframe for entries. Structure stays on `RIPTIDE_INTERVAL` |
-| `RIPTIDE_FRESH_BARS` | `3` | only alert if the setup became **detectable** this recently — see *Three timing limits* |
+| `RIPTIDE_FRESH_BARS` | `2` | only alert if the setup became **detectable** this recently. **Minimum 2**, clamped — see *Three timing limits* and the note below |
 | `RIPTIDE_SCAN_ON_START` | `1` | scan immediately on startup instead of waiting for the next close |
 | `RIPTIDE_TG_RETRIES` | `4` | Telegram send attempts. Only provably-undelivered failures are retried |
 | `RIPTIDE_TZ` | unset | IANA zone for the heartbeat's clock. Display only |
 | `RIPTIDE_TG_COMMANDS` | `1` | accept commands from `TELEGRAM_CHAT_ID`. `0` disables |
 | `RIPTIDE_SWEEP_ALERTS` | `1` | heads-up when a pool is swept, ahead of the shift. `0` disables |
 | `RIPTIDE_SWEEP_SRC` | unset | which pools raise a heads-up. Unset = all. e.g. `Pivot` |
-| `RIPTIDE_SWEEP_FRESH_BARS` | `2` | sweep freshness window. **Minimum 2** — see below |
+| `RIPTIDE_SWEEP_FRESH_BARS` | `2` | sweep freshness window. **Minimum 2**, clamped — see below |
 | `RIPTIDE_LOOKBACK` | `600` | bars fetched per symbol |
 | `RIPTIDE_CONCURRENCY` | `8` | parallel requests |
 | `RIPTIDE_MIN_VOL` | `3000000` | min 24h turnover (USDT). Only applies when `RIPTIDE_SYMBOLS` is unset; an explicit list is never filtered. `0` disables. At the default this cuts ~1019 perps to ~96 |
