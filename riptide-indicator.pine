@@ -133,6 +133,11 @@ showGrab       = input.bool(true,  "Raid marker (X)",                group = gLo
 showGrabTag    = input.bool(true,  "Label on the raid marker",       group = gLook,
      tooltip = "The small dark tag under the X naming what got raided: Pivot, Day, Week or a session name.")
 showMSS        = input.bool(true,  "Structure break level + label",  group = gLook)
+showRaidDot    = input.bool(true,  "Mark raids in progress",         group = gLook,
+     tooltip = "A hollow dot on a raid that has taken liquidity but has NOT produced a structure shift yet — the state the bot's ⚡ EARLY alerts fire in. It follows the raid to each new extreme, becomes the solid X if the shift confirms, and disappears if the raid dies. Most raids die, which is why they get a provisional mark rather than an X.")
+raidDotKeep    = input.int(4,     "  how many in progress",  minval = 1, maxval = 20,
+     group = gLook,
+     tooltip = "Only the most recent this-many unresolved raids keep a dot. Older ones are dropped even if still technically alive, so the chart shows what is live rather than every raid of the session.")
 showFVGs       = input.bool(true,  "Entry zones (gaps)",             group = gLook)
 showFvgMidline = input.bool(true,  "Centre line in entry zones",     group = gLook)
 showAllFvg     = input.bool(true,  "All imbalances (context only)",  group = gLook,
@@ -141,7 +146,7 @@ allFvgMinATR   = input.float(0.10, "  min size (ATR)", minval = 0, step = 0.05, 
      tooltip = "Context imbalances smaller than this are ignored. Zero draws every one, which on a low-volatility chart is a lot of boxes.")
 allFvgKeep     = input.int(40,    "  how many to keep", minval = 5, maxval = 200, group = gLook,
      tooltip = "Only the most recent this-many context imbalances stay on the chart. TradingView allows 500 drawings in total and entry zones, liquidity lines and labels share that budget.")
-allFvgFill     = input.int(93,    "  transparency", minval = 50, maxval = 99, group = gLook)
+allFvgFill     = input.int(85,    "  transparency", minval = 50, maxval = 99, group = gLook)
 allFvgRemove   = input.string("Body close", "  mitigated when",
      options = ["Body close", "50% (CE)", "Wick", "Touched", "Never"], group = gLook,
      tooltip = "How much of the gap price must take back before the box goes.\n\nBody close: a candle BODY closes through the far edge. Ignores wicks, so a single spike through the zone does not kill it — the steadiest reading and the default.\n\n50% (CE): consequent encroachment, the midpoint. The classic ICT reading of a mitigated gap.\n\nWick: any wick through the far edge. Strictest, and the noisiest.\n\nTouched: price merely entered the zone.\n\nNever: keep every box until the count above recycles it.")
@@ -315,8 +320,10 @@ type Cluster
     array<LiqPivot> pivots
     line   liqLine
     line   mssLine
-    label  grabX                    // the raid X, kept so Live mode can move
-    label  grabTagLbl               // it as trailGrabExtreme finds a new extreme
+    label  grabX                    // the confirmed raid X, drawn at MSS time
+    label  grabTagLbl               // and its dark tag
+    label  raidDot                  // provisional marker while the raid is
+                                    // still waiting for a shift
 
 // A context imbalance. Deliberately NOT an Fvg: the engine walks the Fvg array
 // for mitigation, extension and outcome tracking, and these must never reach
@@ -413,6 +420,10 @@ var array<Fvg>     fvgs     = array.new<Fvg>()
 // mitigation and extension, and feeding it gaps the strategy never selected
 // would change behaviour rather than just the picture.
 var array<CtxFvg>  ctxFvgs  = array.new<CtxFvg>()
+// Raids that have taken liquidity but have no shift yet. Held so their
+// provisional dots can be retired the moment the raid resolves either way —
+// leaving a marker on a raid that died is what made Live mode unreadable.
+var array<Cluster> pendingRaids = array.new<Cluster>()
 var array<Trade>   trades   = array.new<Trade>()
 var Stats          stx      = Stats.new()
 var Counters       cnt      = Counters.new()
@@ -633,6 +644,34 @@ moveGrab(Cluster c) =>
         label.set_xy(c.grabX, c.grabBar, y)
     if not na(c.grabTagLbl)
         label.set_xy(c.grabTagLbl, c.grabBar, y)
+    if not na(c.raidDot)
+        label.set_xy(c.raidDot, c.grabBar, y)
+
+// The provisional mark on a raid with no shift yet. Hollow and faded on
+// purpose: most raids never become setups, so this is "something is
+// happening here", not "take this".
+drawRaidDot(Cluster c) =>
+    if showRaidDot and na(c.raidDot) and na(c.grabX)
+        c.raidDot := label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, "",
+             xloc    = xloc.bar_index,
+             yloc    = yloc.price,
+             style   = label.style_circle,
+             color   = color.new(dirCol(c.isHigh), 45),
+             size    = size.tiny,
+             tooltip = "Raid in progress — " + c.tag + " liquidity @ " +
+                       f2s(c.level) + " taken.\nNo structure shift yet; needs " +
+                       (c.isHigh ? "close < " : "close > ") + f2s(c.structLevel))
+        pendingRaids.push(c)
+        // Only the most recent handful stay marked. An unresolved raid from
+        // forty bars ago is history, not context.
+        while pendingRaids.size() > raidDotKeep
+            Cluster old = pendingRaids.shift()
+            label.delete(old.raidDot)
+            old.raidDot := na
+
+dropRaidDot(Cluster c) =>
+    label.delete(c.raidDot)
+    c.raidDot := na
 
 // An FVG anchored at an arbitrary (possibly historical) left bar.
 newFvgAt(bool isBull, float top, float bottom, int lft) =>
@@ -682,18 +721,18 @@ drawCtxFvg(bool isBull, float top, float bottom, int lft) =>
 
     color base = isBull ? bullCol : bearCol
     float av = math.avg(top, bottom)
+    // No border. At this transparency a dotted outline reads as noise and
+    // fights the candles; a clean fill plus the midline defines the zone.
     box b = box.new(lft, top, lft + fvgExtendBars, bottom,
          xloc         = xloc.bar_index,
-         border_color = color.new(base, math.max(0, allFvgFill - 8)),
-         border_width = 1,
-         border_style = line.style_dotted,
+         border_color = #00000000,
          bgcolor      = color.new(base, allFvgFill))
     // The midpoint is not decoration: it is where "50% (CE)" mitigates, and
     // the level price most often reacts to inside a gap.
     line m = showFvgMidline
          ? line.new(lft, av, lft + fvgExtendBars, av,
               xloc = xloc.bar_index, style = line.style_dotted,
-              color = color.new(base, math.max(0, allFvgFill - 15)))
+              color = color.new(base, math.max(0, allFvgFill - 30)))
          : na
     ctxFvgs.push(CtxFvg.new(bx = b, mid = m, top = top, bottom = bottom,
          avg = av, isBull = isBull, createdBar = bar_index))
@@ -1008,6 +1047,17 @@ if engineOk
     // and the "Look for entry zones from" setting. Runs before anything else
     // and touches no engine state, so what the strategy does is identical
     // whether this is on or off — only the chart changes.
+    // A provisional dot only lives while its raid is still waiting for a
+    // shift. Checking the cluster's own state here catches every way a raid
+    // can end — confirmed, timed out, suppressed by the cooldown, or
+    // superseded — without having to find and patch each of those sites.
+    if pendingRaids.size() > 0
+        for i = pendingRaids.size() - 1 to 0
+            Cluster pc = pendingRaids.get(i)
+            if pc.mssConfirmed or pc.expired or pc.suppressed or pc.setupDone
+                dropRaidDot(pc)
+                pendingRaids.remove(i)
+
     // Retire mitigated boxes first, so a gap created below cannot retire
     // itself on the bar that formed it. Backwards, because remove() shifts
     // every index above it.
@@ -1171,12 +1221,13 @@ if engineOk
                                   alert.freq_once_per_bar_close)
                         if not deferred
                             drawStructLine(c, bar_index)
-                            // The raid marker itself, which Live mode was
-                            // promising and not delivering: without this the X
-                            // only ever arrived via renderPattern at MSS time,
-                            // so a sweep that never produced a shift — every
-                            // EARLY signal the bot sends — showed nothing.
-                            drawGrab(c)
+                        // Provisional mark on the raid itself, in EITHER draw
+                        // mode. Drawing the real X here instead was wrong:
+                        // most raids never produce a shift, so the chart
+                        // filled with X marks on patterns that never
+                        // completed. The dot says "in progress" and is
+                        // retired the moment the raid resolves either way.
+                        drawRaidDot(c)
 
                 // Swept, waiting for the opposing structure break.
                 if wasSwept and not wasMss and not c.expired
