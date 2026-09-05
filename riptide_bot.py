@@ -16,11 +16,13 @@ are not implemented here; they are off by default in the indicator too.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import sqlite3
 import sys
 import time
+from zoneinfo import ZoneInfo
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -48,6 +50,10 @@ ALERT_ON_FIRST_RUN = os.getenv("RIPTIDE_ALERT_FIRST_RUN", "0") == "1"
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 # Scan immediately on startup instead of waiting for the next bar close.
 SCAN_ON_START = os.getenv("RIPTIDE_SCAN_ON_START", "1") == "1"
+TG_RETRIES = int(os.getenv("RIPTIDE_TG_RETRIES", "4"))
+# IANA name, e.g. Asia/Karachi. Display only — every internal calculation
+# stays on UTC epoch seconds.
+DISPLAY_TZ = os.getenv("RIPTIDE_TZ", "")
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
 # closed is already one full step old, and the scan wakes another 10s after
@@ -614,6 +620,17 @@ def first_run(db) -> bool:
     return db.execute("SELECT COUNT(*) FROM seen").fetchone()[0] == 0
 
 
+def meta_get(db, k: str, default: str = "") -> str:
+    row = db.execute("SELECT v FROM meta WHERE k=?", (k,)).fetchone()
+    return row[0] if row else default
+
+
+def meta_set(db, k: str, v) -> None:
+    db.execute("INSERT INTO meta(k, v) VALUES(?, ?) "
+               "ON CONFLICT(k) DO UPDATE SET v=excluded.v", (k, str(v)))
+    db.commit()
+
+
 def sweep_sig(s: Sweep) -> str:
     return (f"SWP|{s.symbol}|{INTERVAL}|{s.anchor_time}|{s.sweep_time}|"
             f"{'H' if s.is_high else 'L'}")
@@ -632,20 +649,83 @@ def record_sweep(db, sid, s: Sweep):
 
 
 # ── telegram ────────────────────────────────────────────────────────────────
-async def tg_send(sess, text: str):
+async def tg_send(sess, text: str) -> bool:
+    """
+    Send one alert. Returns True only if Telegram acknowledged it.
+
+    sendMessage is not idempotent — there is no request id to deduplicate on —
+    so a blind retry can deliver the same alert twice. Retries are therefore
+    limited to failures where the message provably did not arrive:
+
+      429  Telegram states it did not deliver and says how long to wait.
+      5xx  the request was not processed; Telegram's own docs say to retry.
+      connect errors  the request never reached Telegram at all.
+
+    Everything else stops. A read timeout or a reset mid-request is ambiguous:
+    Telegram may have sent the message and lost the reply, so retrying risks a
+    duplicate. Those are logged as possibly-delivered and dropped, which is the
+    quieter failure of the two.
+    """
     if not TG_TOKEN or not TG_CHAT:
         log.info("[no telegram configured]\n%s", text)
-        return
+        return False
+
     url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
     payload = {"chat_id": TG_CHAT, "text": text, "parse_mode": "HTML",
                "disable_web_page_preview": True}
-    try:
-        async with sess.post(url, json=payload,
-                             timeout=aiohttp.ClientTimeout(total=15)) as r:
-            if r.status != 200:
-                log.warning("telegram %s: %s", r.status, await r.text())
-    except Exception as e:
-        log.warning("telegram failed: %s", e)
+
+    for attempt in range(1, TG_RETRIES + 1):
+        try:
+            async with sess.post(
+                    url, json=payload,
+                    timeout=aiohttp.ClientTimeout(total=20, sock_connect=10)) as r:
+                if r.status == 200:
+                    if attempt > 1:
+                        log.info("telegram delivered on attempt %d", attempt)
+                    return True
+
+                body = await r.text()
+
+                if r.status == 429:
+                    wait = 1.0
+                    try:
+                        wait = float(json.loads(body)
+                                     .get("parameters", {}).get("retry_after", 1))
+                    except (ValueError, AttributeError, TypeError):
+                        pass
+                    wait = min(max(wait, 1.0), 60.0)
+                    log.warning("telegram rate limited, waiting %.0fs "
+                                "(attempt %d/%d)", wait, attempt, TG_RETRIES)
+                    await asyncio.sleep(wait)
+                    continue
+
+                if 500 <= r.status < 600:
+                    back = min(2 ** attempt, 30)
+                    log.warning("telegram %s, retrying in %ds (attempt %d/%d)",
+                                r.status, back, attempt, TG_RETRIES)
+                    await asyncio.sleep(back)
+                    continue
+
+                # 400 bad request, 403 blocked by the user, and friends. These
+                # do not improve on a retry.
+                log.error("telegram %s, not retried: %s", r.status, body[:300])
+                return False
+
+        except aiohttp.ClientConnectorError as e:
+            back = min(2 ** attempt, 30)
+            log.warning("telegram unreachable, retrying in %ds (attempt %d/%d): %s",
+                        back, attempt, TG_RETRIES, e)
+            await asyncio.sleep(back)
+            continue
+
+        except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+            log.error("telegram send outcome unknown (%s) — not retried, since "
+                      "Telegram may already have delivered it. This alert may "
+                      "or may not have arrived.", e)
+            return False
+
+    log.error("telegram gave up after %d attempts; alert NOT delivered", TG_RETRIES)
+    return False
 
 
 def fmt(v: float) -> str:
@@ -654,6 +734,18 @@ def fmt(v: float) -> str:
     if v >= 1:
         return f"{v:.4g}"
     return f"{v:.8g}"
+
+
+def local_clock() -> str:
+    """Current time in RIPTIDE_TZ, e.g. '08:30 PKT'. Empty if unset or bad."""
+    if not DISPLAY_TZ:
+        return ""
+    try:
+        now = datetime.now(ZoneInfo(DISPLAY_TZ))
+    except Exception:
+        log.warning("RIPTIDE_TZ=%r is not a valid IANA zone, ignoring", DISPLAY_TZ)
+        return ""
+    return now.strftime("%H:%M %Z")
 
 
 def bar_label(t: int) -> str:
@@ -739,8 +831,8 @@ async def cycle(sess, db, symbols):
                 continue
             record_sweep(db, sid, w)
             if fresh and not bootstrap:
-                await tg_send(sess, sweep_message(w))
-                swept += 1
+                if await tg_send(sess, sweep_message(w)):
+                    swept += 1
 
     for setups, _ in results:
         for s in setups:
@@ -752,8 +844,8 @@ async def cycle(sess, db, symbols):
                 continue
             record(db, sid, s)
             if fresh and not bootstrap:
-                await tg_send(sess, setup_message(s))
-                sent += 1
+                if await tg_send(sess, setup_message(s)):
+                    sent += 1
     if bootstrap:
         log.info("first run: history recorded, nothing sent")
     if SWEEP_ALERTS:
@@ -803,7 +895,13 @@ async def main():
             await cycle(sess, db, symbols)
 
         last_symbol_refresh = time.time()
-        last_heartbeat = 0.0
+        # Persisted, so "alive" means a day has genuinely passed rather than
+        # "the process restarted". Survives updates; a deleted riptide.db
+        # resets it, which only costs one extra heartbeat.
+        try:
+            last_heartbeat = float(meta_get(db, "last_heartbeat", "0") or 0)
+        except ValueError:
+            last_heartbeat = 0.0
         while True:
             try:
                 await asyncio.sleep(seconds_to_next_close(step))
@@ -818,8 +916,11 @@ async def main():
                 # Daily heartbeat, so silence means something is broken rather
                 # than that nothing set up.
                 if time.time() - last_heartbeat > 86400:
-                    await tg_send(sess, f"Riptide alive · {len(symbols)} symbols")
+                    when = local_clock()
+                    await tg_send(sess, f"Riptide alive · {len(symbols)} symbols"
+                                        + (f" · {when}" if when else ""))
                     last_heartbeat = time.time()
+                    meta_set(db, "last_heartbeat", last_heartbeat)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

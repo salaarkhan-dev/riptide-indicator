@@ -133,6 +133,8 @@ them there, not in the engine body.
 | `RIPTIDE_SYMBOLS` | all USDT perps | comma separated |
 | `RIPTIDE_FRESH_BARS` | `3` | only alert if the shift is this recent |
 | `RIPTIDE_SCAN_ON_START` | `1` | scan immediately on startup instead of waiting for the next close |
+| `RIPTIDE_TG_RETRIES` | `4` | Telegram send attempts. Only provably-undelivered failures are retried |
+| `RIPTIDE_TZ` | unset | IANA zone for the heartbeat's clock. Display only |
 | `RIPTIDE_SWEEP_ALERTS` | `1` | heads-up when a pool is swept, ahead of the shift. `0` disables |
 | `RIPTIDE_SWEEP_SRC` | unset | which pools raise a heads-up. Unset = all. e.g. `Pivot` |
 | `RIPTIDE_SWEEP_FRESH_BARS` | `2` | sweep freshness window. **Minimum 2** — see below |
