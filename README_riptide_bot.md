@@ -40,6 +40,26 @@ alerts on new ones only. To see the flood once for testing, set
 Leave `RIPTIDE_SYMBOLS` unset to scan every USDT perpetual above
 `RIPTIDE_MIN_VOL` of 24h turnover.
 
+## Layout
+
+`riptide_bot.py` is a launcher; the implementation is a package beside it, so
+the systemd unit's `ExecStart` never changes.
+
+| | |
+|---|---|
+| `riptide/config.py` | settings from the environment, and `Cfg` — the engine's calibrated defaults, mirroring the Pine inputs |
+| `riptide/engine.py` | the state machine. Pure and synchronous: no I/O, no clock, so it can be run against recorded candles |
+| `riptide/exchange.py` | MEXC reads: contracts, turnover, candles |
+| `riptide/storage.py` | SQLite dedupe and key/value bookkeeping |
+| `riptide/telegram.py` | delivery and message formatting |
+| `riptide/scanner.py` | the scan cycle and the loop that drives it |
+| `riptide/commands.py` | Telegram command handling |
+| `riptide/app.py` | startup and task supervision |
+
+`scanner` and `commands` import `telegram` as a module rather than pulling
+`tg_send` into their own namespace, so a harness can substitute the sender in
+one place — that is how `deploy/flood_test.py` throttles it.
+
 ## Two kinds of alert
 
 **Sweep** — the liquidity grab on its own, the X on the chart, sent on the

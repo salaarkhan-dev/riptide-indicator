@@ -108,7 +108,9 @@ echo "== 2. install =="
 
 mkdir -p "$APP_DIR"
 cp "$SRC_DIR/riptide_bot.py" "$APP_DIR/riptide_bot.py"
-ok "riptide_bot.py -> $APP_DIR"
+rm -rf "$APP_DIR/riptide"
+cp -r "$SRC_DIR/riptide" "$APP_DIR/riptide"
+ok "riptide_bot.py + riptide/ package -> $APP_DIR"
 
 python3 -m venv "$APP_DIR/.venv"
 "$APP_DIR/.venv/bin/pip" install --quiet --upgrade pip

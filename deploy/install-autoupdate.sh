@@ -42,6 +42,14 @@ echo "== 2. settings move out of .env and into the repo =="
 install -m 644 "$SRC/riptide.conf" "$APP/riptide.conf"
 ok "riptide.conf installed"
 
+# The bot is a package now; make sure the app dir has it before restarting.
+install -m 644 "$SRC/riptide_bot.py" "$APP/riptide_bot.py"
+rm -rf "$APP/riptide.new"
+cp -r "$SRC/riptide" "$APP/riptide.new"
+rm -rf "$APP/riptide"
+mv "$APP/riptide.new" "$APP/riptide"
+ok "riptide/ package installed"
+
 # .env keeps only the secrets. Anything RIPTIDE_* left there would be shadowed
 # by riptide.conf anyway (systemd applies the later EnvironmentFile last), and
 # a stale duplicate is exactly the kind of thing that wastes an hour later.
