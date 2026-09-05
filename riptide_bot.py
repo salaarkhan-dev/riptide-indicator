@@ -154,7 +154,10 @@ class Setup:
     mss_time: int
     anchor_time: int
     pivots: int
-    grab_time: int = 0     # bar that swept the pool
+    sweep_time: int = 0    # bar that took the pool
+    grab_time: int = 0     # deepest bar of the raid — NOT the sweep bar.
+                           # trail_grab_extreme moves this to the extreme, and
+                           # it is what the stop is measured from.
     fvg_time: int = 0      # bar the entry gap closed on
 
 
@@ -460,6 +463,7 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                         grab_bar=c.grab_bar, mss_bar=c.mss_bar,
                         mss_time=cs[c.mss_bar].t, anchor_time=cs[c.oldest_bar].t,
                         pivots=len(c.prices) or 1,
+                        sweep_time=cs[c.sweep_bar].t if c.sweep_bar >= 0 else 0,
                         grab_time=cs[c.grab_bar].t, fvg_time=cs[fvg_bar].t))
                     c.done = True
                 elif i - c.mss_bar >= cfg.max_bars_after_mss:
@@ -664,8 +668,8 @@ def setup_message(s: Setup) -> str:
         f"1R     {fmt(t1)}\n"
         f"BE at  {fmt(t15)}  ({CFG.be_arm_r}R)\n"
         f"3R     {fmt(t3)}\n\n"
-        f"<i>sweep {bar_label(s.grab_time)} · gap {bar_label(s.fvg_time)} · "
-        f"shift {bar_label(s.mss_time)} UTC</i>\n"
+        f"<i>swept {bar_label(s.sweep_time)} · low {bar_label(s.grab_time)} · "
+        f"gap {bar_label(s.fvg_time)} · shift {bar_label(s.mss_time)} UTC</i>\n"
         f"<a href='{tv}'>chart</a>"
     )
 
