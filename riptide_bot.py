@@ -668,8 +668,6 @@ def setup_message(s: Setup) -> str:
         f"1R     {fmt(t1)}\n"
         f"BE at  {fmt(t15)}  ({CFG.be_arm_r}R)\n"
         f"3R     {fmt(t3)}\n\n"
-        f"<i>swept {bar_label(s.sweep_time)} · low {bar_label(s.grab_time)} · "
-        f"gap {bar_label(s.fvg_time)} · shift {bar_label(s.mss_time)} UTC</i>\n"
         f"<a href='{tv}'>chart</a>"
     )
 
