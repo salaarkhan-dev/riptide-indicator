@@ -154,6 +154,8 @@ class Setup:
     mss_time: int
     anchor_time: int
     pivots: int
+    grab_time: int = 0     # bar that swept the pool
+    fvg_time: int = 0      # bar the entry gap closed on
 
 
 @dataclass
@@ -335,7 +337,7 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                 target.active = True
 
     def scan_leg(c, frm, to, i, a):
-        """Newest window first; returns (top, bot, tradeable) or None."""
+        """Newest window first; returns (entry, stop, fvg_bar) or None."""
         for off in range(0, min(to - frm, 120) + 1):
             j = to - off
             if j - 2 < 0 or j < frm:
@@ -356,7 +358,7 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                  (c.grab_high + a * cfg.sl_buffer_atr)
             if cfg.max_risk_atr > 0 and abs(ent - sl) > a * cfg.max_risk_atr:
                 continue
-            return ent, sl
+            return ent, sl, j
         return None
 
     start = cfg.atr_len
@@ -451,13 +453,14 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
             if c.mss and not c.done and not c.expired:
                 found = scan_leg(c, c.grab_bar, i, i, a)
                 if found:
-                    ent, sl = found
+                    ent, sl, fvg_bar = found
                     setups.append(Setup(
                         symbol=symbol, is_long=not c.is_high, src=c.src,
                         level=c.level, entry=ent, stop=sl, risk=abs(ent - sl),
                         grab_bar=c.grab_bar, mss_bar=c.mss_bar,
                         mss_time=cs[c.mss_bar].t, anchor_time=cs[c.oldest_bar].t,
-                        pivots=len(c.prices) or 1))
+                        pivots=len(c.prices) or 1,
+                        grab_time=cs[c.grab_bar].t, fvg_time=cs[fvg_bar].t))
                     c.done = True
                 elif i - c.mss_bar >= cfg.max_bars_after_mss:
                     c.done = True
@@ -639,6 +642,11 @@ def fmt(v: float) -> str:
     return f"{v:.8g}"
 
 
+def bar_label(t: int) -> str:
+    """UTC bar-open time, matching how TradingView labels the bar."""
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%H:%M")
+
+
 def setup_message(s: Setup) -> str:
     side = "LONG" if s.is_long else "SHORT"
     sign = 1 if s.is_long else -1
@@ -656,6 +664,8 @@ def setup_message(s: Setup) -> str:
         f"1R     {fmt(t1)}\n"
         f"BE at  {fmt(t15)}  ({CFG.be_arm_r}R)\n"
         f"3R     {fmt(t3)}\n\n"
+        f"<i>sweep {bar_label(s.grab_time)} · gap {bar_label(s.fvg_time)} · "
+        f"shift {bar_label(s.mss_time)} UTC</i>\n"
         f"<a href='{tv}'>chart</a>"
     )
 
