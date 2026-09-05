@@ -77,8 +77,13 @@ often does not return. Over 12.5 days on 20 symbols:
 | Min15 gap + Min15 stop | **85%** | 51% |
 
 So roughly twice as many setups turn into a 1R win, and the tighter stop
-(median 0.68× the distance) does not cost hit rate. The scan also wakes on the
-faster bar, which halves the confirmation delay.
+(median 0.68× the distance) does not cost hit rate.
+
+**It does not make alerts faster — it makes them later.** A lower-timeframe
+gap cannot exist until three of its candles have closed measured from the
+shift bar's open, so a setup alert arrives a median 60 minutes after the same
+setup would have alerted on the higher timeframe (quartiles +15 and +120). The
+trade is a later alert for one that can be filled: 84% against 48%.
 
 A setup with no usable gap on the lower timeframe keeps its higher-timeframe
 entry rather than being dropped — 14 of 239 in the sample. Alerts show which,

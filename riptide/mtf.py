@@ -29,7 +29,7 @@ from __future__ import annotations
 from bisect import bisect_left
 from dataclasses import replace
 
-from .config import CFG, Cfg, log
+from .config import BAR_SECONDS, CFG, ENTRY_INTERVAL, INTERVAL, Cfg, log
 from .engine import Candle, Setup, entry_of
 
 
@@ -59,7 +59,7 @@ def _first_gap(cs: list[Candle], start: int, is_long: bool, min_size: float,
 
 
 def refine(s: Setup, ltf: list[Candle], atr_ref: float,
-           cfg: Cfg = CFG, horizon: int = 40) -> Setup | None:
+           cfg: Cfg = CFG, horizon: int = 0) -> Setup | None:
     """
     Move a setup's entry and stop onto the lower timeframe.
 
@@ -71,12 +71,29 @@ def refine(s: Setup, ltf: list[Candle], atr_ref: float,
     if not ltf or atr_ref <= 0:
         return None
 
+    # The lower timeframe covers less wall-clock time for the same bar count —
+    # 600 Min15 bars is 6 days against 12.5 for Min30 — so roughly half the
+    # structure window has no lower-timeframe data at all. Without this,
+    # bisect_left returns 0 for those and the scan starts at the beginning of
+    # the lower-timeframe series, returning a gap days after the shift as if
+    # it belonged to the setup.
+    if s.mss_time < ltf[0].t:
+        return None
+
     # Where the shift lands on the lower timeframe. Anything at or after this
     # bar is information the engine already had when it emitted the setup.
     times = [c.t for c in ltf]
     start = bisect_left(times, s.mss_time)
     if start >= len(ltf) - 2:
         return None
+
+    # Look no further than the engine's own patience. It gives up on a setup
+    # max_bars_after_mss higher-timeframe bars after the shift; the lower
+    # timeframe should not still be offering entries long after that.
+    if horizon <= 0:
+        htf_step = BAR_SECONDS[INTERVAL]
+        ltf_step = BAR_SECONDS[ENTRY_INTERVAL] if ENTRY_INTERVAL else htf_step
+        horizon = max(3, cfg.max_bars_after_mss * max(1, htf_step // ltf_step))
 
     found = _first_gap(ltf, start, s.is_long,
                        atr_ref * cfg.min_fvg_atr,
