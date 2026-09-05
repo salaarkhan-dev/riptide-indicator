@@ -411,10 +411,13 @@ emaLine = ta.ema(close, emaLen)
 htfTrendDir() =>
     [_l, _d] = ta.supertrend(trendFilterFac, trendFilterLen)
     _d
-htfDir = trendFilter
-     ? request.security(syminfo.tickerid, trendFilterTf, htfTrendDir()[1],
-                        lookahead = barmerge.lookahead_off)
-     : na
+// Called unconditionally. request.security belongs at global scope and is
+// evaluated whether or not a surrounding condition wants it, so gating the
+// call buys nothing and risks the conditional-execution surprises Pine is
+// known for. The toggle lives in trendOk instead, which is where it reads
+// clearly anyway.
+htfDir = request.security(syminfo.tickerid, trendFilterTf, htfTrendDir()[1],
+                          lookahead = barmerge.lookahead_off)
 
 // -1 is up. na means the filter is off or the higher timeframe has no value
 // yet, and in both cases nothing is suppressed — missing data must never
