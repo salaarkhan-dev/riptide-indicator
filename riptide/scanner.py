@@ -22,8 +22,15 @@ from .exchange import fetch_candles, list_symbols
 from .storage import (already_sent, first_run, meta_get, meta_set, record,
                       record_sweep, sweep_already_sent, sweep_sig, sig_id)
 
-async def scan_symbol(sess, sem, symbol):
-    """Returns (setups, sweeps). sweeps is empty unless RIPTIDE_SWEEP_ALERTS."""
+async def scan_symbol(sess, sem, symbol, trend_on=None):
+    """
+    Returns (setups, sweeps). sweeps is empty unless RIPTIDE_SWEEP_ALERTS.
+
+    trend_on defaults to the configured setting; cycle() passes the live
+    value so /trend takes effect on the next scan without a restart.
+    """
+    if trend_on is None:
+        trend_on = TREND_FILTER
     async with sem:
         cs = await fetch_candles(sess, symbol)
         if len(cs) < 100:
@@ -83,7 +90,7 @@ async def scan_symbol(sess, sem, symbol):
         # the trend against -0.053 against it, a 4.2 SE difference over 1961
         # setups. A symbol with too little history returns None and is kept,
         # so missing data never silently drops signals.
-        if TREND_FILTER:
+        if trend_on:
             keep_s, keep_w = [], []
             for x in setups:
                 d = await trend.direction_at(sess, symbol, x.mss_time, fetch_candles)
@@ -103,9 +110,18 @@ async def scan_symbol(sess, sem, symbol):
         return setups, (sweeps or [])
 
 
+def trend_on(db) -> bool:
+    """Live trend-filter state: the /trend override if set, else the config."""
+    v = meta_get(db, "trend_filter", "")
+    return v == "1" if v in ("0", "1") else TREND_FILTER
+
+
 async def cycle(sess, db, symbols):
     sem = asyncio.Semaphore(CONCURRENCY)
-    results = await asyncio.gather(*(scan_symbol(sess, sem, s) for s in symbols))
+    # Read once per cycle so every symbol in it sees the same setting.
+    tf_on = trend_on(db)
+    results = await asyncio.gather(
+        *(scan_symbol(sess, sem, s, tf_on) for s in symbols))
 
     bootstrap = first_run(db) and not ALERT_ON_FIRST_RUN
     # /pause records everything as usual but sends nothing, so resuming does

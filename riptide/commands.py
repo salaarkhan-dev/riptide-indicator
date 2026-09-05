@@ -16,13 +16,14 @@ from . import telegram as tg
 from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
                      SWEEP_ALERTS, TG_CHAT, TG_TOKEN, TREND_FACTOR,
                      TREND_FILTER, TREND_INTERVAL, TREND_LEN, build_id, log)
-from .scanner import cycle, seconds_to_next_close
+from .scanner import cycle, seconds_to_next_close, trend_on
 from .storage import meta_get, meta_set
 
 HELP = (
     "<b>Riptide</b>\n\n"
     "/status — build, symbols, last and next scan\n"
     "/scan — run a scan now\n"
+    "/trend on|off — filter setups by the daily trend\n"
     "/pause — record setups but stop sending\n"
     "/resume — start sending again\n"
     "/update — check GitHub for a new build now\n"
@@ -63,8 +64,10 @@ def status_text(db, state) -> str:
     else:
         scan_line = "none yet"
     sweeps = "on" if SWEEP_ALERTS else "off"
-    trend_line = (f"ON · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})"
-                  if TREND_FILTER else "off")
+    live = trend_on(db)
+    src = "" if (meta_get(db, "trend_filter", "") not in ("0", "1")) else " (/trend)"
+    trend_line = ((f"ON · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})"
+                   if live else "off") + src)
     return (
         f"<b>Riptide status</b>\n\n"
         f"build      <code>{build_id()}</code>\n"
@@ -95,6 +98,27 @@ async def handle_command(sess, db, state, text: str) -> None:
         state["last_cycle"] = time.time()
         state["last_sent"] = n
         await tg.tg_send(sess, f"Scan done · {n} alert(s) sent")
+
+    elif cmd == "trend":
+        parts = text.strip().split()
+        want = parts[1].lower() if len(parts) > 1 else ""
+        if want not in ("on", "off"):
+            now = "ON" if trend_on(db) else "off"
+            await tg.tg_send(sess,
+                             f"Trend filter is <b>{now}</b>"
+                             f" · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})\n\n"
+                             "<code>/trend on</code> — only setups facing the daily trend\n"
+                             "<code>/trend off</code> — every setup\n\n"
+                             "<i>Measured: with the trend +0.083 R per setup, against "
+                             "it -0.053, over 1961 setups. Roughly halves the alerts.</i>")
+            return
+        meta_set(db, "trend_filter", "1" if want == "on" else "0")
+        await tg.tg_send(sess,
+                         f"Trend filter <b>{want.upper()}</b>. Applies from the next "
+                         "scan — no restart.\n\n"
+                         "<i>This overrides RIPTIDE_TREND_FILTER in riptide.conf and "
+                         "survives updates, so a change on GitHub will not take "
+                         "effect until you /trend the other way.</i>")
 
     elif cmd == "pause":
         meta_set(db, "alerts_paused", "1")
