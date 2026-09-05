@@ -72,6 +72,8 @@ class Setup:
     trend_dir: int = 0     # higher-timeframe trend at the shift:
                            # +1 up, -1 down, 0 unknown. Set by the
                            # scanner, never by the engine.
+    last_price: float = 0.0  # latest close, for the alert footer only. Also
+                             # set by the scanner; the engine never reads it.
 
     @property
     def detected_time(self) -> int:
@@ -132,6 +134,7 @@ class Early:
     pivots: int
     bars_from_sweep: int
     trend_dir: int = 0
+    last_price: float = 0.0   # display only, as on Setup
 
     @property
     def detected_time(self) -> int:
@@ -161,6 +164,7 @@ class Sweep:
     anchor_time: int
     pivots: int
     trend_dir: int = 0     # as above
+    last_price: float = 0.0   # display only, as above
 
 
 def rma(values: list[float], length: int) -> list[float]:

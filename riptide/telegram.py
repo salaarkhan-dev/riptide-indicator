@@ -143,6 +143,14 @@ def signal_age(closed_at: int) -> str:
     return f"{datetime.fromtimestamp(closed_at, tz).strftime('%H:%M %Z')} · {ago}"
 
 
+TF_LABEL = {"Min1": "1m", "Min5": "5m", "Min15": "15m", "Min30": "30m",
+            "Min60": "1h", "Hour4": "4h", "Hour8": "8h", "Day1": "1D"}
+
+
+def tf_label(interval: str) -> str:
+    return TF_LABEL.get(interval, interval)
+
+
 def trend_note(trend_dir: int, is_long: bool) -> str:
     """
     Which side of the higher-timeframe trend the signal sits on.
@@ -154,9 +162,11 @@ def trend_note(trend_dir: int, is_long: bool) -> str:
     """
     if not trend_dir:
         return ""
+    name = {"Day1": "daily", "Hour4": "4h", "Hour8": "8h",
+            "Min60": "hourly"}.get(TREND_INTERVAL, tf_label(TREND_INTERVAL))
     aligned = (trend_dir > 0) == is_long
-    return (f"✅ with the {TREND_INTERVAL} trend" if aligned
-            else f"⚠️ AGAINST the {TREND_INTERVAL} trend")
+    return (f"✅ with the {name} trend" if aligned
+            else f"⚠️ AGAINST the {name} trend")
 
 
 def bar_label(t: int) -> str:
@@ -164,95 +174,105 @@ def bar_label(t: int) -> str:
     return datetime.fromtimestamp(t, timezone.utc).strftime("%H:%M")
 
 
+def _headline(tag: str, is_long: bool, symbol: str, tf: str,
+              suffix: str = "") -> str:
+    """
+    First line of every alert, and the only line Telegram shows in the
+    notification preview — so it carries all three things needed to triage
+    without opening the chat: which strategy, which way, which symbol.
+
+    suffix qualifies the direction ("bias" on a sweep, where nothing is
+    tradeable yet) and belongs beside it, not after the timeframe.
+    """
+    side = "LONG" if is_long else "SHORT"
+    return (f"{tag}  {'🟢' if is_long else '🔴'} <b>{side}</b>"
+            f"{f' <i>{suffix}</i>' if suffix else ''}  <b>{symbol}</b>  {tf}")
+
+
+def _footer(when: int, price: float, tv_symbol: str) -> str:
+    """Time, age and the price as of the scan, so a stale alert is obvious."""
+    tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{tv_symbol.replace('_', '')}.P"
+    px = f" · {fmt(price)}" if price else ""
+    return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
+
+
+def _pool(src: str, level: float, pivots: int) -> str:
+    return (f"{src} pool @ {fmt(level)}"
+            f"{f' · {pivots} swings' if src == 'Pivot' else ''}")
+
+
+def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
+    """
+    The trade, as an aligned monospace block. Kept to five short lines: the
+    numbers are what gets acted on and everything else is context around them.
+    """
+    sign = 1 if is_long else -1
+    riskpct = risk / entry * 100 if entry else 0
+    return ("<pre>"
+            f"entry {fmt(entry)}\n"
+            f"stop  {fmt(stop)}  {riskpct:.2f}%\n"
+            f"1R    {fmt(entry + sign * risk)}\n"
+            f"BE    {fmt(entry + sign * risk * CFG.be_arm_r)} → "
+            f"{fmt(entry + sign * risk * CFG.be_lock_r)}\n"
+            f"3R    {fmt(entry + sign * risk * 3)}"
+            "</pre>")
+
+
 def setup_message(s: Setup) -> str:
-    side = "LONG" if s.is_long else "SHORT"
-    sign = 1 if s.is_long else -1
-    t1 = s.entry + sign * s.risk
-    t15 = s.entry + sign * s.risk * CFG.be_arm_r
-    # A stop moved exactly to entry still loses the round-trip fee,
-    # so break-even locks a little in. Mirrors beLockR in the Pine.
-    be_stop = s.entry + sign * s.risk * CFG.be_lock_r
-    t3 = s.entry + sign * s.risk * 3
-    riskpct = s.risk / s.entry * 100 if s.entry else 0
-    tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{s.symbol.replace('_', '')}.P"
-    tf = f"{INTERVAL} → {ENTRY_INTERVAL}" if s.entry_tf == "LTF" else INTERVAL
+    tf = (f"{tf_label(INTERVAL)}→{tf_label(ENTRY_INTERVAL)}"
+          if s.entry_tf == "LTF" else tf_label(INTERVAL))
     # The gap sits on whichever timeframe produced the entry.
     gap_step = BAR_SECONDS[ENTRY_INTERVAL] if s.entry_tf == "LTF" \
         else BAR_SECONDS[INTERVAL]
     note = trend_note(s.trend_dir, s.is_long)
-    note_line = f"{note}\n" if note else ""
-    return (
-        f"🅑 <b>CONFIRMED {side}  {s.symbol}</b>  ({tf})\n"
-        f"<i>sweep → shift → FVG</i>\n"
-        f"{s.src} liquidity @ {fmt(s.level)}"
-        f"{f' · {s.pivots} swings' if s.src == 'Pivot' else ''}\n"
-        f"{note_line}\n"
-        f"Entry  <code>{fmt(s.entry)}</code>\n"
-        f"Stop   <code>{fmt(s.stop)}</code>   ({riskpct:.2f}% risk)\n"
-        f"1R     {fmt(t1)}\n"
-        f"BE at  {fmt(t15)}  \u2192 stop {fmt(be_stop)}\n"
-        f"3R     {fmt(t3)}\n\n"
-        f"<i>{signal_age(s.detected_time + gap_step)}</i>\n"
-        f"<a href='{tv}'>chart</a>"
-    )
+    return "\n".join(x for x in (
+        _headline("🎯 <b>CONFIRMED</b>", s.is_long, s.symbol, tf),
+        "<i>sweep → shift → FVG</i>",
+        "",
+        _levels(s.entry, s.stop, s.risk, s.is_long),
+        note or None,
+        _pool(s.src, s.level, s.pivots),
+        _footer(s.detected_time + gap_step, s.last_price, s.symbol),
+    ) if x is not None)
 
 
 def early_message(s: Early) -> str:
     """
     The no-shift entry. Labelled distinctly from the confirmed setup because
-    it is a different bet, not an earlier version of the same one: no shift
-    has confirmed the reversal, so the sweep may simply be a trend continuing.
+    it is a different bet, not an earlier version of the same one: nothing has
+    confirmed the reversal, so the sweep may simply be a trend continuing.
     What it buys is the stop sitting a few candles away at the raid extreme
     rather than a whole leg back.
     """
-    side = "LONG" if s.is_long else "SHORT"
-    sign = 1 if s.is_long else -1
-    t1 = s.entry + sign * s.risk
-    t15 = s.entry + sign * s.risk * CFG.be_arm_r
-    be_stop = s.entry + sign * s.risk * CFG.be_lock_r
-    t3 = s.entry + sign * s.risk * 3
-    riskpct = s.risk / s.entry * 100 if s.entry else 0
-    tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{s.symbol.replace('_', '')}.P"
-    note = trend_note(s.trend_dir, s.is_long)
-    note_line = f"{note}\n" if note else ""
     bars = s.bars_from_sweep
-    return (
-        f"⚡ <b>EARLY {side}  {s.symbol}</b>  ({INTERVAL})\n"
-        f"<i>sweep → FVG · no shift yet</i>\n"
-        f"{s.src} liquidity @ {fmt(s.level)}"
-        f"{f' · {s.pivots} swings' if s.src == 'Pivot' else ''}\n"
-        f"{note_line}\n"
-        f"Entry  <code>{fmt(s.entry)}</code>   <i>gap edge</i>\n"
-        f"Stop   <code>{fmt(s.stop)}</code>   ({riskpct:.2f}% risk, "
-        f"beyond the sweep)\n"
-        f"1R     {fmt(t1)}\n"
-        f"BE at  {fmt(t15)}  → stop {fmt(be_stop)}\n"
-        f"3R     {fmt(t3)}\n\n"
-        f"<i>first gap {bars} bar{'' if bars == 1 else 's'} after the sweep · "
-        f"unconfirmed</i>\n"
-        f"<i>{signal_age(s.fvg_time + BAR_SECONDS[INTERVAL])}</i>\n"
-        f"<a href='{tv}'>chart</a>"
-    )
+    note = trend_note(s.trend_dir, s.is_long)
+    return "\n".join(x for x in (
+        _headline("⚡ <b>EARLY</b>", s.is_long, s.symbol, tf_label(INTERVAL)),
+        f"<i>sweep → FVG · no shift · gap {bars} "
+        f"bar{'' if bars == 1 else 's'} after the raid</i>",
+        "",
+        _levels(s.entry, s.stop, s.risk, s.is_long),
+        note or None,
+        _pool(s.src, s.level, s.pivots),
+        _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
+    ) if x is not None)
 
 
 def sweep_message(s: Sweep) -> str:
     """Heads-up on the grab. Deliberately carries no entry or stop: there is
     no setup yet, and the shift may never come."""
-    bias = "SHORT" if s.is_high else "LONG"
+    is_long = not s.is_high
     took = "high" if s.is_high else "low"
     direction = "below" if s.is_high else "above"
-    tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{s.symbol.replace('_', '')}.P"
-    note = trend_note(s.trend_dir, not s.is_high)
-    note_line = f"{note}\n" if note else ""
-    return (
-        f"⚠️ <b>SWEEP  {s.symbol}</b>  ({INTERVAL})\n"
-        f"{s.src} {took} @ {fmt(s.level)} taken"
-        f"{f' · {s.pivots} swings' if s.src == 'Pivot' else ''}\n"
-        f"{note_line}\n"
-        f"Watching for  <b>{bias}</b>\n"
-        f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>\n"
-        f"Sweep {took}   {fmt(s.sweep_extreme)}\n\n"
-        f"No entry yet — the FVG forms after the shift.\n"
-        f"<i>{signal_age(s.sweep_time + BAR_SECONDS[INTERVAL])}</i>\n"
-        f"<a href='{tv}'>chart</a>"
-    )
+    note = trend_note(s.trend_dir, is_long)
+    return "\n".join(x for x in (
+        _headline("👀 <b>SWEEP</b>", is_long, s.symbol, tf_label(INTERVAL),
+                  suffix="bias"),
+        "<i>liquidity taken · no entry yet</i>",
+        "",
+        f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",
+        f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>",
+        note or None,
+        _pool(s.src, s.level, s.pivots),
+        _footer(s.sweep_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
+    ) if x is not None)

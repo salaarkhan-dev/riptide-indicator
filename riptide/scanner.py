@@ -119,6 +119,12 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
             if with_trend or not trend_on:
                 keep_e.append(e)
 
+        # Latest close, for the alert footer. Display only — nothing decides
+        # anything on it, and the engine has already finished by this point.
+        px = cs[-1].c
+        for x in (*keep_s, *keep_w, *keep_e):
+            x.last_price = px
+
         dropped = len(setups) - len(keep_s)
         if dropped:
             log.debug("%s: %d setup(s) dropped against the %s trend",
