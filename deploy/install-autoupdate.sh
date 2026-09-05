@@ -74,7 +74,7 @@ ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl restart riptide, /bin/systemctl r
 EOF
 sudo chmod 440 /etc/sudoers.d/riptide-update
 sudo visudo -c -f /etc/sudoers.d/riptide-update >/dev/null || die "bad sudoers file"
-ok "scoped to 'systemctl restart riptide' only"
+ok "scoped to 'restart riptide' and 'start riptide-update.service' only"
 
 echo
 echo "== 4. units =="
