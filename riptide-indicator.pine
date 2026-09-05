@@ -435,6 +435,14 @@ var Tracker        s1T      = Tracker.new()
 var Tracker        s2T      = Tracker.new()
 var Tracker        s3T      = Tracker.new()
 
+// Context-imbalance mitigation mode, resolved once. Pine will not take a
+// multi-line `switch` expression inside a nested local scope, and these do not
+// change bar to bar anyway.
+ctxBody  = allFvgRemove == "Body close"
+ctxCE    = allFvgRemove == "50% (CE)"
+ctxWick  = allFvgRemove == "Wick"
+ctxTouch = allFvgRemove == "Touched"
+
 // ═════════════════════════ 4. BAR-LEVEL SERIES ══════════════════════════════
 atr = ta.atr(atrLength)
 tol = atr * liquidityToleranceATR
@@ -731,11 +739,11 @@ drawCtxFvg(bool isBull, float top, float bottom, int lft) =>
          bgcolor      = color.new(base, allFvgFill))
     // The midpoint is not decoration: it is where "50% (CE)" mitigates, and
     // the level price most often reacts to inside a gap.
-    line m = showFvgMidline
-         ? line.new(lft, av, lft + fvgExtendBars, av,
-              xloc = xloc.bar_index, style = line.style_dotted,
-              color = color.new(base, math.max(0, allFvgFill - 30)))
-         : na
+    line m = na
+    if showFvgMidline
+        m := line.new(lft, av, lft + fvgExtendBars, av,
+             xloc = xloc.bar_index, style = line.style_dotted,
+             color = color.new(base, math.max(0, allFvgFill - 30)))
     ctxFvgs.push(CtxFvg.new(bx = b, mid = m, top = top, bottom = bottom,
          avg = av, isBull = isBull, createdBar = bar_index))
     // Kept short so entry zones, liquidity lines and labels are not starved
@@ -1075,12 +1083,11 @@ if engineOk
                 // still live.
                 float body = f.isBull ? math.min(close, open)
                      : math.max(close, open)
-                bool gone = switch allFvgRemove
-                     "Body close" => f.isBull ? body < f.bottom : body > f.top
-                     "50% (CE)"   => f.isBull ? low  < f.avg    : high > f.avg
-                     "Wick"       => f.isBull ? low  < f.bottom : high > f.top
-                     "Touched"    => low <= f.top and high >= f.bottom
-                     => false
+                bool gone = ctxBody  ? (f.isBull ? body < f.bottom : body > f.top)
+                     : ctxCE    ? (f.isBull ? low  < f.avg    : high > f.avg)
+                     : ctxWick  ? (f.isBull ? low  < f.bottom : high > f.top)
+                     : ctxTouch ? (low <= f.top and high >= f.bottom)
+                     : false
                 if gone
                     dropCtx(i)
                 // Still unmitigated: carry it forward to the current bar, so
