@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import aiohttp
 
-from .config import (CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL, TG_CHAT,
-                     TG_RETRIES, TG_TOKEN, log)
+from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
+                     TG_CHAT, TG_RETRIES, TG_TOKEN, log)
 from .engine import Setup, Sweep
 
 async def tg_send(sess, text: str) -> bool:
@@ -117,6 +118,31 @@ def local_clock() -> str:
     return now.strftime("%H:%M %Z")
 
 
+def signal_age(closed_at: int) -> str:
+    """
+    'HH:MM PKT · 2m ago' for the moment a signal became actionable.
+
+    Answers one question — is this fresh, or did it sit somewhere. The
+    freshness gates should already prevent a stale send, so a large age here
+    means something is wrong upstream rather than merely late.
+    """
+    delta = max(0, int(time.time()) - closed_at)
+    if delta < 60:
+        ago = f"{delta}s ago"
+    elif delta < 3600:
+        ago = f"{delta // 60}m ago"
+    else:
+        ago = f"{delta // 3600}h {(delta % 3600) // 60}m ago"
+
+    tz = timezone.utc
+    if DISPLAY_TZ:
+        try:
+            tz = ZoneInfo(DISPLAY_TZ)
+        except Exception:
+            pass                      # local_clock already logs a bad zone
+    return f"{datetime.fromtimestamp(closed_at, tz).strftime('%H:%M %Z')} · {ago}"
+
+
 def bar_label(t: int) -> str:
     """UTC bar-open time, matching how TradingView labels the bar."""
     return datetime.fromtimestamp(t, timezone.utc).strftime("%H:%M")
@@ -131,6 +157,9 @@ def setup_message(s: Setup) -> str:
     riskpct = s.risk / s.entry * 100 if s.entry else 0
     tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{s.symbol.replace('_', '')}.P"
     tf = f"{INTERVAL} → {ENTRY_INTERVAL}" if s.entry_tf == "LTF" else INTERVAL
+    # The gap sits on whichever timeframe produced the entry.
+    gap_step = BAR_SECONDS[ENTRY_INTERVAL] if s.entry_tf == "LTF" \
+        else BAR_SECONDS[INTERVAL]
     return (
         f"<b>{side}  {s.symbol}</b>  ({tf})\n"
         f"{s.src} liquidity @ {fmt(s.level)}"
@@ -140,6 +169,7 @@ def setup_message(s: Setup) -> str:
         f"1R     {fmt(t1)}\n"
         f"BE at  {fmt(t15)}  ({CFG.be_arm_r}R)\n"
         f"3R     {fmt(t3)}\n\n"
+        f"<i>{signal_age(s.fvg_time + gap_step)}</i>\n"
         f"<a href='{tv}'>chart</a>"
     )
 
@@ -159,5 +189,6 @@ def sweep_message(s: Sweep) -> str:
         f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>\n"
         f"Sweep {took}   {fmt(s.sweep_extreme)}\n\n"
         f"No entry yet — the FVG forms after the shift.\n"
+        f"<i>{signal_age(s.sweep_time + BAR_SECONDS[INTERVAL])}</i>\n"
         f"<a href='{tv}'>chart</a>"
     )
