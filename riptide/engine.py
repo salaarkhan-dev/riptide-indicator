@@ -72,6 +72,26 @@ class Setup:
                            # +1 up, -1 down, 0 unknown. Set by the
                            # scanner, never by the engine.
 
+    @property
+    def detected_time(self) -> int:
+        """
+        Bar on which this setup first became knowable — the one an alert can
+        honestly be timed from, and the earliest bar a person could act on.
+
+        Not the same as the shift bar. scan_leg searches backwards from the
+        grab, so a gap that formed BEFORE the shift is picked up the instant
+        the shift confirms (fvg_time < mss_time, detected at the shift). And
+        when no gap exists yet, the engine retries each bar for
+        max_bars_after_mss, so the gap can arrive well after the shift
+        (fvg_time > mss_time, detected at the gap).
+
+        Either way it is the later of the two, because a setup needs both.
+        Freshness, the age shown on the alert, and the bar outcome tracking
+        starts scoring from all measure from here; measuring from the shift
+        instead silently drops the slow-gap setups and back-dates the rest.
+        """
+        return max(self.mss_time, self.fvg_time)
+
 
 @dataclass
 class Sweep:

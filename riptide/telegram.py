@@ -191,7 +191,7 @@ def setup_message(s: Setup) -> str:
         f"1R     {fmt(t1)}\n"
         f"BE at  {fmt(t15)}  \u2192 stop {fmt(be_stop)}\n"
         f"3R     {fmt(t3)}\n\n"
-        f"<i>{signal_age(s.fvg_time + gap_step)}</i>\n"
+        f"<i>{signal_age(s.detected_time + gap_step)}</i>\n"
         f"<a href='{tv}'>chart</a>"
     )
 

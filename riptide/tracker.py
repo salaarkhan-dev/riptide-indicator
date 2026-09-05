@@ -84,16 +84,19 @@ def arm(db, sid: str, s: Setup, from_bar: int | None = None) -> None:
     first run should not backfill 600 bars of history into what is meant to be
     forward data.
 
-    Scoring begins after the LATER of two bars: the one the gap closed on (it
-    is not known to exist before that) and the one that had just closed when
-    the alert fired. The second matters because RIPTIDE_FRESH_BARS allows a
-    shift from a few bars back to still alert — and counting a fill from a bar
-    that closed before the alert existed would be scoring a trade nobody could
-    have taken. That is lookahead, and it only ever flatters the result.
+    Scoring begins after the LATER of two bars: Setup.detected_time, the bar
+    on which both the shift and the gap existed, and the bar that had just
+    closed when the alert fired. The second matters because RIPTIDE_FRESH_BARS
+    allows a setup from a few bars back to still alert — and counting a fill
+    from a bar that closed before the alert existed would be scoring a trade
+    nobody could have taken. That is lookahead, and it only ever flatters the
+    result; measured at 0.229 R per setup on 41.6 days.
 
-    The fill window still runs from the gap bar, so a late alert has fewer
+    The fill window runs from detected_time too, so a late alert has fewer
     bars left to fill in. That is the right way round: being late costs you
-    the bars you were late by.
+    the bars you were late by. (Running it from the alert instead was measured
+    at +0.004 R, +0.8 SE — the choice does not matter, so take the simpler
+    one.)
 
     from_bar overrides that floor. It exists for replaying recorded candles,
     where wall-clock time is meaningless; live callers must not pass it.
@@ -101,13 +104,14 @@ def arm(db, sid: str, s: Setup, from_bar: int | None = None) -> None:
     if not TRACK or s.risk <= 0 or not s.fvg_time:
         return
     now = int(time.time())
+    detected = s.detected_time
     start = from_bar if from_bar is not None \
-        else max(s.fvg_time, last_closed_bar(now))
+        else max(detected, last_closed_bar(now))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
-                s.mss_time, s.fvg_time, now,
+                s.mss_time, detected, now,
                 PENDING, 0, 0, None, 0.0, 0.0, start, now))
     db.commit()
 

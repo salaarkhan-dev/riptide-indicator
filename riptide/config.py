@@ -21,8 +21,11 @@ INTERVAL = os.getenv("RIPTIDE_INTERVAL", "Min30")     # Min15 Min30 Min60 Hour4
 BAR_SECONDS = {"Min1": 60, "Min5": 300, "Min15": 900, "Min30": 1800,
                "Min60": 3600, "Hour4": 14400, "Hour8": 28800, "Day1": 86400}
 LOOKBACK = int(os.getenv("RIPTIDE_LOOKBACK", "600"))   # bars fetched per symbol
-FRESH_BARS = int(os.getenv("RIPTIDE_FRESH_BARS", "3"))  # only alert if the shift
-                                                        # is this recent
+# Only alert if the setup became detectable this recently — measured from
+# Setup.detected_time, not from the shift. A shift-based window binned every
+# setup whose gap was slow to arrive, which Cfg.max_bars_after_mss explicitly
+# allows for up to 10 bars.
+FRESH_BARS = int(os.getenv("RIPTIDE_FRESH_BARS", "3"))
 DB_PATH = os.getenv("RIPTIDE_DB", "riptide.db")
 CONCURRENCY = int(os.getenv("RIPTIDE_CONCURRENCY", "8"))
 QUOTE = os.getenv("RIPTIDE_QUOTE", "USDT")

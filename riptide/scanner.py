@@ -170,9 +170,15 @@ async def cycle(sess, db, symbols):
 
     for setups, _, _ in results:
         for s in setups:
-            # Only shifts from the last few bars are actionable. Older ones are
-            # recorded so a restart cannot re-alert the whole history.
-            fresh = (now - s.mss_time) <= FRESH_BARS * step
+            # Only setups from the last few bars are actionable. Older ones
+            # are recorded so a restart cannot re-alert the whole history.
+            #
+            # Measured from detected_time, not the shift. Cfg.max_bars_after_mss
+            # lets the gap arrive up to 10 bars after the shift, and a shift-
+            # based window silently binned every setup slower than FRESH_BARS
+            # — 3% of them — while still recording each one, so dedupe made the
+            # loss permanent. The setup is not late; it did not exist yet.
+            fresh = (now - s.detected_time) <= FRESH_BARS * step
             sid = sig_id(s)
             if already_sent(db, sid):
                 continue

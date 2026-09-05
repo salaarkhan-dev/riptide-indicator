@@ -164,6 +164,34 @@ The daily heartbeat is separate and still fires once per restart:
 `last_heartbeat` lives in memory and resets to `0.0` on every start, so
 "Riptide alive" is a restart marker as much as a daily one.
 
+### Three timing limits, often confused
+
+The chain is pool → **sweep** → **MSS** (structure shift) → **FVG** (the gap
+the entry sits in). Three separate settings bound it, and they answer three
+different questions:
+
+| | | |
+|---|---|---|
+| `Cfg.max_bars_after_grab` | 50 | how long after the **sweep** the shift may come |
+| `Cfg.max_bars_after_mss` | 10 | how long after the **shift** the gap may form |
+| `RIPTIDE_FRESH_BARS` | 3 | how old the **setup** may be when the alert fires |
+
+A long wait between the sweep and the entry is normal and fully alerted —
+median 14 bars, quartiles 7 and 25, up to the 50-bar limit. Only the third
+setting suppresses anything.
+
+It measures from `Setup.detected_time`, the later of the shift bar and the gap
+bar, because a setup needs both to exist. Measuring from the shift instead —
+which the bot did until this was caught — silently binned every setup whose
+gap took more than a bar to arrive: **76 of 2035 setups (4%) over 41.6 days**,
+recorded and deduped, so the loss was permanent and invisible. Nominally they
+scored better than the ones that were sent, though on 76 samples that is not
+worth reading; the reason to fix it is that the gate was measuring the wrong
+thing, not that the dropped ones looked good.
+
+`detected_time` is the same bar outcome tracking starts scoring from. Both bugs
+were the same mistake about when a setup starts existing.
+
 ### Why `RIPTIDE_SWEEP_FRESH_BARS` cannot be 1
 
 `Candle.t` is the bar's **open** time, so a bar that has just closed is
@@ -286,7 +314,7 @@ them there, not in the engine body.
 | `RIPTIDE_INTERVAL` | `Min30` | `Min15`, `Min30`, `Min60`, `Hour4` |
 | `RIPTIDE_SYMBOLS` | all USDT perps | comma separated |
 | `RIPTIDE_ENTRY_INTERVAL` | unset | lower timeframe for entries. Structure stays on `RIPTIDE_INTERVAL` |
-| `RIPTIDE_FRESH_BARS` | `3` | only alert if the shift is this recent |
+| `RIPTIDE_FRESH_BARS` | `3` | only alert if the setup became **detectable** this recently — see *Three timing limits* |
 | `RIPTIDE_SCAN_ON_START` | `1` | scan immediately on startup instead of waiting for the next close |
 | `RIPTIDE_TG_RETRIES` | `4` | Telegram send attempts. Only provably-undelivered failures are retried |
 | `RIPTIDE_TZ` | unset | IANA zone for the heartbeat's clock. Display only |
