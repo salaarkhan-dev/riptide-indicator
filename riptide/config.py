@@ -53,6 +53,13 @@ SCAN_INTERVAL = ENTRY_INTERVAL or INTERVAL
 # exist at the first scan after the shift, so 0 would defeat the feature.
 MTF_GRACE_BARS = int(os.getenv("RIPTIDE_MTF_GRACE_BARS", "2"))
 
+# Suppress setups and sweeps that face against the higher-timeframe trend.
+# The one filter measured to separate winners from losers — see trend.py.
+TREND_FILTER = os.getenv("RIPTIDE_TREND_FILTER", "0") == "1"
+TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Day1")
+TREND_LEN = int(os.getenv("RIPTIDE_TREND_LEN", "14"))
+TREND_FACTOR = float(os.getenv("RIPTIDE_TREND_FACTOR", "5.0"))
+
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
@@ -102,6 +109,9 @@ class Cfg:
     use_daily: bool = True
     use_weekly: bool = True
     be_arm_r: float = 1.5
+    be_lock_r: float = 0.1     # break-even stop locks in this much,
+                               # so a 'scratch' still covers fees.
+                               # Mirrors beLockR in the Pine.
 
 
 log = logging.getLogger("riptide")

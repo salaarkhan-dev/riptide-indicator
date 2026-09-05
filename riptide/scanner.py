@@ -11,10 +11,12 @@ import time
 
 from . import mtf
 from . import telegram as tg
+from . import trend
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      ENTRY_INTERVAL, FRESH_BARS, INTERVAL, MTF_GRACE_BARS,
                      SCAN_INTERVAL,
-                     SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC, log)
+                     SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC,
+                     TREND_FILTER, TREND_INTERVAL, log)
 from .engine import Sweep, atr_series, run_engine
 from .exchange import fetch_candles, list_symbols
 from .storage import (already_sent, first_run, meta_get, meta_set, record,
@@ -75,6 +77,28 @@ async def scan_symbol(sess, sem, symbol):
                     log.debug("%s: holding setup for a %s gap", symbol,
                               ENTRY_INTERVAL)
             setups = refined
+
+        # Only signals facing the higher-timeframe trend. Measured as the
+        # one filter that separates winners from losers: +0.083 R/setup with
+        # the trend against -0.053 against it, a 4.2 SE difference over 1961
+        # setups. A symbol with too little history returns None and is kept,
+        # so missing data never silently drops signals.
+        if TREND_FILTER:
+            keep_s, keep_w = [], []
+            for x in setups:
+                d = await trend.direction_at(sess, symbol, x.mss_time, fetch_candles)
+                if d is None or (d > 0) == x.is_long:
+                    keep_s.append(x)
+            for w in (sweeps or []):
+                d = await trend.direction_at(sess, symbol, w.sweep_time, fetch_candles)
+                # A swept high implies a short, so it wants a downtrend.
+                if d is None or (d < 0) == w.is_high:
+                    keep_w.append(w)
+            dropped = len(setups) - len(keep_s)
+            if dropped:
+                log.debug("%s: %d setup(s) dropped against the %s trend",
+                          symbol, dropped, TREND_INTERVAL)
+            return keep_s, keep_w
 
         return setups, (sweeps or [])
 

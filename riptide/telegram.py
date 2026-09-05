@@ -153,6 +153,9 @@ def setup_message(s: Setup) -> str:
     sign = 1 if s.is_long else -1
     t1 = s.entry + sign * s.risk
     t15 = s.entry + sign * s.risk * CFG.be_arm_r
+    # A stop moved exactly to entry still loses the round-trip fee,
+    # so break-even locks a little in. Mirrors beLockR in the Pine.
+    be_stop = s.entry + sign * s.risk * CFG.be_lock_r
     t3 = s.entry + sign * s.risk * 3
     riskpct = s.risk / s.entry * 100 if s.entry else 0
     tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{s.symbol.replace('_', '')}.P"
@@ -167,7 +170,7 @@ def setup_message(s: Setup) -> str:
         f"Entry  <code>{fmt(s.entry)}</code>\n"
         f"Stop   <code>{fmt(s.stop)}</code>   ({riskpct:.2f}% risk)\n"
         f"1R     {fmt(t1)}\n"
-        f"BE at  {fmt(t15)}  ({CFG.be_arm_r}R)\n"
+        f"BE at  {fmt(t15)}  \u2192 stop {fmt(be_stop)}\n"
         f"3R     {fmt(t3)}\n\n"
         f"<i>{signal_age(s.fvg_time + gap_step)}</i>\n"
         f"<a href='{tv}'>chart</a>"
