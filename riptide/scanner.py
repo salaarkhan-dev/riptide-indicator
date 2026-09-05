@@ -12,7 +12,8 @@ import time
 from . import mtf
 from . import telegram as tg
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
-                     ENTRY_INTERVAL, FRESH_BARS, INTERVAL, SCAN_INTERVAL,
+                     ENTRY_INTERVAL, FRESH_BARS, INTERVAL, MTF_GRACE_BARS,
+                     SCAN_INTERVAL,
                      SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC, log)
 from .engine import Sweep, atr_series, run_engine
 from .exchange import fetch_candles, list_symbols
@@ -39,14 +40,31 @@ async def scan_symbol(sess, sem, symbol):
 
         if ltf:
             atr = atr_series(cs, CFG.atr_len)
+            now = int(time.time())
+            # A gap needs three lower-timeframe candles measured from the
+            # shift bar's OPEN. At the scan that fires when the shift bar
+            # closes, only two of them have closed — so the lower timeframe
+            # can never have an answer yet on the first look.
+            #
+            # Sending the higher-timeframe entry then would record the
+            # signature and let dedupe suppress the refined entry that
+            # arrives a scan later, which is the entry the feature exists to
+            # produce. So hold the setup back instead and reconsider next
+            # scan; fall back only once the lower timeframe has had a fair
+            # chance and the setup would otherwise be lost.
+            grace = MTF_GRACE_BARS * BAR_SECONDS[INTERVAL]
             refined = []
             for s in setups:
-                # A setup with no usable gap on the lower timeframe keeps its
-                # higher-timeframe entry rather than being dropped.
                 r = None
                 if 0 <= s.mss_bar < len(atr):
                     r = mtf.refine(s, ltf, atr[s.mss_bar])
-                refined.append(r or s)
+                if r is not None:
+                    refined.append(r)
+                elif now - s.mss_time > grace:
+                    refined.append(s)          # no gap came; take the HTF entry
+                else:
+                    log.debug("%s: holding setup for a %s gap", symbol,
+                              ENTRY_INTERVAL)
             setups = refined
 
         return setups, (sweeps or [])

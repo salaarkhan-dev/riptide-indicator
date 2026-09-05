@@ -13,8 +13,8 @@ import time
 import aiohttp
 
 from . import telegram as tg
-from .config import (BAR_SECONDS, INTERVAL, SWEEP_ALERTS, TG_CHAT, TG_TOKEN,
-                     build_id, log)
+from .config import (BAR_SECONDS, ENTRY_INTERVAL, INTERVAL, SWEEP_ALERTS,
+                     TG_CHAT, TG_TOKEN, build_id, log)
 from .scanner import cycle, seconds_to_next_close
 from .storage import meta_get, meta_set
 
@@ -65,7 +65,8 @@ def status_text(db, state) -> str:
     return (
         f"<b>Riptide status</b>\n\n"
         f"build      <code>{build_id()}</code>\n"
-        f"symbols    {len(state.get('symbols', []))} · {INTERVAL}\n"
+        f"symbols    {len(state.get('symbols', []))} · {INTERVAL}"
+        f"{f' → {ENTRY_INTERVAL} entries' if ENTRY_INTERVAL else ''}\n"
         f"alerts     {'PAUSED' if paused else 'on'} · sweeps {sweeps}\n"
         f"uptime     {_fmt_ago(time.time() - state.get('started', time.time()))}\n"
         f"last scan  {scan_line}\n"

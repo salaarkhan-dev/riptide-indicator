@@ -48,6 +48,10 @@ ENTRY_INTERVAL = os.getenv("RIPTIDE_ENTRY_INTERVAL", "").strip()
 # faster one, otherwise a gap could form and be up to a full HTF bar stale
 # before anything looked for it.
 SCAN_INTERVAL = ENTRY_INTERVAL or INTERVAL
+# How long to hold a setup back waiting for a lower-timeframe gap before
+# falling back to the higher-timeframe entry, in HTF bars. The gap cannot
+# exist at the first scan after the shift, so 0 would defeat the feature.
+MTF_GRACE_BARS = int(os.getenv("RIPTIDE_MTF_GRACE_BARS", "2"))
 
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
