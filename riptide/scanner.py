@@ -85,29 +85,32 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
                               ENTRY_INTERVAL)
             setups = refined
 
-        # Only signals facing the higher-timeframe trend. Measured as the
-        # one filter that separates winners from losers: +0.083 R/setup with
-        # the trend against -0.053 against it, a 4.2 SE difference over 1961
-        # setups. A symbol with too little history returns None and is kept,
-        # so missing data never silently drops signals.
-        if trend_on:
-            keep_s, keep_w = [], []
-            for x in setups:
-                d = await trend.direction_at(sess, symbol, x.mss_time, fetch_candles)
-                if d is None or (d > 0) == x.is_long:
-                    keep_s.append(x)
-            for w in (sweeps or []):
-                d = await trend.direction_at(sess, symbol, w.sweep_time, fetch_candles)
-                # A swept high implies a short, so it wants a downtrend.
-                if d is None or (d < 0) == w.is_high:
-                    keep_w.append(w)
-            dropped = len(setups) - len(keep_s)
-            if dropped:
-                log.debug("%s: %d setup(s) dropped against the %s trend",
-                          symbol, dropped, TREND_INTERVAL)
-            return keep_s, keep_w
+        # Trend alignment is recorded on every signal, whether or not the
+        # filter is suppressing anything, so the alert can say which side of
+        # the trend it is on. Measured: with the trend +0.083 R per setup,
+        # against it -0.053, a 4.2 SE difference over 1961 setups — worth
+        # knowing even when taking both. Daily bars are cached for an hour,
+        # so this costs one fetch per symbol per hour.
+        keep_s, keep_w = [], []
+        for x in setups:
+            d = await trend.direction_at(sess, symbol, x.mss_time, fetch_candles)
+            x.trend_dir = d or 0
+            with_trend = d is None or (d > 0) == x.is_long
+            if with_trend or not trend_on:
+                keep_s.append(x)
+        for w in (sweeps or []):
+            d = await trend.direction_at(sess, symbol, w.sweep_time, fetch_candles)
+            w.trend_dir = d or 0
+            # A swept high implies a short, so it wants a downtrend.
+            with_trend = d is None or (d < 0) == w.is_high
+            if with_trend or not trend_on:
+                keep_w.append(w)
 
-        return setups, (sweeps or [])
+        dropped = len(setups) - len(keep_s)
+        if dropped:
+            log.debug("%s: %d setup(s) dropped against the %s trend",
+                      symbol, dropped, TREND_INTERVAL)
+        return keep_s, keep_w
 
 
 def trend_on(db) -> bool:

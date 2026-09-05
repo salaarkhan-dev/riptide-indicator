@@ -68,6 +68,9 @@ class Setup:
                            # it is what the stop is measured from.
     fvg_time: int = 0      # bar the entry gap closed on
     entry_tf: str = "HTF"  # "LTF" once mtf.refine has moved the entry
+    trend_dir: int = 0     # higher-timeframe trend at the shift:
+                           # +1 up, -1 down, 0 unknown. Set by the
+                           # scanner, never by the engine.
 
 
 @dataclass
@@ -90,6 +93,7 @@ class Sweep:
     sweep_extreme: float
     anchor_time: int
     pivots: int
+    trend_dir: int = 0     # as above
 
 
 def rma(values: list[float], length: int) -> list[float]:
