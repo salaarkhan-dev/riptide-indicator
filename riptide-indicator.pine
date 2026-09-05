@@ -142,6 +142,9 @@ allFvgMinATR   = input.float(0.10, "  min size (ATR)", minval = 0, step = 0.05, 
 allFvgKeep     = input.int(40,    "  how many to keep", minval = 5, maxval = 200, group = gLook,
      tooltip = "Only the most recent this-many context imbalances stay on the chart. TradingView allows 500 drawings in total and entry zones, liquidity lines and labels share that budget.")
 allFvgFill     = input.int(93,    "  transparency", minval = 50, maxval = 99, group = gLook)
+allFvgRemove   = input.string("Filled", "  remove when",
+     options = ["Touched", "Filled", "Never"], group = gLook,
+     tooltip = "Filled: the box disappears once price has traded all the way through the gap, so what stays on the chart is unmitigated imbalance only — the reading most people want. Touched: it goes the moment price enters the zone at all. Never: keep every box until the budget above recycles it.")
 showEntryLine  = input.bool(true,  "Entry line",                     group = gLook)
 showStopLoss   = input.bool(true,  "Stop loss line",                 group = gLook,
      tooltip = "Drawn from the raid candle itself and extended right, so you can see which bar the stop comes from.")
@@ -311,6 +314,16 @@ type Cluster
     line   liqLine
     line   mssLine
 
+// A context imbalance. Deliberately NOT an Fvg: the engine walks the Fvg array
+// for mitigation, extension and outcome tracking, and these must never reach
+// any of that. Top and bottom are kept only so the box can retire itself.
+type CtxFvg
+    box   bx
+    float top
+    float bottom
+    bool  isBull
+    int   createdBar
+
 type Fvg
     int   id
     bool  isBull
@@ -393,7 +406,7 @@ var array<Fvg>     fvgs     = array.new<Fvg>()
 // NOT Fvg objects and never pushed to `fvgs` — the engine walks that array for
 // mitigation and extension, and feeding it gaps the strategy never selected
 // would change behaviour rather than just the picture.
-var array<box>     ctxFvgs  = array.new<box>()
+var array<CtxFvg>  ctxFvgs  = array.new<CtxFvg>()
 var array<Trade>   trades   = array.new<Trade>()
 var Stats          stx      = Stats.new()
 var Counters       cnt      = Counters.new()
@@ -640,11 +653,12 @@ drawCtxFvg(bool isBull, float top, float bottom, int lft) =>
          border_width = 1,
          border_style = line.style_dotted,
          bgcolor      = color.new(base, allFvgFill))
-    ctxFvgs.push(b)
+    ctxFvgs.push(CtxFvg.new(bx = b, top = top, bottom = bottom,
+         isBull = isBull, createdBar = bar_index))
     // Kept short so entry zones, liquidity lines and labels are not starved
     // out of TradingView's 500-drawing budget by chart context.
     while ctxFvgs.size() > allFvgKeep
-        box.delete(ctxFvgs.shift())
+        box.delete(ctxFvgs.shift().bx)
 
 // Entry price implied by entryMode, from a gap's two edges.
 entryOf(bool isLong, float top, float bot) =>
@@ -952,6 +966,28 @@ if engineOk
     // and the "Look for entry zones from" setting. Runs before anything else
     // and touches no engine state, so what the strategy does is identical
     // whether this is on or off — only the chart changes.
+    // Retire mitigated boxes first, so a gap created below cannot retire
+    // itself on the bar that formed it. Backwards, because remove() shifts
+    // every index above it.
+    if allFvgRemove != "Never" and ctxFvgs.size() > 0
+        for i = ctxFvgs.size() - 1 to 0
+            CtxFvg f = ctxFvgs.get(i)
+            if bar_index > f.createdBar
+                // Touched: price entered the zone at all. Filled: price has
+                // traded all the way through, which is the reading that
+                // leaves only unmitigated imbalance on the chart.
+                bool gone = allFvgRemove == "Touched"
+                     ? low <= f.top and high >= f.bottom
+                     : (f.isBull ? low <= f.bottom : high >= f.top)
+                if gone
+                    box.delete(f.bx)
+                    ctxFvgs.remove(i)
+                // Still unmitigated: carry the box forward to the current bar,
+                // so its width reads as "how long this gap has gone unfilled"
+                // rather than a fixed stub.
+                if not gone and bar_index > f.createdBar + fvgExtendBars
+                    box.set_right(f.bx, bar_index)
+
     if showAllFvg and bar_index > 2
         bool ctxBull = low > high[2]
         bool ctxBear = high < low[2]
