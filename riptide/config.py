@@ -95,10 +95,23 @@ log = logging.getLogger("riptide")
 
 
 def build_id() -> str:
-    """Short commit the running file came from, written by deploy/update.sh."""
-    try:
-        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "BUILD")
-        with open(p) as f:
-            return f.read().strip()[:12] or "unknown"
-    except OSError:
-        return "unknown"
+    """
+    Short commit the running code came from, written by deploy/update.sh.
+
+    update.sh writes BUILD into the application directory, beside
+    riptide_bot.py — one level above this package. The candidates cover that,
+    a copy inside the package, and the working directory systemd starts us in,
+    so the lookup survives being moved or run from a checkout.
+    """
+    pkg = os.path.dirname(os.path.abspath(__file__))
+    for path in (os.path.join(os.path.dirname(pkg), "BUILD"),
+                 os.path.join(pkg, "BUILD"),
+                 "BUILD"):
+        try:
+            with open(path) as f:
+                value = f.read().strip()[:12]
+        except OSError:
+            continue
+        if value:
+            return value
+    return "unknown"
