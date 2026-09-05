@@ -10,8 +10,8 @@ import time
 import aiohttp
 
 from . import telegram as tg
-from .config import (BAR_SECONDS, INTERVAL, SCAN_ON_START, TG_COMMANDS,
-                     build_id, log)
+from .config import (BAR_SECONDS, ENTRY_INTERVAL, INTERVAL, SCAN_ON_START,
+                     TG_COMMANDS, build_id, log)
 from .commands import command_loop
 from .exchange import list_symbols
 from .scanner import cycle, scan_loop
@@ -26,6 +26,13 @@ async def main() -> None:
     if INTERVAL not in BAR_SECONDS:
         log.error("bad interval %s", INTERVAL)
         return
+    if ENTRY_INTERVAL and ENTRY_INTERVAL not in BAR_SECONDS:
+        log.error("bad entry interval %s", ENTRY_INTERVAL)
+        return
+    if ENTRY_INTERVAL and BAR_SECONDS[ENTRY_INTERVAL] >= BAR_SECONDS[INTERVAL]:
+        log.error("entry interval %s is not faster than %s; the point is to "
+                  "place entries on a lower timeframe", ENTRY_INTERVAL, INTERVAL)
+        return
     db = db_init()
 
     async with aiohttp.ClientSession() as sess:
@@ -33,8 +40,10 @@ async def main() -> None:
         if not symbols:
             log.error("no symbols; check MEXC_BASE or RIPTIDE_SYMBOLS")
             return
-        log.info("riptide up: %d symbols, %s bars, build %s",
-                 len(symbols), INTERVAL, build_id())
+        log.info("riptide up: %d symbols, %s bars%s, build %s",
+                 len(symbols), INTERVAL,
+                 f" + {ENTRY_INTERVAL} entries" if ENTRY_INTERVAL else "",
+                 build_id())
         await tg.tg_send(sess, f"Riptide scanner started\n"
                                f"{len(symbols)} symbols · {INTERVAL} bars")
 

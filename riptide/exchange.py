@@ -93,10 +93,15 @@ async def filter_by_turnover(sess, symbols: list[str]) -> list[str]:
     return kept
 
 
-async def fetch_candles(sess, symbol: str) -> list[Candle]:
-    step = BAR_SECONDS[INTERVAL]
+async def fetch_candles(sess, symbol: str, interval: str = "") -> list[Candle]:
+    """Closed candles, newest last. Defaults to the structure timeframe."""
+    interval = interval or INTERVAL
+    if interval not in BAR_SECONDS:
+        log.warning("unknown interval %r, falling back to %s", interval, INTERVAL)
+        interval = INTERVAL
+    step = BAR_SECONDS[interval]
     now = int(time.time())
-    params = {"interval": INTERVAL, "start": now - LOOKBACK * step, "end": now}
+    params = {"interval": interval, "start": now - LOOKBACK * step, "end": now}
     d = await get_json(sess, f"{BASE}/api/v1/contract/kline/{symbol}", params)
     if not d or not d.get("data"):
         return []

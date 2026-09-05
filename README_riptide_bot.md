@@ -60,6 +60,35 @@ the systemd unit's `ExecStart` never changes.
 `tg_send` into their own namespace, so a harness can substitute the sender in
 one place — that is how `deploy/flood_test.py` throttles it.
 
+## Multi-timeframe entries
+
+`RIPTIDE_ENTRY_INTERVAL` splits where structure is found from where the entry
+is placed. The pool, the sweep and the shift still come from
+`RIPTIDE_INTERVAL`; once the shift confirms, the entry moves to the first gap
+on the lower timeframe, with the stop on that timeframe's own structure — the
+extreme reached between the shift and the gap.
+
+The problem it solves: a Min30 gap sits where price has already been, and
+often does not return. Over 12.5 days on 20 symbols:
+
+| Entry | Filled within 5h | Of fills, reached 1R |
+|---|---|---|
+| Min30 gap + Min30 stop | 45% | 48% |
+| Min15 gap + Min15 stop | **85%** | 51% |
+
+So roughly twice as many setups turn into a 1R win, and the tighter stop
+(median 0.68× the distance) does not cost hit rate. The scan also wakes on the
+faster bar, which halves the confirmation delay.
+
+A setup with no usable gap on the lower timeframe keeps its higher-timeframe
+entry rather than being dropped — 14 of 239 in the sample. Alerts show which,
+as `Min30 → Min15` in the header.
+
+**Read those numbers carefully.** One market regime, under a hundred filled
+samples per variant, no fees, no slippage, and no break-even rule. Enough to
+justify running it, not enough to size a position on. `riptide/mtf.py` carries
+the same caveat at the top.
+
 ## Two kinds of alert
 
 **Sweep** — the liquidity grab on its own, the X on the chart, sent on the
@@ -177,6 +206,7 @@ them there, not in the engine body.
 |---|---|---|
 | `RIPTIDE_INTERVAL` | `Min30` | `Min15`, `Min30`, `Min60`, `Hour4` |
 | `RIPTIDE_SYMBOLS` | all USDT perps | comma separated |
+| `RIPTIDE_ENTRY_INTERVAL` | unset | lower timeframe for entries. Structure stays on `RIPTIDE_INTERVAL` |
 | `RIPTIDE_FRESH_BARS` | `3` | only alert if the shift is this recent |
 | `RIPTIDE_SCAN_ON_START` | `1` | scan immediately on startup instead of waiting for the next close |
 | `RIPTIDE_TG_RETRIES` | `4` | Telegram send attempts. Only provably-undelivered failures are retried |

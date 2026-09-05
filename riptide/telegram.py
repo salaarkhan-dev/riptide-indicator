@@ -14,8 +14,8 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 
-from .config import (CFG, DISPLAY_TZ, INTERVAL, TG_CHAT, TG_RETRIES, TG_TOKEN,
-                     log)
+from .config import (CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL, TG_CHAT,
+                     TG_RETRIES, TG_TOKEN, log)
 from .engine import Setup, Sweep
 
 async def tg_send(sess, text: str) -> bool:
@@ -130,8 +130,9 @@ def setup_message(s: Setup) -> str:
     t3 = s.entry + sign * s.risk * 3
     riskpct = s.risk / s.entry * 100 if s.entry else 0
     tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{s.symbol.replace('_', '')}.P"
+    tf = f"{INTERVAL} → {ENTRY_INTERVAL}" if s.entry_tf == "LTF" else INTERVAL
     return (
-        f"<b>{side}  {s.symbol}</b>  ({INTERVAL})\n"
+        f"<b>{side}  {s.symbol}</b>  ({tf})\n"
         f"{s.src} liquidity @ {fmt(s.level)}"
         f"{f' · {s.pivots} swings' if s.src == 'Pivot' else ''}\n\n"
         f"Entry  <code>{fmt(s.entry)}</code>\n"

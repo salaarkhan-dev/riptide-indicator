@@ -67,6 +67,7 @@ class Setup:
                            # trail_grab_extreme moves this to the extreme, and
                            # it is what the stop is measured from.
     fvg_time: int = 0      # bar the entry gap closed on
+    entry_tf: str = "HTF"  # "LTF" once mtf.refine has moved the entry
 
 
 @dataclass

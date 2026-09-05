@@ -9,10 +9,12 @@ from __future__ import annotations
 import asyncio
 import time
 
+from . import mtf
 from . import telegram as tg
-from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CONCURRENCY, FRESH_BARS,
-                     INTERVAL, SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC, log)
-from .engine import Sweep, run_engine
+from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
+                     ENTRY_INTERVAL, FRESH_BARS, INTERVAL, SCAN_INTERVAL,
+                     SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC, log)
+from .engine import Sweep, atr_series, run_engine
 from .exchange import fetch_candles, list_symbols
 from .storage import (already_sent, first_run, meta_get, meta_set, record,
                       record_sweep, sweep_already_sent, sweep_sig, sig_id)
@@ -23,13 +25,31 @@ async def scan_symbol(sess, sem, symbol):
         cs = await fetch_candles(sess, symbol)
         if len(cs) < 100:
             return [], []
+        # Structure always comes from the higher timeframe; only the entry can
+        # move. Fetched inside the semaphore so the pair counts as one slot.
+        ltf = await fetch_candles(sess, symbol, ENTRY_INTERVAL) \
+            if ENTRY_INTERVAL else []
+
         sweeps: list[Sweep] = [] if SWEEP_ALERTS else None
         try:
             setups = run_engine(symbol, cs, sweeps_out=sweeps)
-            return setups, (sweeps or [])
         except Exception as e:
             log.warning("engine failed on %s: %s", symbol, e)
             return [], []
+
+        if ltf:
+            atr = atr_series(cs, CFG.atr_len)
+            refined = []
+            for s in setups:
+                # A setup with no usable gap on the lower timeframe keeps its
+                # higher-timeframe entry rather than being dropped.
+                r = None
+                if 0 <= s.mss_bar < len(atr):
+                    r = mtf.refine(s, ltf, atr[s.mss_bar])
+                refined.append(r or s)
+            setups = refined
+
+        return setups, (sweeps or [])
 
 
 async def cycle(sess, db, symbols):
@@ -91,7 +111,7 @@ def seconds_to_next_close(step: int, pad: int = 10) -> float:
 
 
 async def scan_loop(sess, db, state) -> None:
-    step = BAR_SECONDS[INTERVAL]
+    step = BAR_SECONDS[SCAN_INTERVAL]
     last_symbol_refresh = time.time()
     # Persisted, so "alive" means a day has genuinely passed rather than
     # "the process restarted". Survives updates; a deleted riptide.db
