@@ -74,6 +74,8 @@ class Setup:
                            # scanner, never by the engine.
     last_price: float = 0.0  # latest close, for the alert footer only. Also
                              # set by the scanner; the engine never reads it.
+    confluence: int = 0      # how many of {order block, breaker} share the
+                             # gap's price area. 0-2. See confluence_of.
 
     @property
     def detected_time(self) -> int:
@@ -135,6 +137,8 @@ class Early:
     bars_from_sweep: int
     pools: int = 0         # how many separate pools raided into this one gap.
                            # Set when duplicates are collapsed, not by detection.
+    confluence: int = 0    # order-block agreement only, 0-1: with no shift
+                           # there is no breaker to agree with.
     trend_dir: int = 0
     last_price: float = 0.0   # display only, as on Setup
 
@@ -225,6 +229,63 @@ def entry_of(is_long: bool, top: float, bot: float, mode: str) -> float:
     if mode == "distal":
         return bot if is_long else top
     return top if is_long else bot
+
+
+def last_opposing(cs: list[Candle], before: int, is_bull: bool,
+                  max_back: int = 20) -> int:
+    """
+    Index of the last candle closing against the move, scanning back from
+    `before`. For a bullish leg that is the last down-close candle — the
+    order block. -1 if none within max_back.
+    """
+    for k in range(before, max(-1, before - max_back), -1):
+        if is_bull and cs[k].c < cs[k].o:
+            return k
+        if not is_bull and cs[k].c > cs[k].o:
+            return k
+    return -1
+
+
+def ranges_overlap(a1: float, a2: float, b1: float, b2: float) -> bool:
+    lo1, hi1 = min(a1, a2), max(a1, a2)
+    lo2, hi2 = min(b1, b2), max(b1, b2)
+    return not (lo1 >= hi2 or hi1 <= lo2)
+
+
+def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
+                  grab_bar: int = -1, mss_bar: int = -1) -> int:
+    """
+    How many of {order block, breaker} sit in the same price area as the gap.
+
+    Observation only — it never changes which setups exist or what they enter
+    at. Both zones were separately tested as ALTERNATIVE entries and both came
+    back flat; the open question is whether their AGREEMENT with the gap grades
+    a setup, which is a different thing and is what this counts.
+
+      order block  the last opposing candle before the impulse that made the gap
+      breaker      the last opposing candle at or before the extreme the shift
+                   broke. Needs an MSS, so an early signal can only score 0-1.
+
+    Measured, 1982 setups: 0 of 2 scored +0.043, 2 of 2 scored +0.106 — but
+    +1.4 SE, and NOT monotonic (1 of 2 came in below 0 of 2). Not a finding.
+    Recorded on every alert so /stats can settle it out of sample.
+    """
+    if fvg_bar < 2 or fvg_bar >= len(cs):
+        return 0
+    top, bot = ((cs[fvg_bar].l, cs[fvg_bar - 2].h) if is_bull
+                else (cs[fvg_bar - 2].l, cs[fvg_bar].h))
+    n = 0
+    ob = last_opposing(cs, fvg_bar - 1, is_bull)
+    if ob >= 0 and ranges_overlap(top, bot, cs[ob].h, cs[ob].l):
+        n += 1
+    if 0 <= grab_bar < mss_bar:
+        rng = range(grab_bar, mss_bar)
+        ext = (max(rng, key=lambda x: cs[x].h) if is_bull
+               else min(rng, key=lambda x: cs[x].l))
+        brk = last_opposing(cs, ext, is_bull)
+        if brk >= 0 and ranges_overlap(top, bot, cs[brk].h, cs[brk].l):
+            n += 1
+    return n
 
 
 def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
@@ -483,7 +544,10 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                                 fvg_bar=i, fvg_time=cs[i].t,
                                 anchor_time=cs[c.oldest_bar].t,
                                 pivots=len(c.prices) or 1,
-                                bars_from_sweep=i - c.sweep_bar))
+                                bars_from_sweep=i - c.sweep_bar,
+                                # No shift yet, so no breaker to agree with:
+                                # the order block is the only vote available.
+                                confluence=confluence_of(cs, i, is_bull)))
                             c.early_done = True
 
             if c.mss and not c.done and not c.expired:
@@ -500,7 +564,9 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                         mss_time=cs[c.mss_bar].t, anchor_time=cs[c.oldest_bar].t,
                         pivots=len(c.prices) or 1,
                         sweep_time=cs[c.sweep_bar].t if c.sweep_bar >= 0 else 0,
-                        grab_time=cs[c.grab_bar].t, fvg_time=cs[fvg_bar].t))
+                        grab_time=cs[c.grab_bar].t, fvg_time=cs[fvg_bar].t,
+                        confluence=confluence_of(cs, fvg_bar, not c.is_high,
+                                                 c.grab_bar, c.mss_bar)))
                     c.done = True
                 elif i - c.mss_bar >= cfg.max_bars_after_mss:
                     c.done = True

@@ -172,6 +172,48 @@ that is not readable. Reverted: the count reduction is certain, the quality
 claim is not, and suppressing them would foreclose the live measurement that
 could settle it.
 
+## Confluence — the one open question
+
+The tests above asked whether an Order Block or Breaker is a *better entry
+price* than the gap. Flat, three times over. They never asked whether the zones
+**agreeing** grades a setup, which is a different question and the more natural
+use for them: keep the shipped entry, and score the alert by how many other
+zones sit in the same price area.
+
+1982 setups that had both an order block and a breaker:
+
+| zones agreeing with the gap | all setups | trend-aligned | 3R |
+|---|---|---|---|
+| 0 of 2 | +0.043 ± 0.019 (1232) | +0.082 ± 0.028 | +0.032 ± 0.030 |
+| 1 of 2 | +0.035 ± 0.032 (388) | +0.104 ± 0.045 | +0.042 ± 0.051 |
+| 2 of 2 | **+0.106 ± 0.039** (362) | **+0.170 ± 0.057** | +0.064 ± 0.063 |
+
+2 minus 0 is **+1.4 SE**. Taken alone:
+
+| | agrees | does not | |
+|---|---|---|---|
+| Order block overlaps the gap | +0.096 ± 0.030 (542) | +0.037 ± 0.018 (1440) | +1.7 SE |
+| Breaker overlaps the gap | +0.067 ± 0.030 (570) | +0.047 ± 0.018 (1412) | +0.6 SE |
+
+And by how far the order block sits from the gap entry, in ATR: Q1 (0.00–0.24)
++0.090, Q2 +0.045, Q3 (0.51–0.99) +0.017, Q4 +0.059.
+
+**Not a finding.** +1.4 to +1.7 SE across four framings is roughly what the
+maximum of four tests produces from noise, and the primary is **not monotonic**
+— 1 of 2 came in *below* 0 of 2, which a real effect should not do. The
+trend-aligned column is monotonic and the OB-distance quartiles agree with the
+OB-overlap result, so two roughly independent framings point the same way. That
+is more than any rejected variant above managed, and still not enough.
+
+So it ships the only way an uncertain signal should: **as a label, never as a
+filter.** Every alert carries `●●` / `●○` / `○○`, no setup is suppressed, and
+`outcomes.confluence` lets `/stats` split live results by it. If the effect is
+real it will show up out of sample; if it is the fourth false positive on this
+page, nothing was lost but a line of text.
+
+Note also that the breaker contributes almost nothing on its own (+0.6 SE) —
+if this survives, the order block is doing the work.
+
 ## What this adds up to
 
 Tested: six engine parameters, two entry timeframes, five exit families, four
@@ -181,7 +223,10 @@ inside noise.** One thing has ever separated, and it keeps replicating.
 
 The reasonable conclusion is not that these need testing more carefully. It is
 that the structural variations genuinely do not matter much on this data, and
-the remaining headroom is not in another entry type.
+the remaining headroom is not in another entry *price*.
+
+Zone confluence is the one live candidate, at +1.4 SE — shipped as a score
+rather than a filter, precisely because that is not enough to act on.
 
 ## The standing caveat
 

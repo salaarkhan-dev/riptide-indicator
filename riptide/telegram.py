@@ -196,6 +196,30 @@ def _footer(when: int, price: float, tv_symbol: str) -> str:
     return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
 
 
+def _zones(confluence: int, of: int) -> str:
+    """
+    How many other zones sit where the gap does — an order block, and on a
+    confirmed setup a breaker too.
+
+    Shown, never acted on. Both were tested as alternative entries and came
+    back flat; their AGREEMENT with the gap scored +0.106 against +0.043 at
+    2 of 2, which is +1.4 SE and not monotonic. That is a hint, not a finding,
+    so it goes on the alert to be judged and into /stats to be settled.
+    """
+    if not of:
+        return ""
+    dots = "●" * confluence + "○" * (of - confluence)
+    if confluence == of and of == 2:
+        tail = "gap, order block and breaker agree"
+    elif confluence == 0:
+        tail = "gap only"
+    elif of == 1:
+        tail = "order block agrees"
+    else:
+        tail = "one other zone agrees"
+    return f"{dots} <i>{tail}</i>"
+
+
 def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
     """`pools` > 1 means several separate pools were raided into the same gap
     — worth saying, since it is why one alert stands for what the engine saw
@@ -240,6 +264,7 @@ def setup_message(s: Setup) -> str:
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         note or None,
+        _zones(s.confluence, 2) or None,
         _pool(s.src, s.level, s.pivots),
         _footer(s.detected_time + gap_step, s.last_price, s.symbol),
     ) if x is not None)
@@ -262,6 +287,7 @@ def early_message(s: Early) -> str:
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         note or None,
+        _zones(s.confluence, 1) or None,
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
     ) if x is not None)

@@ -153,6 +153,14 @@ def stats_text(db) -> str:
                  f"<code>{_bucket_line('  with trend', k['aligned'])}</code>\n"
                  f"<code>{_bucket_line('  against', k['against'])}</code>\n")
 
+    z = s.get("zones") or {}
+    if any(b["setups"] for b in z.values()):
+        body += ("\n<b>by zone agreement</b>  <i>(gap + order block + breaker)</i>\n")
+        for n in (2, 1, 0):
+            b = z.get(n)
+            if b and b["setups"]:
+                body += f"<code>{_bucket_line('  ' + '●'*n + '○'*(2-n), b)}</code>\n"
+
     body += (f"\n<b>both together</b>\n"
              f"<code>{_bucket_line('  all', a)}</code>\n"
              f"<code>{_bucket_line('  with trend', s['aligned'])}</code>\n"

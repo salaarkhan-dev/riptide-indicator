@@ -50,7 +50,7 @@ RESOLVED = (WON, LOST, TIMEOUT)
 
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
-            "r, mfe_r, mae_r, last_bar, updated_at, kind")
+            "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence")
 
 CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
@@ -65,7 +65,7 @@ def init(db) -> None:
         status TEXT, fill_time INT, exit_time INT,
         r REAL, mfe_r REAL, mae_r REAL,
         last_bar INT, updated_at INT,
-        kind TEXT DEFAULT 'setup')""")
+        kind TEXT DEFAULT 'setup', confluence INT DEFAULT 0)""")
     # Databases created before the no-shift strategy existed have no `kind`.
     # Everything already in them came from the confirmed path, which is what
     # the default backfills.
@@ -73,6 +73,9 @@ def init(db) -> None:
     if "kind" not in have:
         db.execute("ALTER TABLE outcomes ADD COLUMN kind TEXT DEFAULT 'setup'")
         log.info("outcomes: added the kind column, existing rows are 'setup'")
+    if "confluence" not in have:
+        db.execute("ALTER TABLE outcomes ADD COLUMN confluence INT DEFAULT 0")
+        log.info("outcomes: added the confluence column, existing rows are 0")
     db.execute("CREATE INDEX IF NOT EXISTS outcomes_live "
                "ON outcomes(symbol, status)")
     db.commit()
@@ -119,12 +122,13 @@ def arm(db, sid: str, s, from_bar: int | None = None,
     start = from_bar if from_bar is not None \
         else max(detected, last_closed_bar(now))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
                 # Early has no shift; its sweep bar is the comparable anchor.
                 getattr(s, "mss_time", 0) or s.sweep_time, detected, now,
-                PENDING, 0, 0, None, 0.0, 0.0, start, now, kind))
+                PENDING, 0, 0, None, 0.0, 0.0, start, now, kind,
+                getattr(s, "confluence", 0)))
     db.commit()
 
 
@@ -268,20 +272,20 @@ def _bucket(rows) -> dict:
 
 def summary(db, kind: str | None = None) -> dict:
     """Pass a kind to describe one strategy alone; omit it for both together."""
-    sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind "
-           "FROM outcomes")
+    sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind, "
+           "confluence FROM outcomes")
     rows = (db.execute(sql + " WHERE kind=?", (kind,)).fetchall() if kind
             else db.execute(sql).fetchall())
     if not rows:
         return {"armed": 0}
 
     aligned, against = [], []
-    for st, r, td, side, _, _, _, _ in rows:
+    for st, r, td, side, _, _, _, _, _ in rows:
         if not td:
             continue
         (aligned if (td > 0) == (side == "long") else against).append((st, r))
 
-    filled = [(mfe, mae) for st, _, _, _, mfe, mae, _, _ in rows
+    filled = [(mfe, mae) for st, _, _, _, mfe, mae, _, _, _ in rows
               if st in RESOLVED]
     return {
         "armed": len(rows),
@@ -295,4 +299,8 @@ def summary(db, kind: str | None = None) -> dict:
         "against": _bucket(against),
         "mfe": statistics.fmean([m for m, _ in filled]) if filled else 0.0,
         "mae": statistics.fmean([m for _, m in filled]) if filled else 0.0,
+        # The open question the confluence score exists to answer, split so
+        # live data can settle what a 41-day backtest could only hint at.
+        "zones": {n: _bucket([(r[0], r[1]) for r in rows if r[8] == n])
+                  for n in (0, 1, 2)},
     }
