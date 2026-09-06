@@ -57,6 +57,11 @@ the systemd unit's `ExecStart` never changes.
 | `riptide/commands.py` | Telegram command handling |
 | `riptide/app.py` | startup and task supervision |
 
+Every strategy question tested on this project, with results and
+verdicts, is recorded in **[MEASUREMENTS.md](MEASUREMENTS.md)** — most of
+them came back negative, and a negative result nobody writes down gets
+re-tested in a month.
+
 `scanner` and `commands` import `telegram` as a module rather than pulling
 `tg_send` into their own namespace, so a harness can substitute the sender in
 one place — that is how `deploy/flood_test.py` throttles it.
@@ -144,18 +149,22 @@ instead of 50%. At a 1R target that is most of the edge.
 `/stats` reports the two separately, so live data settles this rather than one
 41-day window.
 
-Measured over 12.5 days on 20 symbols, sweeps outnumber setups roughly 5:1,
-and the share that goes on to produce a setup varies sharply by pool type:
+Sweeps outnumber setups roughly 5:1, and the share that goes on to produce a
+setup varies sharply by pool type. Measured over 41.6 days on 50 symbols:
 
-| Pool | Sweeps | Setups | Converts | Sweeps/day |
+| Pool | Sweeps | Setups | Converts | R per setup |
 |---|---|---|---|---|
-| Pivot | 767 | 213 | **28%** | 61.6 |
-| Day | 353 | 32 | 9% | 28.3 |
-| Week | 50 | 1 | 2% | 4.0 |
+| Pivot | 6114 | 1686 | **28%** | +0.048 ± 0.017 |
+| Day | 3286 | 311 | 9% | +0.094 ± 0.035 |
+| Week | 295 | **0** | **0%** | — |
 
-The intuition that daily and weekly levels are the significant ones is not
-what the numbers show. Keep that in mind if you ever narrow
-`RIPTIDE_SWEEP_SRC`; it is unset by default, which alerts on all of them.
+The intuition that daily and weekly levels are the significant ones is not what
+the numbers show. Note also that converting often and scoring well are
+different things: Pivot converts three times as often as Day and scores no
+better per setup (+1.2 SE apart, which is nothing).
+
+**Weekly pools are switched off** in `riptide.conf` — 295 sweeps, zero setups.
+See [MEASUREMENTS.md](MEASUREMENTS.md).
 
 Expect roughly 95 sweep messages a day on 20 symbols, against 20 setups. Cut
 the symbol list, not the source filter, if that is too many.
