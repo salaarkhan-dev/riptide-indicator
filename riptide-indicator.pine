@@ -70,8 +70,8 @@ usePivotLiq   = input.bool(true,  "Swing highs / lows", group = gSrc,
      tooltip = "The main source. Two or more swing points at roughly the same price form a liquidity pool — a shelf of stop orders. The indicator waits for price to run that shelf and then reverse.")
 useDailyLiq   = input.bool(true,  "Yesterday's high / low", group = gSrc,
      tooltip = "Treats the previous day's extremes as liquidity in their own right. These are watched by a lot of traders, so they get raided often.")
-useWeeklyLiq  = input.bool(true,  "Last week's high / low", group = gSrc,
-     tooltip = "Same idea on a weekly scale. Fewer signals, but the levels carry more weight.")
+useWeeklyLiq  = input.bool(false, "Last week's high / low", group = gSrc,
+     tooltip = "Same idea on a weekly scale. Off by default, and off in the alert bot: over 41.6 days weekly levels were raided 295 times and produced zero complete setups — price takes the level and simply keeps going rather than shifting structure. Left as a switch because 0 of 295 bounds the rate, it does not prove it is zero in a regime this window did not contain.")
 useSessionLiq = input.bool(false, "Session highs / lows", group = gSrc,
      tooltip = "Uses the high and low of each finished session below. Leave off until the timezone in section 2 matches how you actually trade — otherwise the levels are arbitrary.")
 showLongs     = input.bool(true,  "Show long setups",  inline = "dir", group = gSrc)
@@ -265,9 +265,9 @@ maxBarsAfterGrab = input.int(50, "Cancel if no structure break within (bars)", m
      tooltip = "Counted from the first raid of the level. Without a limit, an old raid could produce an unrelated signal hours later.")
 mssCooldownBars  = input.int(5, "Min bars between same-direction signals", minval = 0, group = gAdv,
      tooltip = "Stops two overlapping pools printing what is really the same trade twice.")
-fvgScanFrom      = input.string("Grab candle", "Look for entry zones from",
+fvgScanFrom      = input.string("MSS candle only", "Look for entry zones from",
      options = ["Grab candle", "MSS candle only"], group = gAdv,
-     tooltip = "Grab candle marks every imbalance across the whole move from the raid to the structure break, including those formed before the break itself. MSS candle only looks at the break bar onwards.")
+     tooltip = "MSS candle only (default, and what the alert bot runs) looks at the break bar onwards. Grab candle also marks imbalances formed BEFORE the break, anywhere back to the raid — and because the stop is pinned at the raid extreme, newer gaps then fail the risk cap and the search walks back until one fits, which can hand you an entry from many bars ago, far below market. Measured over 41.6 days the two score the same per setup, but MSS-only fills 64-75% of the time against 40-60%: fewer entries left hanging where price never returns.")
 maxFvgPerSetup   = input.int(2, "Max entry zones per setup", minval = 1, maxval = 10, group = gAdv)
 skipOverlappingFvg = input.bool(true, "Skip overlapping zones", group = gAdv,
      tooltip = "In a fast move consecutive bars often gap over each other; this keeps the first and drops the stack.")

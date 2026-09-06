@@ -166,11 +166,13 @@ class Cfg:
     #   "grab"  every imbalance across the whole move from the raid to the
     #           break, including gaps that formed BEFORE the break
     #   "mss"   the break bar onwards only
-    # The Pine ships "Grab candle", so that is the default here too. Note what
-    # it costs: the stop is pinned at the raid extreme, so as price runs the
-    # newer gaps fail max_risk_atr and the search keeps walking back until one
-    # fits — which can hand back an entry from many bars ago, far below market.
-    fvg_scan_from: str = "grab"           # grab | mss
+    # "grab" was the original default, matching the reference indicator, and it
+    # has a failure mode: the stop is pinned at the raid extreme, so as price
+    # runs, newer gaps fail max_risk_atr and the search walks back until one
+    # fits — handing back an entry from many bars ago, far below market. The
+    # two score the same per setup (+0.045 against +0.042 R), but "mss" fills
+    # 64-75% of the time against 40-60%. Both defaults now say "mss".
+    fvg_scan_from: str = "mss"            # grab | mss
     # No-shift entry: how many bars after the raid to keep watching for the
     # first imbalance. Has no counterpart in the Pine — this pattern is not in
     # the reference indicator. See Early in engine.py.
@@ -179,7 +181,9 @@ class Cfg:
     entry_mode: str = "proximal"          # proximal | mid | distal
     use_pivot: bool = True
     use_daily: bool = True
-    use_weekly: bool = True
+    # Off by default: 295 weekly raids produced zero setups in 41.6 days. See
+    # "Pool source" in MEASUREMENTS.md — it is a switch, not a deletion.
+    use_weekly: bool = False
     be_arm_r: float = 1.5
     be_lock_r: float = 0.1     # break-even stop locks in this much,
                                # so a 'scratch' still covers fees.
