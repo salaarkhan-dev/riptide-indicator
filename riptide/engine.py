@@ -288,6 +288,47 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
     return n
 
 
+# Grade bands, read off the measured trend x confluence cells rather than
+# invented. 50 symbols, 41.6 days, 1R target, R per setup:
+#
+#                 0 zones            1 zone             2 zones
+#   with trend    +0.083 (620)       +0.109 (188)       +0.170 (173)
+#   against       +0.001 (625)       -0.025 (204)       +0.047 (189)
+#
+# Every with-trend cell beats every against-trend cell, and within with-trend
+# the confluence ordering is monotonic. That is the ladder below.
+#
+# READ THE STEPS HONESTLY. Only the trend step is established: +0.110 ± 0.029,
+# +3.8 SE, replicated across two windows and two symbol sets. A+ over B is
+# +0.087 ± 0.064, which is +1.4 SE and not significant — and against the trend
+# the confluence ordering breaks down entirely (1 zone scores below 0). So B
+# versus C is a real distinction; A+ versus A versus B is a hypothesis being
+# tracked live, and none of the bands is a prediction about one trade.
+GRADES = {
+    ("with", 2): ("A+", "with the trend · gap, order block and breaker agree"),
+    ("with", 1): ("A",  "with the trend · gap and order block agree"),
+    ("with", 0): ("B",  "with the trend"),
+    ("against", 2): ("C", "AGAINST the trend · zones agree"),
+    ("against", 1): ("C", "AGAINST the trend"),
+    ("against", 0): ("C", "AGAINST the trend"),
+}
+
+
+def grade_of(trend_dir: int, is_long: bool, confluence: int) -> tuple[str, str]:
+    """
+    (letter, why) for one signal. Presentation only — nothing decides on it,
+    and no signal is suppressed by it.
+
+    Returns ("?", ...) when the higher-timeframe trend is unknown, which is
+    honest: the axis carrying almost all of the separation is missing, so
+    there is nothing to grade on.
+    """
+    if not trend_dir:
+        return "?", "trend unknown"
+    side = "with" if (trend_dir > 0) == is_long else "against"
+    return GRADES[(side, max(0, min(2, confluence)))]
+
+
 def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                sweeps_out: list | None = None,
                early_out: list | None = None) -> list[Setup]:

@@ -214,6 +214,43 @@ page, nothing was lost but a line of text.
 Note also that the breaker contributes almost nothing on its own (+0.6 SE) —
 if this survives, the order block is doing the work.
 
+## The grade on each alert
+
+Two lines on the alert — a trend note and a zone count — asked the reader to
+combine them. They are now one graded line, with the bands read off the joint
+cells rather than invented:
+
+| | 0 zones | 1 zone | 2 zones |
+|---|---|---|---|
+| **with the trend** | +0.083 (620) | +0.109 (188) | **+0.170 (173)** |
+| **against** | +0.001 (625) | −0.025 (204) | +0.047 (189) |
+
+Every with-trend cell beats every against-trend cell, and within with-trend the
+confluence ordering is monotonic — which is what makes a ladder defensible:
+
+| grade | | share of alerts | measured |
+|---|---|---|---|
+| 🟢 **A+** | with the trend · gap, order block and breaker agree | 9% | +0.170 ± 0.057 |
+| 🟢 **A** | with the trend · gap and order block agree | 9% | +0.109 ± 0.045 |
+| 🟡 **B** | with the trend | 31% | +0.083 ± 0.028 |
+| 🟠 **C** | against the trend | 50% | +0.008 |
+| ⚪ **?** | trend unknown | rare | — |
+
+**Read the steps honestly.** Only the **B/C step is established** — that is the
+trend filter, +0.110 ± 0.029, +3.8 SE, replicated three times. **A+ over B is
++0.087 ± 0.064, which is +1.4 SE and not significant**, and against the trend
+the confluence ordering breaks down entirely (1 zone scores *below* 0 zones).
+
+So B versus C is a real distinction; A+ versus A versus B is a hypothesis being
+tracked live. Four bands rather than ten because the data cannot resolve ten,
+and no band is a prediction about any single trade — C averages roughly zero,
+not a loss.
+
+Nothing is suppressed by grade. `/stats` reports by grade so live data settles
+the top of the ladder, and grades are computed from the stored `trend_dir` and
+`confluence` columns rather than stored themselves — so revising the ladder
+re-grades history instead of stranding it.
+
 ## What this adds up to
 
 Tested: six engine parameters, two entry timeframes, five exit families, four

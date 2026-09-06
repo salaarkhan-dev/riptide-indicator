@@ -17,7 +17,7 @@ import aiohttp
 
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TREND_INTERVAL, log)
-from .engine import Early, Setup, Sweep
+from .engine import Early, Setup, Sweep, grade_of
 
 async def tg_send(sess, text: str) -> bool:
     """
@@ -196,28 +196,18 @@ def _footer(when: int, price: float, tv_symbol: str) -> str:
     return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
 
 
-def _zones(confluence: int, of: int) -> str:
+def _grade(trend_dir: int, is_long: bool, confluence: int) -> str:
     """
-    How many other zones sit where the gap does — an order block, and on a
-    confirmed setup a breaker too.
+    One line replacing the separate trend and zone lines: a letter to triage
+    on, and the reason it got that letter so the letter is never a black box.
 
-    Shown, never acted on. Both were tested as alternative entries and came
-    back flat; their AGREEMENT with the gap scored +0.106 against +0.043 at
-    2 of 2, which is +1.4 SE and not monotonic. That is a hint, not a finding,
-    so it goes on the alert to be judged and into /stats to be settled.
+    The bands come from measured cells (see GRADES in engine.py) and only the
+    B/C step is established. Deliberately four bands and not ten — the data
+    cannot resolve ten.
     """
-    if not of:
-        return ""
-    dots = "●" * confluence + "○" * (of - confluence)
-    if confluence == of and of == 2:
-        tail = "gap, order block and breaker agree"
-    elif confluence == 0:
-        tail = "gap only"
-    elif of == 1:
-        tail = "order block agrees"
-    else:
-        tail = "one other zone agrees"
-    return f"{dots} <i>{tail}</i>"
+    letter, why = grade_of(trend_dir, is_long, confluence)
+    dot = {"A+": "🟢", "A": "🟢", "B": "🟡", "C": "🟠", "?": "⚪"}[letter]
+    return f"{dot} <b>{letter}</b>  <i>{why}</i>"
 
 
 def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
@@ -257,14 +247,12 @@ def setup_message(s: Setup) -> str:
     # The gap sits on whichever timeframe produced the entry.
     gap_step = BAR_SECONDS[ENTRY_INTERVAL] if s.entry_tf == "LTF" \
         else BAR_SECONDS[INTERVAL]
-    note = trend_note(s.trend_dir, s.is_long)
     return "\n".join(x for x in (
         _headline("🎯 <b>CONFIRMED</b>", s.is_long, s.symbol, tf),
         "<i>sweep → shift → FVG</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        note or None,
-        _zones(s.confluence, 2) or None,
+        _grade(s.trend_dir, s.is_long, s.confluence),
         _pool(s.src, s.level, s.pivots),
         _footer(s.detected_time + gap_step, s.last_price, s.symbol),
     ) if x is not None)
@@ -279,15 +267,13 @@ def early_message(s: Early) -> str:
     rather than a whole leg back.
     """
     bars = s.bars_from_sweep
-    note = trend_note(s.trend_dir, s.is_long)
     return "\n".join(x for x in (
         _headline("⚡ <b>EARLY</b>", s.is_long, s.symbol, tf_label(INTERVAL)),
         f"<i>sweep → FVG · no shift · gap {bars} "
         f"bar{'' if bars == 1 else 's'} after the raid</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        note or None,
-        _zones(s.confluence, 1) or None,
+        _grade(s.trend_dir, s.is_long, s.confluence),
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
     ) if x is not None)

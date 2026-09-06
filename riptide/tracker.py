@@ -38,7 +38,7 @@ import time
 
 from .config import (BAR_SECONDS, INTERVAL, TRACK, TRACK_FILL_BARS,
                      TRACK_HORIZON_BARS, TRACK_TARGET_R, log)
-from .engine import Candle, Setup
+from .engine import Candle, Setup, grade_of
 
 PENDING, OPEN = "pending", "open"          # still live
 WON, LOST, TIMEOUT = "won", "lost", "timeout"   # filled and finished
@@ -299,8 +299,11 @@ def summary(db, kind: str | None = None) -> dict:
         "against": _bucket(against),
         "mfe": statistics.fmean([m for m, _ in filled]) if filled else 0.0,
         "mae": statistics.fmean([m for _, m in filled]) if filled else 0.0,
-        # The open question the confluence score exists to answer, split so
-        # live data can settle what a 41-day backtest could only hint at.
-        "zones": {n: _bucket([(r[0], r[1]) for r in rows if r[8] == n])
-                  for n in (0, 1, 2)},
+        # By grade — the view worth acting on, since it crosses the one
+        # established effect with the one open hypothesis. Computed from the
+        # same trend_dir and confluence columns, not stored separately, so a
+        # change to the ladder re-grades history rather than stranding it.
+        "grades": {g: _bucket([(r[0], r[1]) for r in rows
+                               if grade_of(r[2], r[3] == "long", r[8])[0] == g])
+                   for g in ("A+", "A", "B", "C", "?")},
     }
