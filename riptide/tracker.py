@@ -50,7 +50,8 @@ RESOLVED = (WON, LOST, TIMEOUT)
 
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
-            "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence")
+            "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence, "
+            "di_dir, rsi_ext")
 
 CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
@@ -65,7 +66,8 @@ def init(db) -> None:
         status TEXT, fill_time INT, exit_time INT,
         r REAL, mfe_r REAL, mae_r REAL,
         last_bar INT, updated_at INT,
-        kind TEXT DEFAULT 'setup', confluence INT DEFAULT 0)""")
+        kind TEXT DEFAULT 'setup', confluence INT DEFAULT 0,
+        di_dir INT DEFAULT 0, rsi_ext REAL DEFAULT 0.0)""")
     # Databases created before the no-shift strategy existed have no `kind`.
     # Everything already in them came from the confirmed path, which is what
     # the default backfills.
@@ -76,6 +78,15 @@ def init(db) -> None:
     if "confluence" not in have:
         db.execute("ALTER TABLE outcomes ADD COLUMN confluence INT DEFAULT 0")
         log.info("outcomes: added the confluence column, existing rows are 0")
+    # Rows armed before the grade moved to DI have no di_dir. They backfill to
+    # 0, which grade_of reads as "direction unknown" and grades "?" — correct,
+    # because it genuinely was not recorded, and far better than back-dating a
+    # letter onto rows that never carried one.
+    if "di_dir" not in have:
+        db.execute("ALTER TABLE outcomes ADD COLUMN di_dir INT DEFAULT 0")
+        db.execute("ALTER TABLE outcomes ADD COLUMN rsi_ext REAL DEFAULT 0.0")
+        log.info("outcomes: added di_dir and rsi_ext; rows armed before the "
+                 "grade moved to DI stay ungraded rather than being back-dated")
     db.execute("CREATE INDEX IF NOT EXISTS outcomes_live "
                "ON outcomes(symbol, status)")
     db.commit()
@@ -122,13 +133,14 @@ def arm(db, sid: str, s, from_bar: int | None = None,
     start = from_bar if from_bar is not None \
         else max(detected, last_closed_bar(now))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
                 # Early has no shift; its sweep bar is the comparable anchor.
                 getattr(s, "mss_time", 0) or s.sweep_time, detected, now,
                 PENDING, 0, 0, None, 0.0, 0.0, start, now, kind,
-                getattr(s, "confluence", 0)))
+                getattr(s, "confluence", 0),
+                getattr(s, "di_dir", 0), getattr(s, "rsi_ext", 0.0)))
     db.commit()
 
 
@@ -270,22 +282,52 @@ def _bucket(rows) -> dict:
             "win_pct": 100.0 * wins / len(trades) if trades else 0.0}
 
 
+def live_band(db, letter: str, kind: str, min_n: int = 30):
+    """
+    (n, fill %, win %, R, SE) for one band from FORWARD data, or None until
+    the band has at least min_n settled rows.
+
+    This is the number that eventually replaces the backtest figure on an
+    alert. It is worth strictly more than the historical one — it is out of
+    sample by construction, it includes whatever the market has done since,
+    and it cannot have been fitted. min_n exists because a band with nine
+    settled trades would print a win rate swinging 30 points on one outcome,
+    which is worse than saying nothing.
+    """
+    rows = db.execute(
+        "SELECT status, r, side, di_dir, rsi_ext FROM outcomes WHERE kind=?",
+        (kind,)).fetchall()
+    mine = [r for r in rows
+            if grade_of(r[3], r[2] == "long", r[4])[0] == letter]
+    settled = [r for r in mine if r[0] in RESOLVED or r[0] == EXPIRED]
+    if len(settled) < min_n:
+        return None
+    fills = [r for r in settled if r[0] in RESOLVED and r[1] is not None]
+    if not fills:
+        return None
+    wins = sum(1 for r in fills if r[1] > 0)
+    scored = [r[1] for r in fills] + [0.0 for r in settled if r[0] == EXPIRED]
+    m, se = _mean_se(scored)
+    return (len(settled), round(100 * len(fills) / len(settled)),
+            round(100 * wins / len(fills)), m, se)
+
+
 def summary(db, kind: str | None = None) -> dict:
     """Pass a kind to describe one strategy alone; omit it for both together."""
     sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind, "
-           "confluence FROM outcomes")
+           "confluence, di_dir, rsi_ext FROM outcomes")
     rows = (db.execute(sql + " WHERE kind=?", (kind,)).fetchall() if kind
             else db.execute(sql).fetchall())
     if not rows:
         return {"armed": 0}
 
     aligned, against = [], []
-    for st, r, td, side, _, _, _, _, _ in rows:
+    for st, r, td, side, _, _, _, _, _, _, _ in rows:
         if not td:
             continue
         (aligned if (td > 0) == (side == "long") else against).append((st, r))
 
-    filled = [(mfe, mae) for st, _, _, _, mfe, mae, _, _, _ in rows
+    filled = [(mfe, mae) for st, _, _, _, mfe, mae, _, _, _, _, _ in rows
               if st in RESOLVED]
     return {
         "armed": len(rows),
@@ -304,6 +346,6 @@ def summary(db, kind: str | None = None) -> dict:
         # same trend_dir and confluence columns, not stored separately, so a
         # change to the ladder re-grades history rather than stranding it.
         "grades": {g: _bucket([(r[0], r[1]) for r in rows
-                               if grade_of(r[2], r[3] == "long", r[8])[0] == g])
-                   for g in ("A+", "A", "B", "C", "?")},
+                               if grade_of(r[9], r[3] == "long", r[10])[0] == g])
+                   for g in ("A", "B", "C", "?")},
     }

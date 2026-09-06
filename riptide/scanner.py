@@ -109,12 +109,22 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
             d = await trend.direction_at(sess, symbol, x.detected_time,
                                          fetch_candles)
             x.trend_dir = d or 0
+            # DI sets the grade letter; the SuperTrend above still prints
+            # beside it so both can be watched live. Same cached daily bars,
+            # so this costs no extra request. The filter below deliberately
+            # still keys on the SuperTrend: DI has replicated on splits of one
+            # window, which earns it the letter, not the power to suppress an
+            # alert before /stats has seen it forward.
+            x.di_dir = await trend.di_at(sess, symbol, x.detected_time,
+                                         fetch_candles) or 0
             with_trend = d is None or (d > 0) == x.is_long
             if with_trend or not trend_on:
                 keep_s.append(x)
         for w in (sweeps or []):
             d = await trend.direction_at(sess, symbol, w.sweep_time, fetch_candles)
             w.trend_dir = d or 0
+            w.di_dir = await trend.di_at(sess, symbol, w.sweep_time,
+                                         fetch_candles) or 0
             # A swept high implies a short, so it wants a downtrend.
             with_trend = d is None or (d < 0) == w.is_high
             if with_trend or not trend_on:
@@ -122,6 +132,8 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
         for e in (early or []):
             d = await trend.direction_at(sess, symbol, e.fvg_time, fetch_candles)
             e.trend_dir = d or 0
+            e.di_dir = await trend.di_at(sess, symbol, e.fvg_time,
+                                         fetch_candles) or 0
             with_trend = d is None or (d > 0) == e.is_long
             if with_trend or not trend_on:
                 keep_e.append(e)
@@ -264,7 +276,9 @@ async def cycle(sess, db, symbols):
             if fresh:
                 tracker.arm(db, sid, e, kind=tracker.EARLY)
             if fresh and not mute:
-                if await tg.tg_send(sess, tg.early_message(e)):
+                if await tg.tg_send(sess, tg.early_message(
+                        e, tracker.live_band(db, tg.grade_letter(
+                            e.di_dir, e.is_long, e.rsi_ext), tracker.EARLY))):
                     quick += 1
 
     for setups, _, _, _ in results:
@@ -289,7 +303,10 @@ async def cycle(sess, db, symbols):
             if fresh:
                 tracker.arm(db, sid, s, kind=tracker.CONFIRMED)
             if fresh and not mute:
-                if await tg.tg_send(sess, tg.setup_message(s)):
+                if await tg.tg_send(sess, tg.setup_message(
+                        s, tracker.live_band(db, tg.grade_letter(
+                            s.di_dir, s.is_long, s.rsi_ext),
+                            tracker.CONFIRMED))):
                     sent += 1
     if bootstrap:
         log.info("first run: history recorded, nothing sent")

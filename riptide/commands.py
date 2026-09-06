@@ -21,6 +21,7 @@ from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
                      TRACK_FILL_BARS, TRACK_HORIZON_BARS, TRACK_TARGET_R,
                      TREND_FACTOR, TREND_FILTER, TREND_INTERVAL, TREND_LEN,
                      build_id, log)
+from .engine import band_stats
 from .scanner import cycle, seconds_to_next_close, trend_on
 from .storage import meta_get, meta_set
 
@@ -164,14 +165,16 @@ def stats_text(db) -> str:
 
     g = s.get("grades") or {}
     if any(b["setups"] for b in g.values()):
-        body += "\n<b>by grade</b>\n"
-        for k in ("A+", "A", "B", "C", "?"):
+        body += "\n<b>by grade</b>  <i>(A DI agrees · B/C it does not)</i>\n"
+        for k in ("A", "B", "C", "?"):
             b = g.get(k)
             if b and b["setups"]:
-                body += f"<code>{_bucket_line('  ' + k, b)}</code>\n"
-        body += ("<i>Only the B/C step is established (+3.8 SE). A+ over B is "
-                 "+1.4 SE on the backtest — that is what these rows are here "
-                 "to settle.</i>\n")
+                hist = band_stats(k)
+                mark = f"   vs {hist[3]:+.3f} back" if hist else ""
+                body += f"<code>{_bucket_line('  ' + k, b)}{mark}</code>\n"
+        body += ("<i>The backtest column is what these rows exist to overturn. "
+                 "A over C measured +0.36 R there; the ordering is what "
+                 "replicated across splits, not the level.</i>\n")
 
     body += (f"\n<b>both together</b>\n"
              f"<code>{_bucket_line('  all', a)}</code>\n"

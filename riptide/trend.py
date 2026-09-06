@@ -41,11 +41,44 @@ import time
 from bisect import bisect_right
 
 from .config import (BAR_SECONDS, TREND_FACTOR, TREND_INTERVAL, TREND_LEN, log)
-from .engine import Candle, atr_series
+from .engine import Candle, atr_series, rma as atr_rma
 
 # Daily bars change once a day; refetching them every scan is pure waste.
-_CACHE: dict[str, tuple[float, list[int], list[int]]] = {}
+# (fetched_at, bar times, supertrend dirs, DI dirs)
+_CACHE: dict[str, tuple[float, list[int], list[int], list[int]]] = {}
 _TTL = 3600.0
+
+
+def di_direction(cs: list[Candle], length: int = 14) -> list[int]:
+    """
+    Wilder's +DI / -DI as a direction: +1 where +DI leads, -1 where -DI does.
+
+    Measured stronger than the SuperTrend above and replicated on every split
+    — see GRADES in engine.py. It sets the letter on confirmed alerts; the
+    SuperTrend line is kept beside it so both can be watched live before
+    anything is filtered on either.
+    """
+    tr, pdm, ndm = [], [], []
+    for i, c in enumerate(cs):
+        if i == 0:
+            tr.append(c.h - c.l)
+            pdm.append(0.0)
+            ndm.append(0.0)
+            continue
+        p = cs[i - 1]
+        tr.append(max(c.h - c.l, abs(c.h - p.c), abs(c.l - p.c)))
+        up, dn = c.h - p.h, p.l - c.l
+        pdm.append(up if (up > dn and up > 0) else 0.0)
+        ndm.append(dn if (dn > up and dn > 0) else 0.0)
+    atr = atr_rma(tr, length)
+    pd, nd = atr_rma(pdm, length), atr_rma(ndm, length)
+    out = []
+    for a, p_, n_ in zip(atr, pd, nd):
+        if a <= 0:
+            out.append(0)
+            continue
+        out.append(1 if p_ > n_ else -1 if n_ > p_ else 0)
+    return out
 
 
 def supertrend(cs: list[Candle], length: int = TREND_LEN,
@@ -76,25 +109,52 @@ def supertrend(cs: list[Candle], length: int = TREND_LEN,
     return out
 
 
-async def direction_at(sess, symbol: str, when: int, fetch) -> int | None:
-    """
-    Trend on the bar that had already closed at `when`. Returns +1, -1, or
-    None when there is not enough history to judge — the caller keeps the
-    setup in that case rather than dropping it on missing data.
+async def _series(sess, symbol: str, fetch):
+    """Cached (fetched_at, times, supertrend, DI) for one symbol's daily bars.
+
+    Both readings come off the same fetch, so adding DI costs no extra request.
     """
     now = time.monotonic()
     hit = _CACHE.get(symbol)
     if hit is None or now - hit[0] > _TTL:
         cs = await fetch(sess, symbol, TREND_INTERVAL)
         if len(cs) < TREND_LEN + 5:
-            log.warning("%s: only %d %s bars, trend filter skipped",
+            log.warning("%s: only %d %s bars, trend readings skipped",
                         symbol, len(cs), TREND_INTERVAL)
-            _CACHE[symbol] = (now, [], [])
+            _CACHE[symbol] = (now, [], [], [])
             return None
-        _CACHE[symbol] = (now, [c.t for c in cs], supertrend(cs))
+        _CACHE[symbol] = (now, [c.t for c in cs], supertrend(cs),
+                          di_direction(cs))
         hit = _CACHE[symbol]
+    return hit if hit[1] else None
 
-    _, times, dirs = hit
+
+def _at(times, series, when) -> int | None:
+    """Value on the last bar whose CLOSE is at or before `when`. See the note
+    in direction_at: bar times are OPEN times, so the forming bar must be
+    excluded by arithmetic, not by hoping it was dropped upstream."""
+    i = bisect_right(times, when - BAR_SECONDS[TREND_INTERVAL]) - 1
+    return series[i] if 0 <= i < len(series) else None
+
+
+async def di_at(sess, symbol: str, when: int, fetch) -> int | None:
+    """Daily DI direction on the last closed bar at `when`. +1, -1, or None."""
+    hit = await _series(sess, symbol, fetch)
+    if hit is None:
+        return None
+    return _at(hit[1], hit[3], when) or None
+
+
+async def direction_at(sess, symbol: str, when: int, fetch) -> int | None:
+    """
+    Trend on the bar that had already closed at `when`. Returns +1, -1, or
+    None when there is not enough history to judge — the caller keeps the
+    setup in that case rather than dropping it on missing data.
+    """
+    hit = await _series(sess, symbol, fetch)
+    if hit is None:
+        return None
+    _, times, dirs, _ = hit
     if not times:
         return None
     # Candle.t is a bar OPEN time, so the last bar that had already CLOSED at

@@ -78,6 +78,11 @@ class Setup:
                              # gap's price area. 0-2. See confluence_of.
     pools: int = 0           # how many clusters reached this same gap. Set by
                              # collapse(), not by detection.
+    di_dir: int = 0          # daily DI+/DI- direction at detection: +1 up,
+                             # -1 down, 0 unknown. Set by the scanner, like
+                             # trend_dir — the engine has no daily bars.
+    rsi_ext: float = 0.0     # RSI stretch at the raid, in the trade's favour.
+                             # See rsi_extension.
     also_early: int = 0      # bars from raid to gap, when this exact trade
                              # also fired as an Early on the same bar. Set by
                              # the scanner when it pairs the two, so one trade
@@ -146,6 +151,8 @@ class Early:
     confluence: int = 0    # order-block agreement only, 0-1: with no shift
                            # there is no breaker to agree with.
     trend_dir: int = 0
+    di_dir: int = 0           # as on Setup
+    rsi_ext: float = 0.0      # as on Setup
     last_price: float = 0.0   # display only, as on Setup
 
     @property
@@ -178,6 +185,8 @@ class Sweep:
     pools: int = 0         # how many pools this one bar took out. Set when
                            # duplicates are collapsed, not by detection.
     trend_dir: int = 0     # as above
+    di_dir: int = 0        # as above
+    rsi_ext: float = 0.0   # as above
     last_price: float = 0.0   # display only, as above
 
 
@@ -203,6 +212,35 @@ def atr_series(cs: list[Candle], length: int) -> list[float]:
             pc = cs[i - 1].c
             tr.append(max(c.h - c.l, abs(c.h - pc), abs(c.l - pc)))
     return rma(tr, length)
+
+
+def rsi_series(cs: list[Candle], length: int = 14) -> list[float]:
+    """Wilder's RSI, one value per bar. Pure, like everything else here."""
+    up, dn = [0.0], [0.0]
+    for i in range(1, len(cs)):
+        d = cs[i].c - cs[i - 1].c
+        up.append(max(d, 0.0))
+        dn.append(max(-d, 0.0))
+    au, ad = rma(up, length), rma(dn, length)
+    out = []
+    for u, d in zip(au, ad):
+        out.append(100.0 if d == 0 and u > 0 else
+                   50.0 if d == 0 else
+                   100.0 - 100.0 / (1.0 + u / d))
+    return out
+
+
+def rsi_extension(rsi: float, is_long: bool) -> float:
+    """
+    How stretched RSI is IN THE TRADE'S FAVOUR at the raid: oversold for a
+    long, overbought for a short. Positive means stretched the right way.
+
+    The zero point is RSI 50 and nothing else. A median split of this sample
+    put the cut at +7.00 and measured stronger (+3.1 SE against +2.1), which
+    is exactly why it is not used — that threshold was read off the same data
+    it would then be judged on.
+    """
+    return (50.0 - rsi) if is_long else (rsi - 50.0)
 
 
 def is_pivot_high(cs: list[Candle], i: int, left: int, right: int) -> bool:
@@ -296,45 +334,86 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
     return n
 
 
-# Grade bands, read off the measured trend x confluence cells rather than
-# invented. 50 symbols, 41.6 days, 1R target, R per setup:
+# Grade bands, read off measured cells rather than invented. Rebuilt on the
+# two axes that survived out-of-sample splits, replacing the SuperTrend x
+# confluence ladder that preceded them.
 #
-#                 0 zones            1 zone             2 zones
-#   with trend    +0.083 (620)       +0.109 (188)       +0.170 (173)
-#   against       +0.001 (625)       -0.025 (204)       +0.047 (189)
+#   DI      daily DI+ vs DI- direction. +0.222 R, +4.7 SE on 1185 confirmed
+#           setups, and it replicates on every split: symbols A +2.9 SE,
+#           symbols B +3.8 SE, first half of the window +4.0, second +2.6.
+#           Stronger than the daily SuperTrend it displaces (+3.1 SE), and not
+#           a restatement of it — the two agree on only 78% of signals and DI
+#           still separates after conditioning on it.
 #
-# Every with-trend cell beats every against-trend cell, and within with-trend
-# the confluence ordering is monotonic. That is the ladder below.
+#   RSI     stretch at the raid, in the trade's favour, split at RSI 50. Only
+#           used INSIDE the counter-DI band, because that is the only place it
+#           does anything: +2.1 SE there, -0.1 SE where DI already agrees.
+#           Splitting the DI-with band by RSI would be inventing a step the
+#           data says is not there.
 #
-# READ THE STEPS HONESTLY. Only the trend step is established: +0.110 ± 0.029,
-# +3.8 SE, replicated across two windows and two symbol sets. A+ over B is
-# +0.087 ± 0.064, which is +1.4 SE and not significant — and against the trend
-# the confluence ordering breaks down entirely (1 zone scores below 0). So B
-# versus C is a real distinction; A+ versus A versus B is a hypothesis being
-# tracked live, and none of the bands is a prediction about one trade.
+# Measured bands, 50 symbols, 41.6 days, 1R target:
+#
+#     band     n    fill   win% of fills   R per setup
+#     A      587     70%       61% ± 2     +0.158 ± 0.033
+#     B      486     74%       47% ± 3     -0.030 ± 0.037
+#     C      112     71%       35% ± 5     -0.206 ± 0.076
+#
+# Three bands, not five. The win rate ladder is clean and monotonic, and every
+# step is a comparison that survived both splits. Confluence is still recorded
+# on every signal but no longer sets the letter: it measured +1.4 SE and never
+# replicated, so it was decorating a letter with a number that did not hold.
+#
+# READ THE NUMBERS AS HISTORY, NOT AS A FORECAST. They come from one 41.6-day
+# window; this project has watched the LEVEL of an effect move from -0.05 to
+# +0.32 across windows while the separation between bands held. The ordering
+# is the finding. The percentages are context for it.
 GRADES = {
-    ("with", 2): ("A+", "with the trend · gap, order block and breaker agree"),
-    ("with", 1): ("A",  "with the trend · gap and order block agree"),
-    ("with", 0): ("B",  "with the trend"),
-    ("against", 2): ("C", "AGAINST the trend · zones agree"),
-    ("against", 1): ("C", "AGAINST the trend"),
-    ("against", 0): ("C", "AGAINST the trend"),
+    ("with", True): ("A", "daily DI agrees"),
+    ("with", False): ("A", "daily DI agrees"),
+    ("against", True): ("B", "DI disagrees · RSI stretched your way"),
+    ("against", False): ("C", "DI disagrees · RSI offers nothing"),
+}
+
+# Historical rate for each band: (setups, fill %, win % of fills, R, SE).
+# Shown on the alert so a letter is never a bare assertion, and replaced by
+# the live figure from /stats as soon as a band has enough settled rows.
+BAND_STATS = {
+    "A": (587, 70, 61, +0.158, 0.033),
+    "B": (486, 74, 47, -0.030, 0.037),
+    "C": (112, 71, 35, -0.206, 0.076),
+}
+
+# The same bands applied to early signals, which is a different and much
+# weaker story: +0.063 / +0.044 / +0.002, win rates 54% / 53% / 50% over 2945
+# signals. A minus C is +0.8 SE — the ladder barely sorts them. Neither DI nor
+# the SuperTrend nor RSI separates early signals; nothing tested so far does.
+# So an early alert shows its band's OWN early numbers, and they are flat on
+# purpose: the honest message is that the letter means little there.
+EARLY_BAND_STATS = {
+    "A": (1432, 79, 54, +0.063, 0.023),
+    "B": (1349, 78, 53, +0.044, 0.024),
+    "C": (164, 82, 50, +0.002, 0.070),
 }
 
 
-def grade_of(trend_dir: int, is_long: bool, confluence: int) -> tuple[str, str]:
+def grade_of(di_dir: int, is_long: bool, rsi_ext: float) -> tuple[str, str]:
     """
     (letter, why) for one signal. Presentation only — nothing decides on it,
     and no signal is suppressed by it.
 
-    Returns ("?", ...) when the higher-timeframe trend is unknown, which is
-    honest: the axis carrying almost all of the separation is missing, so
-    there is nothing to grade on.
+    Returns ("?", ...) when the daily DI is unknown, which is honest: the axis
+    carrying the separation is missing, so there is nothing to grade on.
     """
-    if not trend_dir:
-        return "?", "trend unknown"
-    side = "with" if (trend_dir > 0) == is_long else "against"
-    return GRADES[(side, max(0, min(2, confluence)))]
+    if not di_dir:
+        return "?", "daily direction unknown"
+    side = "with" if (di_dir > 0) == is_long else "against"
+    return GRADES[(side, rsi_ext > 0.0)]
+
+
+def band_stats(letter: str, kind_early: bool = False):
+    """Historical (n, fill %, win %, R, SE) for a band, or None."""
+    table = EARLY_BAND_STATS if kind_early else BAND_STATS
+    return table.get(letter)
 
 
 def collapse(items: list, key, better) -> list:
@@ -381,6 +460,8 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
         return []
 
     atr = atr_series(cs, cfg.atr_len)
+    # RSI at the raid feeds the grade, never a decision. One pass, reused.
+    rsi = rsi_series(cs)
     clusters: list[Cluster] = []
     setups: list[Setup] = []
     last_mss = {True: -10 ** 9, False: -10 ** 9}   # keyed by is_high
@@ -550,7 +631,8 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                             struct_level=c.struct_level,
                             sweep_extreme=cs[i].h if c.is_high else cs[i].l,
                             anchor_time=cs[c.oldest_bar].t,
-                            pivots=len(c.prices) or 1))
+                            pivots=len(c.prices) or 1,
+                            rsi_ext=rsi_extension(rsi[i], not c.is_high)))
 
             if was_swept and not was_mss and not c.expired:
                 if i - c.sweep_bar > cfg.max_bars_after_grab:
@@ -638,6 +720,7 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                                 anchor_time=cs[c.oldest_bar].t,
                                 pivots=len(c.prices) or 1,
                                 bars_from_sweep=i - c.sweep_bar,
+                                rsi_ext=rsi_extension(rsi[c.sweep_bar], is_bull),
                                 # No shift yet, so no breaker to agree with:
                                 # the order block is the only vote available.
                                 confluence=confluence_of(cs, i, is_bull)))
@@ -658,6 +741,8 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                         pivots=len(c.prices) or 1,
                         sweep_time=cs[c.sweep_bar].t if c.sweep_bar >= 0 else 0,
                         grab_time=cs[c.grab_bar].t, fvg_time=cs[fvg_bar].t,
+                        rsi_ext=rsi_extension(rsi[c.sweep_bar], not c.is_high)
+                                if c.sweep_bar >= 0 else 0.0,
                         confluence=confluence_of(cs, fvg_bar, not c.is_high,
                                                  c.grab_bar, c.mss_bar)))
                     c.done = True
