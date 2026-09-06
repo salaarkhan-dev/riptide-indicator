@@ -227,19 +227,24 @@ def _cfg_from_env(base: Cfg) -> tuple[Cfg, dict]:
 CFG, CFG_OVERRIDES = _cfg_from_env(Cfg())
 
 # The engine reads fvg_scan_from as `== "grab"`, so ANY other string — a typo,
-# or the Pine's own wording — silently selects the other mode instead of
-# failing. Normalise and validate here, where it can say so.
+# or the Pine's own wording — silently selects a mode instead of failing.
+# Normalise and validate here, where it can say so.
 _FVG_SCAN_FROM = {"grab": "grab", "grab candle": "grab",
                   "mss": "mss", "mss candle only": "mss", "mss only": "mss"}
 _raw_scan = str(CFG.fvg_scan_from).strip().lower()
 if _raw_scan in _FVG_SCAN_FROM:
     CFG.fvg_scan_from = _FVG_SCAN_FROM[_raw_scan]
 else:
-    log.warning("RIPTIDE_FVG_SCAN_FROM=%r is not 'grab' or 'mss'; using 'grab'. "
-                "Anything unrecognised would otherwise have selected 'mss' by "
-                "accident, since the engine tests for 'grab' by name.",
-                CFG.fvg_scan_from)
-    CFG.fvg_scan_from = "grab"
+    # Fall back to the DEFAULT, not to a hardcoded mode. This used to say
+    # "grab", which was the default at the time; once the default moved to
+    # "mss" that turned a typo into a silent downgrade to the old behaviour —
+    # the exact failure this block exists to prevent.
+    fallback = Cfg().fvg_scan_from
+    log.warning("RIPTIDE_FVG_SCAN_FROM=%r is not 'grab' or 'mss'; using %r, "
+                "the default. Anything unrecognised would otherwise have "
+                "selected 'mss' by accident, since the engine tests for "
+                "'grab' by name.", CFG.fvg_scan_from, fallback)
+    CFG.fvg_scan_from = fallback
     CFG_OVERRIDES.pop("fvg_scan_from", None)
 
 
