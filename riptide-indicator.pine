@@ -132,7 +132,12 @@ showPivots     = input.bool(true,  "Swing markers (diamonds)",       group = gLo
 showGrab       = input.bool(true,  "Raid marker (X)",                group = gLook)
 showGrabTag    = input.bool(true,  "Label on the raid marker",       group = gLook,
      tooltip = "The small dark tag under the X naming what got raided: Pivot, Day, Week or a session name.")
-showMSS        = input.bool(true,  "Structure break level + label",  group = gLook)
+showMSS        = input.bool(true,  "Structure break label",          group = gLook)
+showStructLine = input.bool(true,  "Structure break level (dashed)", group = gLook,
+     tooltip = "The dashed line price had to break for the shift to confirm. Separate from the label above, which used to share this switch — so wanting the MSS marked without the line across the chart was not possible.")
+setupLevelKeep = input.int(3,     "Keep levels for the last N setups", minval = 1,
+     maxval = 50, group = gLook,
+     tooltip = "Entry, stop and target lines are drawn per setup and used to stay forever, so a long chart ended up striped with levels from trades that closed days ago. Only the most recent this-many setups keep theirs.")
 showRaidDot    = input.bool(true,  "Mark raids in progress",         group = gLook,
      tooltip = "A hollow dot on a raid that has taken liquidity but has NOT produced a structure shift yet — the state the bot's ⚡ EARLY alerts fire in. It follows the raid to each new extreme, becomes the solid X if the shift confirms, and disappears if the raid dies. Most raids die, which is why they get a provisional mark rather than an X.")
 raidDotKeep    = input.int(4,     "  how many in progress",  minval = 1, maxval = 20,
@@ -330,6 +335,12 @@ type Cluster
 // A context imbalance. Deliberately NOT an Fvg: the engine walks the Fvg array
 // for mitigation, extension and outcome tracking, and these must never reach
 // any of that. Top and bottom are kept only so the box can retire itself.
+// The entry, stop and target drawings of ONE setup, held together so the
+// whole set can be cleared as a unit once it is old enough.
+type LevelGroup
+    array<line>  lns
+    array<label> lbs
+
 type CtxFvg
     box   bx
     line  mid
@@ -426,6 +437,8 @@ var array<CtxFvg>  ctxFvgs  = array.new<CtxFvg>()
 // provisional dots can be retired the moment the raid resolves either way —
 // leaving a marker on a raid that died is what made Live mode unreadable.
 var array<Cluster> pendingRaids = array.new<Cluster>()
+var array<LevelGroup> lvlGroups = array.new<LevelGroup>()
+var int               lvlGroupBar = na
 var array<Trade>   trades   = array.new<Trade>()
 var Stats          stx      = Stats.new()
 var Counters       cnt      = Counters.new()
@@ -601,7 +614,7 @@ drawLiqLine(Cluster c, int x2) =>
              width = 1)
 
 drawStructLine(Cluster c, int x2) =>
-    if showMSS and na(c.mssLine)
+    if showStructLine and na(c.mssLine)
         c.mssLine := line.new(c.structBar, c.structLevel, x2, c.structLevel,
              xloc  = xloc.bar_index,
              color = structCol,
@@ -799,6 +812,21 @@ entryFrom(Cluster c) =>
     entryOf(not c.isHigh, c.lastFvgTop, c.lastFvgBot)
 
 // Call after scanLeg: reads lastFvgTop/Bot, which the scan produces.
+// The drawing group for the setup being rendered on this bar. drawSetup and
+// openTrade both contribute and run back to back, so keying on bar_index lets
+// them share one group rather than each spending a slot.
+levelGroup() =>
+    if na(lvlGroupBar) or lvlGroupBar != bar_index or lvlGroups.size() == 0
+        lvlGroups.push(LevelGroup.new(array.new<line>(), array.new<label>()))
+        lvlGroupBar := bar_index
+        while lvlGroups.size() > setupLevelKeep
+            LevelGroup old = lvlGroups.shift()
+            for l in old.lns
+                line.delete(l)
+            for b in old.lbs
+                label.delete(b)
+    lvlGroups.get(lvlGroups.size() - 1)
+
 drawSetup(Cluster c) =>
     bool isLong = not c.isHigh
     bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
@@ -808,17 +836,18 @@ drawSetup(Cluster c) =>
         float entry = entryFrom(c)
         float sl    = stopFrom(c)
         int   x2    = bar_index + setupExtendBars
+        LevelGroup g = levelGroup()
         if showEntryLine
-            line.new(c.mssBar, entry, x2, entry,
-                 xloc = xloc.bar_index, color = col, style = line.style_solid, width = 1)
-            label.new(x2, entry, "Entry " + f2s(entry),
+            g.lns.push(line.new(c.mssBar, entry, x2, entry,
+                 xloc = xloc.bar_index, color = col, style = line.style_solid, width = 1))
+            g.lbs.push(label.new(x2, entry, "Entry " + f2s(entry),
                  xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left,
-                 color = color.new(col, 75), textcolor = col, size = size.tiny)
+                 color = color.new(col, 75), textcolor = col, size = size.tiny))
         if showStopLoss
             // Anchored on the grab bar so the line starts at the X.
-            line.new(c.grabBar, sl, x2, sl,
-                 xloc = xloc.bar_index, color = color.new(col, 20), style = line.style_dashed, width = 1)
-            label.new(x2, sl, "SL " + f2s(sl),
+            g.lns.push(line.new(c.grabBar, sl, x2, sl,
+                 xloc = xloc.bar_index, color = color.new(col, 20), style = line.style_dashed, width = 1))
+            g.lbs.push(label.new(x2, sl, "SL " + f2s(sl),
                  xloc      = xloc.bar_index,
                  yloc      = yloc.price,
                  style     = label.style_label_left,
@@ -828,7 +857,7 @@ drawSetup(Cluster c) =>
                  tooltip   = "Stop beyond the grab candle @ bar " + str.tostring(c.grabBar) +
                              "\ngrab " + (isLong ? "low " : "high ") + f2s(isLong ? c.grabLow : c.grabHigh) +
                              "\nbuffer " + str.tostring(slBufferATR) + " x ATR" +
-                             "\nrisk " + f2s(math.abs(entry - sl)))
+                             "\nrisk " + f2s(math.abs(entry - sl))))
     if showSetupLabels and dirOk and c.fvgCount > 0
         label.new(bar_index + 2, isLong ? c.lastFvgTop : c.lastFvgBot, isLong ? "LONG" : "SHORT",
              xloc      = xloc.bar_index,
@@ -866,12 +895,14 @@ openTrade(Cluster c) =>
             for mi = 0 to mults.size() - 1
                 float m  = mults.get(mi)
                 float tp = isLong ? e + r * m : e - r * m
-                line.new(bar_index, tp, bar_index + setupExtendBars, tp,
+                LevelGroup tg = levelGroup()
+                tg.lns.push(line.new(bar_index, tp, bar_index + setupExtendBars, tp,
                      xloc = xloc.bar_index, color = color.new(col, 55),
-                     style = line.style_dotted, width = 1)
-                label.new(bar_index + setupExtendBars, tp, str.tostring(m) + "R",
+                     style = line.style_dotted, width = 1))
+                tg.lbs.push(label.new(bar_index + setupExtendBars, tp,
+                     str.tostring(m) + "R",
                      xloc = xloc.bar_index, yloc = yloc.price, style = label.style_none,
-                     textcolor = color.new(col, 30), size = size.tiny)
+                     textcolor = color.new(col, 30), size = size.tiny))
 
 // ── period trackers ─────────────────────────────────────────────────────────
 trackerReset(Tracker t) =>
@@ -1461,10 +1492,19 @@ if engineOk
                             line.set_x2(f.mid, f.right)
 
     // ── 8.4 object budget ───────────────────────────────────────────────────
-    // Oldest state objects are dropped. Drawings persist and are recycled by
-    // the max_*_count budgets in indicator().
+    // Oldest state objects are dropped. Their LINES go with them: leaving
+    // them behind is what striped the chart with dotted pool levels and
+    // dashed structure lines belonging to pools evicted long ago. Only
+    // TradingView's 500-drawing cap was clearing them, which is a recycling
+    // policy, not a display decision.
+    //
+    // The raid markers are deliberately kept — an X is a record of what
+    // happened, and the provisional dots are already retired by their own
+    // housekeeping the moment a raid resolves.
     while clusters.size() > maxLiquidityClusters
-        clusters.shift()
+        Cluster gone = clusters.shift()
+        line.delete(gone.liqLine)
+        line.delete(gone.mssLine)
     while fvgs.size() > maxFVGs
         fvgs.shift()
     while trades.size() > maxTrades
