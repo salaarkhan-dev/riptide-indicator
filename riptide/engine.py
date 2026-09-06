@@ -78,6 +78,10 @@ class Setup:
                              # gap's price area. 0-2. See confluence_of.
     pools: int = 0           # how many clusters reached this same gap. Set by
                              # collapse(), not by detection.
+    also_early: int = 0      # bars from raid to gap, when this exact trade
+                             # also fired as an Early on the same bar. Set by
+                             # the scanner when it pairs the two, so one trade
+                             # is one message. 0 means it did not.
 
     @property
     def detected_time(self) -> int:
@@ -572,6 +576,24 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                                         and o.active and not o.mss and not o.expired
                                         and abs(o.level - c.level) <= a * cfg.tol_atr * 2):
                                     o.expired = True
+
+            # The raid extreme stops trailing the moment the shift confirms —
+            # the block above only runs while `not was_mss` — but the gap
+            # search below keeps going for max_bars_after_mss bars. If price
+            # trades back through the raid extreme during that window, the stop
+            # a setup would carry has already been breached, and when the gap
+            # forms beyond it the stop lands on the WRONG SIDE of the entry: a
+            # long stopped above its own entry, which loses by construction.
+            # Measured before this check: 7 of 1219 setups inverted that way
+            # (-0.857 R), and 37 more carried a stop price had already taken.
+            #
+            # Expiring is the right response, not re-trailing the stop. For a
+            # long, price back below the swept low means that low has been
+            # taken a second time and the reversal the shift claimed did not
+            # hold. There is no setup left to re-price — the premise is gone.
+            if c.mss and not c.done and not c.expired:
+                if (cs[i].h > c.grab_high) if c.is_high else (cs[i].l < c.grab_low):
+                    c.expired = True
 
             # No-shift entry: the FIRST imbalance within early_max_bars of the
             # raid, entered at the gap edge with the stop beyond the raid

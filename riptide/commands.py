@@ -179,7 +179,7 @@ def stats_text(db) -> str:
     elif settled < 200:
         body += ("\n<i>Still thin — the standard errors above are wide enough "
                  "to contain almost any conclusion. The backtest that produced "
-                 "the trend filter used 2026 setups.</i>")
+                 "the trend filter used 1188 setups.</i>")
     else:
         body += ("\n<i>This is out-of-sample: live alerts, in whatever regime "
                  "has actually occurred. Where it disagrees with the backtest, "
@@ -216,8 +216,8 @@ async def handle_command(sess, db, state, text: str) -> None:
                              f" · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})\n\n"
                              "<code>/trend on</code> — only setups facing the daily trend\n"
                              "<code>/trend off</code> — every setup\n\n"
-                             "<i>Measured: with the trend +0.103 R per setup, against "
-                             "it -0.008, over 2026 setups. Roughly halves the alerts. "
+                             "<i>Measured: with the trend +0.119 R per setup, against "
+                             "it -0.016, over 1188 setups. Roughly halves the alerts. "
                              "The gap is what replicates; the level moves with the "
                              "window, so read /stats over this.</i>")
             return

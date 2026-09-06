@@ -37,6 +37,12 @@ It is the only result that has replicated: the gap came back at **+0.135,
 methods. The level it sits on has ranged from −0.05 to +0.32 over the same
 comparisons.
 
+Re-measured after the audit below, on the fixed engine with the trend
+lookahead removed, it reads **+0.119 against −0.016, a +0.135 ± 0.047 gap
+(+2.8 SE) over 1188 setups**. Smaller sample because `fvg_scan_from="mss"`
+roughly halves the setup count; the separation is what survived, which is
+the claim.
+
 **Trust the separation, not the level.** Shipped as a label on every alert
 rather than a filter, so counter-trend signals are judged rather than hidden.
 `/trend on` suppresses them.
@@ -56,6 +62,74 @@ shift, not from when it became knowable, so any setup whose gap took more than
 a bar to arrive was found, recorded, deduped and never sent — 76 of 2035 (4%),
 permanently. Both bugs were the same mistake about when a setup starts
 existing.
+
+## Full audit, 6 Sep
+
+Every module read line by line, plus invariant checks over 1219 confirmed,
+2966 early and 7943 sweep signals on 50 symbols. Three real defects.
+
+**The stop froze at the shift while the gap search kept going.** Trailing the
+raid extreme lives inside `if was_swept and not was_mss`, so it stops the
+instant the shift confirms — but the setup block keeps hunting for a gap for
+`max_bars_after_mss` bars after that. When price traded back through the raid
+extreme in that window, the setup carried a stop price had already taken, and
+when the gap formed beyond it the stop landed on the **wrong side of the
+entry**: a long stopped above its own entry.
+
+| | n | share | R per setup |
+|---|---|---|---|
+| inverted stop | 7 | 0.6% | **−0.857** |
+| stop already traded through | 37 | 3.0% | +0.150 |
+| clean | 1175 | 96.4% | +0.047 |
+
+Six of the seven inverted setups lost by construction. The Pine had the same
+defect in the same shape. Both now expire the cluster instead: for a long,
+price back below the swept low means that low was taken a second time and the
+reversal the shift claimed did not hold — there is no setup left to re-price.
+After the fix all three classes are zero and 100% of setups carry an intact
+stop. Aggregate cost was small (+0.045 → +0.050); the point is that seven
+alerts were unwinnable trades.
+
+The giveaway that it was an oversight rather than a decision: `Early` has
+exactly this guard, and so does `mtf.refine`. Only `scan_leg` lacked it.
+
+**15% of early alerts were a confirmed alert sent twice.** The early block
+runs before the setup block on the same bar, and with `fvg_scan_from="mss"`
+`scan_leg` examines the very gap the early block just used, with the same
+entry formula and the same stop. Whenever the shift landed within
+`early_max_bars` of the raid, both fired: **457 of 2966 early signals** had
+byte-identical entry and stop, the same detected bar, and therefore the same
+freshness — two messages, one trade. Worse, both were armed for tracking, so
+`/stats` counted one trade twice and correlated its own sample.
+
+Now paired: the confirmed alert carries the trade and gains a line saying it
+also qualified early, the duplicate is recorded so it can never be sent later,
+and only one outcome row is armed. Early signals that share a gap but differ
+in price are untouched — 6 of them in the test set.
+
+**The trend read a daily bar that had not closed.** `bisect_right(times, when)
+- 1` finds the last bar that had *opened* at `when`, not the last that had
+*closed*. Live this never bit, because `fetch_candles` drops the forming bar
+so today's daily candle is not in the series at all. In a backtest every bar
+is closed and present, so a signal at 12:00 read the trend computed from that
+day's close. It moved 1.2% of signals and the headline gap from +0.147 to
++0.135 — **the conclusion survived**, and it is fixed so measurements and live
+now agree.
+
+Two smaller things: the trend was evaluated at `mss_time` for setups but at
+the detection bar for early signals (both now use `detected_time`), and the
+`/trend` help quoted superseded figures.
+
+**Verified clean:** no API key, signing, order or position code anywhere —
+`exchange.py` is GETs only. Every Early invariant passed on all 2966 signals
+(stop exactly at the raid extreme, entry inside the gap, window 0–10 bars,
+confluence 0–1, sweep before gap), as did every sweep invariant. Non-repainting
+confirmed, tracker idempotent through `last_bar`, dedupe tables cannot collide,
+commands gated on chat *and* sender with literal `systemctl` arguments.
+
+Early scores **+0.053 ± 0.016** per signal against +0.045 ± 0.024 for
+confirmed, over 2944 scored — not the weaker strategy, and it fires a median
+4 bars after the raid.
 
 ## Tested and rejected
 

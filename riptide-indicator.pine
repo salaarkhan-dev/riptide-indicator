@@ -1350,6 +1350,23 @@ if engineOk
                                               f2s(c.isHigh ? c.grabHigh : c.grabLow),
                                               alert.freq_once_per_bar_close)
 
+                // The grab candle stops trailing once the break confirms — the
+                // block above only runs while `not wasMss` — but the zone
+                // search below keeps going for maxBarsAfterMss bars. If price
+                // trades back through the raid extreme in that window, the
+                // stop is already breached, and a zone forming beyond it puts
+                // the stop on the WRONG SIDE of the entry: a long stopped
+                // above its own entry. Measured on the engine: 7 of 1219
+                // setups inverted that way, 37 more carried a taken stop.
+                //
+                // Expire rather than re-trail. For a long, price back below
+                // the swept low means that low was taken again and the
+                // reversal the break claimed did not hold; there is no setup
+                // left to re-price.
+                if c.mssConfirmed and not c.setupDone and not c.expired and not c.suppressed
+                    if bar_index > c.mssBar and (c.isHigh ? high > c.grabHigh : low < c.grabLow)
+                        c.expired := true
+
                 // Keep looking for zones for a few bars past the break.
                 if c.mssConfirmed and not c.setupDone and not c.expired and not c.suppressed
                     if bar_index > c.mssBar

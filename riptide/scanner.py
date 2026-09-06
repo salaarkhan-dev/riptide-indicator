@@ -94,13 +94,18 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
 
         # Trend alignment is recorded on every signal, whether or not the
         # filter is suppressing anything, so the alert can say which side of
-        # the trend it is on. Measured: with the trend +0.103 R per setup,
-        # against it -0.008, a 3.8 SE difference over 2026 setups — worth
+        # the trend it is on. Measured: with the trend +0.119 R per setup,
+        # against it -0.016, a 2.8 SE difference over 1188 setups — worth
         # knowing even when taking both. Daily bars are cached for an hour,
         # so this costs one fetch per symbol per hour.
         keep_s, keep_w, keep_e = [], [], []
         for x in setups:
-            d = await trend.direction_at(sess, symbol, x.mss_time, fetch_candles)
+            # detected_time, not mss_time: the gap can arrive up to
+            # max_bars_after_mss bars after the shift, and the trend that
+            # matters is the one in force when the signal became actionable.
+            # Early already used its detection bar; this makes them agree.
+            d = await trend.direction_at(sess, symbol, x.detected_time,
+                                         fetch_candles)
             x.trend_dir = d or 0
             with_trend = d is None or (d > 0) == x.is_long
             if with_trend or not trend_on:
@@ -130,6 +135,45 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
             log.debug("%s: %d setup(s) dropped against the %s trend",
                       symbol, dropped, TREND_INTERVAL)
         return keep_s, keep_w, keep_e, cs
+
+
+def _same_trade(e: Early, s) -> bool:
+    """Whether an Early and a Setup are the identical trade, not merely the
+    same idea. Both are computed by the same formulas from the same candles,
+    so equal entry and stop means equal to the last bit; the tolerance is
+    only there so a float representation change cannot silently unpair them."""
+    scale = max(abs(s.entry), 1e-12)
+    return (abs(e.entry - s.entry) / scale < 1e-9
+            and abs(e.stop - s.stop) / scale < 1e-9)
+
+
+def pair_early(results) -> dict:
+    """
+    Find early signals that describe the same trade as a confirmed setup.
+
+    The early block fires on the gap bar; with fvg_scan_from="mss" the setup
+    search looks at that same gap on that same bar, with the same entry formula
+    and the same stop. Whenever the shift lands within early_max_bars of the
+    raid, both produce a signal — same entry, same stop, same detected bar, so
+    both pass the freshness gate in the same cycle and two messages go out for
+    one trade. Measured: 457 of 2966 early signals, 15.4%.
+
+    They are paired rather than one being dropped: the confirmed alert carries
+    strictly more (the shift, the breaker in its confluence) and gains a line
+    saying it also qualified early, so nothing is lost by sending it alone.
+
+    Returns the set of early keys to suppress, and stamps `also_early` on the
+    setup that will carry the message.
+    """
+    suppress = set()
+    for setups, _, early, _ in results:
+        keyed = {(s.symbol, s.fvg_time, s.is_long): s for s in setups}
+        for e in early:
+            s = keyed.get((e.symbol, e.fvg_time, e.is_long))
+            if s is not None and _same_trade(e, s):
+                s.also_early = e.bars_from_sweep or 0
+                suppress.add((e.symbol, e.fvg_time, e.is_long))
+    return suppress
 
 
 def trend_on(db) -> bool:
@@ -188,6 +232,7 @@ async def cycle(sess, db, symbols):
     # lands before the confirmed setup on the same sweep — often bars before,
     # sometimes instead of, since most sweeps never produce a shift at all.
     quick = 0
+    paired = pair_early(results)
     for _, _, early, _ in results:
         for e in early:
             fresh = (now - e.detected_time) <= FRESH_BARS * step
@@ -195,6 +240,13 @@ async def cycle(sess, db, symbols):
             if early_already_sent(db, sid):
                 continue
             record_early(db, sid, e)
+            # Same trade as a confirmed setup in this cycle. Record it so it
+            # can never be sent later, then stand aside: the confirmed alert
+            # below carries it. Deliberately NOT armed either — two outcome
+            # rows for one trade would double-count it in /stats and correlate
+            # the sample, which is worse than the duplicate message.
+            if (e.symbol, e.fvg_time, e.is_long) in paired:
+                continue
             if fresh:
                 tracker.arm(db, sid, e, kind=tracker.EARLY)
             if fresh and not mute:

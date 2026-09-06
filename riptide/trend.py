@@ -7,9 +7,16 @@ project that separates winning signals from losing ones. Measured across 50
 symbols over 41.6 days, 1R target, fills counted only from the bar the setup
 became detectable:
 
-    with the daily trend      1011 setups   +0.103 R/setup  ± 0.021
-    against the daily trend   1015 setups   -0.008 R/setup  ± 0.020
-    difference                +0.110 R  ± 0.029  (+3.8 SE)
+    with the daily trend       582 setups   +0.119 R/setup  ± 0.034
+    against the daily trend    606 setups   -0.016 R/setup  ± 0.033
+    difference                +0.135 R  ± 0.047  (+2.8 SE)
+
+An earlier run of the same comparison read +0.103 / -0.008 (+0.110, +3.8 SE)
+over 2026 setups. Two things moved it: fvg_scan_from="mss" roughly halves the
+setup count, and direction_at used to read the daily bar that had OPENED at
+the signal rather than the one that had CLOSED, which was worth about 1.2% of
+signals. The corrected figure is smaller and less certain; the separation is
+what survived both, which is the point.
 
 Six engine-parameter variants, two entry timeframes, five exit families and
 four targets all came back inside noise. The edge was never in the parameters
@@ -33,7 +40,7 @@ from __future__ import annotations
 import time
 from bisect import bisect_right
 
-from .config import (TREND_FACTOR, TREND_INTERVAL, TREND_LEN, log)
+from .config import (BAR_SECONDS, TREND_FACTOR, TREND_INTERVAL, TREND_LEN, log)
 from .engine import Candle, atr_series
 
 # Daily bars change once a day; refetching them every scan is pure waste.
@@ -90,6 +97,15 @@ async def direction_at(sess, symbol: str, when: int, fetch) -> int | None:
     _, times, dirs = hit
     if not times:
         return None
-    # bisect_right - 1 is the last bar at or before `when`: strictly the past.
-    i = bisect_right(times, when) - 1
+    # Candle.t is a bar OPEN time, so the last bar that had already CLOSED at
+    # `when` is the last one with open + step <= when — not the last one with
+    # open <= when, which is the bar still forming.
+    #
+    # Live the distinction never bites: fetch_candles drops the forming bar, so
+    # today's daily candle is not in the series at all. In a BACKTEST every bar
+    # is closed and present, so the looser reading handed a signal at 12:00 the
+    # trend computed from that day's close — hours of lookahead. It moved 1.2%
+    # of signals and the headline gap from +0.149 to +0.138 (still +2.9 SE), so
+    # nothing built on it changed; it is fixed so measurements and live agree.
+    i = bisect_right(times, when - BAR_SECONDS[TREND_INTERVAL]) - 1
     return dirs[i] if 0 <= i < len(dirs) else None

@@ -157,7 +157,7 @@ def trend_note(trend_dir: int, is_long: bool) -> str:
 
     Shown on every alert whether or not the filter is suppressing anything —
     the point is to judge a counter-trend setup, not to be spared it.
-    Measured: with the trend +0.103 R per setup, against it -0.008.
+    Measured: with the trend +0.119 R per setup, against it -0.016.
     Empty when the trend is unknown, which is honest about not knowing.
     """
     if not trend_dir:
@@ -247,9 +247,16 @@ def setup_message(s: Setup) -> str:
     # The gap sits on whichever timeframe produced the entry.
     gap_step = BAR_SECONDS[ENTRY_INTERVAL] if s.entry_tf == "LTF" \
         else BAR_SECONDS[INTERVAL]
+    # When the same gap also produced an early signal, this one message stands
+    # for both — the scanner suppressed the duplicate rather than sending the
+    # identical entry and stop twice. Saying so keeps the early strategy
+    # visible instead of silently swallowing it.
+    also = (f" · ⚡ also early, gap {s.also_early} "
+            f"bar{'' if s.also_early == 1 else 's'} after the raid"
+            if s.also_early else "")
     return "\n".join(x for x in (
         _headline("🎯 <b>CONFIRMED</b>", s.is_long, s.symbol, tf),
-        "<i>sweep → shift → FVG</i>",
+        f"<i>sweep → shift → FVG{also}</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         _grade(s.trend_dir, s.is_long, s.confluence),
