@@ -671,4 +671,20 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
             best[k].pools += 1
         early_out[:] = sorted(best.values(), key=lambda e: e.fvg_bar)
 
+    # And one per gap for confirmed setups, for the same reason. Several
+    # clusters can reach the same gap with different raid extremes, so the
+    # entry matches and only the stop differs. I claimed earlier that this
+    # path was already clean; it was clean on the symbols I happened to check
+    # and not on others, which is what a rule enforced in one place and
+    # verified in another gets you.
+    if len(setups) > 1:
+        keep: dict[tuple[int, bool], Setup] = {}
+        for s in setups:
+            k = (s.fvg_time, s.is_long)
+            cur = keep.get(k)
+            if cur is None or s.risk < cur.risk:
+                keep[k] = s
+        if len(keep) != len(setups):
+            setups = sorted(keep.values(), key=lambda s: s.detected_time)
+
     return setups
