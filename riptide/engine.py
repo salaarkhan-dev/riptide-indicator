@@ -169,6 +169,8 @@ class Sweep:
     sweep_extreme: float
     anchor_time: int
     pivots: int
+    pools: int = 0         # how many pools this one bar took out. Set when
+                           # duplicates are collapsed, not by detection.
     trend_dir: int = 0     # as above
     last_price: float = 0.0   # display only, as above
 
@@ -611,6 +613,34 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                     c.done = True
                 elif i - c.mss_bar >= cfg.max_bars_after_mss:
                     c.done = True
+
+    # One heads-up per liquidity event. A single bar can run through several
+    # pools stacked in the same area — on ETH, 31 Aug, one bar took four —
+    # and each spawned its own message with an IDENTICAL sweep extreme and
+    # shift level, differing only in which pool got named. 18% of sweep
+    # alerts were the same event told again.
+    #
+    # The bar and the direction are what make it one event. Keep the
+    # best-confirmed pool (most swings, then the level nearest the extreme,
+    # which is the one most precisely taken) and say how many were run: four
+    # pools in one candle is a stronger read than one, and it belongs in that
+    # one message rather than in four.
+    if sweeps_out is not None and len(sweeps_out) > 1:
+        pick: dict[tuple[int, bool], Sweep] = {}
+        for w in sweeps_out:
+            k = (w.sweep_bar, w.is_high)
+            cur = pick.get(k)
+            better = cur is not None and (
+                w.pivots > cur.pivots or
+                (w.pivots == cur.pivots
+                 and abs(w.level - w.sweep_extreme)
+                     < abs(cur.level - cur.sweep_extreme)))
+            if cur is None or better:
+                if cur is not None:
+                    w.pools = cur.pools
+                pick[k] = w
+            pick[k].pools += 1
+        sweeps_out[:] = sorted(pick.values(), key=lambda w: w.sweep_bar)
 
     # One signal per gap. Every pool swept in the same area spawns its own
     # cluster, and they all find the SAME first imbalance afterwards with the

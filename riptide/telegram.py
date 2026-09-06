@@ -216,7 +216,7 @@ def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
     as several clusters."""
     extra = f" · {pivots} swings" if src == "Pivot" else ""
     if pools > 1:
-        extra += f" · {pools} pools converged"
+        extra += f" · {pools} pools taken"
     return f"{src} pool @ {fmt(level)}{extra}"
 
 
@@ -294,6 +294,6 @@ def sweep_message(s: Sweep) -> str:
         f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",
         f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>",
         note or None,
-        _pool(s.src, s.level, s.pivots),
+        _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.sweep_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
     ) if x is not None)
