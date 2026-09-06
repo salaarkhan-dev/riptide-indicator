@@ -319,6 +319,39 @@ against what was intended. Rejected.
 **Daily ADX level.** Not monotonic, confirmed +1.1 SE, early −0.4 SE with the
 opposite sign. Null.
 
+### RSI and RSI divergence
+
+Divergence fits this strategy better than any indicator tested before it: the
+raid is *by construction* a new price extreme, and the liquidity pool the
+engine already tracks is the prior swing to compare against. So RSI at the
+sweep bar against RSI at the pool's anchor bar is an exact comparison, not an
+approximation. Signed so positive always means divergent in the trade's favour.
+
+**Divergence: null.** +0.028, +0.6 SE, and the time split flips sign — −1.0 SE
+in the first half of the window, +2.5 SE in the second. That flip is the whole
+story: an effect that reverses between halves of one 41-day window is regime
+noise, and it is exactly what the split rule exists to catch.
+
+Worth keeping descriptively: only **30% of setups diverge in the trade's
+favour**, median −3.4. RSI usually *confirms* the raid's extreme rather than
+refusing it. The textbook setup is the minority case here.
+
+**RSI level** (oriented to the trade: oversold for a long, overbought for a
+short) passed the pre-registered rule at +0.106, +2.2 SE, with all four splits
+the same sign. But it is **not an independent effect** — conditioned on DI it
+only exists in one half:
+
+| | RSI high | RSI low | gap |
+|---|---|---|---|
+| DI with | +0.175 (281) | +0.143 (306) | −0.009 (−0.1 SE) |
+| DI against | +0.035 (311) | **−0.169 (287)** | +0.187 (+2.8 SE) |
+
+RSI level does nothing when DI agrees with the trade, and rescues the trade
+when DI does not. Its +2.2 SE main effect is entirely those counter-DI cells.
+Ships as a modifier on that band if at all, never as its own axis — the two
+measures agree on only 48% of setups, so this is a genuine interaction rather
+than the same reading twice.
+
 ### DI direction — the strongest open hypothesis since the trend filter
 
 Declared descriptive-only before the run, so **it is not shipped on this
@@ -337,9 +370,29 @@ It is **not** the SuperTrend restated. The two agree on only 78% of signals,
 and DI still separates after conditioning on it — +2.1 SE within the
 trend-aligned half, +2.7 SE within the counter-trend half, same sign in both.
 
-Before it can ship it needs what the SuperTrend got: a pre-registered primary
-test on a different symbol set and a different window. Same-window,
-same-symbols is how several results on this page died.
+**It got that test, and it passed.** Re-run as a pre-registered primary under
+a split rule that does not depend on early signals (which the section below
+shows cannot discriminate a trend-derived effect):
+
+| split | gap | |
+|---|---|---|
+| overall | +0.222 | **+4.7 SE** |
+| symbols A (alternating by turnover rank) | +0.193 | +2.9 SE |
+| symbols B | +0.253 | +3.8 SE |
+| first half of the window | +0.279 | +4.0 SE |
+| second half | +0.170 | +2.6 SE |
+
+Every split the same sign, every split individually significant. That is a
+stronger replication than the SuperTrend itself has, and DI's effect is
+larger. **This is the second thing in the project that has ever separated,**
+and the practical reading is that the daily trend axis should probably *be*
+DI rather than the SuperTrend.
+
+The standing caveat still applies and is not small: the symbol split is
+genuinely out of sample across instruments and the time split across time, but
+both halves are the same 41.6 days of the same market. A different regime can
+still kill it. What it has earned is a place in the grade ladder and a live
+`/stats` split, not a position size.
 
 ### The trend filter does not work on early signals
 
