@@ -198,13 +198,48 @@ where entries routinely sat too far below market to ever fill.
 ### Engine parameters
 
 Six variants covering the reference indicator's own settings — `pivot_right`,
-`tol_atr`, `max_overshoot_atr`, `max_bars_after_grab` — all inside noise.
+`tol_atr`, `max_overshoot_atr`, `max_bars_after_grab` — all inside noise. The
+last of those was later swept on its own across six values; see below.
 
 `max_bars_after_mss = 5` (against 10) drops 55 of 2034 setups and alters none.
 Those 55 nominally scored better (+0.319 against +0.044), but on 55 samples
 that is not readable. Reverted: the count reduction is certain, the quality
 claim is not, and suppressing them would foreclose the live measurement that
 could settle it.
+
+**`max_bars_after_grab`** — how long a raid stays live waiting for a structure
+break — swept properly across six pre-registered values:
+
+| cancel at | setups | R per setup |
+|---|---|---|
+| 10 bars | 759 | +0.038 ± 0.030 |
+| 20 bars | 1081 | +0.044 ± 0.025 |
+| 30 bars | 1178 | +0.039 ± 0.024 |
+| **50 bars** (shipped) | **1210** | **+0.045 ± 0.024** |
+| 75 bars | 1196 | +0.046 ± 0.024 |
+| 100 bars | 1183 | +0.047 ± 0.024 |
+
+Flat. The whole range spans 0.009 R against standard errors of 0.025 — 0.3 SE
+end to end. Kept at 50, which already admits 97% of setups: raid age at the
+break has median 9 bars, p90 28, p99 67. Lowering to 10 costs 37% of alerts
+and buys nothing measurable; raising past 50 reaches 2.8% more.
+
+Fill rate is flat across age too (71–74% in every band), which is a coherence
+check on `fvg_scan_from="mss"`: the entry gap comes from after the break, so an
+old raid does not imply a stale entry.
+
+**The method was wrong, and the verification step is what caught it.** The
+plan was to run once at a ceiling of 200, record each setup's age, and read
+every threshold off that one population — the parameter only ever *removes*
+setups, so the books should nest. They do not. Re-running each candidate gives
+1210 setups at 50 against 1128 predicted, and 759 at 10 against 656. Expiring
+a cluster early frees later clusters that the long-lived one would have
+suppressed through `mss_cooldown_bars`, so the threshold *creates* setups as
+well as removing them — the count is not even monotonic (100 bars yields fewer
+setups than 50). The re-run figures above are the authoritative ones.
+
+Worth carrying forward: **no parameter sweep on this engine may assume
+nesting.** Clusters interact, so a threshold must be measured by re-running it.
 
 ## Confluence — the one open question
 
