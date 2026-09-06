@@ -83,6 +83,26 @@ TRACK_HORIZON_BARS = int(os.getenv("RIPTIDE_TRACK_HORIZON_BARS", "60"))
 # rows afterwards.
 TRACK_TARGET_R = float(os.getenv("RIPTIDE_TRACK_TARGET_R", "1.0"))
 
+# Log open interest and funding per bar, so they can be tested LATER.
+#
+# MEXC serves holdVol (open interest) and fundingRate only as a snapshot from
+# contract/ticker — there is no history endpoint for either, so unlike volume
+# they cannot be backtested at all. The only way they ever become testable is
+# to start recording them now and wait.
+#
+# Worth doing because open interest is the one genuine supply/demand reading a
+# futures venue offers: OI FALLING through a raid means positions are being
+# closed out, which is what a stop run is; OI RISING means new money is
+# positioning, which is continuation and the reversal is wrong. Nothing in the
+# OHLC can distinguish those two.
+#
+# Costs one request per scan — contract/ticker returns every symbol at once —
+# and touches nothing that decides an alert. See market.py.
+LOG_MARKET = os.getenv("RIPTIDE_LOG_MARKET", "1") == "1"
+# Days of snapshots to keep. At one row per symbol per bar this is roughly
+# 20 symbols x 48 bars x 180 days = 173k rows, a few MB.
+MARKET_KEEP_DAYS = int(os.getenv("RIPTIDE_MARKET_KEEP_DAYS", "180"))
+
 # The no-shift entry: sweep -> first imbalance, no structure shift required.
 # A second strategy running beside the confirmed one, not a replacement — both
 # fire independently on the same sweep and each alert says which it is.

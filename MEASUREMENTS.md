@@ -269,6 +269,101 @@ not representative of a class. And fill rates confirm the stale-entry fix:
 64–75% per quintile under `fvg_scan_from="mss"` against 40–60% under `"grab"`,
 where entries routinely sat too far below market to ever fill.
 
+### Volume, and the context filters
+
+The first tests using information the engine does not already have. Everything
+above rearranges the same OHLC geometry.
+
+**Sweep volume** (relative turnover on the raid bar, against the median of the
+50 bars before it). Quintiles on R: +0.011, +0.095, +0.080, +0.052, +0.007 —
+an inverted U, Q5 minus Q1 is −0.1 SE. Three pre-registered thresholds all
+lean negative but none past −1.3 SE. **No effect on trade quality.**
+
+But conversion is a different story, and a large one:
+
+| sweep RVOL | → confirmed setup |
+|---|---|
+| Q1 0.01–0.98 | 26.4% ± 1.1 |
+| Q2 0.98–1.55 | 20.3% ± 1.0 |
+| Q3 1.55–2.35 | 14.6% ± 0.9 |
+| Q4 2.35–4.08 | 10.6% ± 0.8 |
+| Q5 4.08–387 | **6.5% ± 0.6** |
+
+Monotonic over 7869 sweeps, **+15.6 SE**. A quiet raid is four times likelier
+to reverse than a loud one — which inverts the folk premise. Volume surging
+through a level is a *breakout*, not a stop run; the classic grab that snaps
+back drifts through on thin participation. Note what this is not: the setups
+that *do* come from loud sweeps score the same (−0.1 SE). Conversion and
+expectancy are different questions. Actionable for sweep heads-ups, not for
+setup quality.
+
+**Volume profile.** Density in the path from entry to the 1R target, over a
+500-bar / 100-bin profile built strictly before the signal. Confirmed Q5−Q1
+was +2.1 SE — *backwards* from the premise (heavy volume in the path scored
+better, not worse), not monotonic, and +0.7 SE on early. Density at the gap
+(+1.4 SE) and density at the swept pool (−1.5 SE) point opposite ways. Noise.
+Likely partly a proxy for risk size, which is itself null.
+
+**BTC regime**, conditional on the symbol's own daily trend. One cell cleared
+the pre-registered bar, and it should still not ship, because the 2×2 pattern
+contradicts itself:
+
+| | confirmed worst cell | early worst cell |
+|---|---|---|
+| | own against + BTC against, −0.063 | own **with** + BTC against, −0.062 |
+
+The two strategies disagree about *which* combination is bad. And the design
+was flawed: allowing "any of two rows" to pass doubles the false-positive rate
+against what was intended. Rejected.
+
+**Daily ADX level.** Not monotonic, confirmed +1.1 SE, early −0.4 SE with the
+opposite sign. Null.
+
+### DI direction — the strongest open hypothesis since the trend filter
+
+Declared descriptive-only before the run, so **it is not shipped on this
+evidence**. Recorded because it is the best candidate the project has found
+since the SuperTrend, and because promoting a secondary to a finding is
+exactly the flexibility pre-registration exists to stop.
+
+Confirmed setups, 1185 scored:
+
+| | with | against | gap |
+|---|---|---|---|
+| daily SuperTrend | +0.122 (582) | −0.026 (603) | +0.148 (+3.1 SE) |
+| daily DI+/DI− | +0.158 (587) | −0.063 (598) | **+0.222 (+4.7 SE)** |
+
+It is **not** the SuperTrend restated. The two agree on only 78% of signals,
+and DI still separates after conditioning on it — +2.1 SE within the
+trend-aligned half, +2.7 SE within the counter-trend half, same sign in both.
+
+Before it can ship it needs what the SuperTrend got: a pre-registered primary
+test on a different symbol set and a different window. Same-window,
+same-symbols is how several results on this page died.
+
+### The trend filter does not work on early signals
+
+The most useful thing to come out of this round, and it affects what already
+ships:
+
+| | with the daily trend | against | gap |
+|---|---|---|---|
+| confirmed (1185) | +0.122 | −0.026 | +0.148 (+3.1 SE) |
+| early (2945) | +0.035 | +0.065 | **−0.030 (−0.9 SE)** |
+
+On early signals the daily trend shows no effect at all, and nominally the
+wrong sign, over 2945 samples. The difference between the two strategies is
+itself **+3.0 SE**, so this is not merely a weaker version of the same thing —
+the axis that sorts confirmed setups does not sort early ones.
+
+Two consequences. First, `GRADES` was measured on confirmed setups and is
+applied to early alerts too, where the trend axis carrying almost all of the
+separation appears not to hold — the letter on an early alert is less
+meaningful than the letter on a confirmed one. Second, **early is not a valid
+replication set for a trend-derived filter**, which retrospectively weakens
+the replication requirement used above: the known-good control fails that same
+test.
+
 ### Engine parameters
 
 Six variants covering the reference indicator's own settings — `pivot_right`,

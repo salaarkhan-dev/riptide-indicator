@@ -13,8 +13,10 @@ import time
 import aiohttp
 
 from . import telegram as tg
+from . import market
 from . import tracker
 from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
+                     LOG_MARKET,
                      SWEEP_ALERTS, TG_CHAT, TG_TOKEN, TRACK,
                      TRACK_FILL_BARS, TRACK_HORIZON_BARS, TRACK_TARGET_R,
                      TREND_FACTOR, TREND_FILTER, TREND_INTERVAL, TREND_LEN,
@@ -75,6 +77,12 @@ def status_text(db, state) -> str:
         track_line = f"{done} settled · {live} live · /stats"
     else:
         track_line = "off"
+    if LOG_MARKET:
+        rows, msyms, mdays = market.coverage(db)
+        oi_line = (f"{rows} rows · {msyms} symbols · {mdays:.1f}d"
+                   if rows else "on, nothing yet")
+    else:
+        oi_line = "off"
     sweeps = "on" if SWEEP_ALERTS else "off"
     live = trend_on(db)
     src = "" if (meta_get(db, "trend_filter", "") not in ("0", "1")) else " (/trend)"
@@ -88,6 +96,7 @@ def status_text(db, state) -> str:
         f"alerts     {'PAUSED' if paused else 'on'} · sweeps {sweeps}\n"
         f"trend      {trend_line}\n"
         f"outcomes   {track_line}\n"
+        f"oi log     {oi_line}\n"
         f"uptime     {_fmt_ago(time.time() - state.get('started', time.time()))}\n"
         f"last scan  {scan_line}\n"
         f"next scan  in {int(seconds_to_next_close(step) // 60)}m\n"

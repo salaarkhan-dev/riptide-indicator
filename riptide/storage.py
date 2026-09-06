@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
-from . import tracker
+from . import market, tracker
 from .config import DB_PATH, INTERVAL
 from .engine import Early, Setup, Sweep
 
@@ -33,6 +33,7 @@ def db_init():
         sent_at INT)""")
     db.commit()
     tracker.init(db)
+    market.init(db)
     return db
 
 

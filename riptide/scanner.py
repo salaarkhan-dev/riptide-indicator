@@ -9,12 +9,14 @@ from __future__ import annotations
 import asyncio
 import time
 
+from . import market
 from . import mtf
 from . import telegram as tg
 from . import tracker
 from . import trend
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      EARLY_ALERTS, ENTRY_INTERVAL, FRESH_BARS, INTERVAL,
+                     LOG_MARKET,
                      MTF_GRACE_BARS, SCAN_INTERVAL,
                      SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC,
                      TREND_FILTER, TREND_INTERVAL, log)
@@ -211,6 +213,18 @@ async def cycle(sess, db, symbols):
         tracker.expire_stale(db)
     except Exception as e:
         log.warning("stale outcome sweep failed: %s", e)
+
+    # Open interest and funding for this bar. Neither has a history endpoint,
+    # so recording forward is the only way they ever become testable — see
+    # market.py. Wrapped because a logger must never be able to cost an alert.
+    if LOG_MARKET:
+        try:
+            n = await market.snapshot(sess, db, symbols)
+            log.debug("market: logged %d snapshots", n)
+            if now % 86400 < BAR_SECONDS[INTERVAL]:      # about once a day
+                market.prune(db)
+        except Exception as e:
+            log.warning("market snapshot failed: %s", e)
 
     # Sweeps first: the grab precedes the shift, so the heads-up should land
     # before the setup message when both fall in the same cycle.
