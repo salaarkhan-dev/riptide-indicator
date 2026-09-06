@@ -156,6 +156,10 @@ class Cfg:
     min_fvg_atr: float = 0.05
     max_fvg_atr: float = 2.0
     max_risk_atr: float = 4.0
+    # There is deliberately no minimum. A stop inside one ordinary candle looks
+    # like it should be filtered out, but three pre-registered floors (0.50,
+    # 0.75, 1.00 ATR) found no effect, and the two with enough samples to read
+    # ran the other way. See "A minimum risk floor" in MEASUREMENTS.md.
     max_bars_after_mss: int = 10
     # Where the entry-gap search starts. Mirrors the Pine input "Look for
     # entry zones from":

@@ -161,6 +161,40 @@ zero setups in 41.6 days. By the rule of three that bounds their conversion
 below ~1%, against Pivot's 28%. They cost sweep alerts and return nothing —
 see `RIPTIDE_USE_WEEKLY` in `riptide.conf`.
 
+**A minimum risk floor.** `Cfg` has `max_risk_atr = 4.0` and no minimum, so
+nothing stops a setup whose stop sits inside a single ordinary candle. A live
+BTC_USDT alert on 5 Sep was stopped out with its stop about 1.0 ATR away,
+which raised the obvious hypothesis: R normalises by risk, so a 1-ATR stop and
+a 3-ATR stop both pay +1R when they work, but only the 1-ATR stop can be taken
+out by noise.
+
+Three thresholds were fixed before looking — reject below 0.50, 0.75, 1.00 ATR
+— along with the rule that it ships only if the effect is **monotonic across
+all three** and the best gap is ≥ 2 SE. 1210 setups, shipped config:
+
+| floor | rejected (below) | kept | kept − rej |
+|---|---|---|---|
+| 0.50 ATR | −0.667 ± 0.333 (3) | +0.047 ± 0.024 (1207) | +2.1 SE |
+| 0.75 ATR | +0.267 ± 0.228 (15) | +0.042 ± 0.024 (1195) | −1.0 SE |
+| 1.00 ATR | +0.122 ± 0.136 (41) | +0.042 ± 0.024 (1169) | −0.6 SE |
+
+**The hypothesis is wrong, and the monotonicity rule is what caught it.** The
+0.50 row is +2.1 SE on *three setups*, and its sign flips under the old
+`fvg_scan_from="grab"` config (+0.500 on two setups there). Taken alone it
+would have read as a shippable result. The two thresholds with enough samples
+to mean anything both run the *other* way: tight stops score slightly better,
+not worse.
+
+Across quintiles there is no gradient in either direction — the widest-stop
+quintile is nominally the worst (+0.005 against +0.050 for the tightest), but
+that is 0.6 SE, and 1.3 SE on the larger `grab` sample. Rejected; no floor added.
+
+Two by-products worth keeping. Only 3% of setups have a stop under 1 ATR, and
+the median is 2.58 ATR — so the BTC alert sat below the 10th percentile and was
+not representative of a class. And fill rates confirm the stale-entry fix:
+64–75% per quintile under `fvg_scan_from="mss"` against 40–60% under `"grab"`,
+where entries routinely sat too far below market to ever fill.
+
 ### Engine parameters
 
 Six variants covering the reference indicator's own settings — `pivot_right`,
@@ -255,12 +289,14 @@ re-grades history instead of stranding it.
 
 Tested: six engine parameters, two entry timeframes, five exit families, four
 targets, Order Block entries (four variants), Breaker Block entries (four
-variants), session timing (six buckets), pool source. **Every one came back
-inside noise.** One thing has ever separated, and it keeps replicating.
+variants), session timing (six buckets), pool source, a minimum risk floor
+(three thresholds). **Every one came back inside noise.** One thing has ever
+separated, and it keeps replicating.
 
 The reasonable conclusion is not that these need testing more carefully. It is
 that the structural variations genuinely do not matter much on this data, and
-the remaining headroom is not in another entry *price*.
+the remaining headroom is not in another entry *price* — nor, now, in another
+entry *filter*.
 
 Zone confluence is the one live candidate, at +1.4 SE — shipped as a score
 rather than a filter, precisely because that is not enough to act on.
