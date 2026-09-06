@@ -265,6 +265,41 @@ the remaining headroom is not in another entry *price*.
 Zone confluence is the one live candidate, at +1.4 SE — shipped as a score
 rather than a filter, precisely because that is not enough to act on.
 
+## Duplicate alerts, and what the collapse is allowed to merge
+
+Three signal types each sent the same event more than once, because several
+liquidity pools sit in the same price area: one bar runs through all of them,
+or several clusters reach the same gap. Measured over 20 symbols:
+
+| | raw | sent | merged |
+|---|---|---|---|
+| 👀 sweep | 1085 | 917 | 168 |
+| ⚡ early | 501 | 347 | 154 |
+| 🎯 confirmed | 228 | 224 | 4 |
+
+`collapse()` merges on (event, direction) and keeps the tightest stop; the
+group size survives as `pools` and is printed on the alert, so four pools taken
+in one candle reads as a stronger signal in one message rather than four
+messages.
+
+**The sweep key includes the shift level, and that is not incidental.** Two
+pools taken by the same bar can need *different* levels broken for the shift to
+confirm — they are two setups in waiting, not one. 37 same-bar groups disagreed
+on it, and merging those would have dropped a real alert. Adding it to the key
+put 39 sweeps back.
+
+`run_engine(collapse_dupes=False)` returns the raw stream so this is a test
+rather than a claim in a comment. The test asserts two things on every merged
+group: that `raw − sent == merged` (nothing vanishes uncounted), and that the
+members agreed on direction, entry/extreme and shift level — meaning only the
+named pool and the stop distance differed. Both hold across 20 symbols.
+
+Worth recording how this was found: the duplicate was reported on early
+signals, fixed there, and I then said twice that the confirmed path was clean,
+citing a measurement that returned zero on 30 symbols which happened to contain
+no case. Writing one test across all three types failed immediately on the
+third. A rule enforced in one place needs verifying in one place.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their

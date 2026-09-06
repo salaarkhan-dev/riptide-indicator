@@ -76,6 +76,8 @@ class Setup:
                              # set by the scanner; the engine never reads it.
     confluence: int = 0      # how many of {order block, breaker} share the
                              # gap's price area. 0-2. See confluence_of.
+    pools: int = 0           # how many clusters reached this same gap. Set by
+                             # collapse(), not by detection.
 
     @property
     def detected_time(self) -> int:
@@ -331,9 +333,35 @@ def grade_of(trend_dir: int, is_long: bool, confluence: int) -> tuple[str, str]:
     return GRADES[(side, max(0, min(2, confluence)))]
 
 
+def collapse(items: list, key, better) -> list:
+    """
+    One entry per event. `key` says what makes two items the same event;
+    `better(new, cur)` says which to keep. The kept item's `pools` counts the
+    whole group, so nothing is silently discarded — the count survives.
+
+    Only ever merges items that are the same TRADE: same bar, same direction,
+    and therefore the same entry. What differs between members is which pool
+    was named and how far back its raid extreme sat, so the group collapses to
+    the tightest stop and the pool count.
+    """
+    if len(items) < 2:
+        return items
+    best: dict = {}
+    for it in items:
+        k = key(it)
+        cur = best.get(k)
+        if cur is None or better(it, cur):
+            if cur is not None:
+                it.pools = cur.pools
+            best[k] = it
+        best[k].pools += 1
+    return list(best.values())
+
+
 def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                sweeps_out: list | None = None,
-               early_out: list | None = None) -> list[Setup]:
+               early_out: list | None = None,
+               collapse_dupes: bool = True) -> list[Setup]:
     """
     Single pass over closed candles, mirroring the Pine bar loop. Returns every
     setup found in the window; the caller decides which are recent enough to
@@ -614,77 +642,37 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                 elif i - c.mss_bar >= cfg.max_bars_after_mss:
                     c.done = True
 
-    # One heads-up per liquidity event. A single bar can run through several
-    # pools stacked in the same area — on ETH, 31 Aug, one bar took four —
-    # and each spawned its own message with an IDENTICAL sweep extreme and
-    # shift level, differing only in which pool got named. 18% of sweep
-    # alerts were the same event told again.
+    # A single bar can run through several pools stacked in the same area, and
+    # several clusters can reach the same gap with different raid extremes. In
+    # both cases the entry is identical and only the named pool and the stop
+    # differ — one trade, told once. Measured before this: 18% of sweep alerts
+    # and 49% of early signals were repeats.
     #
-    # The bar and the direction are what make it one event. Keep the
-    # best-confirmed pool (most swings, then the level nearest the extreme,
-    # which is the one most precisely taken) and say how many were run: four
-    # pools in one candle is a stronger read than one, and it belongs in that
-    # one message rather than in four.
-    if sweeps_out is not None and len(sweeps_out) > 1:
-        pick: dict[tuple[int, bool], Sweep] = {}
-        for w in sweeps_out:
-            k = (w.sweep_bar, w.is_high)
-            cur = pick.get(k)
-            better = cur is not None and (
-                w.pivots > cur.pivots or
-                (w.pivots == cur.pivots
-                 and abs(w.level - w.sweep_extreme)
-                     < abs(cur.level - cur.sweep_extreme)))
-            if cur is None or better:
-                if cur is not None:
-                    w.pools = cur.pools
-                pick[k] = w
-            pick[k].pools += 1
-        sweeps_out[:] = sorted(pick.values(), key=lambda w: w.sweep_bar)
-
-    # One signal per gap. Every pool swept in the same area spawns its own
-    # cluster, and they all find the SAME first imbalance afterwards with the
-    # same trailed raid extreme — so a single trade arrived once per pool that
-    # happened to sit nearby. On DOGE that was seven identical alerts for one
-    # gap, and 49% of all early signals over a 12-day window were duplicates.
-    #
-    # The gap and the direction are what make it one trade; which pool led to
-    # it is a label. Keep the tightest stop, since that is the version worth
-    # taking, and record how many pools converged — several pools raided into
-    # one imbalance is information, not noise, as long as it is one message.
-    if early_out is not None and len(early_out) > 1:
-        best: dict[tuple[int, bool], Early] = {}
-        for e in early_out:
-            k = (e.fvg_bar, e.is_long)
-            cur = best.get(k)
-            # Tightest stop wins. Risks usually tie — the pools share a raid
-            # extreme — so break it on the freshest raid, otherwise the
-            # "gap N bars after the raid" line reports whichever pool the
-            # cluster list happened to reach first.
-            better = cur is not None and (
-                e.risk < cur.risk or
-                (e.risk == cur.risk and e.bars_from_sweep < cur.bars_from_sweep))
-            if cur is None or better:
-                if cur is not None:
-                    e.pools = cur.pools
-                best[k] = e
-            best[k].pools += 1
-        early_out[:] = sorted(best.values(), key=lambda e: e.fvg_bar)
-
-    # And one per gap for confirmed setups, for the same reason. Several
-    # clusters can reach the same gap with different raid extremes, so the
-    # entry matches and only the stop differs. I claimed earlier that this
-    # path was already clean; it was clean on the symbols I happened to check
-    # and not on others, which is what a rule enforced in one place and
-    # verified in another gets you.
-    if len(setups) > 1:
-        keep: dict[tuple[int, bool], Setup] = {}
-        for s in setups:
-            k = (s.fvg_time, s.is_long)
-            cur = keep.get(k)
-            if cur is None or s.risk < cur.risk:
-                keep[k] = s
-        if len(keep) != len(setups):
-            setups = sorted(keep.values(), key=lambda s: s.detected_time)
+    # collapse_dupes=False returns the raw stream. It exists so a test can
+    # prove the collapse only ever merges items that are the same trade,
+    # rather than that claim being an assertion in a comment.
+    if collapse_dupes:
+        if sweeps_out is not None:
+            sweeps_out[:] = sorted(
+                # struct_level is part of the key, not incidental: two pools
+                # taken by the same bar can need DIFFERENT levels broken for
+                # the shift to confirm, and then they are two setups in
+                # waiting, not one. Measured: 37 same-bar groups disagreed on
+                # it, and merging those would have dropped a real alert.
+                collapse(sweeps_out,
+                         lambda w: (w.sweep_bar, w.is_high, w.struct_level),
+                         lambda n, c: (n.pivots, -abs(n.level - n.sweep_extreme))
+                                      > (c.pivots, -abs(c.level - c.sweep_extreme))),
+                key=lambda w: w.sweep_bar)
+        if early_out is not None:
+            early_out[:] = sorted(
+                collapse(early_out, lambda e: (e.fvg_bar, e.is_long),
+                         lambda n, c: (n.risk, n.bars_from_sweep)
+                                      < (c.risk, c.bars_from_sweep)),
+                key=lambda e: e.fvg_bar)
+        setups = sorted(
+            collapse(setups, lambda s: (s.fvg_time, s.is_long),
+                     lambda n, c: n.risk < c.risk),
+            key=lambda s: s.detected_time)
 
     return setups
