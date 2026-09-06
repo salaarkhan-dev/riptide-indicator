@@ -340,6 +340,10 @@ type Cluster
 type LevelGroup
     array<line>  lns
     array<label> lbs
+    int          bar     // bar it was opened on, so drawSetup and openTrade
+                         // can share one. Held here rather than in a global
+                         // because Pine functions may mutate object fields
+                         // but may not assign to globals.
 
 type CtxFvg
     box   bx
@@ -438,7 +442,6 @@ var array<CtxFvg>  ctxFvgs  = array.new<CtxFvg>()
 // leaving a marker on a raid that died is what made Live mode unreadable.
 var array<Cluster> pendingRaids = array.new<Cluster>()
 var array<LevelGroup> lvlGroups = array.new<LevelGroup>()
-var int               lvlGroupBar = na
 var array<Trade>   trades   = array.new<Trade>()
 var Stats          stx      = Stats.new()
 var Counters       cnt      = Counters.new()
@@ -816,9 +819,12 @@ entryFrom(Cluster c) =>
 // openTrade both contribute and run back to back, so keying on bar_index lets
 // them share one group rather than each spending a slot.
 levelGroup() =>
-    if na(lvlGroupBar) or lvlGroupBar != bar_index or lvlGroups.size() == 0
-        lvlGroups.push(LevelGroup.new(array.new<line>(), array.new<label>()))
-        lvlGroupBar := bar_index
+    bool fresh = lvlGroups.size() == 0
+    if not fresh
+        fresh := lvlGroups.get(lvlGroups.size() - 1).bar != bar_index
+    if fresh
+        lvlGroups.push(LevelGroup.new(lns = array.new<line>(),
+             lbs = array.new<label>(), bar = bar_index))
         while lvlGroups.size() > setupLevelKeep
             LevelGroup old = lvlGroups.shift()
             for l in old.lns
