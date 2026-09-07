@@ -2141,3 +2141,84 @@ direction.
        refuted from five separate directions, its HTF-zone step describes an
        event that occurs in 1% of our signals, and its target rule would exit
        at 0.16R.
+
+## The multi-timeframe model, swept properly — and one filter that survived
+
+`research/studies/mtf_grid.py`, held out in `research/studies/mtf_holdout.py`.
+
+This is Model 1 built as an actual multi-timeframe model, which is NOT what
+sniper.py rejected. There, riptide/mtf.py took the first gap on a faster chart
+after the 30m shift and put the stop on that gap. Here the lower timeframe
+forms its OWN complete setup — its own sweep, its own change of character, its
+own gap — and the stop sits beyond the LOWER timeframe's raid extreme. Every
+stop refuted so far shared one property: none sat beyond a liquidity raid.
+This one does, so it earned its own measurement.
+
+Run as an ablation, so each of the five strict steps is priced separately:
+LTF alone, + HTF point of interest, + HTF narrative, + both. 7 HTF/LTF pairs,
+4 arms, 2 signal types = 56 cells on 14 symbols.
+
+### The faster timeframes are worse, monotonically
+
+    LTF alone, confirmed        n     fill     win    risk    R/signal
+      Min30                    145   69.0%   54.0%   1.43%    +0.317
+      Min15                    140   82.1%   32.2%   1.36%    -0.095
+      Min5                     603   84.9%   32.6%   0.66%    -0.182
+
+The blueprint's central promise — drop to 5m or 1m, use a tiny stop, ride a 4h
+trend for a huge RR — is the opposite of what happens. Fill rate does rise
+exactly as promised (69% to 85%), and the stop does get much tighter (1.43% to
+0.66%). Both of those are real. What comes with them is the win rate falling
+from 54% to 33%, and at 0.66% risk the round-trip fee is 0.06-0.12 R before
+anything else happens. Min1 was excluded outright: 2000 bars is 33 hours.
+
+This is now the sixth independent route to the same conclusion. A stop is only
+worth what the level under it is worth, and speed does not create levels.
+
+### Only the DAILY point of interest does anything
+
+4h and 1h POIs did nothing or hurt in every cell. The daily POI — the LTF raid
+landing inside a daily order block or fair value gap formed in the last 30 days
+— improved every cell it could be measured in:
+
+    discovery, 14 symbols            without POI    with POI
+      Day1 -> Min30  confirmed          +0.317       +0.520
+      Day1 -> Min30  early              +0.061       +0.125
+      Day1 -> Min15  confirmed          -0.095       +0.417
+      Day1 -> Min15  early              -0.039       +0.159
+
+Four cells, one direction. That is a better shape than the gapless-piercing
+candidate ever had, which is why it was worth holding out rather than adopting.
+
+### Held out, pre-registered, on nine symbols the grid never saw
+
+The prediction was written into `mtf_holdout.py` before the run: same sign in
+all four arms, sign flip in any one is a failure.
+
+    Day1 -> Min30  confirmed   +0.036 (n=71)  -> +0.429 (n=30)   +1.4 SE
+    Day1 -> Min30  early       -0.083 (n=376) -> +0.066 (n=170)  +1.3 SE
+    Day1 -> Min15  confirmed   too few (24 inside the POI)
+    Day1 -> Min15  early       -0.043 (n=387) -> +0.201 (n=122)  +1.8 SE
+
+    => SURVIVES. All three measurable arms kept the predicted sign.
+
+Read this honestly. No single arm clears 2 SE, let alone the 3 SE bar a
+single-comparison filter has to clear here. What carries it is that four
+discovery cells and three held-out cells all point one way, on disjoint
+symbols, which is not what the September candlestick candidate did — that one
+reversed sign the moment it left the window it was found in. One wobble worth
+naming: the Day1->Min30 early arm is -0.054 in the first half of the held-out
+window and positive overall.
+
+### What it would actually mean
+
+The Day1->Min30 arm needs no new timeframe and no new engine. It is one filter
+on the signals that already ship: **require the raid to land inside a daily
+order block or fair value gap.** It drops about 65% of signals and roughly
+doubles R on what is left, so TOTAL R falls (145 x 0.317 = +45.9 against
+51 x 0.520 = +26.5) while R PER SIGNAL rises sharply.
+
+That trade is only worth making because capacity, not signal quality, is the
+binding constraint at 300 USDT — the portfolio study had to skip 450-950
+signals for want of a slot. Fewer, better signals is exactly the direction that
+constraint asks for. On a large account the same filter would be a downgrade.
