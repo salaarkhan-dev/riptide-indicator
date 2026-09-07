@@ -128,6 +128,9 @@ drawMode = input.string("On MSS confirmation", "When to draw a pattern",
      options = ["On MSS confirmation", "Live (as they form)"], group = gLook,
      tooltip = "On MSS confirmation: nothing appears until the whole sequence completes, then the full pattern is drawn back over the bars where it happened. Clean, and nothing on screen ever turns out to be a false start. Live: watch pools and raids form in real time — useful for trading it, much busier.")
 showLiquidity  = input.bool(true,  "Liquidity levels (dotted)",      group = gLook)
+markStyle      = input.string("Riptide", "Marking style",
+     options = ["Riptide", "Match reference"], group = gLook,
+     tooltip = "'Match reference' redraws the chart the way ICT SM Trades PREMIUM does, so the two can be compared side by side without reading differences off a screenshot. It applies that indicator's own four pivot/grab values (look-back/forward 1, max range 0.2 ATR, max tested range 0.1 ATR, grab-to-shift window 12 bars) and turns off the three things Riptide draws that it has no equivalent for: the context imbalance layer, the in-progress raid dots, and the trend line. Measured on 5 symbols over 41.6 days, marks on a 5.5-day screen per symbol: Riptide draws 7 shifts, 11 raid dots and 24 diamonds; this draws 5, 0 and 14, against roughly 7, 0 and 12 on the reference's own chart. It changes DRAWING plus those four engine values — the bot is unaffected either way, since it reads riptide.conf and not this panel."
 showPivots     = input.bool(true,  "Swing markers (diamonds)",       group = gLook)
 hideDeadPivots = input.bool(true,  "  drop them once the pool dies",  group = gLook,
      tooltip = "Drops the swing markers of a pool that DIED having produced nothing — raided and never shifted, or expired untouched. Pools still waiting, and pools that went on to shift structure, keep theirs: a diamond group beside an X and an MSS label is the whole pattern and is the part worth seeing. Measured over 41.6 days this takes a 3.5-day screen from about 36 markers to 16, against roughly 14 for the reference indicator. Off keeps every diamond ever drawn, which is what this used to do because the label handle was discarded at draw time and nothing could ever delete it.")
@@ -467,12 +470,26 @@ ctxCE    = allFvgRemove == "50% (CE)"
 ctxWick  = allFvgRemove == "Wick"
 ctxTouch = allFvgRemove == "Touched"
 
+// ── the reference preset, resolved once ─────────────────────────────────────
+// One place, so no consumer below has to know the preset exists. The four
+// engine values are the reference's own panel; measured over 41.6 days the
+// complete set is 0.071 R behind ours at 1.4 SE, which is to say
+// indistinguishable, so this is a viewing choice and not a claim either way.
+bool  refMode      = markStyle == "Match reference"
+int   effPivotRight = refMode ? 1    : pivotRight
+float effTolATR     = refMode ? 0.2  : liquidityToleranceATR
+float effOvershoot  = refMode ? 0.1  : maxPivotOvershootATR
+int   effGrabBars   = refMode ? 12   : maxBarsAfterGrab
+bool  effAllFvg     = refMode ? false : showAllFvg
+bool  effRaidDot    = refMode ? false : showRaidDot
+string effTrendMode = refMode ? "Off" : trendMode
+
 // ═════════════════════════ 4. BAR-LEVEL SERIES ══════════════════════════════
 atr = ta.atr(atrLength)
-tol = atr * liquidityToleranceATR
+tol = atr * effTolATR
 
-ph = ta.pivothigh(high, pivotLeft, pivotRight)
-pl = ta.pivotlow(low,  pivotLeft, pivotRight)
+ph = ta.pivothigh(high, pivotLeft, effPivotRight)
+pl = ta.pivotlow(low,  pivotLeft, effPivotRight)
 
 // ta.* calls are unconditional: they carry state and must run every bar.
 [stLine, stDir] = ta.supertrend(stFactor, stAtrLen)
@@ -583,7 +600,7 @@ overshootOk(Cluster c, float price) =>
             for i = 1 to c.pivots.size() - 1
                 float p = c.pivots.get(i).price
                 ext := c.isHigh ? math.max(ext, p) : math.min(ext, p)
-        float allow = atr * maxPivotOvershootATR
+        float allow = atr * effOvershoot
         ok := c.isHigh ? price <= ext + allow : price >= ext - allow
     ok
 
@@ -685,7 +702,7 @@ moveGrab(Cluster c) =>
 // purpose: most raids never become setups, so this is "something is
 // happening here", not "take this".
 drawRaidDot(Cluster c) =>
-    if showRaidDot and na(c.raidDot) and na(c.grabX)
+    if effRaidDot and na(c.raidDot) and na(c.grabX)
         c.raidDot := label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, "",
              xloc    = xloc.bar_index,
              yloc    = yloc.price,
@@ -1161,7 +1178,7 @@ if engineOk
                     if not na(f.mid)
                         line.set_x2(f.mid, bar_index)
 
-    if showAllFvg and bar_index > 2
+    if effAllFvg and bar_index > 2
         bool ctxBull = low > high[2]
         bool ctxBear = high < low[2]
         float ctxTop = ctxBull ? low : low[2]
@@ -1329,7 +1346,7 @@ if engineOk
                 if wasSwept and not wasMss and not c.expired
                     // Clock runs from the first sweep; reading the trailed
                     // grabBar would let each new extreme reset it.
-                    bool timedOut = bar_index - c.sweepBar > maxBarsAfterGrab
+                    bool timedOut = bar_index - c.sweepBar > effGrabBars
                     if timedOut
                         c.expired := true
                     if not timedOut
@@ -1585,13 +1602,13 @@ if engineOk
 
 // ═════════════════════════ 9. TREND PLOT + ALERTS ══════════════════════════
 // plot() and alertcondition() are global scope only, hence the flags above.
-plot(trendMode == "SuperTrend" ? stLine : na, "SuperTrend",
+plot(effTrendMode == "SuperTrend" ? stLine : na, "SuperTrend",
      color = stDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
-plot(trendMode == "EMA" ? emaLine : na, "EMA",
+plot(effTrendMode == "EMA" ? emaLine : na, "EMA",
      color = close > emaLine ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
 // The line the filter actually decides on. Drawn whether or not the filter is
 // switched on, so its behaviour can be judged before committing to it.
-plot(trendMode == "Filter trend" ? htfLine : na, "Filter trend",
+plot(effTrendMode == "Filter trend" ? htfLine : na, "Filter trend",
      color = htfDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 2)
 
 // Named conditions for the alert dropdown. Static text; the alert() calls
@@ -1706,7 +1723,7 @@ if debugMode and barstate.islast
     table.clear(dbg, 0, 0, 8, 12)
     table.cell(dbg, 0, 12, "ATR "  + f2s(atr),                        bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
     table.cell(dbg, 2, 12, "tol "  + f2s(tol),                        bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
-    table.cell(dbg, 4, 12, "over " + f2s(atr * maxPivotOvershootATR), bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 4, 12, "over " + f2s(atr * effOvershoot), bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
     table.cell(dbg, 6, 12, "span " + f2s(atr * maxClusterSpanATR),    bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
     table.cell(dbg, 0, 0, "#",       bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
     table.cell(dbg, 1, 0, "dir",     bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
