@@ -112,6 +112,46 @@ def check_brackets(src: str) -> list[str]:
     return problems
 
 
+# Series built-ins a local may not shadow once the file reads them. Type and
+# namespace names (color, label, line, math, ta) are NOT here: those are
+# legitimate type keywords and `color col = ...` is ordinary Pine.
+#
+# The trap this catches is that shadowing stays LEGAL until something reads the
+# built-in, so adding one `open[n]` anywhere breaks a local named `open`
+# written months earlier. That is exactly how CE10190 arrived in this file.
+PINE_SERIES = {
+    "open", "high", "low", "close", "volume", "time", "time_close",
+    "hl2", "hlc3", "ohlc4", "hlcc4", "bar_index", "last_bar_index",
+    "dayofmonth", "dayofweek", "hour", "minute", "month", "second",
+    "weekofyear", "year",
+}
+
+DECL = re.compile(
+    r"^\s+(?:(?:var|varip)\s+)?"
+    r"(?:(?:bool|int|float|string|color|line|label|box|table|array|matrix)\s+)?"
+    r"([A-Za-z_]\w*)\s*:?=(?!=)")
+
+
+def check_shadowing(src: str) -> list[str]:
+    """Locals shadowing a series built-in the file also reads.
+
+    Only lines at bracket depth zero are declarations; anything deeper is a
+    named argument inside a multi-line call, where `color = ...` is normal.
+    """
+    used = {n for n in PINE_SERIES if re.search(rf"\b{n}\s*\[", src)}
+    problems, depth = [], 0
+    for n, raw in enumerate(src.split("\n"), 1):
+        code = strip_code(raw)
+        if depth == 0:
+            m = DECL.match(code)
+            if m and m.group(1) in used:
+                problems.append(f"line {n}: local '{m.group(1)}' shadows a Pine "
+                                f"series built-in the file reads — CE10190")
+        depth = max(0, depth + code.count("(") + code.count("[")
+                    - code.count(")") - code.count("]"))
+    return problems
+
+
 def pine_default(src: str, name: str) -> str | None:
     m = re.search(rf'^{name}\s*=\s*input\.\w+\(\s*("[^"]*"|[^,]+?)\s*,', src, re.M)
     return m.group(1).strip() if m else None
@@ -152,6 +192,13 @@ def main() -> int:
             problems.append(f"{pine} = {choice!r} -> {options[choice]!r}   "
                             f"but   Cfg.{field} = {want!r}")
 
+    shadow = check_shadowing(src)
+    if shadow:
+        print(f"PINE SYNTAX: {len(shadow)} shadowed built-in(s)\n")
+        for s_ in shadow:
+            print("  " + s_)
+        return 1
+
     bracket = check_brackets(src)
     if bracket:
         print(f"PINE SYNTAX: {len(bracket)} bracket problem(s)\n")
@@ -167,7 +214,8 @@ def main() -> int:
             print("  " + p)
         print("\nThe chart would show a different trade than the bot alerts.")
         return 1
-    print(f"pine: brackets balanced · parity: all {n} shared settings agree")
+    print(f"pine: brackets balanced, no shadowed built-ins · "
+          f"parity: all {n} shared settings agree")
     return 0
 
 

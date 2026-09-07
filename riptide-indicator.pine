@@ -1144,8 +1144,12 @@ registerPivot(bool isHigh, float price, int pbar, float tolerance) =>
             Cluster c = clusters.get(i)
             // src 0 only: a daily/weekly/session level is a fixed price, not
             // a pool that pivots may join.
-            bool open = c.src == 0 and not c.expired and not c.mssConfirmed and (not c.swept or allowJoinAfterSweep)
-            if open and c.isHigh == isHigh
+            // Named joinable, not `open`: `open` is a Pine built-in, and a
+            // local may only shadow one while the file never uses it. Drawing
+            // the order block reads open[], so this became CE10190 the moment
+            // that was added — a rename here, not a change of meaning.
+            bool joinable = c.src == 0 and not c.expired and not c.mssConfirmed and (not c.swept or allowJoinAfterSweep)
+            if joinable and c.isHigh == isHigh
                 float d = pivotDistance(c, price)
                 if na(nearD) or d < nearD
                     nearD := d
