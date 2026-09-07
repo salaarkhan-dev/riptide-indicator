@@ -2222,3 +2222,71 @@ That trade is only worth making because capacity, not signal quality, is the
 binding constraint at 300 USDT — the portfolio study had to skip 450-950
 signals for want of a slot. Fewer, better signals is exactly the direction that
 constraint asks for. On a large account the same filter would be a downgrade.
+
+## Models 2 and 3 — the two SMC models without a liquidity sweep
+
+`research/studies/models23.py`. Min30 structure, daily context, all 23
+symbols, same harness and same wall-clock windows as everything else, so these
+sit directly beside Model 1.
+
+Both models were chosen because they share one property Riptide's signals never
+have: **neither requires a liquidity sweep.** If the raid is what carries the
+edge — which five separate stop studies imply, since the raid extreme is the
+only stop level that has survived anything — both should be materially worse.
+That was the prediction, and it is what happened.
+
+                                        n    fill    win   risk    R/signal
+    M1 sweep -> CHOCH  <- shipped     247   69.6%  50.0%  1.83%    +0.248
+      + daily POI                      81   64.2%  61.5%  1.78%    +0.486
+      + daily trend                   109   70.6%  57.1%  1.97%    +0.449
+      + both                           43   67.4%  75.9%  1.90%    +0.822
+
+    M2 order block continuation       946   63.8%  34.4%  1.01%    -0.056
+      + daily POI                     240   61.3%  40.1%  0.78%    +0.041
+      + both                           84   56.0%  40.4%  0.81%    +0.053
+
+    M3 FVG sniper, gap edge          3183   79.3%  35.3%  1.24%    -0.036
+      + daily POI                     872   74.2%  38.5%  1.06%    +0.028
+      + both                          363   74.4%  42.2%  1.30%    +0.129
+    M3 FVG, displacement > 1.5 ATR   1109   77.2%  36.3%  1.67%    -0.003
+      + both                          115   72.2%  44.6%  1.82%    +0.190
+
+**Model 1 unfiltered beats every cell of Models 2 and 3, including their best
+filtered arms.** Both alternatives are negative raw and only reach break-even
+once the daily filters carry them. Win rate is the tell: 50% for Model 1
+against 34-36% for both others, at the same 2R target.
+
+Three specific things fall out of this:
+
+**The sweep is the edge, not the structure around it.** Model 2 has a trend, a
+break of structure, an order block and a pullback — every SMC ingredient except
+the raid — and returns -0.056. Model 3 has a displacement and a gap and returns
+-0.036. Add a raid and the same 30m chart returns +0.248.
+
+**"The order block should have an FVG next to it" is worth nothing.** The
+condition is standard doctrine and it is tested here as its own arm: -0.029
+with the FVG against -0.056 without, and with both daily filters on it is
+WORSE than plain Model 2 (-0.029 against +0.053). It also discards 39% of the
+signals to achieve that.
+
+**Entering at the gap edge beats the 50% mark again**, on a completely
+different model: -0.036 against -0.065 raw, +0.129 against +0.021 filtered.
+That is now the third independent confirmation of `entry_mode = "proximal"`.
+
+### The daily POI keeps working, on models it was not found on
+
+Worth separating from the rest, because it is the strongest evidence yet that
+the POI result is real rather than a Model-1 quirk. It was discovered on Model
+1, held out on nine unseen symbols, and here it improves **every arm of every
+model**, including two models built on a different premise entirely:
+
+    M1  +0.248 -> +0.486     M2  -0.056 -> +0.041     M3  -0.036 -> +0.028
+
+An effect that only existed in the window it was found in would not do that.
+
+### Model 1 replicates on the full symbol set
+
+The grid ran on 14 symbols; this run is all 23, and the ablation lands in the
+same place: +0.248 raw, +0.486 with the POI, +0.449 with the trend, +0.822
+with both, against +0.317 / +0.520 / +0.522 / +0.889 on the 14. The 43-signal
+"both" arm wins 75.9% of its fills.
