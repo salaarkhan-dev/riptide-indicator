@@ -788,9 +788,12 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                         # A gap sitting on the wrong side of the raid extreme
                         # would give a zero or inverted stop.
                         sane = (ent > sl) if is_bull else (ent < sl)
+                        # early_max_risk_atr, not max_risk_atr: the caps are
+                        # separate because the two signal types measured in
+                        # opposite directions. See config.py.
                         if sane and risk > 0 and (
-                                cfg.max_risk_atr <= 0
-                                or risk <= a * cfg.max_risk_atr):
+                                cfg.early_max_risk_atr <= 0
+                                or risk <= a * cfg.early_max_risk_atr):
                             early_out.append(Early(
                                 symbol=symbol, is_long=is_bull, src=c.src,
                                 level=c.level, entry=ent, stop=sl, risk=risk,

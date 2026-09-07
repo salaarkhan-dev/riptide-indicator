@@ -194,11 +194,29 @@ class Cfg:
     mss_cooldown_bars: int = 5
     min_fvg_atr: float = 0.05
     max_fvg_atr: float = 2.0
-    max_risk_atr: float = 4.0
-    # There is deliberately no minimum. A stop inside one ordinary candle looks
-    # like it should be filtered out, but three pre-registered floors (0.50,
-    # 0.75, 1.00 ATR) found no effect, and the two with enough samples to read
-    # ran the other way. See "A minimum risk floor" in MEASUREMENTS.md.
+    # CONFIRMED setups only. 2.5, not 4.0, and the two signal types no longer
+    # share one cap. Swept by re-running the engine at each value — a rejected
+    # gap does not end the search, so a tighter cap yields a later, tighter gap
+    # off the same raid rather than simply fewer signals:
+    #
+    #   confirmed  2.5 ATR  242 signals  +0.260 R  total +63.0
+    #              4.0 ATR  544 signals  +0.110 R  total +59.7
+    #
+    # +0.151 at 2.5 SE, same sign on all four splits. Read it for what it is:
+    # total R is inside noise, so this is the SAME money from 44% of the
+    # trades, not more money. What improves is exposure and R per trade.
+    max_risk_atr: float = 2.5
+    # EARLY signals, which want the opposite and are why this is two settings.
+    # Tightening them costs total R the whole way down — 4.0 ATR +153.4,
+    # 3.0 +151.3, 2.5 +143.2, 1.5 +105.0 — while R per signal rises, which is
+    # the shape of a filter deleting winners. Against 4.0 the 2.5 difference is
+    # +0.007 at 0.035 SE: nothing.
+    early_max_risk_atr: float = 4.0
+    # There is deliberately no minimum on either. A stop inside one ordinary
+    # candle looks like it should be filtered out, but three pre-registered
+    # floors (0.50, 0.75, 1.00 ATR) found no effect, and the two with enough
+    # samples to read ran the other way. See "A minimum risk floor" in
+    # MEASUREMENTS.md.
     max_bars_after_mss: int = 10
     # Where the entry-gap search starts. Mirrors the Pine input "Look for
     # entry zones from":

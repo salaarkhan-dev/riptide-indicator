@@ -1230,7 +1230,10 @@ merely fewer. Filtering post-hoc answers a question nobody asked.
 | 4 ATR (current) | 1347 | +0.114 | **+153.4** | 544 | +0.110 | +59.7 |
 | none | 1373 | +0.111 | +152.5 | 787 | +0.075 | +59.4 |
 
-**The two signal types want different caps, and they currently share one.**
+**The two signal types want different caps, and they used to share one.**
+Split as of this measurement: `max_risk_atr` 2.5 for confirmed setups,
+`early_max_risk_atr` 4.0 for early. Confirmed alerts fall from 13.4 to 6.0 a
+day; early is unchanged at 33.4.
 
 For EARLY, 4 ATR is already about right. R per signal rises all the way down
 to +0.235 at 1 ATR, and total R falls the whole way — the tighter caps are

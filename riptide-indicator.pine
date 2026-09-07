@@ -131,7 +131,7 @@ entryMode = input.string("Proximal", "Where in the gap to enter",
      tooltip = "Proximal = the near edge, the first price touched on the pullback: fills most often, widest stop. Midpoint = halfway in. Distal = the far edge: best price and tightest stop, but price often turns before reaching it and you miss the trade.")
 slBufferATR = input.float(0.0, "Extra room beyond the stop (x ATR)", minval = 0.0, step = 0.01, group = gTrade,
      tooltip = "The stop sits just past the candle that raided the liquidity — the one marked with an X. This adds breathing room beyond that wick. 0 puts it exactly on the wick.")
-maxRiskATR  = input.float(4.0, "Skip setups risking more than (x ATR)", minval = 0.0, step = 0.1, group = gTrade,
+maxRiskATR  = input.float(2.5, "Skip setups risking more than (x ATR)", minval = 0.0, step = 0.1, group = gTrade,
      tooltip = "Protects you from setups where the entry is a long way from the stop. One trade risking 8 ATR carries the size of eight normal ones and will dominate your results whichever way it goes. 0 turns the check off.")
 maxFvgSizeATR = input.float(2.0, "Skip gaps bigger than (x ATR)", minval = 0.0, step = 0.1, group = gTrade,
      tooltip = "A gap torn open by one huge candle is not an entry zone — its far edge can sit several ATR from the stop. 0 turns the check off.")
@@ -196,6 +196,9 @@ earlyMaxBars   = input.int(10, "  gap must form within (bars of the raid)",
      tooltip = "Matches RIPTIDE_EARLY_MAX_BARS on the bot, so the zone the chart draws is the one the alert fired on. Raise it and the chart will draw zones no alert was sent for.")
 earlyFade      = input.int(60, "  opacity", minval = 0, maxval = 95, group = gLook,
      tooltip = "How solid the early marks are. Higher is fainter.")
+earlyMaxRiskATR = input.float(4.0, "  skip early risking more than (x ATR)",
+     minval = 0.0, step = 0.1, group = gLook,
+     tooltip = "The early signal's own risk cap, separate from the confirmed setup's above it because the two measured in OPPOSITE directions.\n\nConfirmed setups prefer 2.5: 242 signals at +0.260 R against 544 at +0.110, same sign on all four splits. Early signals prefer 4.0 — tightening them costs total R the whole way down (4.0 +153.4, 3.0 +151.3, 2.5 +143.2, 1.5 +105.0) while R per signal rises, which is what a filter deleting winners looks like.\n\nMatches RIPTIDE_EARLY_MAX_RISK_ATR on the bot.")
 earlyKeep      = input.int(2, "  how many zones to keep", minval = 1, maxval = 20,
      group = gLook,
      tooltip = "Early zones are pruned on their OWN budget, not the confirmed setups' one. Sharing it would let three early zones — most of which never become anything — evict the entry and stop lines of a setup that did confirm.")
@@ -1692,8 +1695,8 @@ if engineOk
                                     // decoration: without them the chart draws
                                     // zones no alert was ever sent for, which
                                     // is worse than drawing nothing.
-                                    if eSane and eRsk > 0 and (maxRiskATR <= 0
-                                         or eRsk <= atr * maxRiskATR)
+                                    if eSane and eRsk > 0 and (earlyMaxRiskATR <= 0
+                                         or eRsk <= atr * earlyMaxRiskATR)
                                         drawEarly(c, eTop, eBot, eSl)
                                         c.earlyDone := true
                         bool broke = c.isHigh

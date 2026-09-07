@@ -50,6 +50,7 @@ NUMERIC = {
     "mssCooldownBars": "mss_cooldown_bars",
     "maxBarsAfterMss": "max_bars_after_mss",
     "earlyMaxBars": "early_max_bars",
+    "earlyMaxRiskATR": "early_max_risk_atr",
 }
 
 # Pine input name -> (Cfg field, {Pine option string: Cfg value}).
