@@ -55,6 +55,63 @@ CHOICE = {
 }
 
 
+def strip_code(line: str) -> str:
+    """Line with string literals and trailing comments removed, so bracket
+    counting is not fooled by punctuation inside a tooltip."""
+    out, i, in_str = [], 0, False
+    while i < len(line):
+        ch = line[i]
+        if in_str:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == '"':
+                in_str = False
+            i += 1
+            continue
+        if ch == '"':
+            in_str = True
+            i += 1
+            continue
+        if ch == "/" and i + 1 < len(line) and line[i + 1] == "/":
+            break
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def check_brackets(src: str) -> list[str]:
+    """Every bracket balanced, and no top-level statement left hanging.
+
+    Pine reports an unclosed call as CE10015 on the line where the NEXT
+    statement starts, which points at innocent code and hides a missing ')'
+    several lines up. This finds it directly: a new top-level assignment can
+    only begin at depth zero.
+    """
+    problems, depth, opened_at = [], 0, None
+    for n, raw in enumerate(src.split("\n"), 1):
+        code = strip_code(raw)
+        if depth > 0 and re.match(r"^[A-Za-z_]\w*\s*=[^=]", code):
+            problems.append(f"line {n}: statement starts while {depth} "
+                            f"bracket(s) opened on line {opened_at} are still "
+                            f"unclosed — likely a missing ')' above")
+            depth = 0
+        for ch in code:
+            if ch in "([":
+                if depth == 0:
+                    opened_at = n
+                depth += 1
+            elif ch in ")]":
+                depth -= 1
+                if depth < 0:
+                    problems.append(f"line {n}: unmatched closing bracket")
+                    depth = 0
+    if depth:
+        problems.append(f"end of file: {depth} bracket(s) never closed "
+                        f"(opened on line {opened_at})")
+    return problems
+
+
 def pine_default(src: str, name: str) -> str | None:
     m = re.search(rf'^{name}\s*=\s*input\.\w+\(\s*("[^"]*"|[^,]+?)\s*,', src, re.M)
     return m.group(1).strip() if m else None
@@ -95,6 +152,14 @@ def main() -> int:
             problems.append(f"{pine} = {choice!r} -> {options[choice]!r}   "
                             f"but   Cfg.{field} = {want!r}")
 
+    bracket = check_brackets(src)
+    if bracket:
+        print(f"PINE SYNTAX: {len(bracket)} bracket problem(s)\n")
+        for b in bracket:
+            print("  " + b)
+        print("\nTradingView reports these as CE10015 on the wrong line.")
+        return 1
+
     n = len(NUMERIC) + len(CHOICE)
     if problems:
         print(f"PINE / ENGINE PARITY: {len(problems)} of {n} settings disagree\n")
@@ -102,7 +167,7 @@ def main() -> int:
             print("  " + p)
         print("\nThe chart would show a different trade than the bot alerts.")
         return 1
-    print(f"pine / engine parity: all {n} shared settings agree")
+    print(f"pine: brackets balanced · parity: all {n} shared settings agree")
     return 0
 
 
