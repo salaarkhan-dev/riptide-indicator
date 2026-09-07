@@ -15,13 +15,12 @@ import aiohttp
 from . import telegram as tg
 from . import market
 from . import tracker
-from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
-                     LOG_MARKET,
-                     SWEEP_ALERTS, TG_CHAT, TG_TOKEN, TRACK,
-                     TRACK_FILL_BARS, TRACK_HORIZON_BARS, TRACK_TARGET_R,
-                     DI_INTERVAL, TREND_FACTOR, TREND_FILTER,
-                     TREND_INTERVAL, TREND_LEN,
-                     build_id, log)
+from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
+                     INTERVAL, INTERVALS, LOG_MARKET, POI_REQUIRED,
+                     POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS, SWEEP_INTERVALS,
+                     TG_CHAT, TG_TOKEN, TRACK, TRACK_FILL_BARS,
+                     TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_FACTOR,
+                     TREND_FILTER, TREND_INTERVAL, TREND_LEN, build_id, log)
 from .engine import band_stats
 from .scanner import cycle, seconds_to_next_close, trend_on
 from .storage import meta_get, meta_set
@@ -62,7 +61,11 @@ async def _run(*argv) -> tuple[int, str]:
 
 
 def status_text(db, state) -> str:
-    step = BAR_SECONDS[INTERVAL]
+    # The loop wakes on SCAN_INTERVAL — the FASTEST timeframe scanned — not on
+    # RIPTIDE_INTERVAL. Reading the wrong one here reported "next scan in 28m"
+    # while the scanner was correctly running every 15, which looks exactly
+    # like a broken scanner and is only a broken status line.
+    step = BAR_SECONDS[SCAN_INTERVAL]
     paused = meta_get(db, "alerts_paused", "0") == "1"
     seen_n = db.execute("SELECT COUNT(*) FROM seen").fetchone()[0]
     swp_n = db.execute("SELECT COUNT(*) FROM seen_sweeps").fetchone()[0]
@@ -93,12 +96,17 @@ def status_text(db, state) -> str:
     trend_line = ((f"ON · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})"
                    if live else "off") + src
                   + f" · grade POI+trend on {TREND_INTERVAL}/{DI_INTERVAL}")
+    poi_line = ("POI required" if POI_REQUIRED else "POI not required")
+    if SWEEP_ALERTS:
+        poi_line += (f" · sweeps {'+'.join(SWEEP_INTERVALS)}"
+                     + (" in POI" if POI_SWEEPS and POI_REQUIRED else ""))
     return (
         f"<b>Riptide status</b>\n\n"
         f"build      <code>{build_id()}</code>\n"
-        f"symbols    {len(state.get('symbols', []))} · {INTERVAL}"
+        f"symbols    {len(state.get('symbols', []))} · {'+'.join(INTERVALS)}"
         f"{f' → {ENTRY_INTERVAL} entries' if ENTRY_INTERVAL else ''}\n"
         f"alerts     {'PAUSED' if paused else 'on'} · sweeps {sweeps}\n"
+        f"filter     {poi_line}\n"
         f"trend      {trend_line}\n"
         f"outcomes   {track_line}\n"
         f"oi log     {oi_line}\n"
