@@ -91,6 +91,16 @@ main() {
         rm -rf "$APP/riptide.old" "$APP/riptide_bot.py.prev"
     else
         log "service did not come up — rolling back to $prev_build"
+        # Capture the FAILING journal before the rollback restart overwrites
+        # the tail with the old build's healthy startup. Reading it after the
+        # restart is how a failure once reported itself as a working service:
+        # every line in the notification came from the build that was fine.
+        local fail_log
+        fail_log=$(journalctl -u riptide -n 40 --no-pager \
+                   | grep -iE "error|traceback|exception|[A-Za-z]+Error" \
+                   | tail -c 600 || true)
+        [[ -n ${fail_log:-} ]] || fail_log=$(journalctl -u riptide -n 12 \
+                                             --no-pager | tail -c 600 || true)
         rm -rf "$APP/riptide"
         [[ -d $APP/riptide.old ]] && mv "$APP/riptide.old" "$APP/riptide"
         [[ -f $APP/riptide_bot.py.prev ]] && mv -f "$APP/riptide_bot.py.prev" "$APP/riptide_bot.py"
@@ -99,7 +109,7 @@ main() {
         sleep 5
         local state
         state=$(systemctl is-active riptide || true)
-        notify "Riptide update $short FAILED — service would not start. Rolled back to ${prev_build}, now: ${state}."$'\n\n'"$(journalctl -u riptide -n 12 --no-pager | tail -c 600)"
+        notify "Riptide update $short FAILED — service would not start. Rolled back to ${prev_build}, now: ${state}."$'\n\n'"${fail_log}"
         return 1
     fi
 }

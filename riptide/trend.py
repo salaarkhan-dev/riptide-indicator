@@ -50,6 +50,12 @@ from .engine import (Candle, atr_series, daily_zones, in_zone,
 _CACHE: dict[tuple[str, str],
              tuple[float, list[int], list[int], list[int]]] = {}
 _TTL = 3600.0
+# A FAILED fetch is cached far more briefly than a good one. It used to share
+# the hour-long TTL, which meant one rate-limited request muted a symbol's
+# trend and POI readings until the next hour — and under POI_REQUIRED a
+# missing POI reading is the difference between an alert and silence. Retrying
+# in two minutes costs one request and removes an hour-long blind spot.
+_FAIL_TTL = 120.0
 
 
 def di_direction(cs: list[Candle], length: int = 14) -> list[int]:
@@ -127,15 +133,31 @@ async def _series(sess, symbol: str, fetch, interval: str):
     now = time.monotonic()
     key = (symbol, interval)
     hit = _CACHE.get(key)
-    if hit is None or now - hit[0] > _TTL:
+    ttl = _TTL if (hit and hit[1]) else _FAIL_TTL
+    if hit is None or now - hit[0] > ttl:
         cs = await fetch(sess, symbol, interval)
-        if len(cs) < TREND_LEN + 5:
-            log.warning("%s: only %d %s bars, trend readings skipped",
-                        symbol, len(cs), interval)
+        if not cs:
+            # NOTHING came back. That is a failed request, not a fact about
+            # the symbol, and the caller must be able to tell the difference —
+            # see poi_at.
+            log.warning("%s: no %s bars returned, retrying in %.0fs",
+                        symbol, interval, _FAIL_TTL)
             _CACHE[key] = (now, [], [], [], [])
             return None
-        _CACHE[key] = (now, [c.t for c in cs], supertrend(cs),
-                       di_direction(cs),
+        # Some bars came back, just not many. That IS a fact about the symbol:
+        # a coin listed six days ago genuinely has six daily candles. The
+        # SuperTrend and DI need a full window and are left empty, but the
+        # zones are computed from whatever exists and are correct for it —
+        # six bars simply produce few or no zones, which is the true answer
+        # rather than a missing one.
+        short = len(cs) < TREND_LEN + 5
+        if short:
+            log.info("%s: only %d %s bars — too new for a trend reading; "
+                     "POI still computed from what exists", symbol, len(cs),
+                     interval)
+        _CACHE[key] = (now, [c.t for c in cs],
+                       [] if short else supertrend(cs),
+                       [] if short else di_direction(cs),
                        daily_zones(cs, atr_series(cs, CFG.atr_len)))
         hit = _CACHE[key]
     return hit if hit[1] else None
@@ -175,17 +197,28 @@ async def btc_at(sess, when: int, fetch) -> int | None:
 
 
 async def poi_at(sess, symbol: str, when: int, price: float, is_long: bool,
-                 fetch) -> bool:
+                 fetch) -> bool | None:
     """Did the raid land inside an aligned daily order block or fair value gap?
 
     Reads the same cached daily bars as the SuperTrend and DI, so it costs no
-    extra request. Returns False when the history is missing, which grades the
-    signal as though there were no POI — the conservative direction, and the
-    same choice the trend readings make.
+    extra request.
+
+    Returns None — not False — when the daily fetch came back EMPTY. The
+    distinction is the whole point: "the raid was not in a zone" and "we could
+    not find out" look identical to a boolean, and under POI_REQUIRED the
+    first means suppress while the second must mean send. Daily fetches do
+    fail transiently, and collapsing the two would silently mute a symbol for
+    as long as the failure lasted.
+
+    A symbol with real but SHORT history is not unknown. A coin listed six
+    days ago has six daily candles and therefore genuinely has no daily point
+    of interest, so it answers False and is suppressed by the filter — which
+    is correct: a policy built on daily context cannot be run on a symbol that
+    has none.
     """
     hit = await _series(sess, symbol, fetch, TREND_INTERVAL)
     if hit is None:
-        return False
+        return None
     return in_zone(hit[4], when, price, is_long, BAR_SECONDS[TREND_INTERVAL])
 
 

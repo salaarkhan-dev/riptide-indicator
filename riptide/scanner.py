@@ -128,8 +128,9 @@ async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
             # The stop sits just beyond the raid extreme, and it is the raid
             # that has to land in the daily zone — not the entry, which is a
             # retracement away from it.
-            x.poi = await trend.poi_at(sess, symbol, x.detected_time, x.stop,
+            _poi = await trend.poi_at(sess, symbol, x.detected_time, x.stop,
                                        x.is_long, fetch_candles)
+            x.poi, x.poi_known = bool(_poi), _poi is not None
             with_trend = d is None or (d > 0) == x.is_long
             if with_trend or not trend_on:
                 keep_s.append(x)
@@ -140,8 +141,13 @@ async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
                                           fetch_candles) or 0
             w.di_dir = await trend.di_at(sess, symbol, w.sweep_time,
                                          fetch_candles) or 0
-            w.poi = await trend.poi_at(sess, symbol, w.sweep_time, w.stop,
-                                       w.is_long, fetch_candles)
+            # A Sweep has no entry and no stop — it fires before either
+            # exists — so the raid price is sweep_extreme itself, and the
+            # direction is implied: a swept HIGH is a short bias.
+            _poi = await trend.poi_at(sess, symbol, w.sweep_time,
+                                      w.sweep_extreme, not w.is_high,
+                                      fetch_candles)
+            w.poi, w.poi_known = bool(_poi), _poi is not None
             # A swept high implies a short, so it wants a downtrend.
             with_trend = d is None or (d < 0) == w.is_high
             if with_trend or not trend_on:
@@ -153,8 +159,9 @@ async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
                                           fetch_candles) or 0
             e.di_dir = await trend.di_at(sess, symbol, e.fvg_time,
                                          fetch_candles) or 0
-            e.poi = await trend.poi_at(sess, symbol, e.fvg_time, e.stop,
+            _poi = await trend.poi_at(sess, symbol, e.fvg_time, e.stop,
                                        e.is_long, fetch_candles)
+            e.poi, e.poi_known = bool(_poi), _poi is not None
             with_trend = d is None or (d > 0) == e.is_long
             if with_trend or not trend_on:
                 keep_e.append(e)
@@ -194,7 +201,15 @@ def poi_ok(x) -> bool:
     timeframe took return per unit of drawdown from 6.94 to 21.53 on a 300
     USDT account. It suppresses roughly two thirds of alerts.
     """
-    return not POI_REQUIRED or bool(getattr(x, "poi", False))
+    if not POI_REQUIRED:
+        return True
+    # Unknown sends. A transient daily-bar failure must not read as "not in a
+    # zone" — that would mute a symbol for as long as the failure lasted, and
+    # silently, which is the worst possible failure mode for an alerting
+    # service. The grade still shows the conservative letter.
+    if not getattr(x, "poi_known", True):
+        return True
+    return bool(getattr(x, "poi", False))
 
 
 def pair_early(results) -> dict:

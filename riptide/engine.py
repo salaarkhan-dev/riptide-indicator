@@ -86,6 +86,9 @@ class Setup:
     poi: bool = False        # the raid landed inside an aligned daily order
                              # block or fair value gap. Set by the scanner,
                              # never by the engine. See daily_zones.
+    poi_known: bool = True   # False when the daily bars could not be read, so
+                             # `poi` is a default rather than an answer. The
+                             # POI gate sends on unknown rather than muting.
     di_dir: int = 0          # daily DI+/DI- direction at detection: +1 up,
                              # -1 down, 0 unknown. Set by the scanner, like
                              # trend_dir — the engine has no daily bars.
@@ -164,6 +167,7 @@ class Early:
     trend_dir: int = 0
     tf: str = ""              # as on Setup
     poi: bool = False         # as on Setup
+    poi_known: bool = True    # as on Setup
     di_dir: int = 0           # as on Setup
     rsi_ext: float = 0.0      # as on Setup
     btc_dir: int = 0          # as on Setup
@@ -201,6 +205,7 @@ class Sweep:
     trend_dir: int = 0     # as above
     tf: str = ""           # as above
     poi: bool = False      # as above
+    poi_known: bool = True # as above
     di_dir: int = 0        # as above
     rsi_ext: float = 0.0   # as above
     btc_dir: int = 0       # as above
