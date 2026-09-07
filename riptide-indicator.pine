@@ -1731,7 +1731,20 @@ if engineOk
                                 scanLeg(c, from, bar_index)
                                 if c.fvgCount > had and had == 0
                                     drawSetup(c)
-                                    if trackOutcomes
+                                    // trendOk here, not just inside
+                                    // drawSetup: the stats table is what the
+                                    // filter is judged BY, and openTrade was
+                                    // counting every setup regardless. Toggling
+                                    // the filter moved the alerts and the
+                                    // drawings and left the numbers identical,
+                                    // which is the one place that silence
+                                    // actually misleads.
+                                    //
+                                    // trendOk only, deliberately — showLongs
+                                    // and showShorts are viewing preferences
+                                    // and must not change a measurement. This
+                                    // matches what the alert path gates on.
+                                    if trackOutcomes and trendOk(not c.isHigh)
                                         openTrade(c)
                                 if c.fvgCount > had and trendOk(not c.isHigh)
                                     if c.isHigh
@@ -1769,7 +1782,8 @@ if engineOk
                         scanLeg(c, bar_index, bar_index)
                         if c.fvgCount > had2 and had2 == 0
                             drawSetup(c)
-                            if trackOutcomes
+                            // Same gate as the first scan above.
+                            if trackOutcomes and trendOk(not c.isHigh)
                                 openTrade(c)
                         if c.fvgCount > had2 and trendOk(not c.isHigh)
                             if c.isHigh

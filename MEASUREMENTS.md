@@ -1286,6 +1286,34 @@ loss size, and no cap in the engine can repair that.
 Fees also run the other way from intuition: cost in R is 0.08 / risk_pct, so a
 wide stop is CHEAPER per unit of risk, not dearer.
 
+## The Pine stats table ignored the trend filter
+
+Reported as "these are not updating the results": ticking *Only take setups
+with the higher-timeframe trend* changed nothing in the panel's numbers.
+
+It was true. Three paths existed and only two were gated:
+
+| path | gated by |
+|---|---|
+| alerts | `trendOk` |
+| drawing | `showLongs`/`showShorts` and `trendOk`, inside `drawSetup` |
+| **stats table** | **nothing** |
+
+`openTrade` sat beside `drawSetup` in the same `if` and took no filter at all,
+so `stx.setups` counted every setup whatever the panel said. Flipping the
+filter moved the alerts and the drawings and left the table identical.
+
+That is the worst place for it to have been missing. The table is what the
+filter is *judged by* — the whole reason to switch it on is to see whether
+those setups score better — and it was quietly answering a different question.
+Anyone reading it would have concluded the filter does nothing, which is the
+opposite of what the bot measured (+3.7 SE on 4h confirmed setups).
+
+Fixed by gating `openTrade` on `trendOk`. Deliberately NOT on
+`showLongs`/`showShorts`: those are viewing preferences and must not move a
+measurement. That also matches what the alert path gates on, so the table now
+counts exactly the population the alerts would have sent.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their
