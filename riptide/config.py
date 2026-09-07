@@ -64,25 +64,32 @@ MTF_GRACE_BARS = int(os.getenv("RIPTIDE_MTF_GRACE_BARS", "2"))
 # Suppress setups and sweeps that face against the higher-timeframe trend.
 # The one filter measured to separate winners from losers — see trend.py.
 TREND_FILTER = os.getenv("RIPTIDE_TREND_FILTER", "0") == "1"
-# The SuperTrend filter's timeframe. 4h, not daily, and the two are no longer
-# the same setting as DI_INTERVAL below — measured on Min30 confirmed setups,
-# net of fees, with-trend minus against-trend:
+# The SuperTrend filter's timeframe. Back to daily after re-measuring.
 #
-#   4h SuperTrend   +0.255  +3.7 SE   splits +3.0 / +2.2 / +2.7 / +2.6
-#   daily SuperTrend +0.150  +2.2 SE
+# It was moved to 4h on numbers from a backtest scorer that turned out to be
+# broken — see the correction at the top of MEASUREMENTS.md. On the corrected
+# scorer, separation between with-trend and against-trend on Min30 confirmed
+# setups, net of fees:
 #
-# The 4h reading replicates on all four splits. On EARLY signals it does not
-# (+1.9 SE overall, one split at +0.1), so this is a confirmed-setup effect.
-TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Hour4")
+#   daily SuperTrend  +0.250  +2.4 SE      (read +0.150 / +2.2 before)
+#   4h SuperTrend     +0.214  +2.0 SE      (read +0.255 / +3.7 before)
+#
+# Daily is now ahead on both signal types, which is what it was before the
+# switch. Neither clears 3 SE, so this is the better of two weak readings
+# rather than a finding — /stats settles it.
+TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Day1")
 
 # DI's timeframe, and it must stay DAILY. DI is the axis the grade letter is
 # built on, and it is the one thing here that does not survive being moved:
 #
-#   daily DI  +0.250  +3.7 SE   splits +2.3 / +2.9 / +3.0 / +2.2
-#   4h DI     +0.001  +0.0 SE   splits -0.6 / +0.7 / +0.2 / -0.2
+#   daily DI  +0.266  +2.5 SE
+#   4h DI     +0.011  +0.1 SE
 #
-# A flat null on every split. These were one setting until that was measured,
-# so moving the filter to 4h would silently have taken the grade with it.
+# A flat null on 4h, and this is the one reading the correction did not move:
+# it was +0.250 against +0.001 on the broken scorer and is +0.266 against
+# +0.011 on the fixed one. They are two settings rather than one because the
+# question is separable, which the 4h experiment proved even though the 4h
+# answer was wrong; both now sit on Day1.
 DI_INTERVAL = os.getenv("RIPTIDE_DI_INTERVAL", "Day1")
 TREND_LEN = int(os.getenv("RIPTIDE_TREND_LEN", "14"))
 TREND_FACTOR = float(os.getenv("RIPTIDE_TREND_FACTOR", "5.0"))

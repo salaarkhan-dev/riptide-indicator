@@ -95,6 +95,92 @@ does not by itself contradict the 2.5 ATR cap; that is re-measured separately.
 **Confluence is flat at -0.005 and -0.016.** The order block and breaker
 agreement, the thing this indicator draws in yellow and orange, sorts nothing.
 
+## Re-measured on the corrected scorer — decisions and exits
+
+`research/studies/decisions.py`. Min30, live windows, net of fees.
+
+### The 2.5 ATR risk cap survives, and it is the peak
+
+| cap | n | R/signal | total R |
+|---|---|---|---|
+| 1.5 ATR | 72 | -0.081 | -5.8 |
+| 2 ATR | 146 | -0.005 | -0.8 |
+| **2.5 ATR (shipped)** | 246 | **+0.083** | **+20.4** |
+| 3 ATR | 358 | +0.045 | +16.3 |
+| 4 ATR | 558 | +0.005 | +2.9 |
+
+Unchanged decision, and on better evidence than it was made with: at 4 ATR
+confirmed setups are worth essentially nothing.
+
+### Exits — confirmed
+
+| policy | R/signal | total R | vs 1.5R |
+|---|---|---|---|
+| target 1R | +0.083 | +20.4 | |
+| target 1.5R (baseline) | +0.160 | +39.5 | |
+| target 2R | +0.215 | +52.8 | +1.6 SE |
+| target 2.5R | +0.242 | +59.6 | +1.6 SE |
+| target 3R | +0.252 | +61.9 | +1.5 SE |
+| BE arm 1R lock 0.1R | +0.129 | +31.7 | **-1.8 SE** |
+| BE arm 1.5R / 2R lock 0.1R | +0.160 | +39.5 | 0.000 |
+| half 1.5R, half 3R | +0.192 | +47.2 | +1.2 SE |
+| horizon 20 bars | +0.063 | +15.6 | **-3.3 SE** |
+| horizon 40 bars | +0.106 | +26.2 | **-3.2 SE** |
+
+**Only one result clears 3 SE, and it is a negative: cutting the horizon
+short costs real money.** 20 bars loses 60% of the total R against 60 bars.
+Let trades run.
+
+Targets are monotone and total R triples from 1R to 3R, but every step is
+about 1.5 SE, so the ladder is direction without proof.
+
+**The break-even rule is worthless or harmful.** Arming at 1R costs -1.8 SE.
+Arming at 1.5R or 2R with a 1.5R target cannot trigger at all, which is the
+setting the alert has been advising — a no-op dressed as advice. The
+pre-registered prediction (BE lowers expectancy) was right.
+
+### Exits — early, and this is the finding that matters
+
+| target | R/signal | total R |
+|---|---|---|
+| 1R | -0.033 | **-45.5** |
+| 1.5R | -0.016 | -22.7 |
+| 2R | +0.008 | +10.5 |
+| 3R | +0.013 | +17.8 |
+
+**Early signals are net negative after fees at the target the bot actually
+tracks.** Not weak — negative, across 1384 signals, and no exit policy rescues
+them: every break-even, partial and horizon variant sits between -0.019 and
++0.013. On the broken scorer they read +0.114.
+
+This is 33 alerts a day, the majority of what the bot sends, and the strategy
+the user said mattered most. It needs a decision, not a tweak.
+
+### Structure timeframe
+
+| | R/signal | total R |
+|---|---|---|
+| Min30 confirmed | **+0.083** | +20.4 |
+| Min15 confirmed | -0.067 | -15.1 |
+| Min30 early | -0.033 | -45.5 |
+| Min15 early | -0.065 | -88.1 |
+
+30m confirmed. 15m is worse on both, so that question stays closed.
+
+### Trend timeframe — the 4h switch was wrong and is reverted
+
+| reading | with | against | separation | |
+|---|---|---|---|---|
+| **daily SuperTrend** | +0.201 | -0.049 | **+0.250** | +2.4 SE |
+| 4h SuperTrend | +0.183 | -0.031 | +0.214 | +2.0 SE |
+| **daily DI** | +0.204 | -0.062 | **+0.266** | +2.5 SE |
+| 4h DI | +0.088 | +0.077 | +0.011 | +0.1 SE |
+
+Daily is ahead on both axes. `TREND_INTERVAL` is back to `Day1`, where it was
+before the broken numbers moved it. Daily DI is the one reading the correction
+barely touched — +0.250 before, +0.266 after — which is some comfort about the
+axis the grade is built on, though at 2.5 SE it still does not clear the bar.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,
