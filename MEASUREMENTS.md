@@ -324,6 +324,50 @@ doubt is that its 1R edge does not survive costs.
 Standing caveats: 20.8 days, one regime, and slippage is still not modelled —
 only spread-free fees, so these are an upper bound.
 
+### Early at a far target — the rescue that did not happen
+
+The timeframe run left early unprofitable after fees at 1R, with one open
+defence: 1R might simply be the wrong exit. `riptide.conf` recorded that
+early's trend-aligned edge "only appears at 3R", and early runs a tighter stop
+so it has more room in R terms. A far target also *dilutes* the fee — the cost
+in R is FEE/risk whatever the target, but at 3R it is subtracted from a 4R
+win-loss spread instead of a 2R one.
+
+Tested paired, so every target is scored on the same 1374 early signals rather
+than on two independent samples. 23 symbols, 41.6 days, fees included.
+
+| target | hit target | stopped | timeout | gross | **net** |
+|---|---|---|---|---|---|
+| 1R | 42% | 36% | 2% | +0.057 | **−0.016** |
+| 2R | 26% | 47% | 7% | +0.078 | **+0.006** |
+| 3R | 17% | 52% | 11% | +0.067 | **−0.006** |
+
+Paired against the shipped 1R: **3R is +0.010, +0.3 SE**, and the window halves
+disagree (−0.040 first half, +0.057 second). 2R is +0.022 at +0.9 SE. Nothing.
+
+**The defence fails, and the earlier claim does not survive being measured
+properly.** It was computed gross, unpaired, on a different window. With fees,
+pairing and splits, early sits within noise of zero at every exit tested —
+three targets, two horizons, and a break-even variant. Its median fee cost is
+0.066 R against 0.044 R for confirmed, because it runs a tighter stop and
+fills more often, and that is structural rather than a quirk of one window.
+
+Two by-products, both declared descriptive before the run and therefore **not
+shippable on this evidence**:
+
+**Confirmed setups nominally prefer a far target** — net +0.020 at 1R, +0.065
+at 2R, +0.078 at 3R, paired +0.058 (+1.4 SE) for 3R over 1R. Suggestive, under
+2 SE, and the obvious next pre-registered primary. `TRACK_TARGET_R` is 1.0.
+
+**The break-even rule still does nothing, even at 3R** — +0.077 against +0.078
+without it. That was the one place it might have mattered, since there is 3R of
+open profit to protect rather than 1R. There is not. A longer horizon does not
+help either: 120 bars gives confirmed +0.062 at 3R against +0.078 at 60.
+
+Early band A at 3R is +0.093 ± 0.059, the only early cell that looks alive —
+but that is a band × target slice of a descriptive branch, which is exactly
+the shape of the false positives already buried on this page.
+
 ### Volume, and the context filters
 
 The first tests using information the engine does not already have. Everything
