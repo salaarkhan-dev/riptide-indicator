@@ -1078,6 +1078,55 @@ axis to stack on the grade — it is a way to reach the 93%-fill low-gap bucket,
 which is the biggest and worst-scoring group and the one the gap measure calls
 uniformly mediocre.
 
+## Batch 4 — the rest of the SMC doctrine
+
+Riptide already implements the core of it: pool, sweep, structure shift, gap.
+These are the parts of the doctrine it does NOT implement, each pre-registered
+with the direction the doctrine claims, on 1888 signals across 23 symbols.
+
+| concept | doctrine says | early | confirmed |
+|---|---|---|---|
+| premium / discount at entry | buy in discount | **-0.176** | **-0.242** |
+| displacement (leg range in ATR) | bigger is better | -0.171 | -0.322 |
+| pool tightness (equal highs/lows) | tighter is better | +0.082 | -0.041 |
+| inducement before the raid | present is better | -0.003 | -0.030 |
+| gap share of the leg | bigger is better | -0.038 | +0.049 |
+| imbalances stacked in the leg | more is better | -0.147 | -0.110 |
+| order block unmitigated | fresh is better | not measured | not measured |
+
+**Nothing passed.** Two of these need their failures described precisely
+rather than filed under "flat".
+
+**Displacement runs backwards.** The doctrine is that a real reversal moves
+with energy. The smallest-displacement quartile scored best on both signal
+types (+0.33 early, +0.35 confirmed, against +0.16 and +0.03 for the largest).
+Non-monotone, so not a finding in reverse either — but it is not support.
+
+**Premium / discount points the right way and still fails.** It is the only
+concept whose sign matched the doctrine: entries deep in discount scored
++0.27 against +0.09 in premium on early, -2.6 SE overall. It is non-monotone,
+and the pre-registered control kills it — entry deep in discount means entry
+near the raid extreme, which means a TIGHT STOP, and tight stops already score
+better. Inside risk terciles it is -1.8 / -0.4 / -2.3 on early and -0.8 /
+-1.9 / -0.0 on confirmed. No consistent effect once stop size is held.
+
+### Two errors in this batch, both mine
+
+**The gap-share feature was miscoded.** It computed entry-to-stop distance
+divided by the leg, not gap size divided by the leg. As coded it was close to
+a restatement of premium/discount — risk is measured from the raid extreme —
+and it produced the largest number in the batch at 4.7 SE. Recomputed with the
+actual gap size it is -0.7 SE and +0.6 SE. The 4.7 SE was an artefact of
+measuring the same thing twice, and it was one rounding step away from being
+reported as a finding: the monotonicity check rejected it on values that print
+as +0.18 and +0.18 and are actually 0.1750 and 0.1826.
+
+**Order block mitigation was not measured at all.** The test asked whether
+price traded back into the block between the block bar and the signal, and the
+block sits immediately before the gap, so the answer was yes for 1888 of 1888
+signals. A degenerate feature returns no buckets and silently drops out of the
+table. It needs a definition that looks at the bars before the raid, not after.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their
