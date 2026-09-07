@@ -2370,3 +2370,57 @@ plausible noise band of each other. What is NOT within noise is that every
 POI-requiring policy beats the shipped one by 2-3x on return per drawdown, and
 the POI component is the one thing here that has passed a pre-registered
 held-out test.
+
+## What policy G actually gives up — and a correction
+
+`research/studies/missed.py`, run on the LIVE universe (60 symbols, both
+timeframes, 42 days) rather than the 23 the cell table was built on.
+
+    suppressed by G          n   per day    R/signal      total R
+      Min30 confirmed, trend      149   3.6    +0.030        +4.5
+      Min30 confirmed, against    270   6.5    -0.175       -47.2
+      Min30 early, trend          811  19.5    +0.010        +8.4
+      Min30 early, against       1569  37.7    -0.099      -155.5
+      Min15 confirmed, trend      199   4.8    -0.011        -2.2
+      Min15 confirmed, against    186   4.5    -0.165       -30.7
+      Min15 early, trend         1038  24.9    -0.029       -29.8
+      Min15 early, against       1177  28.3    -0.144      -169.9
+
+      suppressed  5399 signals (129.7/day)   -422.5 R
+      kept        2630 signals ( 63.2/day)   +273.0 R
+
+**CORRECTION.** Earlier sections of this file, and the advice that went with
+them, say that requiring a POI lowers TOTAL R and is therefore only worth it
+while a position slot is the scarce resource. On the live 60-symbol universe
+that is wrong. **The suppressed book is worth -422.5 R.** Not one suppressed
+cell measures above +0.030. G is not trading volume for quality; it is cutting
+a losing book, and total R rises.
+
+The earlier claim came from the 23-symbol measurement, where Min30 confirmed
+outside a POI but with the trend scored +0.206 on 66 signals. On 60 symbols
+the same cell is +0.030 on 149. The extra 37 symbols are materially worse than
+the hand-picked 23 — which is the second finding here, and it cuts both ways:
+
+**Widening the universe dilutes signal quality, and that is exactly why the
+POI filter matters more at 60 symbols than it did at 23.** The kept book
+averages +0.104 R per signal across 60 symbols. Expanding the universe without
+the filter would have made the bot worse, not better; the two changes are only
+sound together.
+
+### Sweep heads-ups, which no measurement covers
+
+Sweeps are not trades — no entry, no stop, nothing to score — so no cell in the
+table applies to them, and gating them on the POI was a decision made by the
+code rather than by a finding. It now has its own switch. Measured rates:
+
+    every sweep, both timeframes      393/day
+    every sweep, 30m only             216/day
+    in a daily POI, both timeframes   123/day
+    in a daily POI, 30m only           65/day   <- the default
+
+The default sends FEWER sweeps than the old 23-symbol single-timeframe setup
+(~83/day) despite scanning nearly three times the market. The POI default is
+also coherent rather than merely quiet: a sweep's POI is evaluated at the same
+raid a setup's would be, so a sweep outside a zone can only lead to signals
+POI_REQUIRED then suppresses — sending it would advertise a setup the bot has
+already decided not to alert on.

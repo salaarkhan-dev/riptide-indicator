@@ -210,6 +210,29 @@ SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
 # that. A window of 1 * step can never contain the sweep that just confirmed,
 # so 1 silently suppresses every alert.
 SWEEP_FRESH_BARS = int(os.getenv("RIPTIDE_SWEEP_FRESH_BARS", "2"))
+
+# Which timeframes send sweep heads-ups, and whether the POI filter applies to
+# them. Sweeps are NOT trades — no entry, no stop, nothing to score — so no
+# cell in the measured table covers them and neither of these is an edge
+# decision. They are purely about how many messages a phone gets, and the
+# rates are measured (research/studies/missed.py, 60 symbols, 42 days):
+#
+#     every sweep, both timeframes      393/day
+#     every sweep, 30m only             216/day
+#     in a daily POI, both timeframes   123/day
+#     in a daily POI, 30m only           65/day   <- the default
+#
+# 30m only, POI required, is fewer messages than the 23-symbol single-timeframe
+# setup used to send (~83/day) despite scanning nearly three times the market.
+#
+# The POI default is not arbitrary either: a sweep's POI is evaluated at the
+# same raid the setup's would be, so a sweep outside a zone can only lead to
+# signals that POI_REQUIRED then suppresses. Sending it would be advertising a
+# setup the bot has already decided not to alert on.
+SWEEP_INTERVALS = tuple(dict.fromkeys(
+    i.strip() for i in os.getenv("RIPTIDE_SWEEP_INTERVALS", "Min30").split(",")
+    if i.strip())) or (INTERVAL,)
+POI_SWEEPS = os.getenv("RIPTIDE_POI_SWEEPS", "1") == "1"
 # Which pool types raise a heads-up. Unset means all of them — the right
 # default while the output is being checked against the chart, since
 # filtering would hide part of what is being verified.

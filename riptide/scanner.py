@@ -17,7 +17,8 @@ from . import trend
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      EARLY_ALERTS, ENTRY_INTERVAL, FRESH_BARS, INTERVAL,
                      INTERVALS, LOG_MARKET, MTF_GRACE_BARS, POI_REQUIRED,
-                     SCAN_INTERVAL, SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC,
+                     POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS,
+                     SWEEP_FRESH_BARS, SWEEP_INTERVALS, SWEEP_SRC,
                      TREND_FILTER, TREND_INTERVAL, log)
 from .engine import Early, Sweep, atr_series, run_engine
 from .exchange import fetch_candles, list_symbols
@@ -203,6 +204,12 @@ def poi_ok(x) -> bool:
     """
     if not POI_REQUIRED:
         return True
+    # Sweeps opt out separately. They are heads-ups rather than trades, no
+    # measurement covers them, and gating them was a code decision rather than
+    # a finding — so it gets its own switch instead of riding on one made for
+    # something else.
+    if isinstance(x, Sweep) and not POI_SWEEPS:
+        return True
     # Unknown sends. A transient daily-bar failure must not read as "not in a
     # zone" — that would mute a symbol for as long as the failure lasted, and
     # silently, which is the worst possible failure mode for an alerting
@@ -303,6 +310,8 @@ async def cycle(sess, db, symbols):
     swept = 0
     for _, sweeps, _, _ in results:
         for w in sweeps:
+            if w.tf not in SWEEP_INTERVALS:
+                continue
             if SWEEP_SRC is not None and w.src not in SWEEP_SRC:
                 continue
             fresh = (now - w.sweep_time) <= SWEEP_FRESH_BARS * step_of(w)
