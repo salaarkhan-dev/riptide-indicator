@@ -48,6 +48,53 @@ longer to fill than the other, because that group collected more free bars.
 The impulse-gap result is exactly that failure mode: a large gap means a
 slower fill means more pre-fill bars.
 
+## Re-measured on the corrected scorer — entry-side features
+
+18 features, both signal types, 36 comparisons, run through
+`research/studies/features.py` on `research/harness.py`. Live windows (10 fill
+bars, 60 horizon), fill-anchored outcomes, fees included, and the harness's own
+bar: monotone AND >= 3 SE AND one sign on all four splits AND surviving the
+stop-size control.
+
+**Nothing passed. Not one of the 36.**
+
+| feature | confirmed | early |
+|---|---|---|
+| MACD histogram sign agrees | -0.081 (-0.5) | -0.057 (-1.2) |
+| Stochastic extension our way | -0.051 (-0.3) | +0.069 (+1.0) |
+| CCI extension our way | +0.268 (+1.9) | +0.032 (+0.5) |
+| raid extreme outside Bollinger | +0.040 (+0.4) | +0.043 (+0.8) |
+| rejection wick / range | -0.026 (-0.2) | -0.017 (-0.2) |
+| raid body / range | +0.276 (+1.9) | +0.184 (+2.7) |
+| range width before the raid | +0.036 (+0.2) | +0.022 (+0.3) |
+| pool age | +0.264 (+1.7) | +0.089 (+1.3) |
+| hour of day | +0.078 (+0.5) | -0.066 (-1.0) |
+| **price past entry at signal** | **-0.233 (-1.5)** | **-0.008 (-0.1)** |
+| displacement | +0.109 (+0.7) | +0.056 (+0.8) |
+| gap share of the leg | -0.151 (-1.0) | -0.005 (-0.1) |
+| imbalances in the leg | +0.224 (+2.0) | -0.032 (-0.3) |
+| swings in the pool | +0.051 (+0.5) | -0.056 (-0.9) |
+| Day pool vs Pivot | too few | +0.024 (+0.4) |
+| confluence score | -0.005 (-0.0) | -0.016 (-0.3) |
+| stop size (% risk) | +0.352 (+2.4) | +0.191 (+2.9) |
+
+Two entries deserve naming.
+
+**The impulse-gap effect is dead.** It was headlined in this file at +7.5 SE
+and is now -1.5 SE on confirmed and -0.1 on early — it has changed SIGN. It
+was the scorer bug in its purest form: a large gap means a slow fill means
+more free pre-fill bars, so the feature was partly measuring the bug itself.
+
+**Stop size now runs the OTHER way.** Wider stops score better (+0.352 /
++0.191), where the broken scorer said tighter. Both readings are partly
+mechanical rather than an edge: fees cost `0.08 / risk_pct` R, so a wide stop
+is cheaper per unit of risk. And risk_pct is not the same axis as the ATR cap
+— it mixes stop width with symbol volatility, which ATR normalises away. It
+does not by itself contradict the 2.5 ATR cap; that is re-measured separately.
+
+**Confluence is flat at -0.005 and -0.016.** The order block and breaker
+agreement, the thing this indicator draws in yellow and orange, sorts nothing.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,
