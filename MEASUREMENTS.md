@@ -269,6 +269,61 @@ not representative of a class. And fill rates confirm the stale-entry fix:
 64–75% per quintile under `fvg_scan_from="mss"` against 40–60% under `"grab"`,
 where entries routinely sat too far below market to ever fill.
 
+### Structure timeframe: Min5 vs Min15 vs Min30
+
+**The first measurement on this page that includes fees**, and it changes what
+the numbers mean. Every other figure here is gross.
+
+Two design points decide whether this comparison says anything. All three
+timeframes see the **same 20.8 days** — 2000 bars is 6.9 days of Min5 but 41.6
+of Min30, so equal bar counts would compare three market periods and call the
+difference a timeframe effect. And the primary metric is **net of fees**,
+because fees are a fixed fraction of notional while R is measured against the
+stop: halve the timeframe, halve the stop, double the cost in R.
+
+23 symbols, 20.8 days, 0.08% round trip (0.02% maker in, 0.06% taker out):
+
+| tf | setups | per day | median risk | fill | gross R | cost | **net R** |
+|---|---|---|---|---|---|---|---|
+| Min5 | 1347 | 2.82 | 0.92% | 71% | +0.033 | 0.082 | **−0.049** |
+| Min15 | 516 | 1.08 | 1.59% | 72% | +0.058 | 0.047 | **+0.011** |
+| **Min30** | 277 | 0.58 | 2.37% | 69% | +0.090 | 0.032 | **+0.058** |
+
+Both effects push the same way. Gross expectancy *rises* with timeframe
+(+0.033 → +0.090) and cost *falls* (0.082 → 0.032), so the net gap is wider
+than either alone. Min5 pays 8.2% of its risk in fees before it has done
+anything.
+
+**Min5 is measurably worse: −0.107 against Min30, −2.0 SE, and both halves of
+the symbol set agree.** Min15 is −0.047 at −0.8 SE with the halves
+disagreeing (−0.163 / +0.091) — indistinguishable, nominally behind. No change:
+Min30 stays.
+
+Band A confirmed, the part actually worth trading:
+
+| tf | setups | gross | net |
+|---|---|---|---|
+| Min5 | 655 | +0.104 | +0.026 ± 0.032 |
+| Min15 | 283 | +0.079 | +0.034 ± 0.048 |
+| Min30 | 138 | +0.213 | **+0.178 ± 0.065** |
+
+Min30 band A is the only cell that clearly survives its own costs, though 138
+setups is thin and Min30-over-Min15 there is only 1.8 SE.
+
+Alert volume, which is a cost of its own: at 23 symbols Min5 would produce
+about **250 alerts a day** against Min30's 45.
+
+**Fees make early signals unprofitable on every timeframe** — −0.103, −0.044,
+−0.021 — where gross they are +0.042, +0.035, +0.039. Early runs a tighter
+stop and fills more often, so it pays the round trip more times on a smaller R
+denominator. One caveat before writing it off: this scores at a 1R target, and
+early was separately measured to need a far target (its trend-aligned edge
+only appeared at 3R). The 1R rule is the wrong one for it. What is not in
+doubt is that its 1R edge does not survive costs.
+
+Standing caveats: 20.8 days, one regime, and slippage is still not modelled —
+only spread-free fees, so these are an upper bound.
+
 ### Volume, and the context filters
 
 The first tests using information the engine does not already have. Everything
