@@ -9,9 +9,15 @@ precisely how the "Look for entry zones from" mismatch was found — the bot ran
 "mss", the Pine still shipped "Grab candle".
 
 Only settings that exist on both sides are listed. Pine-only inputs (colours,
-what to draw, session boxes) and Cfg-only fields (early_max_bars, the tracker,
-anything the reference indicator has no notion of) are deliberately absent
-rather than faked into a pair.
+what to draw, session boxes) and Cfg-only fields (the tracker, anything the
+reference indicator has no notion of) are deliberately absent rather than
+faked into a pair.
+
+early_max_bars used to be on that Cfg-only list because the Pine had no early
+path at all. It has one now — the low-opacity zone drawn before the shift — so
+the window is shared and is checked here. A chart drawing early zones on a
+wider window than the bot alerts on is the same silent drift as the
+"fvg_scan_from" mismatch this file was written for.
 
     python deploy/check-parity.py        # exit 1 on any mismatch
 """
@@ -43,6 +49,7 @@ NUMERIC = {
     "maxBarsAfterGrab": "max_bars_after_grab",
     "mssCooldownBars": "mss_cooldown_bars",
     "maxBarsAfterMss": "max_bars_after_mss",
+    "earlyMaxBars": "early_max_bars",
 }
 
 # Pine input name -> (Cfg field, {Pine option string: Cfg value}).

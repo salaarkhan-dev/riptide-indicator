@@ -189,6 +189,16 @@ blockBars      = input.int(8, "  block bar length (bars)", minval = 1, maxval = 
 blockWidth     = input.int(3, "  block bar thickness", minval = 1, maxval = 8, group = gLook)
 obCol          = input.color(#ffd54f, "  order block", inline = "blk", group = gLook)
 bbCol          = input.color(#ff8f00, "  breaker",     inline = "blk", group = gLook)
+showEarly      = input.bool(true,  "Early entry zone (before the shift)", group = gLook,
+     tooltip = "The bot's ⚡ EARLY signal, drawn. Until now the chart marked the raid with a dot and then showed nothing until the shift confirmed, so an early alert arrived with no zone on screen to put an entry against — you got a price in Telegram and a blank chart.\n\nThis draws the first imbalance inside the window below, at low opacity: the zone, its entry edge, the stop beyond the raid extreme, and the order block behind it. Faint on purpose — nothing has confirmed a reversal, and it must not read like a completed setup.\n\nNo breaker block is drawn here and none can be: a breaker is an opposing candle that a structure break traded through, so before the shift there is nothing for it to have broken. That is also why an early alert scores at most 1 on confluence where a confirmed setup can score 2.")
+earlyMaxBars   = input.int(10, "  gap must form within (bars of the raid)",
+     minval = 1, maxval = 100, group = gLook,
+     tooltip = "Matches RIPTIDE_EARLY_MAX_BARS on the bot, so the zone the chart draws is the one the alert fired on. Raise it and the chart will draw zones no alert was sent for.")
+earlyFade      = input.int(60, "  opacity", minval = 0, maxval = 95, group = gLook,
+     tooltip = "How solid the early marks are. Higher is fainter.")
+earlyKeep      = input.int(2, "  how many zones to keep", minval = 1, maxval = 20,
+     group = gLook,
+     tooltip = "Early zones are pruned on their OWN budget, not the confirmed setups' one. Sharing it would let three early zones — most of which never become anything — evict the entry and stop lines of a setup that did confirm.")
 showEntryLine  = input.bool(true,  "Entry line",                     group = gLook)
 showStopLoss   = input.bool(true,  "Stop loss line",                 group = gLook,
      tooltip = "Drawn from the raid candle itself and extended right, so you can see which bar the stop comes from.")
@@ -364,6 +374,9 @@ type Cluster
     bool   swept        = false
     bool   mssConfirmed = false
     bool   setupDone    = false
+    bool   earlyDone    = false        // the early zone has been drawn, or the
+                                       // window closed without one. Mirrors
+                                       // Cluster.early_done in engine.py.
     bool   expired      = false
     bool   suppressed   = false        // MSS fired but muted by the cooldown
     int    sweepBar     = na        // FIRST bar that ran the level (clock)
@@ -403,6 +416,10 @@ type Cluster
 type LevelGroup
     array<line>  lns
     array<label> lbs
+    array<box>   bxs     // the early zone's box. Held here so it is deleted by
+                         // the same prune that clears the group's lines — a box
+                         // left behind when its entry line goes is a zone with
+                         // nothing to say what it was.
     int          bar     // bar it was opened on, so drawSetup and openTrade
                          // can share one. Held here rather than in a global
                          // because Pine functions may mutate object fields
@@ -505,6 +522,8 @@ var array<CtxFvg>  ctxFvgs  = array.new<CtxFvg>()
 // leaving a marker on a raid that died is what made Live mode unreadable.
 var array<Cluster> pendingRaids = array.new<Cluster>()
 var array<LevelGroup> lvlGroups = array.new<LevelGroup>()
+// Early zones get their own list. See earlyKeep.
+var array<LevelGroup> earlyGroups = array.new<LevelGroup>()
 var array<Trade>   trades   = array.new<Trade>()
 var Stats          stx      = Stats.new()
 var Counters       cnt      = Counters.new()
@@ -961,14 +980,32 @@ levelGroup() =>
         fresh := lvlGroups.get(lvlGroups.size() - 1).bar != bar_index
     if fresh
         lvlGroups.push(LevelGroup.new(lns = array.new<line>(),
-             lbs = array.new<label>(), bar = bar_index))
+             lbs = array.new<label>(), bxs = array.new<box>(), bar = bar_index))
         while lvlGroups.size() > setupLevelKeep
             LevelGroup old = lvlGroups.shift()
             for l in old.lns
                 line.delete(l)
             for b in old.lbs
                 label.delete(b)
+            for bx in old.bxs
+                box.delete(bx)
     lvlGroups.get(lvlGroups.size() - 1)
+
+// Same idea as levelGroup, on a separate budget. Not keyed on bar_index: two
+// clusters can produce an early zone on one bar and they are two zones, not
+// one drawing shared between them.
+earlyGroup() =>
+    earlyGroups.push(LevelGroup.new(lns = array.new<line>(),
+         lbs = array.new<label>(), bxs = array.new<box>(), bar = bar_index))
+    while earlyGroups.size() > earlyKeep
+        LevelGroup old = earlyGroups.shift()
+        for l in old.lns
+            line.delete(l)
+        for b in old.lbs
+            label.delete(b)
+        for bx in old.bxs
+            box.delete(bx)
+    earlyGroups.get(earlyGroups.size() - 1)
 
 // ── order block and breaker ─────────────────────────────────────────────────
 // Both mirror engine.py exactly, because the confluence score on every alert
@@ -1058,6 +1095,51 @@ drawBlock(LevelGroup g, int off, bool isBull, color col, string name) =>
              tooltip   = name + "\nbar " + str.tostring(b) +
                          "\nopen " + f2s(open[off]) + "  close " + f2s(close[off]) +
                          "\nline at " + f2s(y) + " (" + blockLevel + ")"))
+
+// The ⚡ EARLY zone: sweep -> first imbalance, no shift. Mirrors the early
+// block in engine.py, including its window and its stop, so what is drawn is
+// what was alerted.
+//
+// Everything is faint. The point of the early signal is that NOTHING has
+// confirmed a reversal — it buys speed with a stop at the raid extreme rather
+// than a whole leg back — and a mark that looked like a completed setup would
+// be lying about which of the two it is.
+//
+// No breaker: a breaker is an opposing candle that a structure break traded
+// through, and before the shift there is nothing for it to have broken.
+drawEarly(Cluster c, float top, float bot, float entry, float sl) =>
+    bool isLong = not c.isHigh
+    bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
+                  and trendOk(isLong)
+    if dirOk
+        color col   = color.new(isLong ? bullCol : bearCol, earlyFade)
+        int   x2    = bar_index + setupExtendBars
+        LevelGroup g = earlyGroup()
+        g.bxs.push(box.new(bar_index - 2, top, bar_index + fvgExtendBars, bot,
+             xloc         = xloc.bar_index,
+             border_color = col,
+             bgcolor      = color.new(isLong ? bullCol : bearCol,
+                                      math.min(99, earlyFade + 30))))
+        g.lns.push(line.new(bar_index, entry, x2, entry,
+             xloc = xloc.bar_index, color = col, style = line.style_dotted, width = 1))
+        g.lbs.push(label.new(x2, entry, "Early " + f2s(entry),
+             xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left,
+             color = color.new(isLong ? bullCol : bearCol, 85),
+             textcolor = col, size = size.tiny))
+        if showStopLoss
+            g.lns.push(line.new(c.grabBar, sl, x2, sl,
+                 xloc = xloc.bar_index, color = col, style = line.style_dotted, width = 1))
+        // The order block behind it — the same last_opposing rule the confirmed
+        // setup uses, anchored on this gap instead of the post-shift one.
+        if showOB
+            int obOff = lastOpposingOffset(1, isLong, 20)
+            if obOff >= 0
+                float y = blockPrice(obOff, isLong)
+                g.lns.push(line.new(bar_index - obOff, y, bar_index - obOff + blockBars, y,
+                     xloc  = xloc.bar_index,
+                     color = color.new(obCol, earlyFade),
+                     style = line.style_solid,
+                     width = blockWidth))
 
 drawSetup(Cluster c) =>
     bool isLong = not c.isHigh
@@ -1580,6 +1662,40 @@ if engineOk
                         // confirms.
                         if trailed
                             moveGrab(c)
+                        // The early gap, before any shift. Runs AFTER the
+                        // trail above so grabHigh/grabLow are current for this
+                        // bar, and only ever looks at a gap ending on THIS bar
+                        // — the point is to catch it as it forms, not to hunt
+                        // backwards through the leg for one that fits.
+                        if showEarly and not c.earlyDone and bar_index > 2
+                            if bar_index - c.sweepBar > earlyMaxBars
+                                c.earlyDone := true
+                            else
+                                bool eBull = not c.isHigh
+                                float eTop = eBull ? low : low[2]
+                                float eBot = eBull ? high[2] : high
+                                bool  eOk  = eBull ? low > high[2] : high < low[2]
+                                float eSz  = eTop - eBot
+                                bool eFits = eOk and eSz >= atr * minFvgSizeATR
+                                     and (maxFvgSizeATR <= 0 or eSz <= atr * maxFvgSizeATR)
+                                if eFits
+                                    float eEnt = entryMode == "Proximal" ? (eBull ? eTop : eBot)
+                                         : entryMode == "Distal" ? (eBull ? eBot : eTop)
+                                         : (eTop + eBot) / 2
+                                    float eSl  = eBull ? c.grabLow - atr * slBufferATR
+                                         : c.grabHigh + atr * slBufferATR
+                                    float eRsk = math.abs(eEnt - eSl)
+                                    // A gap on the wrong side of the raid
+                                    // extreme gives a zero or inverted stop.
+                                    bool eSane = eBull ? eEnt > eSl : eEnt < eSl
+                                    // Both guards are engine.py's, not
+                                    // decoration: without them the chart draws
+                                    // zones no alert was ever sent for, which
+                                    // is worse than drawing nothing.
+                                    if eSane and eRsk > 0 and (maxRiskATR <= 0
+                                         or eRsk <= atr * maxRiskATR)
+                                        drawEarly(c, eTop, eBot, eEnt, eSl)
+                                        c.earlyDone := true
                         bool broke = c.isHigh
                              ? (mssMode == "close" ? close < c.structLevel : low  < c.structLevel)
                              : (mssMode == "close" ? close > c.structLevel : high > c.structLevel)
