@@ -15,8 +15,9 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 
-from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
-                     TG_CHAT, TG_RETRIES, TG_TOKEN, TREND_INTERVAL, log)
+from .config import (ACCOUNT_USDT, BAR_SECONDS, CFG, DISPLAY_TZ,
+                     ENTRY_INTERVAL, INTERVAL, RISK_PCT, TG_CHAT, TG_RETRIES,
+                     TG_TOKEN, TREND_INTERVAL, log)
 from .engine import (Early, Setup, Sweep, band_stats, grade_of, shift_odds)
 
 async def tg_send(sess, text: str) -> bool:
@@ -276,6 +277,41 @@ def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
             f"{fmt(entry + sign * risk * CFG.be_lock_r)}</i>")
 
 
+def _qty(v: float) -> str:
+    """Enough digits to type, never more. A size is read once and copied."""
+    if v >= 1000:
+        return f"{v:,.0f}"
+    if v >= 1:
+        return f"{v:,.2f}"
+    return f"{v:.6g}"
+
+
+def _size_line(symbol: str, entry: float, risk: float) -> str | None:
+    """
+    How much to open, in the two units MEXC's order form actually takes.
+
+    position = account x risk% / stop%
+
+    Printed as NOTIONAL, not margin, because notional is the number that does
+    not move when leverage does — the same trade is the same size at 10x and
+    at 500x, and only the margin locked behind it changes. Sizing off a
+    percentage of balance instead is what makes stop distance drive loss size:
+    a fixed notional with a 3.5% stop risks nearly three times a 1.25% one.
+
+    Silent unless RIPTIDE_ACCOUNT_USDT is set. The bot cannot read a balance
+    and never will — no exchange key exists here — so this is arithmetic on a
+    number you typed into riptide.conf, and a stale one gives a confidently
+    wrong size. Off is the honest default.
+    """
+    if ACCOUNT_USDT <= 0 or entry <= 0 or risk <= 0:
+        return None
+    notional = ACCOUNT_USDT * (RISK_PCT / 100) * entry / risk
+    coin = symbol.split("_")[0]
+    return (f"Size  <b>{_qty(notional)}</b> USDT  ·  {_qty(notional / entry)} {coin}"
+            f"\n<i>{RISK_PCT:g}% of {_qty(ACCOUNT_USDT)} · order by QUANTITY, "
+            f"not cost</i>")
+
+
 def grade_letter(di_dir: int, is_long: bool, rsi_ext: float) -> str:
     """Just the letter, for looking up a band's live rate before rendering."""
     return grade_of(di_dir, is_long, rsi_ext)[0]
@@ -299,6 +335,7 @@ def setup_message(s: Setup, live=None) -> str:
         f"<i>sweep → shift → FVG{also}</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
+        _size_line(s.symbol, s.entry, s.risk),
         *_grade(s.di_dir, s.is_long, s.rsi_ext, live=live),
         trend_note(s.trend_dir, s.is_long) or None,
         _pool(s.src, s.level, s.pivots),
@@ -321,6 +358,7 @@ def early_message(s: Early, live=None) -> str:
         f"bar{'' if bars == 1 else 's'} after the raid</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
+        _size_line(s.symbol, s.entry, s.risk),
         *_grade(s.di_dir, s.is_long, s.rsi_ext, early=True, live=live),
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),

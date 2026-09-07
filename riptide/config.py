@@ -63,6 +63,16 @@ MTF_GRACE_BARS = int(os.getenv("RIPTIDE_MTF_GRACE_BARS", "2"))
 
 # Suppress setups and sweeps that face against the higher-timeframe trend.
 # The one filter measured to separate winners from losers — see trend.py.
+# Position sizing, printed on the alert. Arithmetic only — there is still no
+# exchange key, no balance lookup and no order path anywhere in this bot, and
+# there must not be. You type the account size here; nothing reads it.
+#
+# 0 turns the line off, which is the default: a WRONG account number is worse
+# than none, because a size line looks authoritative whatever it was computed
+# from.
+ACCOUNT_USDT = float(os.getenv("RIPTIDE_ACCOUNT_USDT", "0"))
+RISK_PCT = float(os.getenv("RIPTIDE_RISK_PCT", "1.0"))
+
 TREND_FILTER = os.getenv("RIPTIDE_TREND_FILTER", "0") == "1"
 # The SuperTrend filter's timeframe. 4h, not daily, and the two are no longer
 # the same setting as DI_INTERVAL below — measured on Min30 confirmed setups,
