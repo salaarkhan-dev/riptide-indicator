@@ -533,6 +533,54 @@ a set of parameters to adopt.
 
 Written up as rules in `TRADING.md`.
 
+## Candlestick reversal patterns at the raid
+
+Five patterns, in the direction the trade needs, tested on the raid bar and
+anywhere from the raid to the signal. `research/patterns.py`,
+`research/studies/candles.py`.
+
+### Piercing Line and Dark Cloud Cover cannot happen here
+
+The textbook definition requires the bar to OPEN BEYOND the previous close —
+a gap. A 24/7 perpetual has no gaps: bar i opens where bar i-1 closed, to the
+tick. Measured: **0 of 1638 signals, and 0 of 1999 bars scanned in either
+direction.**
+
+Any indicator labelling these on a crypto chart has dropped the gap condition.
+That is a different pattern wearing the same name, and it is what
+`piercing_gapless` implements — close back past the midpoint of the previous
+opposing body, no gap required.
+
+### Everything else: flat
+
+24 comparisons across engulfing, engulfing of a small body, hammer / shooting
+star, morning / evening star, and any-of-them, on the raid bar and across the
+raid-to-signal window. Nothing exceeded ±1.3 SE on either signal type. The
+largest was morning/evening star anywhere, confirmed, at +0.143 (+0.9 SE).
+
+### The one candidate, and its refutation
+
+Gapless piercing / dark cloud, anywhere raid-to-signal, on early signals:
+
+    discovery window   without -0.043 (n=1054)   with +0.217 (n=338)
+                       +0.260, 3.2 SE, monotone, control held   => CANDIDATE
+
+Found among 26 comparisons and not predicted in advance, so it went to a
+held-out window ending 28 Jul that had never been looked at, with the
+direction stated in writing first.
+
+    held out           without -0.035 (n=1168)   with -0.112 (n=292)
+                       -0.078, -1.0 SE, and NEGATIVE on all four splits
+
+**It reversed sign.** The 3.2 SE was one of twenty-six comparisons landing
+where chance puts one. Rejected.
+
+Worth setting beside the BTC regime result, which went through the identical
+process and came back at +0.123 with the same sign on all four splits — 70% of
+its discovered size. That is the difference between a real effect overestimated
+where it was found and a number that was never anything. Both looked the same
+on the discovery window; only the held-out test told them apart.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,
