@@ -190,7 +190,7 @@ blockWidth     = input.int(3, "  block bar thickness", minval = 1, maxval = 8, g
 obCol          = input.color(#ffd54f, "  order block", inline = "blk", group = gLook)
 bbCol          = input.color(#ff8f00, "  breaker",     inline = "blk", group = gLook)
 showEarly      = input.bool(true,  "Early entry zone (before the shift)", group = gLook,
-     tooltip = "The bot's ⚡ EARLY signal, drawn. Until now the chart marked the raid with a dot and then showed nothing until the shift confirmed, so an early alert arrived with no zone on screen to put an entry against — you got a price in Telegram and a blank chart.\n\nThis draws the first imbalance inside the window below, at low opacity: the zone, its entry edge, the stop beyond the raid extreme, and the order block behind it. Faint on purpose — nothing has confirmed a reversal, and it must not read like a completed setup.\n\nNo breaker block is drawn here and none can be: a breaker is an opposing candle that a structure break traded through, so before the shift there is nothing for it to have broken. That is also why an early alert scores at most 1 on confluence where a confirmed setup can score 2.")
+     tooltip = "The bot's ⚡ EARLY signal, drawn. Until now the chart marked the raid with a dot and then showed nothing until the shift confirmed, so an early alert arrived with no zone on screen to put an entry against — you got a price in Telegram and a blank chart.\n\nThis draws the first imbalance inside the window below, at low opacity: the zone, the stop beyond the raid extreme, and the order block behind it. No entry line and no price tag — under Proximal and Distal the entry is an edge of the zone itself, and the exact price is on the alert. Faint on purpose — nothing has confirmed a reversal, and it must not read like a completed setup.\n\nNo breaker block is drawn here and none can be: a breaker is an opposing candle that a structure break traded through, so before the shift there is nothing for it to have broken. That is also why an early alert scores at most 1 on confluence where a confirmed setup can score 2.")
 earlyMaxBars   = input.int(10, "  gap must form within (bars of the raid)",
      minval = 1, maxval = 100, group = gLook,
      tooltip = "Matches RIPTIDE_EARLY_MAX_BARS on the bot, so the zone the chart draws is the one the alert fired on. Raise it and the chart will draw zones no alert was sent for.")
@@ -1107,7 +1107,7 @@ drawBlock(LevelGroup g, int off, bool isBull, color col, string name) =>
 //
 // No breaker: a breaker is an opposing candle that a structure break traded
 // through, and before the shift there is nothing for it to have broken.
-drawEarly(Cluster c, float top, float bot, float entry, float sl) =>
+drawEarly(Cluster c, float top, float bot, float sl) =>
     bool isLong = not c.isHigh
     bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
                   and trendOk(isLong)
@@ -1120,12 +1120,12 @@ drawEarly(Cluster c, float top, float bot, float entry, float sl) =>
              border_color = col,
              bgcolor      = color.new(isLong ? bullCol : bearCol,
                                       math.min(99, earlyFade + 30))))
-        g.lns.push(line.new(bar_index, entry, x2, entry,
-             xloc = xloc.bar_index, color = col, style = line.style_dotted, width = 1))
-        g.lbs.push(label.new(x2, entry, "Early " + f2s(entry),
-             xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left,
-             color = color.new(isLong ? bullCol : bearCol, 85),
-             textcolor = col, size = size.tiny))
+        // No entry line and no price label here, unlike a confirmed setup.
+        // Under Proximal and Distal the entry IS an edge of the box just
+        // drawn, so a dotted line across the chart plus a price tag restates
+        // the zone and costs two more objects to do it. The exact price is on
+        // the alert. Only "Mid" puts the entry somewhere the box does not
+        // already show, and that is not the default.
         if showStopLoss
             g.lns.push(line.new(c.grabBar, sl, x2, sl,
                  xloc = xloc.bar_index, color = col, style = line.style_dotted, width = 1))
@@ -1694,7 +1694,7 @@ if engineOk
                                     // is worse than drawing nothing.
                                     if eSane and eRsk > 0 and (maxRiskATR <= 0
                                          or eRsk <= atr * maxRiskATR)
-                                        drawEarly(c, eTop, eBot, eEnt, eSl)
+                                        drawEarly(c, eTop, eBot, eSl)
                                         c.earlyDone := true
                         bool broke = c.isHigh
                              ? (mssMode == "close" ? close < c.structLevel : low  < c.structLevel)
