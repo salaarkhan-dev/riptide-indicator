@@ -227,6 +227,11 @@ trendMode = input.string("SuperTrend", "Trend line",
      options = ["Off", "SuperTrend", "EMA"], group = gTrend,
      tooltip = "Context only — switching it NEVER changes which signals appear.\n\n'SuperTrend' draws the higher-timeframe line the FILTER decides on, read from the timeframe and settings below, so what you see and what would be suppressed are the same line. It used to be a second SuperTrend computed on the chart timeframe with its own duplicate factor and length, which meant the panel carried two of everything and the line on screen disagreed with the filter under it. Those duplicates are gone and the old 'Filter trend' option with them: there is one SuperTrend now and this is it.\n\n'EMA' is still a CHART-timeframe average and is unrelated to the filter — it is a different question, not a second opinion on the same one.")
 emaLen    = input.int(50, "EMA length (chart timeframe)", minval = 1, group = gTrend)
+trendWidth    = input.int(1, "Trend line width", minval = 1, maxval = 4, group = gTrend)
+showTrendFill = input.bool(true, "Shade between the line and price", group = gTrend,
+     tooltip = "A soft band from the trend line to price, fading out as the two separate. It reads as a regime at a glance where a bare line reads as a level, which is the whole difference between the two on a chart this dense.")
+showTrendTag  = input.bool(true, "Trend tag in the corner", group = gTrend,
+     tooltip = "One small chip in the bottom-right saying which way the higher-timeframe trend points right now — BUY or SELL. It is the same htfDir the filter uses, so it never disagrees with what would be suppressed.")
 
 // The trend line above is display only, and the note above it is right about
 // it: a chart-timeframe SuperTrend flips at the reversal you are trading, so
@@ -1808,10 +1813,41 @@ if engineOk
 // switched on, so its behaviour can be judged before committing to it. It
 // steps rather than slopes, because one higher-timeframe value spans many
 // chart bars — that is the line being honest about its resolution.
-plot(effTrendMode == "SuperTrend" ? htfLine : na, "SuperTrend",
-     color = htfDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 2)
+bool  trendOn  = effTrendMode == "SuperTrend"
+bool  trendUp  = htfDir < 0                      // -1 is up, per htfTrend()
+color trendCol = trendUp ? bullCol : bearCol
+
+trendPlot = plot(trendOn ? htfLine : na, "SuperTrend",
+     color = color.new(trendCol, 15), style = plot.style_linebr,
+     linewidth = trendWidth)
+
+// The second edge of the band. display.none because it is scaffolding for the
+// fill and not a line anyone wants drawn over the candles.
+pricePlot = plot(trendOn and showTrendFill ? close : na, "Trend fill edge",
+     display = display.none)
+
+// Strong against the line, fading toward price. The two ends swap with
+// direction: in an uptrend the line is BELOW price, so the solid end is the
+// bottom; in a downtrend it is above, so the solid end is the top. Painting
+// both the same way would put the weight on the wrong side half the time.
+fill(trendPlot, pricePlot,
+     math.max(htfLine, close), math.min(htfLine, close),
+     trendUp ? color.new(bullCol, 95) : color.new(bearCol, 78),
+     trendUp ? color.new(bullCol, 78) : color.new(bearCol, 95),
+     title = "Trend shading")
+
 plot(effTrendMode == "EMA" ? emaLine : na, "EMA",
      color = close > emaLine ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
+
+// One chip, bottom right, saying which way the filter's trend points. Written
+// only on the last bar: a table cell is not per-bar state and rewriting it on
+// history would be wasted work for a value only the live edge can be about.
+var table trendTag = table.new(position.bottom_right, 1, 1)
+if barstate.islast and showTrendTag and trendOn and not na(htfDir)
+    table.cell(trendTag, 0, 0, trendUp ? "Trend: BUY" : "Trend: SELL",
+         bgcolor    = color.new(trendCol, 10),
+         text_color = color.white,
+         text_size  = size.small)
 
 // ── the "Riptide + ICT" comparison layer ────────────────────────────────────
 // Drawn with plotshape rather than labels on purpose: TradingView's 500-object
