@@ -14,7 +14,7 @@ from . import mtf
 from . import telegram as tg
 from . import tracker
 from . import trend
-from .config import (ACCOUNT_USDT, ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
+from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      EARLY_ALERTS, ENTRY_INTERVAL, FRESH_BARS, INTERVAL,
                      LOG_MARKET,
                      MTF_GRACE_BARS, SCAN_INTERVAL,
@@ -196,24 +196,6 @@ def trend_on(db) -> bool:
     return v == "1" if v in ("0", "1") else TREND_FILTER
 
 
-def account_usdt(db) -> float:
-    """Balance for the size line: the /size value if set, else the config.
-
-    Same shape as trend_on, and for the same reason — a number that changes
-    every time a trade closes should be settable from the phone rather than by
-    editing a file on GitHub and waiting for the update timer.
-
-    0 means unknown, and the alert then prints the multiplier instead of a
-    finished size, which is the form that cannot go stale.
-    """
-    v = meta_get(db, "account_usdt", "")
-    try:
-        return max(0.0, float(v)) if v else ACCOUNT_USDT
-    except ValueError:
-        log.warning("account_usdt=%r in the db is not a number, ignoring", v)
-        return ACCOUNT_USDT
-
-
 async def cycle(sess, db, symbols):
     sem = asyncio.Semaphore(CONCURRENCY)
     # Read once per cycle so every symbol in it sees the same setting.
@@ -296,8 +278,7 @@ async def cycle(sess, db, symbols):
             if fresh and not mute:
                 if await tg.tg_send(sess, tg.early_message(
                         e, tracker.live_band(db, tg.grade_letter(
-                            e.di_dir, e.is_long, e.rsi_ext), tracker.EARLY),
-                        account=account_usdt(db))):
+                            e.di_dir, e.is_long, e.rsi_ext), tracker.EARLY))):
                     quick += 1
 
     for setups, _, _, _ in results:
@@ -325,8 +306,7 @@ async def cycle(sess, db, symbols):
                 if await tg.tg_send(sess, tg.setup_message(
                         s, tracker.live_band(db, tg.grade_letter(
                             s.di_dir, s.is_long, s.rsi_ext),
-                            tracker.CONFIRMED),
-                        account=account_usdt(db))):
+                            tracker.CONFIRMED))):
                     sent += 1
     if bootstrap:
         log.info("first run: history recorded, nothing sent")

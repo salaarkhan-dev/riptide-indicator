@@ -15,9 +15,8 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 
-from .config import (ACCOUNT_USDT, BAR_SECONDS, CFG, DISPLAY_TZ,
-                     ENTRY_INTERVAL, INTERVAL, RISK_PCT, TG_CHAT, TG_RETRIES,
-                     TG_TOKEN, TREND_INTERVAL, log)
+from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
+                     TG_CHAT, TG_RETRIES, TG_TOKEN, TREND_INTERVAL, log)
 from .engine import (Early, Setup, Sweep, band_stats, grade_of, shift_odds)
 
 async def tg_send(sess, text: str) -> bool:
@@ -277,57 +276,12 @@ def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
             f"{fmt(entry + sign * risk * CFG.be_lock_r)}</i>")
 
 
-def _qty(v: float) -> str:
-    """Enough digits to type, never more. A size is read once and copied."""
-    if v >= 1000:
-        return f"{v:,.0f}"
-    if v >= 1:
-        return f"{v:,.2f}"
-    return f"{v:.6g}"
-
-
-def _size_line(symbol: str, entry: float, risk: float,
-               account: float = 0.0) -> str | None:
-    """
-    How much to open. Two forms, and the first needs no configuration:
-
-        position = risk you are taking x (entry / stop distance)
-
-    so the alert prints that MULTIPLIER, which is a property of the trade and
-    nothing else. Risk 5 USDT on a x27.9 trade and you open 140. It cannot go
-    stale, because it never knew your balance.
-
-    The finished number appears too, but only when a balance has been given
-    through /size. An account figure typed into a config file goes out of date
-    the first time a trade closes, and a size line looks authoritative whatever
-    produced it — so the default is the form that cannot be wrong.
-
-    NOTIONAL in both cases, which is what MEXC's "Order by Quantity -> USDT"
-    takes. Notional does not move when leverage does: the same trade is the
-    same size at 10x and at 500x, only the margin behind it changes. "Order by
-    Cost" is margin, and sizing by a percentage of balance is exactly what
-    makes stop distance drive loss size.
-    """
-    if entry <= 0 or risk <= 0:
-        return None
-    mult = entry / risk
-    coin = symbol.split("_")[0]
-    if account > 0:
-        n = account * (RISK_PCT / 100) * mult
-        return (f"Size  <b>{_qty(n)}</b> USDT  ·  {_qty(n / entry)} {coin}"
-                f"\n<i>{RISK_PCT:g}% of {_qty(account)} · order by QUANTITY, "
-                f"not cost</i>")
-    return (f"Size  <b>{mult:,.1f}x</b> what you risk"
-            f"\n<i>risk 5 USDT → open {_qty(5 * mult)} USDT · by QUANTITY, "
-            f"not cost</i>")
-
-
 def grade_letter(di_dir: int, is_long: bool, rsi_ext: float) -> str:
     """Just the letter, for looking up a band's live rate before rendering."""
     return grade_of(di_dir, is_long, rsi_ext)[0]
 
 
-def setup_message(s: Setup, live=None, account: float = 0.0) -> str:
+def setup_message(s: Setup, live=None) -> str:
     tf = (f"{tf_label(INTERVAL)}→{tf_label(ENTRY_INTERVAL)}"
           if s.entry_tf == "LTF" else tf_label(INTERVAL))
     # The gap sits on whichever timeframe produced the entry.
@@ -345,7 +299,6 @@ def setup_message(s: Setup, live=None, account: float = 0.0) -> str:
         f"<i>sweep → shift → FVG{also}</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        _size_line(s.symbol, s.entry, s.risk, account),
         *_grade(s.di_dir, s.is_long, s.rsi_ext, live=live),
         trend_note(s.trend_dir, s.is_long) or None,
         _pool(s.src, s.level, s.pivots),
@@ -353,7 +306,7 @@ def setup_message(s: Setup, live=None, account: float = 0.0) -> str:
     ) if x is not None)
 
 
-def early_message(s: Early, live=None, account: float = 0.0) -> str:
+def early_message(s: Early, live=None) -> str:
     """
     The no-shift entry. Labelled distinctly from the confirmed setup because
     it is a different bet, not an earlier version of the same one: nothing has
@@ -368,7 +321,6 @@ def early_message(s: Early, live=None, account: float = 0.0) -> str:
         f"bar{'' if bars == 1 else 's'} after the raid</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        _size_line(s.symbol, s.entry, s.risk, account),
         *_grade(s.di_dir, s.is_long, s.rsi_ext, early=True, live=live),
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
