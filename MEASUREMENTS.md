@@ -1904,3 +1904,75 @@ occurs. At ~39 entry signals a day across two strategies, a thin read takes
 about 10 days and one that could see a 0.1R difference about 52.
 
 **Where live data disagrees with this page, believe the live data.**
+
+## Entry fill rate — the misses are the winners, and chasing them still loses
+
+`research/studies/fills.py`. 30m, 23 symbols, 2000 bars, 2R target, maker
+0.02% / taker 0.06%, engine defaults otherwise. Every variant re-scores the
+SAME signal set through `research.harness.simulate`, so the differences are
+PAIRED and the SEs below are paired SEs, not the difference of two
+independent means.
+
+**The ceiling is real.** Of the 74 confirmed setups whose limit never filled,
+**59 (80%) went on to reach 2R without us** — measured from the entry price
+they never traded at. Early: 206 of 281 (73%). Market-entering just those
+would have returned +0.361 R each, better than the book that did fill.
+
+That number is a look-ahead and cannot be traded. Which setups go unfilled is
+knowable only afterwards. The decision actually available is to enter more
+aggressively on *every* signal, and each version of that was measured:
+
+    CONFIRMED  n=246                fill      R/sig    paired vs shipped
+      limit at gap edge  <- shipped 69.9%    +0.250
+      market at signal close       100.0%    +0.186    -0.064  -1.1 SE   risk x1.55
+      limit +0.10 ATR toward price  72.0%    +0.223    -0.027  -1.0 SE   risk x1.06
+      limit +0.30 ATR               81.3%    +0.198    -0.052  -1.1 SE   risk x1.18
+      limit +0.50 ATR               87.4%    +0.183    -0.066  -1.2 SE   risk x1.30
+      limit +1.00 ATR               95.1%    +0.020    -0.230  -3.6 SE   risk x1.61
+
+    EARLY      n=1388
+      limit at gap edge  <- shipped 79.8%    +0.020
+      market at signal close       100.0%    -0.028    -0.048  -1.9 SE   risk x1.34
+      limit +0.50 ATR               94.3%    -0.077    -0.097  -3.8 SE   risk x1.34
+      limit +1.00 ATR               98.7%    -0.232    -0.252  -8.9 SE   risk x1.68
+
+Monotone in both signal types, over the full range, and the mechanism is not
+mysterious: the stop stays pinned to the raid extreme, so buying the fill rate
+costs risk on **every** trade, including the 70% that would have filled
+anyway. The 80% ceiling is paid for out of the other 70% of the book, and the
+bill is larger than the prize.
+
+**The opposite lever also loses**, which is what makes this a peak rather than
+a slope. Entering DEEPER into the gap concedes fill rate to buy a better
+price, and it is worse in the other direction:
+
+    CONFIRMED             fill      R/sig    paired
+      0.00 proximal  <-   69.9%    +0.250              the shipped entry_mode
+      0.50 mid            60.2%    +0.125    -0.125  -3.3 SE
+      1.00 distal         52.4%    +0.098    -0.152  -2.8 SE
+
+So `entry_mode = "proximal"` is not a default nobody checked; it is the top of
+a curve that falls away on both sides.
+
+**Split entries lose.** Half at the proximal edge, half at the midpoint:
+-0.062 (-3.3 SE). Half and half at the distal edge: -0.076 (-2.8 SE). The
+second leg fills mostly on the trades that were going to lose anyway.
+
+**Fill window: 10 bars is right, and cancelling early is expensive.** The
+first sweep looked like 15 bars beat 10 by +0.086 at 2.0 SE, but that
+comparison was against the 5-bar baseline, not against 10. Measured directly,
+10 -> 15 is +0.017 at +0.6 SE and the four splits disagree in sign
+(+0.013 / +0.021 / +0.050 / -0.009). Nothing there. What IS there is the
+other end: **5 bars costs -0.069 (-2.0 SE) against 10.** Late fills in
+isolation are too few to read (n=19 in bars 11-15).
+
+    => nothing adopted. Four levers, eight variants, all at or below the
+       shipped configuration. The one behavioural rule this does support:
+       leave the limit working the full 10 bars (5 hours on 30m) and do not
+       cancel it early because it "looks stale".
+
+The general lesson, which is worth more than the sweep: **the unfilled setups
+are profitable because they are unfilled.** The limit order is not failing to
+catch them, it is doing the selecting — the same discipline that refuses the
+runaway winner is what refuses the entries that were never going to offer a
+good price. Removing the refusal removes both.

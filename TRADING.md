@@ -22,6 +22,16 @@ takes a worse price against the same stop, which quietly inflates the risk you
 just sized. About 20-30% never fill. That is a zero, not a loss, and it is
 already priced into every number here.
 
+**Leave the limit working the full 10 bars, and do not chase it.** Five hours
+on 30m. Cancelling at 5 bars costs 0.069 R per confirmed setup (2.0 SE).
+Moving the order toward price to force a fill is worse still, and the more you
+move it the worse it gets — 0.5 ATR costs 0.066, a full ATR costs 0.230
+(3.6 SE), because the stop does not move with the entry, so buying fill rate
+buys risk on every trade rather than just the ones you were missing. This
+holds even though 80% of the setups that never fill go on to reach 2R without
+you. Those are not the ones that got away; they are the price of the ones that
+did fill working at all.
+
 **Exit at 2R.** The ladder is monotone — 1R +20.4 total R, 1.5R +39.5, 2R
 +52.8, 3R +61.9 — though each step is only about 1.5 SE, so 2R is a floor
 rather than a proven optimum. Longer is not worse.
