@@ -129,6 +129,8 @@ drawMode = input.string("On MSS confirmation", "When to draw a pattern",
      tooltip = "On MSS confirmation: nothing appears until the whole sequence completes, then the full pattern is drawn back over the bars where it happened. Clean, and nothing on screen ever turns out to be a false start. Live: watch pools and raids form in real time — useful for trading it, much busier.")
 showLiquidity  = input.bool(true,  "Liquidity levels (dotted)",      group = gLook)
 showPivots     = input.bool(true,  "Swing markers (diamonds)",       group = gLook)
+hideDeadPivots = input.bool(true,  "  drop them once the pool dies",  group = gLook,
+     tooltip = "A diamond means this swing is part of LIVE liquidity. Once the pool has been taken and traded, or has expired without producing anything, it is not liquidity any more — and leaving the markers turns the chart into a field of diamonds from pools that stopped mattering days ago. Off keeps every diamond ever drawn, which is what the indicator used to do because the label handle was discarded at draw time and nothing could delete it.")
 showGrab       = input.bool(true,  "Raid marker (X)",                group = gLook)
 showGrabTag    = input.bool(true,  "Label on the raid marker",       group = gLook,
      tooltip = "The small dark tag under the X naming what got raided: Pivot, Day, Week or a session name.")
@@ -292,6 +294,11 @@ type LiqPivot
     int   bar
     float price
     bool  drawn = false
+    label mark                      // the diamond itself. Held so a pool that
+                                    // dies can take its markers with it —
+                                    // without this the handle is discarded at
+                                    // draw time and every diamond ever drawn
+                                    // stays on the chart forever.
 
 type Cluster
     int    id
@@ -331,6 +338,7 @@ type Cluster
     label  grabTagLbl               // and its dark tag
     label  raidDot                  // provisional marker while the raid is
                                     // still waiting for a shift
+    bool   markersDropped = false   // its diamonds have been retired
 
 // A context imbalance. Deliberately NOT an Fvg: the engine walks the Fvg array
 // for mitigation, extension and outcome tracking, and these must never reach
@@ -593,7 +601,7 @@ spanOk(Cluster c, float price) =>
 // ═════════════════════════ 6. DRAWING ══════════════════════════════════════
 drawDiamond(Cluster c, LiqPivot p) =>
     if showPivots and not p.drawn
-        label.new(p.bar, p.price, "",
+        p.mark := label.new(p.bar, p.price, "",
              xloc    = xloc.bar_index,
              yloc    = c.isHigh ? yloc.abovebar : yloc.belowbar,
              style   = label.style_diamond,
@@ -698,6 +706,24 @@ drawRaidDot(Cluster c) =>
 dropRaidDot(Cluster c) =>
     label.delete(c.raidDot)
     c.raidDot := na
+
+// Retire a pool's swing markers.
+//
+// A diamond means "this swing is part of live liquidity". Once the pool has
+// been taken or has expired it is not liquidity any more, and leaving the
+// markers turns the chart into a field of diamonds from pools that stopped
+// mattering days ago — which is exactly what it did, because the label handle
+// was thrown away at draw time and nothing could ever delete it.
+//
+// Drawing only. The engine never reads these, so nothing here changes a
+// signal, an entry or an alert.
+dropDiamonds(Cluster c) =>
+    if c.pivots.size() > 0
+        for i = 0 to c.pivots.size() - 1
+            LiqPivot p = c.pivots.get(i)
+            label.delete(p.mark)
+            p.mark  := na
+            p.drawn := false
 
 // An FVG anchored at an arbitrary (possibly historical) left bar.
 newFvgAt(bool isBull, float top, float bottom, int lft) =>
@@ -1229,6 +1255,15 @@ if engineOk
                 bool wasActive = c.active
                 bool wasSwept  = c.swept
                 bool wasMss    = c.mssConfirmed
+
+                // One place covering every way a pool stops being liquidity:
+                // expired unswept, expired mid-raid, suppressed by a sibling,
+                // or consumed by a finished setup. In the last case the setup
+                // has its own X, MSS label, zone and level lines, so the
+                // diamonds have already said what they had to say.
+                if hideDeadPivots and not c.markersDropped and (c.expired or c.setupDone)
+                    dropDiamonds(c)
+                    c.markersDropped := true
 
                 // Lone pivot, not liquidity yet. A shallow undercut must not
                 // kill it or a forming double bottom loses its first low.
