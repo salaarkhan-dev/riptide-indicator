@@ -162,6 +162,16 @@ allFvgRemove   = input.string("Body close", "  mitigated when",
      tooltip = "How much of the gap price must take back before the box goes.\n\nBody close: a candle BODY closes through the far edge. Ignores wicks, so a single spike through the zone does not kill it — the steadiest reading and the default.\n\n50% (CE): consequent encroachment, the midpoint. The classic ICT reading of a mitigated gap.\n\nWick: any wick through the far edge. Strictest, and the noisiest.\n\nTouched: price merely entered the zone.\n\nNever: keep every box until the count above recycles it.")
 allFvgOverlap  = input.bool(true, "  hide overlapping", group = gLook,
      tooltip = "When a new imbalance overlaps an older one in price, drop the older box. Stacked half-transparent boxes are what turns this layer into a smear; one box per price area keeps it readable.")
+showOB         = input.bool(true,  "Order block (yellow)",           group = gLook,
+     tooltip = "The last candle closing AGAINST the move before the entry gap — where the move that made the gap was loaded. Identical rule to last_opposing() in engine.py, same 20-bar cap, so the block drawn here is the one the alert's confluence score counts.")
+showBreaker    = input.bool(true,  "Breaker block (orange)",         group = gLook,
+     tooltip = "The last opposing candle at or before the extreme the structure break went through. It needs a break, so an EARLY signal never has one — which is why an early alert can only score 0 or 1 on confluence while a confirmed setup can score 2.")
+blockLevel     = input.string("Mean threshold", "  block line at",
+     options = ["Mean threshold", "Proximal edge", "Distal edge"], group = gLook,
+     tooltip = "Which single price the block's line is drawn at. Mean threshold is the midpoint of the candle body, the usual one-line convention. Proximal is the edge price meets first coming back; distal is the far side. The reference indicator draws one line per block and its convention is not published, so this is a choice rather than a match — a Data Window reading off that indicator would settle it.")
+blockBars      = input.int(8, "  block line length (bars)", minval = 1, maxval = 100, group = gLook)
+obCol          = input.color(#ffd54f, "  order block", inline = "blk", group = gLook)
+bbCol          = input.color(#ff8f00, "  breaker",     inline = "blk", group = gLook)
 showEntryLine  = input.bool(true,  "Entry line",                     group = gLook)
 showStopLoss   = input.bool(true,  "Stop loss line",                 group = gLook,
      tooltip = "Drawn from the raid candle itself and extended right, so you can see which bar the stop comes from.")
@@ -334,6 +344,9 @@ type Cluster
     int    fvgCount     = 0
     float  lastFvgTop   = na
     float  lastFvgBot   = na
+    int    lastFvgBar   = na    // bar the entry gap closed on. The order block
+                                // is the last opposing candle BEFORE it, so
+                                // this is what locates it.
     array<LiqPivot> pivots
     line   liqLine
     line   mssLine
@@ -851,6 +864,7 @@ scanLeg(Cluster c, int fromBar, int toBar) =>
                         newFvgAt(isBull, gTop, gBot, bar_index - off - 2)
                         c.lastFvgTop := gTop
                         c.lastFvgBot := gBot
+                        c.lastFvgBar := bar_index
                         c.fvgCount   += 1
 
 // Entry price implied by entryMode for a finished setup.
@@ -876,6 +890,76 @@ levelGroup() =>
                 label.delete(b)
     lvlGroups.get(lvlGroups.size() - 1)
 
+// ── order block and breaker ─────────────────────────────────────────────────
+// Both mirror engine.py exactly, because the confluence score on every alert
+// is computed from these same two candles. If the chart drew one block and the
+// alert counted another, the letter on the message would be unexplainable from
+// the chart — which is the whole reason the engine and the Pine are kept in
+// step.
+//
+//   order block   last candle closing AGAINST the move, before the gap bar
+//   breaker       same rule, at or before the extreme the break went through
+//
+// Offsets, not bar indices: Pine reads history as close[n] where n counts back
+// from the current bar, and mixing the two is how off-by-one drawing bugs get
+// written.
+lastOpposingOffset(int fromOffset, bool isBull, int maxBack) =>
+    int found = -1
+    for k = fromOffset to fromOffset + maxBack - 1
+        if k < 0 or k > bar_index
+            break
+        if isBull ? close[k] < open[k] : close[k] > open[k]
+            found := k
+            break
+    found
+
+// The extreme the structure break travelled through, between the raid and the
+// break. For a long that is the highest high in the window, because the break
+// is a close above it.
+extremeOffset(int grabBar, int mssBar, bool isBull) =>
+    int   best  = -1
+    float bestv = na
+    if mssBar > grabBar
+        for b = grabBar to mssBar - 1
+            int off = bar_index - b
+            if off >= 0
+                float v = isBull ? high[off] : low[off]
+                if na(bestv) or (isBull ? v > bestv : v < bestv)
+                    bestv := v
+                    best  := off
+    best
+
+// One price for a block. The reference draws a single line per block and does
+// not publish which price it is, so this is a stated choice, not a match.
+blockPrice(int off, bool isBull) =>
+    float o = open[off]
+    float c = close[off]
+    float body_hi = math.max(o, c)
+    float body_lo = math.min(o, c)
+    blockLevel == "Mean threshold" ? math.avg(o, c) :
+         blockLevel == "Proximal edge" ? (isBull ? body_hi : body_lo) :
+         (isBull ? body_lo : body_hi)
+
+// Drawn into the setup's own LevelGroup, so blocks are pruned with the entry
+// and stop lines rather than accumulating.
+drawBlock(LevelGroup g, int off, bool isBull, color col, string name) =>
+    if off >= 0
+        int   b = bar_index - off
+        float y = blockPrice(off, isBull)
+        g.lns.push(line.new(b, y, b + blockBars, y,
+             xloc  = xloc.bar_index,
+             color = col,
+             style = line.style_solid,
+             width = 2))
+        g.lbs.push(label.new(b, y, "",
+             xloc      = xloc.bar_index,
+             yloc      = yloc.price,
+             style     = label.style_none,
+             size      = size.tiny,
+             tooltip   = name + "\nbar " + str.tostring(b) +
+                         "\nopen " + f2s(open[off]) + "  close " + f2s(close[off]) +
+                         "\nline at " + f2s(y) + " (" + blockLevel + ")"))
+
 drawSetup(Cluster c) =>
     bool isLong = not c.isHigh
     bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
@@ -892,6 +976,15 @@ drawSetup(Cluster c) =>
             g.lbs.push(label.new(x2, entry, "Entry " + f2s(entry),
                  xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left,
                  color = color.new(col, 75), textcolor = col, size = size.tiny))
+        // The two blocks behind this setup's confluence score.
+        if showOB and not na(c.lastFvgBar)
+            int obOff = lastOpposingOffset(bar_index - c.lastFvgBar + 1, isLong, 20)
+            drawBlock(g, obOff, isLong, obCol, "Order block")
+        if showBreaker and c.mssConfirmed and c.mssBar > c.grabBar
+            int extOff = extremeOffset(c.grabBar, c.mssBar, isLong)
+            if extOff >= 0
+                drawBlock(g, lastOpposingOffset(extOff, isLong, 20), isLong,
+                     bbCol, "Breaker block")
         if showStopLoss
             // Anchored on the grab bar so the line starts at the X.
             g.lns.push(line.new(c.grabBar, sl, x2, sl,
