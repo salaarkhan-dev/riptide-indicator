@@ -474,6 +474,65 @@ simulation, capping concurrent positions at five cut maximum drawdown from
 strategy rule, and it is where the remaining improvement on this project
 plausibly lives.
 
+## Portfolio rules — where the remaining improvement is
+
+`research/studies/portfolio.py`. 300 USDT, 10x, target 2R, maker/taker fees.
+Judged on return per unit of maximum drawdown, because a strategy that doubles
+through a 50% drawdown is not tradeable by a person.
+
+| rules | trades | win | return | max DD | ret/DD |
+|---|---|---|---|---|---|
+| everything, no rules | 313 | 41% | +28% | 21% | 1.30 |
+| max 12 open | 281 | 41% | +30% | 16% | 1.84 |
+| **max 8 open** | 154 | 44% | +34% | 15% | 2.21 |
+| max 5 open | 96 | 40% | +11% | 12% | 0.89 |
+| max 3 open | 61 | 38% | +1% | 9% | 0.05 |
+| max 8, cap 5 same direction | 147 | 39% | +16% | 16% | 0.99 |
+| max 8, cap 3 same direction | 136 | 38% | +9% | 19% | 0.47 |
+| **max 8, 3 slots for confirmed** | 182 | **46%** | **+46%** | **13%** | **3.67** |
+| max 8, early needs BTC | 233 | 44% | +49% | 18% | 2.67 |
+| max 8, stop day at -4% | 148 | 43% | +34% | 13% | 2.67 |
+| max 8, stop day at -6% | 195 | 41% | +24% | 15% | 1.54 |
+| ALL RULES together | 116 | 46% | +31% | 15% | 2.11 |
+| ALL RULES, flat sizing | 119 | 45% | +26% | 15% | 1.68 |
+| ALL RULES, risk 2% | 114 | 45% | +59% | 24% | 2.39 |
+| ALL RULES, risk 0.5% | 123 | 44% | +12% | 6% | 2.00 |
+
+**Drawdown falls monotonically as the cap tightens** — 21 / 16 / 15 / 12 / 9%
+— and that part is structural rather than fitted. Return does not: below eight
+positions it falls faster than the drawdown does, and a cap of three earns
++1%.
+
+**Reserving slots for confirmed setups is the best rule measured, and it is
+the one with a mechanism rather than just a number.** Confirmed setups are
+worth 3.4x an early one per signal (+0.227 against +0.021) and early signals
+outnumber them 5.6 to 1 — so without a rule the worse signal crowds out the
+better one purely by arriving first. Win rate rises to 46% and drawdown falls
+to 13%.
+
+**Capping same-direction positions is worse than no rule at all** (0.47
+against 2.21). It reads like correlation control and behaves like blocking the
+winners during the trending moves that pay for everything else.
+
+**Stacking every rule is worse than the best single rule** — 2.11 against
+3.67. Each rule blocks trades, and blocked trades include the good ones.
+
+**A daily loss limit is noise.** -4% scored 2.67, -6% scored 1.54, -10% never
+triggered. A threshold that flips the answer between adjacent values is not a
+rule.
+
+### The caveat that applies to this whole table
+
+Sixteen configurations on one 41.6-day window, with the best selected after
+the fact. That is the multiple-comparison hazard in its plainest form, and the
+spread from 0.05 to 3.67 is mostly what noise looks like at this sample size.
+Two things survive that objection because they have mechanisms independent of
+the numbers: drawdown falling with the concurrency cap, and the better signal
+being crowded out by the more frequent one. The rest is a table to re-run, not
+a set of parameters to adopt.
+
+Written up as rules in `TRADING.md`.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,
