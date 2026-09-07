@@ -860,6 +860,71 @@ entry for a case that cannot occur.
 This is also the whole of why their chart looks busier at the swing level, and
 it is a rule difference and not a bug in either.
 
+## Stale day levels, and the raid that cannot confirm
+
+Raised as "why this live sweep, it doesn't make sense" — a raid dot on HYPE
+30m, 6 Sep 16:00 chart time. The mark was correct and the instinct behind the
+complaint was also correct, for a reason neither the chart nor the alert said
+out loud.
+
+What it took: **3 Sep's high at 88.142**, still unswept three days later. Its
+shift level was **83.510**, which is 4 Sep's low — 5.9% below the raid extreme
+of 88.780. Confirming meant price travelling 5.9% the other way inside the
+grab window.
+
+The engine keeps EVERY unswept previous-day high and low, not just
+yesterday's, and the structure level is the opposing extreme measured back
+from the bar that set the level. So the longer a level survives, the further
+its shift level drifts, and a raid on a week-old level asks for a move nothing
+is going to deliver. Both the Pine input and its tooltip said "Yesterday's
+high / low", which is simply wrong and hid this.
+
+23 symbols, 41.6 days, 3702 raids:
+
+| source | n | median shift distance | over 4% away | reached a confirmed setup |
+|---|---|---|---|---|
+| Pivot | 2747 | 2.59% | 32% | 19.5% |
+| Day | 955 | 4.56% | 57% | 6.4% |
+
+And the gradient itself, all sources pooled:
+
+| shift level sits | n | → confirmed | → early |
+|---|---|---|---|
+| under 1% away | 322 | 37.0% | 45.0% |
+| 1 – 2% | 830 | 25.5% | 41.2% |
+| 2 – 4% | 1128 | 16.8% | 40.2% |
+| 4 – 8% | 865 | **7.2%** | 40.1% |
+| over 8% | 557 | **2.7%** | 39.5% |
+
+The HYPE dot sat in the 4-8% band: about a 7% chance of ever becoming the X
+it was provisionally standing in for.
+
+**It is not a filter, and the early column is why.** Conversion to a confirmed
+setup collapses 37% → 3%, but conversion to an early signal is flat at ~40%
+across every bucket, and so is what those early signals are worth:
+
+| shift level sits | early n | R/signal | SE |
+|---|---|---|---|
+| under 1% | 142 | +0.211 | 0.076 |
+| 1 – 2% | 329 | +0.206 | 0.048 |
+| 2 – 4% | 407 | +0.194 | 0.042 |
+| 4 – 8% | 298 | +0.104 | 0.052 |
+| over 8% | 178 | +0.222 | 0.063 |
+
+No gradient, not even a monotone one. Day-source early signals score +0.175
+against Pivot's +0.185. So a far shift level says the *confirmed* path is
+unlikely and says nothing at all against the *early* one — suppressing these
+raids would delete real early signals to remove a mark that is merely
+uninformative.
+
+Confirmed setups that do occur off a far level are worse (+0.318 / +0.219 /
++0.027 / -0.001 across the first four buckets, top minus bottom +2.5 SE), but
+that is 54 setups in the far bucket, one window, and was not pre-registered.
+Not acted on.
+
+What changed: the sweep alert now prints the distance and the base rate for
+it, and the two input labels no longer claim the levels are yesterday's.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their

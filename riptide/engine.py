@@ -444,6 +444,47 @@ def band_stats(letter: str, kind_early: bool = False):
     return table.get(letter)
 
 
+# How often a raid goes on to produce a CONFIRMED setup, by how far away the
+# level price must break sits at the moment of the raid. (upper bound %, rate,
+# n), measured on 23 symbols over 41.6 days.
+#
+# The gradient is steep and it is not a subtlety: 37% down to 3%. A raid whose
+# shift level is 6% away is not a weaker version of a good raid, it is a raid
+# that will almost certainly never confirm, because confirming means price
+# travelling 6% in the opposite direction inside the grab window.
+#
+# This is mostly a story about Day pools. The engine keeps EVERY unswept
+# previous-day high and low, not just yesterday's, so a level can be days old
+# by the time it is taken — and its shift level is the opposing extreme
+# measured all the way back from the bar that set it, which drifts further
+# away every day the level survives. Day raids: median shift distance 4.56%
+# and 6.4% convert, against Pivot's 2.59% and 19.5%.
+#
+# It is deliberately NOT a filter. Early signals off the same raids show no
+# gradient at all (+0.211 / +0.206 / +0.194 / +0.104 / +0.222 R across the
+# same buckets), so a far shift level says the CONFIRMED path is unlikely and
+# says nothing against the early one. Suppressing these raids would cost real
+# early signals to remove a mark that is merely uninformative.
+SHIFT_ODDS = ((1.0, 37, 322), (2.0, 25, 830), (4.0, 17, 1128),
+              (8.0, 7, 865), (float("inf"), 3, 557))
+
+
+def shift_odds(extreme: float, struct_level: float):
+    """(distance %, historical conversion %, n) for one raid, or None.
+
+    Distance is measured from the raid's extreme to the level the shift needs,
+    which is the move price still has to make — not from the pool, which it
+    has already taken.
+    """
+    if not extreme:
+        return None
+    dist = abs(extreme - struct_level) / extreme * 100
+    for upper, rate, n in SHIFT_ODDS:
+        if dist < upper:
+            return dist, rate, n
+    return None
+
+
 def collapse(items: list, key, better) -> list:
     """
     One entry per event. `key` says what makes two items the same event;

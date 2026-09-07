@@ -17,7 +17,7 @@ import aiohttp
 
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TREND_INTERVAL, log)
-from .engine import Early, Setup, Sweep, band_stats, grade_of
+from .engine import (Early, Setup, Sweep, band_stats, grade_of, shift_odds)
 
 async def tg_send(sess, text: str) -> bool:
     """
@@ -313,6 +313,29 @@ def early_message(s: Early, live=None) -> str:
     ) if x is not None)
 
 
+def _shift_odds_line(extreme: float, struct_level: float) -> str | None:
+    """
+    How far the shift level is, and how often a raid that far out has gone on
+    to confirm.
+
+    The sweep alert already printed the level; what it never said is that the
+    level can be 6% away, which is the difference between a raid worth
+    watching and one that is finished. A stale Day pool raided days after it
+    was set carries a shift level dragged all the way back to that day's
+    opposing extreme, and the alert read exactly like a fresh pivot raid.
+
+    Framed as a base rate, not a forecast, for the reasons in _grade — and it
+    says nothing about the ⚡ EARLY entry off the same raid, which measures the
+    same at every distance.
+    """
+    odds = shift_odds(extreme, struct_level)
+    if odds is None:
+        return None
+    dist, rate, n = odds
+    return (f"<i>{dist:.1f}% away · {rate}% of {n} past raids that far out "
+            f"went on to confirm</i>")
+
+
 def sweep_message(s: Sweep) -> str:
     """Heads-up on the grab. Deliberately carries no entry or stop: there is
     no setup yet, and the shift may never come."""
@@ -327,6 +350,7 @@ def sweep_message(s: Sweep) -> str:
         "",
         f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",
         f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>",
+        _shift_odds_line(s.sweep_extreme, s.struct_level),
         note or None,
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.sweep_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),

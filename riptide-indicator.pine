@@ -85,9 +85,9 @@ markStyle      = input.string("Riptide", "Preset",
 // ── 1. What creates a signal ────────────────────────────────────────────────
 usePivotLiq   = input.bool(true,  "Swing highs / lows", group = gSrc,
      tooltip = "The main source. Two or more swing points at roughly the same price form a liquidity pool — a shelf of stop orders. The indicator waits for price to run that shelf and then reverse.")
-useDailyLiq   = input.bool(true,  "Yesterday's high / low", group = gSrc,
-     tooltip = "Treats the previous day's extremes as liquidity in their own right. These are watched by a lot of traders, so they get raided often.")
-useWeeklyLiq  = input.bool(false, "Last week's high / low", group = gSrc,
+useDailyLiq   = input.bool(true,  "Previous days' highs / lows", group = gSrc,
+     tooltip = "Treats each day's extremes as liquidity in their own right — watched by a lot of traders, so they get raided often.\n\nNote it is not only YESTERDAY'S, which is what this said before and was wrong. A daily level stays live until price takes it, so on any given bar several unswept past days can be in play at once, and one of them may be days old.\n\nThat matters for reading the raid, not for whether it is real. The level a shift has to break is the opposing extreme measured all the way back from the bar that SET the level, so the older a level is, the further away its shift level has drifted. Measured over 41.6 days on 23 symbols, day raids need a 4.56% move to confirm against a swing pool's 2.59%, and 6.4% of them ever do against 19.5%. The raid is still a real raid and the early entry off it measures the same as any other — it is the confirmed setup that is unlikely, which is why the sweep alert now prints how far the level is and how often raids that far out have confirmed.")
+useWeeklyLiq  = input.bool(false, "Previous weeks' highs / lows", group = gSrc,
      tooltip = "Same idea on a weekly scale. Off by default, and off in the alert bot: over 41.6 days weekly levels were raided 295 times and produced zero complete setups — price takes the level and simply keeps going rather than shifting structure. Left as a switch because 0 of 295 bounds the rate, it does not prove it is zero in a regime this window did not contain.")
 useSessionLiq = input.bool(false, "Session highs / lows", group = gSrc,
      tooltip = "Uses the high and low of each finished session below. Leave off until the timezone in section 2 matches how you actually trade — otherwise the levels are arbitrary.")
