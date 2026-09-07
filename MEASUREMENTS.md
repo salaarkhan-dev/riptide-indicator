@@ -994,6 +994,90 @@ way to the contaminated version. Confirmed setups behave the same. Nothing
 changed on the strategy: the raid keeps trailing to the new extreme, and the
 only thing that expires it is the grab window.
 
+## Batch 3 — MACD, oscillators, candle shape, pattern context
+
+Fourteen features, pre-registered with their predicted direction before
+anything was computed, scored on 1839 signals across 23 symbols. Bar for
+calling something real: monotone, top minus bottom at least 3 SE, same sign on
+all four splits, and surviving a stop-size control.
+
+**Twenty-six comparisons. Nothing passed.** Top-minus-bottom R per signal:
+
+| feature | early | confirmed |
+|---|---|---|
+| MACD histogram sign agrees | -0.081 | -0.288 |
+| MACD histogram slope agrees | -0.085 | -0.151 |
+| Stochastic extension our way | +0.068 | -0.099 |
+| CCI extension our way | -0.003 | +0.089 |
+| raid extreme outside Bollinger | -0.068 | -0.076 |
+| rejection wick / range | -0.082 | -0.094 |
+| raid-bar body / range | **+0.188** | +0.105 |
+| daily MACD sign agrees | -0.012 | +0.163 |
+| daily MACD slope agrees | -0.085 | -0.151 |
+| daily RSI extension our way | -0.180 | **-0.251** |
+| ATR compression before the raid | -0.039 | -0.112 |
+| range width before the raid | +0.002 | +0.159 |
+| pool age | -0.073 | -0.175 |
+| hour of day | -0.124 | -0.133 |
+
+Worth naming what died. **MACD adds nothing** on either timeframe, in sign or
+slope, and the chart-timeframe version is mildly negative — the same result the
+chart SuperTrend gave, and for the same reason: an oscillator that turns with
+the move turns at the reversal being traded. **Bollinger** does not separate,
+so "the sweep pierced the band" is not information the pool level did not
+already carry. **ATR compression and range width** both fail, which is the
+coiled-spring/consolidation-breakout idea and it is not there. **Pool age**
+fails as a signal ranking even though it strongly predicts whether a raid
+CONFIRMS — those are different questions and it only answers the first.
+
+Two pre-registered directions came back inverted, which is worth more than a
+result that merely fails:
+
+- **The rejection wick is not the tell.** ICT reading says a long wick beyond
+  the pool is the confirmation. Wick fraction scored -0.082 / -0.094, and body
+  fraction — its opposite — was the largest number in the table. A decisive
+  raid candle beats a hesitant one.
+- **Daily RSI extension the trade's way is BAD**, -0.251 on confirmed and
+  monotone. The grade already uses CHART RSI extension the other way round.
+  Below the bar and not acted on, but it says the two timeframes are not the
+  same variable and the grade should not assume they are.
+
+### The one thing worth another look
+
+Raid-bar body ratio, restricted to early signals whose price gap at the signal
+is under 0.25R:
+
+| split | n low body | n high body | high - low R | |
+|---|---|---|---|---|
+| all | 228 | 228 | +0.349 | +4.0 SE |
+| symbols A | 120 | 120 | +0.294 | +2.5 SE |
+| symbols B | 108 | 108 | +0.308 | +2.4 SE |
+| window 1st half | 108 | 109 | +0.339 | +2.7 SE |
+| window 2nd half | 119 | 120 | +0.341 | +2.8 SE |
+| tight stops | 95 | 95 | +0.404 | +2.9 SE |
+| wide stops | 133 | 133 | +0.294 | +2.6 SE |
+
+Same sign and nearly the same size in all six sub-splits. **It is still not a
+finding**: the low-gap restriction was chosen after seeing that body did
+nothing in the other buckets, so the 3 SE bar was never really in force. It is
+a hypothesis with a good-looking first look, and it needs its own
+pre-registration on fresh data.
+
+What makes it interesting rather than noise is where it sits. Body and the
+impulse-gap effect are **substitutes, not additions** — the same "decisive
+beats hesitant" story measured two ways:
+
+| | body effect inside it | | | gap effect inside it | |
+|---|---|---|---|---|---|
+| gap under 0.25R | +0.349 | +4.0 SE | small body | +0.613 | +6.2 SE |
+| gap 0.25 - 0.75R | -0.021 | -0.2 SE | mid body | +0.480 | +5.3 SE |
+| gap over 0.75R | -0.073 | -0.6 SE | big body | +0.151 | +1.6 SE |
+
+Each one stops mattering once the other is already large. So body is not a new
+axis to stack on the grade — it is a way to reach the 93%-fill low-gap bucket,
+which is the biggest and worst-scoring group and the one the gap measure calls
+uniformly mediocre.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their
