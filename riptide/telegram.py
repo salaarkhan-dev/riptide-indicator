@@ -18,7 +18,7 @@ import aiohttp
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
                      TREND_INTERVAL, log)
-from .engine import (Early, Setup, Sweep, band_stats, grade_of, shift_odds)
+from .engine import Early, Setup, Sweep, grade_of, shift_odds
 
 async def tg_send(sess, text: str) -> bool:
     """
@@ -229,40 +229,22 @@ def _footer(when: int, price: float, tv_symbol: str,
     return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
 
 
-def _grade(x, early: bool = False, live=None) -> list[str]:
+def _grade(x, early: bool = False) -> str:
+    """The one-line reason for the letter in the headline.
+
+    THE BAND'S HISTORICAL RATE USED TO BE PRINTED HERE AND IS NOT ANY MORE.
+    "76% of fills reached 2R, 67% filled, 43 backtest" was the least
+    actionable line in the message and the most likely to be misread: a base
+    rate from a single 42-day window, on 43 signals for band A, reads as a
+    probability for the trade in front of you. It is not one. The letter
+    already carries everything that replicated — the ORDERING of the bands —
+    and the levels are the least stable thing measured here.
+
+    The numbers still exist and still matter; they live in /stats, where they
+    are forward, out of sample, and can be looked at deliberately rather than
+    glanced at while deciding.
     """
-    Two lines: the letter with the reason it got that letter, and the rate
-    that band has actually run at.
-
-    THE RATE IS A BASE RATE, NOT A FORECAST, and it is labelled as one. There
-    is a real temptation to print "68% chance" on an alert; this deliberately
-    does not, because the number would be dishonest in three ways at once.
-    It would come from a single 41.6-day window, and this project has watched
-    the LEVEL of an effect move from -0.05 to +0.32 across windows while the
-    separation between bands held — the ordering is what replicates, the level
-    is the least stable thing measured. The bands hold 112 to 587 setups, so a
-    win rate carries several points of error before accounting for the bands
-    having been drawn using the same data. And a percentage on an alert reads
-    as a licence to size a position, which nothing here has earned.
-
-    "61% of 587 past setups" says exactly what is known and no more. Once
-    /stats has enough settled rows for a band, that live figure replaces the
-    historical one — forward data is the number worth trusting, and until it
-    exists the alert says so by showing history instead.
-    """
-    letter, why = grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)
-    out = [f"<i>{why}</i>"]
-
-    st = live if live else band_stats(letter, early)
-    if st and st[0]:
-        n, fill, win, r, se = st
-        src = "live" if live else "backtest"
-        # The target moved to 2R; the band figures are measured at whatever
-        # TRACK_TARGET_R is, so the number is interpolated rather than written
-        # as "1R" — which is what it used to say, and stopped being true.
-        out.append(f"<i>band {letter}: {win}% of fills reached "
-                   f"{TRACK_TARGET_R:g}R, {fill}% filled · {n} {src}</i>")
-    return out
+    return f"<i>{grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[1]}</i>"
 
 
 def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
@@ -312,7 +294,7 @@ def grade_letter(x, early: bool = False) -> str:
     return grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[0]
 
 
-def setup_message(s: Setup, live=None) -> str:
+def setup_message(s: Setup) -> str:
     tf = (f"{tf_label(s.tf or INTERVAL)}→{tf_label(ENTRY_INTERVAL)}"
           if s.entry_tf == "LTF" else tf_label(s.tf or INTERVAL))
     # The gap sits on whichever timeframe produced the entry.
@@ -325,7 +307,7 @@ def setup_message(s: Setup, live=None) -> str:
     also = (f" · ⚡ also early, gap {s.also_early} "
             f"bar{'' if s.also_early == 1 else 's'} after the raid"
             if s.also_early else "")
-    why, *band = _grade(s, live=live)
+    why = _grade(s)
     return "\n".join(x for x in (
         _headline("🎯 CONFIRMED", s.is_long, s.symbol, tf,
                   grade=grade_chip(s)),
@@ -335,13 +317,12 @@ def setup_message(s: Setup, live=None) -> str:
         "",
         f"<i>sweep → shift → FVG{also} · "
         f"{_pool(s.src, s.level, s.pivots)}</i>",
-        *band,
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf),
     ) if x is not None)
 
 
-def early_message(s: Early, live=None) -> str:
+def early_message(s: Early) -> str:
     """
     The no-shift entry. Labelled distinctly from the confirmed setup because
     it is a different bet, not an earlier version of the same one: nothing has
@@ -350,7 +331,7 @@ def early_message(s: Early, live=None) -> str:
     rather than a whole leg back.
     """
     bars = s.bars_from_sweep
-    why, *band = _grade(s, early=True, live=live)
+    why = _grade(s, early=True)
     return "\n".join(x for x in (
         _headline("⚡ EARLY", s.is_long, s.symbol, tf_label(s.tf or INTERVAL),
                   grade=grade_chip(s, True)),
@@ -361,7 +342,6 @@ def early_message(s: Early, live=None) -> str:
         f"<i>sweep → FVG · no shift · gap {bars} bar"
         f"{'' if bars == 1 else 's'} after the raid · "
         f"{_pool(s.src, s.level, s.pivots, s.pools)}</i>",
-        *band,
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _footer(s.fvg_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
                 s.symbol, s.tf),

@@ -345,9 +345,7 @@ async def cycle(sess, db, symbols):
             if fresh:
                 tracker.arm(db, sid, e, kind=tracker.EARLY)
             if fresh and not mute and EARLY_ALERTS and poi_ok(e):
-                if await tg.tg_send(sess, tg.early_message(
-                        e, tracker.live_band(db, tg.grade_letter(e, True),
-                                             tracker.EARLY))):
+                if await tg.tg_send(sess, tg.early_message(e)):
                     quick += 1
 
     for setups, _, _, _ in results:
@@ -372,9 +370,7 @@ async def cycle(sess, db, symbols):
             if fresh:
                 tracker.arm(db, sid, s, kind=tracker.CONFIRMED)
             if fresh and not mute and poi_ok(s):
-                if await tg.tg_send(sess, tg.setup_message(
-                        s, tracker.live_band(db, tg.grade_letter(s),
-                                             tracker.CONFIRMED))):
+                if await tg.tg_send(sess, tg.setup_message(s)):
                     sent += 1
     if bootstrap:
         log.info("first run: history recorded, nothing sent")
