@@ -933,21 +933,40 @@ lastOpposingOffset(int fromOffset, bool isBull, int maxBack) =>
             break
     found
 
-// The extreme the structure break travelled through, between the raid and the
-// break. For a long that is the highest high in the window, because the break
-// is a close above it.
-extremeOffset(int grabBar, int mssBar, bool isBull) =>
-    int   best  = -1
-    float bestv = na
+// The block price broke THROUGH — a breaker in the sense ICT means, and the
+// same rule as breaker_of() in engine.py.
+//
+// A breaker is an order block on the OPPOSITE side that failed. For a long the
+// decline into the raid was loaded by the last UP-close candle before it; when
+// the shift breaks back above that candle it flips from resistance to support.
+// Different polarity from the order block, so different candle by
+// construction.
+//
+// The rule this replaces looked for the SAME polarity near the break extreme
+// and landed on the identical candle 60% of the time over 244 setups — one
+// line drawn twice, and a confluence score where "2 of 2" often meant one
+// candle agreeing with itself.
+//
+// -1 when nothing opposite is found, or when the shift never traded through
+// it: an unbroken block is not a breaker, just an order block facing the
+// other way.
+breakerOffset(int grabBar, int mssBar, bool isBull) =>
+    int found = -1
     if mssBar > grabBar
-        for b = grabBar to mssBar - 1
-            int off = bar_index - b
-            if off >= 0
-                float v = isBull ? high[off] : low[off]
-                if na(bestv) or (isBull ? v > bestv : v < bestv)
-                    bestv := v
-                    best  := off
-    best
+        for k = bar_index - grabBar to bar_index - grabBar + 19
+            if k < 0 or k > bar_index
+                break
+            if isBull ? close[k] > open[k] : close[k] < open[k]
+                float lvl  = isBull ? high[k] : low[k]
+                float best = lvl
+                for m = bar_index - mssBar to k
+                    if m >= 0 and m <= bar_index
+                        best := isBull ? math.max(best, high[m])
+                                       : math.min(best, low[m])
+                if isBull ? best > lvl : best < lvl
+                    found := k
+                break
+    found
 
 // One price for a block. The reference draws a single line per block and does
 // not publish which price it is, so this is a stated choice, not a match.
@@ -1001,10 +1020,8 @@ drawSetup(Cluster c) =>
             int obOff = lastOpposingOffset(bar_index - c.lastFvgBar + 1, isLong, 20)
             drawBlock(g, obOff, isLong, obCol, "Order block")
         if showBreaker and c.mssConfirmed and c.mssBar > c.grabBar
-            int extOff = extremeOffset(c.grabBar, c.mssBar, isLong)
-            if extOff >= 0
-                drawBlock(g, lastOpposingOffset(extOff, isLong, 20), isLong,
-                     bbCol, "Breaker block")
+            drawBlock(g, breakerOffset(c.grabBar, c.mssBar, isLong), isLong,
+                 bbCol, "Breaker block")
         if showStopLoss
             // Anchored on the grab bar so the line starts at the X.
             g.lns.push(line.new(c.grabBar, sl, x2, sl,

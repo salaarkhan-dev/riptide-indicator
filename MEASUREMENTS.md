@@ -579,7 +579,44 @@ setups than 50). The re-run figures above are the authoritative ones.
 Worth carrying forward: **no parameter sweep on this engine may assume
 nesting.** Clusters interact, so a threshold must be measured by re-running it.
 
-## Confluence — the one open question
+## Confluence — and the broken breaker underneath it
+
+**The breaker was not a breaker.** `confluence_of` looked for the last candle
+of the SAME polarity as the order block, anchored near the break extreme. Over
+244 setups that returned the order block *itself* **60% of the time** — so
+"2 of 2 zones agree" usually meant one candle agreeing with itself, and the
+Pine drew two lines on top of each other, which is how it was spotted: the
+reference showed two levels where ours showed one.
+
+A breaker is an order block on the OPPOSITE side that failed. For a long, the
+decline into the raid was loaded by the last UP-close candle before it; when
+the shift breaks back above that candle it flips from resistance to support.
+Different polarity, therefore a different candle by construction. `breaker_of`
+now implements that, and additionally requires the shift to have actually
+traded through the block — an unbroken block is not a breaker, just an order
+block facing the other way. Coincidence with the order block is now **0%**.
+
+Re-measured on 558 setups with a real breaker, net of fees:
+
+| zones agreeing | n | gross | net |
+|---|---|---|---|
+| 0 of 2 | 285 | +0.018 | −0.020 |
+| 1 of 2 | 223 | +0.131 | **+0.086** |
+| 2 of 2 | 50 | +0.063 | +0.013 |
+
+**2 minus 0 is +0.3 SE**, down from the +1.4 SE recorded under the old rule,
+and it is not monotonic — one zone beats two. So part of that earlier +1.4 SE
+was the double-count, and confluence is weaker than it already looked.
+
+Nothing shipped has to be unwound: the grade ladder moved to DI × RSI before
+this was found, and confluence stopped setting the letter then. It is still
+recorded on every alert and in `outcomes`, so if it ever separates live, the
+rows are there. On this window it does not.
+
+The section below is the original write-up, kept because it is what the old
+rule measured and because the entry-price tests in it are unaffected.
+
+## Confluence — the original write-up
 
 The tests above asked whether an Order Block or Breaker is a *better entry
 price* than the gap. Flat, three times over. They never asked whether the zones

@@ -298,6 +298,38 @@ def ranges_overlap(a1: float, a2: float, b1: float, b2: float) -> bool:
     return not (lo1 >= hi2 or hi1 <= lo2)
 
 
+def breaker_of(cs: list[Candle], grab_bar: int, mss_bar: int,
+               is_bull: bool, max_back: int = 20) -> int:
+    """
+    The block price broke THROUGH — a breaker in the sense ICT means.
+
+    A breaker is an order block on the OPPOSITE side that failed. For a long,
+    the decline into the raid was loaded by the last UP-close candle before it;
+    when the shift breaks back above that candle, it flips from resistance to
+    support. That makes it a different candle from the order block by
+    construction, which is the whole point — two independent votes rather than
+    one counted twice.
+
+    The previous rule looked for the SAME polarity as the order block, anchored
+    near the break extreme, and landed on the identical candle 60% of the time
+    over 244 setups. So "2 of 2 zones agree" frequently meant one candle agreed
+    with itself, and the chart drew two lines on top of each other.
+
+    -1 when no opposite-polarity candle is found within max_back, or when the
+    shift never actually traded through it — an unbroken block is not a
+    breaker, it is just an order block facing the other way.
+    """
+    if not (0 <= grab_bar < mss_bar):
+        return -1
+    for k in range(grab_bar, max(-1, grab_bar - max_back), -1):
+        if (cs[k].c > cs[k].o) if is_bull else (cs[k].c < cs[k].o):
+            seg = range(k, mss_bar + 1)
+            broke = (max(cs[i].h for i in seg) > cs[k].h if is_bull
+                     else min(cs[i].l for i in seg) < cs[k].l)
+            return k if broke else -1
+    return -1
+
+
 def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
                   grab_bar: int = -1, mss_bar: int = -1) -> int:
     """
@@ -309,8 +341,8 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
     a setup, which is a different thing and is what this counts.
 
       order block  the last opposing candle before the impulse that made the gap
-      breaker      the last opposing candle at or before the extreme the shift
-                   broke. Needs an MSS, so an early signal can only score 0-1.
+      breaker      the OPPOSITE-side block the shift broke through — see
+                   breaker_of. Needs an MSS, so an early signal scores 0-1.
 
     Measured, 1982 setups: 0 of 2 scored +0.043, 2 of 2 scored +0.106 — but
     +1.4 SE, and NOT monotonic (1 of 2 came in below 0 of 2). Not a finding.
@@ -324,13 +356,9 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
     ob = last_opposing(cs, fvg_bar - 1, is_bull)
     if ob >= 0 and ranges_overlap(top, bot, cs[ob].h, cs[ob].l):
         n += 1
-    if 0 <= grab_bar < mss_bar:
-        rng = range(grab_bar, mss_bar)
-        ext = (max(rng, key=lambda x: cs[x].h) if is_bull
-               else min(rng, key=lambda x: cs[x].l))
-        brk = last_opposing(cs, ext, is_bull)
-        if brk >= 0 and ranges_overlap(top, bot, cs[brk].h, cs[brk].l):
-            n += 1
+    brk = breaker_of(cs, grab_bar, mss_bar, is_bull)
+    if brk >= 0 and ranges_overlap(top, bot, cs[brk].h, cs[brk].l):
+        n += 1
     return n
 
 
