@@ -444,6 +444,7 @@ def collapse(items: list, key, better) -> list:
 def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                sweeps_out: list | None = None,
                early_out: list | None = None,
+               clusters_out: list | None = None,
                collapse_dupes: bool = True) -> list[Setup]:
     """
     Single pass over closed candles, mirroring the Pine bar loop. Returns every
@@ -454,6 +455,11 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
     early_out to collect the no-shift entries described on Early. Both are
     pure observation: they append to a list and change no decision, so the
     setups returned are identical whether or not either is supplied.
+
+    clusters_out hands back every pool the engine built, in the same spirit.
+    It exists because a pool that reached min_pivots is exactly what the Pine
+    draws a diamond for, so this is the only way to count the markers a chart
+    will carry without reading them off a screenshot.
     """
     n = len(cs)
     if n < cfg.atr_len + cfg.pivot_left + cfg.pivot_right + 10:
@@ -758,6 +764,9 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
     # collapse_dupes=False returns the raw stream. It exists so a test can
     # prove the collapse only ever merges items that are the same trade,
     # rather than that claim being an assertion in a comment.
+    if clusters_out is not None:
+        clusters_out[:] = clusters
+
     if collapse_dupes:
         if sweeps_out is not None:
             sweeps_out[:] = sorted(

@@ -130,7 +130,7 @@ drawMode = input.string("On MSS confirmation", "When to draw a pattern",
 showLiquidity  = input.bool(true,  "Liquidity levels (dotted)",      group = gLook)
 showPivots     = input.bool(true,  "Swing markers (diamonds)",       group = gLook)
 hideDeadPivots = input.bool(true,  "  drop them once the pool dies",  group = gLook,
-     tooltip = "A diamond means this swing is part of LIVE liquidity. Once the pool has been taken and traded, or has expired without producing anything, it is not liquidity any more — and leaving the markers turns the chart into a field of diamonds from pools that stopped mattering days ago. Off keeps every diamond ever drawn, which is what the indicator used to do because the label handle was discarded at draw time and nothing could delete it.")
+     tooltip = "Drops the swing markers of a pool that DIED having produced nothing — raided and never shifted, or expired untouched. Pools still waiting, and pools that went on to shift structure, keep theirs: a diamond group beside an X and an MSS label is the whole pattern and is the part worth seeing. Measured over 41.6 days this takes a 3.5-day screen from about 36 markers to 16, against roughly 14 for the reference indicator. Off keeps every diamond ever drawn, which is what this used to do because the label handle was discarded at draw time and nothing could ever delete it.")
 showGrab       = input.bool(true,  "Raid marker (X)",                group = gLook)
 showGrabTag    = input.bool(true,  "Label on the raid marker",       group = gLook,
      tooltip = "The small dark tag under the X naming what got raided: Pivot, Day, Week or a session name.")
@@ -1256,12 +1256,27 @@ if engineOk
                 bool wasSwept  = c.swept
                 bool wasMss    = c.mssConfirmed
 
-                // One place covering every way a pool stops being liquidity:
-                // expired unswept, expired mid-raid, suppressed by a sibling,
-                // or consumed by a finished setup. In the last case the setup
-                // has its own X, MSS label, zone and level lines, so the
-                // diamonds have already said what they had to say.
-                if hideDeadPivots and not c.markersDropped and (c.expired or c.setupDone)
+                // Drop the markers of a pool that DIED HAVING PRODUCED
+                // NOTHING — expired unswept, expired mid-raid, or suppressed
+                // by a sibling. A pool that went on to shift structure keeps
+                // its diamonds: that group beside an X and an MSS label is the
+                // whole pattern, and it is what makes the chart readable.
+                //
+                // Measured on 5 symbols over 41.6 days, diamonds on a 3.5-day
+                // screen, per symbol:
+                //
+                //    36   every pool ever formed  (what this used to draw)
+                //    16   live + completed        (this rule)
+                //    14   completed only          (the reference's density)
+                //     2   dropping completed too  (a first attempt, far too
+                //         aggressive — it deletes exactly the groups worth
+                //         looking at)
+                //
+                // 36 was never a parameter problem: tightening the pool width
+                // and time span as far as the reference's own panel allows
+                // only reaches 27. The difference was always about WHICH
+                // pools deserve a marker, not how pools are built.
+                if hideDeadPivots and not c.markersDropped and (c.expired or c.suppressed)
                     dropDiamonds(c)
                     c.markersDropped := true
 
