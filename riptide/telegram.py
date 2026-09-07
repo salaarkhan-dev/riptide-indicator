@@ -313,27 +313,19 @@ def early_message(s: Early, live=None) -> str:
     ) if x is not None)
 
 
-def _shift_odds_line(extreme: float, struct_level: float) -> str | None:
+def _shift_distance(extreme: float, struct_level: float) -> str:
     """
-    How far the shift level is, and how often a raid that far out has gone on
-    to confirm.
+    " · 5.9% away" appended to the line that already names the shift level.
 
-    The sweep alert already printed the level; what it never said is that the
-    level can be 6% away, which is the difference between a raid worth
-    watching and one that is finished. A stale Day pool raided days after it
-    was set carries a shift level dragged all the way back to that day's
-    opposing extreme, and the alert read exactly like a fresh pivot raid.
-
-    Framed as a base rate, not a forecast, for the reasons in _grade — and it
-    says nothing about the ⚡ EARLY entry off the same raid, which measures the
-    same at every distance.
+    A first version of this was a whole extra line carrying the historical
+    conversion rate for that distance. It was reverted: a sweep alert is read
+    in two seconds to decide whether to open the chart, and a sentence of
+    statistics is not what that decision needs. The distance itself stays
+    because it costs no line and answers the only question the level alone
+    left open — whether the shift is a candle away or a day away.
     """
     odds = shift_odds(extreme, struct_level)
-    if odds is None:
-        return None
-    dist, rate, n = odds
-    return (f"<i>{dist:.1f}% away · {rate}% of {n} past raids that far out "
-            f"went on to confirm</i>")
+    return f" · {odds[0]:.1f}% away" if odds else ""
 
 
 def sweep_message(s: Sweep) -> str:
@@ -349,8 +341,8 @@ def sweep_message(s: Sweep) -> str:
         "<i>liquidity taken · no entry yet</i>",
         "",
         f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",
-        f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>",
-        _shift_odds_line(s.sweep_extreme, s.struct_level),
+        f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>"
+        f"{_shift_distance(s.sweep_extreme, s.struct_level)}",
         note or None,
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.sweep_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),

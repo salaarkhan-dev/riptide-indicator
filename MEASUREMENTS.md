@@ -922,8 +922,16 @@ Confirmed setups that do occur off a far level are worse (+0.318 / +0.219 /
 that is 54 setups in the far bucket, one window, and was not pre-registered.
 Not acted on.
 
-What changed: the sweep alert now prints the distance and the base rate for
-it, and the two input labels no longer claim the levels are yesterday's.
+What changed: the sweep alert appends the distance to the line that already
+names the shift level — "Shift confirms below 83.51 · 5.9% away" — and the two
+input labels no longer claim the levels are yesterday's.
+
+The first version put the conversion rate on the alert too, as its own line.
+That was reverted on the day it shipped: a sweep alert is read in two seconds
+to decide whether to open the chart, and a sentence of statistics is not what
+that decision needs. The distance stays because it costs no line and answers
+the one question the level alone left open — whether the shift is a candle
+away or a day away. The base rates live here.
 
 ## The raid dot never moved
 
