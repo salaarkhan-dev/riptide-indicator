@@ -269,8 +269,8 @@ trendTagSize  = input.string("Normal", "Trend tag size",
 trendFilter    = input.bool(false, "Only take setups with the higher-timeframe trend",
      group = gTrend,
      tooltip = "Suppresses setups and raid markers that face against a slow trend on a higher timeframe. This is NOT the trend line above — that one is display only and filtering on it does nothing. Measured: with the daily trend +0.111 R per setup, against it -0.018, a 4.2 standard error separation over 1961 setups in one 41.6-day window. Off by default; turning it on roughly halves the signals.")
-trendFilterTf  = input.timeframe("D", "Higher timeframe", group = gTrend,
-     tooltip = "The timeframe the SuperTrend above is read from, and the one the filter judges on. One setting, because they are now one line.")
+trendFilterTf  = input.timeframe("240", "Higher timeframe", group = gTrend,
+     tooltip = "The timeframe the SuperTrend above is read from, and the one the filter judges on. One setting, because they are now one line.\n\n4h, not daily. Measured on Min30 confirmed setups net of fees, with-trend minus against-trend: 4h +0.255 at 3.7 SE and replicating on all four splits, daily +0.150 at 2.2 SE. It matches RIPTIDE_TREND_INTERVAL on the bot.\n\nNote the bot ALSO reads DI on the daily for the grade letter, which this indicator does not draw. DI was the one reading that did not survive the move — 4h DI is a flat null on every split — so the two are separate settings there.")
 trendFilterFac = input.float(5.0, "SuperTrend factor", minval = 0.5, step = 0.1,
      group = gTrend)
 trendFilterLen = input.int(14, "SuperTrend length", minval = 1, group = gTrend)

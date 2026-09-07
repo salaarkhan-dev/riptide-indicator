@@ -1127,6 +1127,50 @@ block sits immediately before the gap, so the answer was yes for 1888 of 1888
 signals. A degenerate feature returns no buckets and silently drops out of the
 table. It needs a definition that looks at the bars before the raid, not after.
 
+## Structure timeframe x trend timeframe
+
+Asked directly: 15m for entries, 4h for the trend. Both halves measured, 23
+symbols, net of fees at 0.08% round trip.
+
+### 15m for entries: worse
+
+| structure TF | early | confirmed |
+|---|---|---|
+| Min15 | +0.073 | +0.075 |
+| Min30 | **+0.114** | **+0.110** |
+
+Min30 wins on both signal types. The gap is about +1.2 SE on early — not
+decisive on its own, but it is the same direction the earlier Min5/Min15/Min30
+comparison found, and 15m's tighter stops make fees bite harder: median risk
+1.14% against 1.21%, so the same 0.08% round trip costs 0.070R instead of
+0.066R while the gross edge is smaller too.
+
+### 4h for the trend: yes for the filter, no for DI
+
+This is the useful half, and it forced a config change. Separation between
+with-trend and against-trend, Min30 confirmed, net of fees:
+
+| reading | separation | | splits |
+|---|---|---|---|
+| **4h SuperTrend** | **+0.255** | +3.7 SE | +3.0 / +2.2 / +2.7 / +2.6 |
+| daily SuperTrend | +0.150 | +2.2 SE | |
+| **daily DI** | **+0.250** | +3.7 SE | +2.3 / +2.9 / +3.0 / +2.2 |
+| 4h DI | +0.001 | +0.0 SE | -0.6 / +0.7 / +0.2 / -0.2 |
+
+The 4h SuperTrend replicates on all four splits and beats the daily one it
+replaces. **4h DI is a flat null on every split** where daily DI is the
+strongest thing this project has measured.
+
+Those were ONE setting. `TREND_INTERVAL` drove the SuperTrend filter and DI
+alike, so moving the filter to 4h — the change that looks like an
+improvement — would silently have moved the grade letter onto an axis that
+sorts nothing. They are now `TREND_INTERVAL` (Hour4) and `DI_INTERVAL` (Day1),
+and the grade's reason string interpolates the interval instead of hardcoding
+"daily", so it cannot go on claiming daily if that ever moves.
+
+On EARLY signals the 4h SuperTrend does not replicate: +1.9 SE overall with
+one split at +0.1 SE. A confirmed-setup effect, recorded as such.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their

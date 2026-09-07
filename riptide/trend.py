@@ -40,12 +40,14 @@ from __future__ import annotations
 import time
 from bisect import bisect_right
 
-from .config import (BAR_SECONDS, TREND_FACTOR, TREND_INTERVAL, TREND_LEN, log)
+from .config import (BAR_SECONDS, DI_INTERVAL, TREND_FACTOR, TREND_INTERVAL,
+                     TREND_LEN, log)
 from .engine import Candle, atr_series, rma as atr_rma
 
 # Daily bars change once a day; refetching them every scan is pure waste.
 # (fetched_at, bar times, supertrend dirs, DI dirs)
-_CACHE: dict[str, tuple[float, list[int], list[int], list[int]]] = {}
+_CACHE: dict[tuple[str, str],
+             tuple[float, list[int], list[int], list[int]]] = {}
 _TTL = 3600.0
 
 
@@ -109,40 +111,50 @@ def supertrend(cs: list[Candle], length: int = TREND_LEN,
     return out
 
 
-async def _series(sess, symbol: str, fetch):
-    """Cached (fetched_at, times, supertrend, DI) for one symbol's daily bars.
+async def _series(sess, symbol: str, fetch, interval: str):
+    """Cached (fetched_at, times, supertrend, DI) for one symbol on `interval`.
 
-    Both readings come off the same fetch, so adding DI costs no extra request.
+    Keyed on the interval as well as the symbol, because the SuperTrend filter
+    and DI no longer read the same timeframe — see TREND_INTERVAL and
+    DI_INTERVAL in config.py for the measurement that separated them. When
+    both are set to the same value this is one fetch and one cache entry, as
+    it was before.
+
+    Both readings still come off one fetch, so whichever timeframe is asked
+    for costs a single request per TTL.
     """
     now = time.monotonic()
-    hit = _CACHE.get(symbol)
+    key = (symbol, interval)
+    hit = _CACHE.get(key)
     if hit is None or now - hit[0] > _TTL:
-        cs = await fetch(sess, symbol, TREND_INTERVAL)
+        cs = await fetch(sess, symbol, interval)
         if len(cs) < TREND_LEN + 5:
             log.warning("%s: only %d %s bars, trend readings skipped",
-                        symbol, len(cs), TREND_INTERVAL)
-            _CACHE[symbol] = (now, [], [], [])
+                        symbol, len(cs), interval)
+            _CACHE[key] = (now, [], [], [])
             return None
-        _CACHE[symbol] = (now, [c.t for c in cs], supertrend(cs),
-                          di_direction(cs))
-        hit = _CACHE[symbol]
+        _CACHE[key] = (now, [c.t for c in cs], supertrend(cs),
+                       di_direction(cs))
+        hit = _CACHE[key]
     return hit if hit[1] else None
 
 
-def _at(times, series, when) -> int | None:
+def _at(times, series, when, interval: str) -> int | None:
     """Value on the last bar whose CLOSE is at or before `when`. See the note
     in direction_at: bar times are OPEN times, so the forming bar must be
-    excluded by arithmetic, not by hoping it was dropped upstream."""
-    i = bisect_right(times, when - BAR_SECONDS[TREND_INTERVAL]) - 1
+    excluded by arithmetic, not by hoping it was dropped upstream. The step
+    subtracted must be the step of the series being read, which is why the
+    interval is passed rather than assumed."""
+    i = bisect_right(times, when - BAR_SECONDS[interval]) - 1
     return series[i] if 0 <= i < len(series) else None
 
 
 async def di_at(sess, symbol: str, when: int, fetch) -> int | None:
-    """Daily DI direction on the last closed bar at `when`. +1, -1, or None."""
-    hit = await _series(sess, symbol, fetch)
+    """DI direction on DI_INTERVAL's last closed bar at `when`. +1, -1, None."""
+    hit = await _series(sess, symbol, fetch, DI_INTERVAL)
     if hit is None:
         return None
-    return _at(hit[1], hit[3], when) or None
+    return _at(hit[1], hit[3], when, DI_INTERVAL) or None
 
 
 async def direction_at(sess, symbol: str, when: int, fetch) -> int | None:
@@ -151,7 +163,7 @@ async def direction_at(sess, symbol: str, when: int, fetch) -> int | None:
     None when there is not enough history to judge — the caller keeps the
     setup in that case rather than dropping it on missing data.
     """
-    hit = await _series(sess, symbol, fetch)
+    hit = await _series(sess, symbol, fetch, TREND_INTERVAL)
     if hit is None:
         return None
     _, times, dirs, _ = hit

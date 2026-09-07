@@ -19,7 +19,8 @@ from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
                      LOG_MARKET,
                      SWEEP_ALERTS, TG_CHAT, TG_TOKEN, TRACK,
                      TRACK_FILL_BARS, TRACK_HORIZON_BARS, TRACK_TARGET_R,
-                     TREND_FACTOR, TREND_FILTER, TREND_INTERVAL, TREND_LEN,
+                     DI_INTERVAL, TREND_FACTOR, TREND_FILTER,
+                     TREND_INTERVAL, TREND_LEN,
                      build_id, log)
 from .engine import band_stats
 from .scanner import cycle, seconds_to_next_close, trend_on
@@ -87,8 +88,11 @@ def status_text(db, state) -> str:
     sweeps = "on" if SWEEP_ALERTS else "off"
     live = trend_on(db)
     src = "" if (meta_get(db, "trend_filter", "") not in ("0", "1")) else " (/trend)"
+    # DI's interval is shown next to the filter's because they are separate
+    # settings now and the grade letter comes off the DI one, not this one.
     trend_line = ((f"ON · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})"
-                   if live else "off") + src)
+                   if live else "off") + src
+                  + f" · grade DI on {DI_INTERVAL}")
     return (
         f"<b>Riptide status</b>\n\n"
         f"build      <code>{build_id()}</code>\n"

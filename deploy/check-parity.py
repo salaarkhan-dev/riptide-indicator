@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from riptide.config import Cfg                             # noqa: E402
+from riptide.config import Cfg, TREND_INTERVAL             # noqa: E402
 
 PINE = Path(__file__).resolve().parent.parent / "riptide-indicator.pine"
 
@@ -199,6 +199,16 @@ def main() -> int:
             problems.append(f"{pine} = {choice!r} -> {options[choice]!r}   "
                             f"but   Cfg.{field} = {want!r}")
 
+    # Not a Cfg field, so it gets its own comparison rather than being faked
+    # into the NUMERIC table.
+    TF = {'"D"': "Day1", '"240"': "Hour4", '"480"': "Hour8", '"60"': "Min60"}
+    raw = pine_default(src, "trendFilterTf")
+    if raw is None:
+        problems.append("trendFilterTf: no input found in the Pine")
+    elif TF.get(raw) != TREND_INTERVAL:
+        problems.append(f"trendFilterTf = {raw} -> {TF.get(raw)!r}   but   "
+                        f"TREND_INTERVAL = {TREND_INTERVAL!r}")
+
     shadow = check_shadowing(src)
     if shadow:
         print(f"PINE SYNTAX: {len(shadow)} shadowed built-in(s)\n")
@@ -214,7 +224,7 @@ def main() -> int:
         print("\nTradingView reports these as CE10015 on the wrong line.")
         return 1
 
-    n = len(NUMERIC) + len(CHOICE)
+    n = len(NUMERIC) + len(CHOICE) + 1
     if problems:
         print(f"PINE / ENGINE PARITY: {len(problems)} of {n} settings disagree\n")
         for p in problems:

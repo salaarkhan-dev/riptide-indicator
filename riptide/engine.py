@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .config import CFG, Cfg
+from .config import CFG, Cfg, DI_INTERVAL
 
 @dataclass
 class Candle:
@@ -395,9 +395,15 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
 # window; this project has watched the LEVEL of an effect move from -0.05 to
 # +0.32 across windows while the separation between bands held. The ordering
 # is the finding. The percentages are context for it.
+# The interval is interpolated rather than written as "daily". DI's timeframe
+# used to be the same setting as the SuperTrend filter's; they were split once
+# 4h DI measured as a flat null, and a hardcoded "daily" here would have gone
+# on claiming daily whatever DI_INTERVAL was actually read from.
+_DI = {"Day1": "daily", "Hour4": "4h", "Hour8": "8h",
+       "Min60": "hourly"}.get(DI_INTERVAL, DI_INTERVAL)
 GRADES = {
-    ("with", True): ("A", "daily DI agrees"),
-    ("with", False): ("A", "daily DI agrees"),
+    ("with", True): ("A", f"{_DI} DI agrees"),
+    ("with", False): ("A", f"{_DI} DI agrees"),
     ("against", True): ("B", "DI disagrees · RSI stretched your way"),
     ("against", False): ("C", "DI disagrees · RSI offers nothing"),
 }
