@@ -746,6 +746,92 @@ citing a measurement that returned zero on 30 symbols which happened to contain
 no case. Writing one test across all three types failed immediately on the
 third. A rule enforced in one place needs verifying in one place.
 
+## How far price has already run when the alert lands
+
+Found while answering "why didn't we catch this move" on AKE, not
+pre-registered — so it was replicated before being written down.
+
+Measure, at the close of the bar that produces the alert, how far price sits
+past the alert's own entry, in units of that alert's risk. Zero means the
+entry is still live at current price; +1R means price has already travelled a
+full stop-distance beyond the entry you are being told to buy. Then score the
+setup the way the tracker does: 12 bars to fill, 1R target, 48-bar horizon,
+**an unfilled setup counts as 0.0** rather than being dropped.
+
+23 symbols, 41.6 days.
+
+| gap at alert | confirmed n | fill % | R/setup | early n | fill % | R/setup |
+|---|---|---|---|---|---|---|
+| 0 – 0.25R past | 262 | 93% | +0.057 | 686 | 92% | +0.063 |
+| 0.25 – 0.5R | 146 | 71% | +0.187 | 380 | 78% | +0.207 |
+| 0.5 – 1R | 109 | 55% | +0.241 | 233 | 64% | +0.388 |
+| over 1R past | 32 | 50% | +0.500 | 56 | 59% | +0.589 |
+
+Monotone in both columns and it goes the *opposite* way to the intuition. The
+alerts that look worst on arrival — price already gone, entry stranded behind
+it — are the ones that pay. Half of them never fill and are scored zero
+anyway, and they still beat the tidy ones almost 5:1.
+
+The obvious objection is that this is the risk gradient wearing a disguise: a
+gap measured in R is large when the stop is small, and small stops already
+score better. It is not. Splitting into risk terciles, the gradient holds
+inside every one of the six panels, monotone in all six — including the wide-stop
+confirmed tercile where the *level* is around zero but the ordering survives
+(-0.064 → -0.014 → +0.000).
+
+Out of sample, taking the top band minus the bottom as the primary:
+
+| split | confirmed | early |
+|---|---|---|
+| all | +0.253 (3.1 SE) | +0.413 (7.5 SE) |
+| symbols A | +0.305 (2.8 SE) | +0.375 (4.9 SE) |
+| symbols B | +0.196 (1.6 SE) | +0.455 (5.8 SE) |
+| first half of window | +0.245 (1.9 SE) | +0.325 (4.0 SE) |
+| second half | +0.267 (2.5 SE) | +0.494 (6.6 SE) |
+
+Same sign in all ten, and on early it is the largest and most consistently
+replicated effect this project has measured — larger than DI (+0.222) and
+larger than the daily trend filter. On confirmed it is real but weaker, and
+two of the four splits are under 2 SE.
+
+Caveats before anything is built on it. Nothing here is fee-adjusted, and the
+high-gap band skews toward tighter stops within a tercile, where 0.08% round
+trip costs more R. The 1R scoring is generous to a band whose whole character
+is a violent impulse followed by a pullback — the fill often happens on a bar
+that also reaches target, and bar-order assumptions decide that case. And it
+is one window.
+
+What it is not is a filter. Suppressing the low-gap alerts throws away 93% of
+the fills to keep a band that trades half the time; the honest use is
+**ranking** — the number belongs on the alert, so a stranded entry reads as
+what the data says it is rather than as a miss.
+
+## Why AKE's +69% was not caught, and what it actually shows
+
+The complaint was that a large AKE rally on 5 Sep ran out of a consolidation
+Riptide had not marked. It had. The sequence, on 30m:
+
+    04 Sep 11:00  pool swept
+    04 Sep 21:00  raid extreme 0.012785
+    05 Sep 00:30  structure shift
+    05 Sep 01:00  gap → CONFIRMED LONG, entry 0.014121, stop 0.012785
+    05 Sep 01:30  alert goes out — price 0.016588
+
+The pattern completed and the alert fired. It was unusable, because by the
+time the gap bar closed price stood **17.5% above the entry it named**, and the
+limit was never touched again inside the fill window — it filled a day later,
+on 6 Sep 06:30, in a different context. Had it filled it was worth +5.6R with
+a worst case of +1.1R.
+
+So the failure is not detection and not the shift being slow. It is that the
+entry is a retracement into a gap, and a vertical move does not retrace. That
+is the same phenomenon the table above measures, at its extreme: gap 1.85R
+past entry, fill 0, scored 0.0.
+
+The three other largest AKE advances in the window read the same way — raids
+detected beforehand in every case, the shift level sitting above where price
+was when the move began.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their
