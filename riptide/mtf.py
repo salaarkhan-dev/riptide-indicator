@@ -6,19 +6,35 @@ as before. Only the entry moves: instead of taking the gap left on the HTF leg,
 this looks for the first gap on a lower timeframe after the shift confirms, and
 places the stop on the lower timeframe's own structure.
 
-Why, measured over 12.5 days on 20 symbols:
+DO NOT ENABLE THIS. Re-measured 7 Sep and it loses badly.
 
-    Min30 gap + Min30 stop   45% of setups filled, 48% of fills reached 1R
-    Min15 gap + Min15 stop   85% of setups filled, 51% of fills reached 1R
+The numbers that used to sit here — "Min15: 85% of setups filled, 51% of fills
+reached 1R" against 45%/48% for Min30 — came from the scoring loop that ran
+from the SIGNAL bar rather than the FILL bar. That bug manufactured wins for
+exactly this kind of comparison, and the conclusion it supported was wrong.
 
-The gain is almost entirely fill rate. A Min30 gap sits where price has already
-been and often does not return; a Min15 gap forms next to where price is now.
-The tighter structural stop (median 0.68x the HTF stop distance) does not cost
-hit rate.
+Re-run through research/harness.py on matched wall-clock windows
+(research/studies/sniper.py), 80 comparable confirmed setups:
 
-Caveats worth remembering when reading those numbers: one market regime, fewer
-than a hundred filled samples per variant, and no fees, slippage or the
-break-even rule. It is enough to justify the feature, not to size a position.
+    Min30 gap + Min30 stop   fill 57.5%   win 56.5%   +0.304 R per setup
+    Min15 gap + Min15 stop   fill 82.5%   win 27.3%   -0.221 R per setup
+                                          paired difference -0.525, 3.2 SE
+
+The fill-rate gain was real and is reproduced almost exactly. What the old
+scorer hid is what it costs: the win rate falls by more than half. The tighter
+structural stop does not "not cost hit rate" — it is the whole problem. A
+Min15 stop sits inside ordinary Min30 retracement noise, so the pullback the
+setup was always going to have takes it out. research/studies/decouple.py
+found the same thing four other ways: every stop nearer than the raid extreme
+tested worse, and the raid extreme is not merely a convenient level, it is the
+price beyond which the setup is wrong.
+
+Min5 was inconclusive rather than bad (-0.067, 0.2 SE) but only 30 setups fall
+inside the range 2000 Min5 bars can reach, so that is an absence of evidence.
+
+Kept in the tree because ENTRY_INTERVAL is documented and someone may want to
+re-test on a different structure timeframe, where the noise argument could
+come out differently. It is off by default and should stay off.
 
 Nothing here mutates the engine. It reads a finished Setup and returns a
 replacement entry and stop, or None.

@@ -2054,3 +2054,90 @@ raid extreme with no chase at all (+0.190 vs +0.250).
        stop beyond the raid. The fill-rate ceiling from the previous section
        is not reachable by any repositioning of entry or stop. It is not a
        parameter problem.
+
+## The "sniper entry" SMC blueprint, claim by claim
+
+`research/studies/sniper.py`. The blueprint circulating as HTF bias -> sweep at
+an HTF zone -> LTF confirmation -> refined LTF entry -> tight stop -> 1:3 RR.
+Three of its five steps were already settled here and were not re-run: HTF bias
+(measured, daily DI, +0.204 with / -0.062 against), LTF confirmation (measured
+— it IS the confirmed signal, +0.250 against +0.020 for the no-shift early),
+and the tight stop at the invalidation wick (refuted in the section above,
+0.54% risk and 40.1% win against 1.83% and 50.0%). The 1:3 target is also
+already known: 3R is +0.252 against 2R's +0.215, about 1.5 SE, not separable.
+
+Three claims were genuinely untested.
+
+### A. The raid must land in a 4h order block or fair value gap — no effect
+
+    rule                              flagged        confirmed      early
+    any 4h zone, ever              1479 (90%)      unbucketable   -0.231 -2.1 SE
+    formed within last 30 4h bars   614 (38%)      -0.027 -0.2 SE  -0.005 -0.1 SE
+    last 30 bars AND unmitigated     14 (1%)       too few         too few
+
+The first row is the trap, and worth writing down because it is how this kind
+of test usually goes wrong. 333 days of 4h bars accumulate thousands of gaps
+and blocks; between them they cover most of the price range, so "the raid was
+in an HTF zone" is true 90% of the time and tests nothing. (Its one nominal
+result points the WRONG way — the 136 raids outside any zone scored +0.231
+against -0.000 — and fails the splits anyway.)
+
+Constrained to zones formed in the last five days, the flag splits the book
+38/62 and is dead flat on both signal types.
+
+Constrained further to zones that are also unmitigated — the actual ICT
+premise, price arriving at a fresh higher-timeframe zone — it fires **14 times
+in 1637 signals, 1%.** That is the useful finding: the blueprint's setup is not
+a filter that improves these signals, it is a much rarer event that our pools
+almost never coincide with. It cannot be measured here and it cannot be traded
+at any useful frequency.
+
+### B. Refining the entry onto a faster chart — loses 0.525 R per setup
+
+`riptide/mtf.py` has implemented this since early on, gated behind
+`RIPTIDE_ENTRY_INTERVAL`, and it is OFF. Its docstring justified it with "85%
+of setups filled, 51% of fills reached 1R" against 45%/48% for Min30 — numbers
+from the buggy scorer. Re-run through the harness on matched wall-clock
+windows (10 bars and 60 bars on 30m are 5 and 30 hours, so 20 and 120 bars on
+Min15), 80 comparable confirmed setups:
+
+    Min30 gap + Min30 stop  <-  fill 57.5%   win 56.5%   +0.304 ± 0.127
+    Min15 gap + Min15 stop      fill 82.5%   win 27.3%   -0.221 ± 0.137
+                                        paired difference -0.525, 3.2 SE
+
+**The fill-rate claim reproduces almost exactly** — 82.5% against the old
+85%. What the old scorer hid is the price of it: the win rate more than halves.
+This is the decouple result again from a fifth direction. A Min15 stop is
+structural on the Min15 chart and pure noise on the Min30 one.
+
+Min5 was inconclusive (-0.067, 0.2 SE) but only 30 setups fall within reach of
+2000 Min5 bars, so that is absence of evidence, not evidence of absence.
+
+The mtf.py docstring has been corrected in place; the old numbers were live
+documentation arguing for a feature that costs half an R per setup.
+
+### C. Targeting the opposing liquidity pool — the blueprint contradicts itself
+
+    CONFIRMED n=245        R/signal          EARLY n=1390
+      fixed 2R  <-          +0.246             +0.023
+      at the pool           -0.021             -0.032
+      floored at 1.5R       +0.188             -0.003
+      1.5R-3R band          +0.183             -0.001
+
+The distribution explains it. **The nearest opposing pool sits at a median of
+0.16R for confirmed setups, and 95% of them are below 1R.** Early is barely
+better: median 0.45R, 74% below 1R.
+
+That is not a flaw in the measurement, it is a consequence of where the entry
+is. We enter at the proximal edge of a gap after a retracement, which is by
+construction close to the swing that price just came from — so the nearest
+opposing liquidity is right there. "Target the opposing pool" and "take a
+minimum 1:3" are not two rules that combine; on this system they are
+contradictory, and the ladder that already ships resolves it in the right
+direction.
+
+    => nothing adopted from the blueprint. Its confirmation step was already
+       our largest measured effect, its stop rule is the one thing we have
+       refuted from five separate directions, its HTF-zone step describes an
+       event that occurs in 1% of our signals, and its target rule would exit
+       at 0.16R.
