@@ -4,6 +4,50 @@ Every strategy question tested on this project, what came back, and what was
 done about it. Written down because most of these came back negative, and a
 negative result nobody recorded gets re-tested in a month.
 
+## CORRECTION — the backtest scorer was wrong, and most numbers below are inflated
+
+Found on 7 Sep while measuring exits. **Every ad-hoc backtest script in this
+session scored outcomes from the SIGNAL bar instead of the FILL bar.**
+
+    if not any(entry touched in the next 12 bars): return 0.0
+    for c in cs[i+1 : i+1+48]:          # <- i is the SIGNAL bar, not the fill
+        if stop hit: return -1.0
+        if target hit: return +1.0
+
+The fill check and the outcome loop were separate. If the entry filled on bar
+i+5, bars i+1 to i+4 were scored as though a position already existed. Entries
+are RETRACEMENTS, so before the fill price sits on the profitable side of the
+entry — the error therefore manufactured wins and almost never manufactured
+losses.
+
+| | signals with the target reached before the fill | old | fill-anchored | inflation |
+|---|---|---|---|---|
+| early | 12.8% | +0.191 | +0.076 | **+0.115 (9.1 SE)** |
+| confirmed | 18.9% | +0.328 | +0.193 | **+0.135 (4.2 SE)** |
+
+Roughly 60% of the early "edge" and 40% of the confirmed "edge" was the bug.
+
+**`riptide/tracker.py` does NOT have this bug** — it holds a row PENDING until
+the entry is touched and only then evaluates. `/stats` was never affected, and
+forward numbers remain the ones to trust. This was throwaway research code.
+
+### What survives re-running
+
+| claim | status |
+|---|---|
+| risk cap 2.5 ATR on confirmed **(shipped)** | **stronger.** +0.135 vs +0.031 for 4.0, total R 32.0 vs 16.5 — it doubles total R rather than matching it |
+| daily DI over 4h DI **(shipped)** | **holds.** +2.2 SE against +0.9 SE |
+| 4h SuperTrend over daily **(shipped)** | **much weaker.** +2.1 SE against daily's +1.8 SE, where it read +3.7 against +2.2. Both are marginal now; 4h is no longer clearly better |
+| the impulse-gap effect (never shipped) | **largely gone.** Still monotone on early but tiny (-0.021 to +0.130), and it now runs the OPPOSITE way on confirmed (+0.215 down to +0.115). It was headlined at +7.5 SE. It was the bug |
+| early signals generally | **thinner than reported.** +0.076 at 1R, not the +0.114 quoted |
+
+Everything below this section that quotes an R value was produced with the
+broken scorer unless it says otherwise. **Treat the levels as inflated and the
+comparisons as suspect** — especially any comparison where one group takes
+longer to fill than the other, because that group collected more free bars.
+The impulse-gap result is exactly that failure mode: a large gap means a
+slower fill means more pre-fill bars.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,
