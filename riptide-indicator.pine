@@ -80,7 +80,7 @@ gEng   = "10. Engine and debug"
 markStyle      = input.string("Riptide", "Preset",
      options = ["Riptide", "ICT Trades (matched ref)", "Riptide + ICT"],
      group = gPreset,
-     tooltip = "Which detection rules run.\n\n'Riptide' — this indicator's own, tuned here and matching riptide.conf on the bot. Use this to trade.\n\n'ICT Trades (matched ref)' — swaps in the reference indicator's values so the two charts mark the same events: pivot look-back/forward 1, max pool range 0.2 ATR, max tested range 0.1 ATR, grab-to-shift window 12 bars, all four liquidity types including weekly and session, and its GMT+0 session windows (08:00-17:00, 13:00-22:00, 00:00-09:00). Its 12-bar grab window is stricter than Riptide's 50, so it produces FEWER setups — that is detection, not drawing. Session pools are chart-only, since the bot's engine has no session source, so the chart can mark a pool no alert will ever fire from.\n\n'Riptide + ICT' — Riptide detection, unchanged, so every mark still matches your alerts; on top of it the swings the reference's looser pivot rule sees and Riptide's does not, in the pale colours. Nothing is added to the engine and no signal changes: it is a comparison layer.\n\nEverything drawn — live raids in progress, imbalances, order blocks, breaker blocks, the trend line — stays exactly as you set it under Appearance, under all three. Measured over 41.6 days the complete reference set is 0.071 R behind ours at 1.4 SE, which is indistinguishable, so this is a viewing choice and not a claim either way. The bot is unaffected: it reads riptide.conf, not this panel.")
+     tooltip = "Which detection rules run.\n\n'Riptide' — this indicator's own, tuned here and matching riptide.conf on the bot. Use this to trade.\n\n'ICT Trades (matched ref)' — swaps in the reference indicator's values so the two charts mark the same events: pivot look-back/forward 1, max pool range 0.2 ATR, max tested range 0.1 ATR, grab-to-shift window 12 bars, all four liquidity types including weekly and session, and its GMT+0 session windows (08:00-17:00, 13:00-22:00, 00:00-09:00). Its 12-bar grab window is stricter than Riptide's 50, so it produces FEWER setups — that is detection, not drawing. Session pools are chart-only, since the bot's engine has no session source, so the chart can mark a pool no alert will ever fire from.\n\n'Riptide + ICT' — Riptide detection, unchanged, so every mark still matches your alerts; on top of it the swings the reference's looser pivot rule sees and Riptide's does not, in the pale colours. Nothing is added to the engine and no signal changes: it is a comparison layer. It needs 'Swing markers (diamonds)' ticked under Appearance, which is OFF by default — those pale marks are swing markers, so that checkbox switches them off too. If you pick this preset and see nothing new, that is the reason.\n\nEverything drawn — live raids in progress, imbalances, order blocks, breaker blocks, the trend line — stays exactly as you set it under Appearance, under all three. Measured over 41.6 days the complete reference set is 0.071 R behind ours at 1.4 SE, which is indistinguishable, so this is a viewing choice and not a claim either way. The bot is unaffected: it reads riptide.conf, not this panel.")
 
 // ── 1. What creates a signal ────────────────────────────────────────────────
 usePivotLiq   = input.bool(true,  "Swing highs / lows", group = gSrc,
@@ -1825,14 +1825,20 @@ plot(effTrendMode == "Filter trend" ? htfLine : na, "Filter trend",
 // back, so reading it effPivotRight-1 bars ago points at that same bar. Get
 // this wrong and the layer marks swings that are merely nearby, which looks
 // almost right and is worthless.
-// Gated on the preset alone, NOT on showPivots. It used to depend on it,
-// which was invisible while diamonds defaulted on and became a trap the
-// moment they defaulted off: picking the comparison preset would have drawn
-// nothing, with no error and no clue why. Choosing "Riptide + ICT" IS the
-// request to see these; Riptide's own diamonds stay under their own switch.
+// Gated on BOTH the preset and showPivots. Briefly it was gated on the preset
+// alone, on the reasoning that picking the comparison preset is the request to
+// see the comparison — and that reasoning put marks on a chart whose owner had
+// unticked "Swing markers (diamonds)". These ARE swing markers. A checkbox
+// that names a thing has to switch off every source of that thing, or its
+// label is a lie, and a stray mark nothing on the panel can remove is worse
+// than a preset that quietly draws nothing.
+//
+// The failure mode that motivated ungating it is real but is a documentation
+// problem, not a behaviour one: the preset's tooltip says the layer needs
+// diamonds on. That is a sentence to read, not a mark to hunt.
 int   cmpBack   = effPivotRight
-bool  ictOnlyPH = dualMode and not na(ictPH[cmpBack - 1]) and na(ph)
-bool  ictOnlyPL = dualMode and not na(ictPL[cmpBack - 1]) and na(pl)
+bool  ictOnlyPH = dualMode and showPivots and not na(ictPH[cmpBack - 1]) and na(ph)
+bool  ictOnlyPL = dualMode and showPivots and not na(ictPL[cmpBack - 1]) and na(pl)
 plotshape(ictOnlyPH ? high[cmpBack] : na, "ICT-only swing high",
      style = shape.diamond, location = location.absolute, color = ictBearCol,
      size = size.tiny, offset = -cmpBack)
