@@ -549,6 +549,23 @@ Fill rate is flat across age too (71–74% in every band), which is a coherence
 check on `fvg_scan_from="mss"`: the entry gap comes from after the break, so an
 old raid does not imply a stale entry.
 
+**A late shift does widen the stop, and it does not matter.** The stop sits at
+the raid extreme, so the longer a raid waits the further price has travelled
+from it — median risk climbs 1.36% → 1.61% → 2.10% → 2.06% → 2.12% across
+0-2, 3-6, 7-12, 13-25 and 26-50 bar bands. That is a real gradient and it is
+why a 50-bar window occasionally produces a setup risking 16%.
+
+But it costs nothing: within 12 bars nets +0.017, later nets +0.040, a −0.3 SE
+difference. R already normalises by risk, and a wider stop is *cheaper* in fee
+terms because the fixed round trip is a smaller fraction of it. So the case for
+shortening the window is legibility, not money.
+
+One cell stands out and is **not** being acted on: shifts arriving within 2
+bars of the raid net **+0.169 ± 0.100 on 70 setups**, far above every other
+band. It is 1.5 SE, on the smallest bucket, and it is the third different
+slice of the same parameter — which is precisely the shape of the false
+positives already buried on this page. Recorded as a lead.
+
 **The method was wrong, and the verification step is what caught it.** The
 plan was to run once at a ceiling of 200, record each setup's age, and read
 every threshold off that one population — the parameter only ever *removes*
