@@ -1256,6 +1256,23 @@ is inside noise. What actually improves is efficiency — 2.4x the R per trade,
 less than half the exposure, less time in market, and the widest-stop setups
 gone. That is worth taking, and it is not an edge increase.
 
+### Does the cap cost reward? It buys reward.
+
+The obvious objection is that cutting the wide-stop setups cuts the big moves
+with them. Measured on ONE uncapped run, so both groups come from the same
+gaps and are directly comparable:
+
+| confirmed setups | n | fill | median risk | avg MFE | reach 1R | 2R | 3R |
+|---|---|---|---|---|---|---|---|
+| kept (<= 2.5 ATR) | 234 | 74% | 1.25% | **2.47 R** | 61% | 40% | **26%** |
+| dropped (> 2.5 ATR) | 549 | 79% | 3.02% | 1.06 R | 31% | 12% | **5%** |
+
+The dropped group reaches 3R five percent of the time. The kept group reaches
+it twenty-six. Reward per unit of risk more than doubles, which is arithmetic
+as much as edge: a tight stop makes each R a small price move, so the same
+move is worth more R. The only thing that gets worse is the fill rate, 74%
+against 79%.
+
 ### The part the cap does not fix
 
 A far stop is not a bigger loss. A -1R loss is -1R whether the stop sits 0.2%
