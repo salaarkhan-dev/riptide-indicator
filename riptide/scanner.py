@@ -48,7 +48,11 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
             if ENTRY_INTERVAL else []
 
         sweeps: list[Sweep] = [] if SWEEP_ALERTS else None
-        early: list[Early] = [] if EARLY_ALERTS else None
+        # Always collected, even when the alert is switched off. Muting a
+        # strategy must not also stop measuring it: /stats is the only
+        # forward, out-of-sample evidence this project has, and the moment a
+        # strategy looks bad is the moment its live sample matters most.
+        early: list[Early] = []
         try:
             setups = run_engine(symbol, cs, sweeps_out=sweeps,
                                 early_out=early)
@@ -275,7 +279,7 @@ async def cycle(sess, db, symbols):
                 continue
             if fresh:
                 tracker.arm(db, sid, e, kind=tracker.EARLY)
-            if fresh and not mute:
+            if fresh and not mute and EARLY_ALERTS:
                 if await tg.tg_send(sess, tg.early_message(
                         e, tracker.live_band(db, tg.grade_letter(
                             e.di_dir, e.is_long, e.rsi_ext), tracker.EARLY))):

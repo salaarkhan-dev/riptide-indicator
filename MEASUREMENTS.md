@@ -181,6 +181,58 @@ before the broken numbers moved it. Daily DI is the one reading the correction
 barely touched — +0.250 before, +0.266 after — which is some comfort about the
 axis the grade is built on, though at 2.5 SE it still does not clear the bar.
 
+## Re-measured — volume, RSI, ADX, BTC regime, volatility
+
+`research/studies/context.py`. Volume was untestable until now: `Candle` had
+no volume field, so every earlier "volume" test was measuring something else.
+
+| feature | confirmed | early |
+|---|---|---|
+| sweep-bar relative volume | +0.100 (+0.7) | +0.049 (+0.7) |
+| gap-bar relative volume | -0.169 (-1.1) | +0.014 (+0.2) |
+| RSI extension at the raid | +0.296 (+1.9) | +0.025 (+0.4) |
+| chart DI agrees | -0.241 (-1.5) | -0.078 (-1.6) |
+| ATR percentile (volatility regime) | +0.017 (+0.1) | -0.001 (-0.0) |
+| BTC DAILY trend agrees | -0.094 (-0.9) | **-0.122 (-2.6)** |
+| **BTC 30m trend agrees** | +0.192 (+1.8) | **+0.174 (+3.6) CANDIDATE** |
+
+**The canonical volume premise is false here.** A liquidity grab is supposed
+to print a volume spike; relative volume on the raid bar sorts nothing
+(+0.7 SE on both). Nor does volume on the gap bar. That closes the whole
+volume family, now that it can actually be measured.
+
+**RSI, chart DI and volatility regime: nothing.**
+
+### BTC 30m regime — the only thing that has cleared the bar since the fix
+
+    early, n=1384
+      BTC 30m trend DISAGREES   -0.129  (n=626)
+      BTC 30m trend AGREES      +0.045  (n=758)
+      top-bottom +0.174 ± 0.048   +3.6 SE   monotone
+      splits  +0.264 / +0.081 / +0.154 / +0.189
+      risk terciles  +0.112 / +0.188 / +0.203      => CANDIDATE
+
+It clears every gate: 3.6 SE, same sign on all four splits, and it survives
+the stop-size control with the sign intact in all three terciles. Confirmed
+setups point the same way at +1.8 SE.
+
+**And it takes early signals from negative to positive.** Early is -0.033 R
+overall; the with-BTC half is +0.045 and the against half is -0.129. That is
+the first thing measured on the corrected scorer that would change what the
+bot sends rather than how it is described.
+
+**One thing about it is wrong, though, and it should be said before anyone
+acts.** The DAILY BTC trend points the OTHER WAY, at -2.6 SE on the same
+signals. Both readings are internally consistent across splits, and they
+contradict each other. Either the 30m version is picking up something real
+about intraday alt-follows-BTC while the daily is mean-reversion, or one of
+them is a coincidence dressed in four agreeing splits. 14 comparisons were
+run in this batch, so a single 3.6 SE result is not the same evidence as a
+3.6 SE result that was predicted in advance — and this one was not.
+
+Not shipped. It needs its own pre-registration on fresh data, and the daily
+contradiction resolved.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,

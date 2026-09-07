@@ -132,6 +132,9 @@ MARKET_KEEP_DAYS = int(os.getenv("RIPTIDE_MARKET_KEEP_DAYS", "180"))
 # The no-shift entry: sweep -> first imbalance, no structure shift required.
 # A second strategy running beside the confirmed one, not a replacement — both
 # fire independently on the same sweep and each alert says which it is.
+# Whether early signals are SENT. They are always detected, recorded and
+# armed for /stats regardless — muting a strategy must not stop measuring it,
+# and the moment one looks bad is the moment its forward sample matters most.
 EARLY_ALERTS = os.getenv("RIPTIDE_EARLY_ALERTS", "1") == "1"
 
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.

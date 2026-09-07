@@ -19,6 +19,8 @@ class Candle:
     h: float
     l: float
     c: float
+    v: float = 0.0        # contract volume. Defaulted so every existing
+                          # construction still works; only research reads it.
 
 
 @dataclass

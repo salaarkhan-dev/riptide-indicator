@@ -107,10 +107,12 @@ async def fetch_candles(sess, symbol: str, interval: str = "") -> list[Candle]:
         return []
     k = d["data"]
     try:
-        rows = list(zip(k["time"], k["open"], k["high"], k["low"], k["close"]))
+        vol = k.get("vol") or [0] * len(k["time"])
+        rows = list(zip(k["time"], k["open"], k["high"], k["low"], k["close"],
+                        vol))
     except (KeyError, TypeError):
         return []
     # Drop the forming bar. This is the confirmOnBarClose rule: the engine only
     # ever sees finished candles, so its output matches the chart.
-    return [Candle(int(t), float(o), float(h), float(l), float(c))
-            for t, o, h, l, c in rows if int(t) + step <= now]
+    return [Candle(int(t), float(o), float(h), float(l), float(c), float(v))
+            for t, o, h, l, c, v in rows if int(t) + step <= now]
