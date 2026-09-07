@@ -620,6 +620,27 @@ def shift_odds(extreme: float, struct_level: float):
     return None
 
 
+# How a raid is worth treating, from the distance alone. The bands are the
+# SHIFT_ODDS bands, collapsed to three because a sweep alert is triaged in
+# about a second and five numbers is not a triage.
+#
+#   NEAR  under 2% away   13-24% become a setup
+#   MID   2-4% away        6%
+#   FAR   over 4% away     1-2%, and 40% of all raids land here
+#
+# The tier deliberately reads off the DISTANCE only, not the POI. They are
+# independent axes — measured, see MEASUREMENTS.md "Sweeps in a POI" — and
+# they answer different questions: distance says how likely a setup is to
+# appear at all, the POI says whether it will be worth taking. Folding them
+# into one word would destroy exactly the distinction that makes both worth
+# printing.
+def sweep_tier(extreme: float, struct_level: float) -> str:
+    odds = shift_odds(extreme, struct_level)
+    if not odds:
+        return ""
+    return "NEAR" if odds[0] < 2.0 else "MID" if odds[0] < 4.0 else "FAR"
+
+
 def collapse(items: list, key, better) -> list:
     """
     One entry per event. `key` says what makes two items the same event;

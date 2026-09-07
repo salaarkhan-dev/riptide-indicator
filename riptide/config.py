@@ -233,6 +233,16 @@ SWEEP_INTERVALS = tuple(dict.fromkeys(
     i.strip() for i in os.getenv("RIPTIDE_SWEEP_INTERVALS", "Min30").split(",")
     if i.strip())) or (INTERVAL,)
 POI_SWEEPS = os.getenv("RIPTIDE_POI_SWEEPS", "1") == "1"
+
+# Drop sweeps whose shift level is further than this many percent away. 0 is
+# off, which is the default because it is a volume decision, not a correctness
+# one, and it should be made on lived experience rather than on a backtest.
+#
+# The number to make it with, measured on 8984 Min30 raids: 40% of every raid
+# sits further than 4% from its shift level, and those convert 1-2% of the
+# time. At 65 sweeps a day that is about 26 daily messages with a one-in-fifty
+# chance of leading anywhere. Setting this to 4 removes them.
+SWEEP_MAX_DIST = float(os.getenv("RIPTIDE_SWEEP_MAX_DIST", "0"))
 # Which pool types raise a heads-up. Unset means all of them — the right
 # default while the output is being checked against the chart, since
 # filtering would hide part of what is being verified.

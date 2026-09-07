@@ -18,7 +18,8 @@ import aiohttp
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
                      TREND_INTERVAL, log)
-from .engine import Early, Setup, Sweep, grade_of, shift_odds
+from .engine import (Early, Setup, Sweep, grade_of, shift_odds,
+                     sweep_tier)
 
 async def tg_send(sess, text: str) -> bool:
     """
@@ -352,15 +353,21 @@ def _shift_distance(extreme: float, struct_level: float) -> str:
     """
     " · 5.9% away" appended to the line that already names the shift level.
 
-    A first version of this was a whole extra line carrying the historical
-    conversion rate for that distance. It was reverted: a sweep alert is read
-    in two seconds to decide whether to open the chart, and a sentence of
-    statistics is not what that decision needs. The distance itself stays
-    because it costs no line and answers the only question the level alone
-    left open — whether the shift is a candle away or a day away.
+    A first version of this was a whole extra LINE carrying the historical
+    conversion rate. It was reverted: a sweep alert is read in two seconds to
+    decide whether to open the chart, and a sentence of statistics is not what
+    that decision needs.
+
+    The rate is back, but as two words on the line that already exists. The
+    distance and the conversion rate are the same fact stated twice — 3.9%
+    away IS about 6% — so putting the rate anywhere other than beside the
+    distance would be padding. Together they cost no line and answer the only
+    question the level alone left open: is this worth watching at all.
     """
     odds = shift_odds(extreme, struct_level)
-    return f" · {odds[0]:.1f}% away" if odds else ""
+    if not odds:
+        return ""
+    return f" · {odds[0]:.1f}% away · ~{odds[1]}% convert"
 
 
 def sweep_message(s: Sweep) -> str:
@@ -383,7 +390,8 @@ def sweep_message(s: Sweep) -> str:
              else "" if s.poi_known else " · POI unknown")
     return "\n".join(x for x in (
         _headline("👀 <b>SWEEP</b>", is_long, s.symbol, tf_label(s.tf or INTERVAL),
-                  suffix="bias"),
+                  suffix="bias",
+                  grade=sweep_tier(s.sweep_extreme, s.struct_level)),
         f"<i>liquidity taken{where} · no entry yet</i>",
         "",
         f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",

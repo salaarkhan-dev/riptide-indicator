@@ -18,9 +18,10 @@ from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      EARLY_ALERTS, ENTRY_INTERVAL, FRESH_BARS, INTERVAL,
                      INTERVALS, LOG_MARKET, MTF_GRACE_BARS, POI_REQUIRED,
                      POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS,
-                     SWEEP_FRESH_BARS, SWEEP_INTERVALS, SWEEP_SRC,
+                     SWEEP_FRESH_BARS, SWEEP_INTERVALS, SWEEP_MAX_DIST,
+                     SWEEP_SRC,
                      TREND_FILTER, TREND_INTERVAL, log)
-from .engine import Early, Sweep, atr_series, run_engine
+from .engine import Early, Sweep, atr_series, run_engine, shift_odds
 from .exchange import fetch_candles, list_symbols
 from .storage import (already_sent, early_already_sent, early_sig, first_run,
                       meta_get, meta_set, record, record_early,
@@ -314,6 +315,10 @@ async def cycle(sess, db, symbols):
                 continue
             if SWEEP_SRC is not None and w.src not in SWEEP_SRC:
                 continue
+            if SWEEP_MAX_DIST > 0:
+                odds = shift_odds(w.sweep_extreme, w.struct_level)
+                if odds and odds[0] > SWEEP_MAX_DIST:
+                    continue
             fresh = (now - w.sweep_time) <= SWEEP_FRESH_BARS * step_of(w)
             sid = sweep_sig(w)
             if sweep_already_sent(db, sid):
