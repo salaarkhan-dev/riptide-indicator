@@ -197,7 +197,7 @@ showPrevDayHL  = input.bool(false, "Draw yesterday's high / low",    group = gLo
 showPrevWeekHL = input.bool(false, "Draw last week's high / low",    group = gLook)
 showSessionBox = input.bool(false, "Draw session ranges",            group = gLook)
 fvgExtendBars  = input.int(6, "Entry zone width (bars)", minval = 1, group = gLook)
-fadeUsedFvg    = input.bool(true,  "Fade entry zones once price returns", group = gLook,
+fadeUsedFvg    = input.bool(false, "Fade entry zones once price returns", group = gLook,
      tooltip = "An entry zone price has already come back to has done its job — that was the fill. Until now it kept the same solid box as a zone still waiting, so live and used were indistinguishable at a glance. Fading and dashing the used ones leaves only the live zones reading as actionable.\n\nNote this is a different question from the one the context imbalance layer answers: there you care whether a gap has been FILLED, here whether a zone has been USED, so the two deliberately test different things.")
 extendFVG      = input.bool(false, "Stretch zones until price returns", group = gLook,
      tooltip = "Off keeps each zone at a fixed width. On stretches it rightwards until price comes back — tidy in theory, but a zone price never revisits ends up as a band across the screen.")
@@ -231,7 +231,9 @@ trendWidth    = input.int(1, "Trend line width", minval = 1, maxval = 4, group =
 showTrendFill = input.bool(true, "Shade between the line and price", group = gTrend,
      tooltip = "A soft band from the trend line to price, fading out as the two separate. It reads as a regime at a glance where a bare line reads as a level, which is the whole difference between the two on a chart this dense.")
 showTrendTag  = input.bool(true, "Trend tag in the corner", group = gTrend,
-     tooltip = "One small chip in the bottom-right saying which way the higher-timeframe trend points right now — BUY or SELL. It is the same htfDir the filter uses, so it never disagrees with what would be suppressed.")
+     tooltip = "One chip in the bottom-right saying which way the trend points right now — BUY or SELL.\n\nIt reads whichever series 'Trend line' selects, and it keeps working when that is set to Off: hiding the line is a request for a cleaner chart, not for less information, so Off gives you the direction with none of the ink. With the line off the chip falls back to the higher-timeframe SuperTrend, which is the one the filter decides on. Hover it to see which series it is reading.")
+trendTagSize  = input.string("Normal", "Trend tag size",
+     options = ["Small", "Normal", "Large", "Huge"], group = gTrend)
 
 // The trend line above is display only, and the note above it is right about
 // it: a chart-timeframe SuperTrend flips at the reversal you are trading, so
@@ -1839,15 +1841,32 @@ fill(trendPlot, pricePlot,
 plot(effTrendMode == "EMA" ? emaLine : na, "EMA",
      color = close > emaLine ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
 
-// One chip, bottom right, saying which way the filter's trend points. Written
-// only on the last bar: a table cell is not per-bar state and rewriting it on
-// history would be wasted work for a value only the live edge can be about.
+// One chip, bottom right. Written only on the last bar: a table cell is not
+// per-bar state, and rewriting it across history would be wasted work for a
+// value only the live edge can be about.
+//
+// It follows the SELECTED series rather than always reading htfDir, so the
+// chip and the line can never say different things. Deliberately NOT gated on
+// trendOn: switching the line off is a request for a cleaner chart, not for
+// less information, and the chip is the cheapest possible way to keep the
+// direction. With the line off it falls back to the higher-timeframe
+// SuperTrend, which is the one the filter actually decides on.
+bool  emaMode = effTrendMode == "EMA"
+bool  tagOk   = emaMode ? not na(emaLine) : not na(htfDir)
+bool  tagUp   = emaMode ? close > emaLine : htfDir < 0
+string tagSrc = emaMode ? "EMA " + str.tostring(emaLen) + " on the chart timeframe"
+     : "SuperTrend " + str.tostring(trendFilterLen) + ", " +
+       str.tostring(trendFilterFac) + " on " + trendFilterTf
+
 var table trendTag = table.new(position.bottom_right, 1, 1)
-if barstate.islast and showTrendTag and trendOn and not na(htfDir)
-    table.cell(trendTag, 0, 0, trendUp ? "Trend: BUY" : "Trend: SELL",
-         bgcolor    = color.new(trendCol, 10),
+if barstate.islast and showTrendTag and tagOk
+    table.cell(trendTag, 0, 0, tagUp ? "Trend: BUY" : "Trend: SELL",
+         bgcolor    = color.new(tagUp ? bullCol : bearCol, 10),
          text_color = color.white,
-         text_size  = size.small)
+         text_size  = trendTagSize == "Small" ? size.small
+             : trendTagSize == "Large" ? size.large
+             : trendTagSize == "Huge" ? size.huge : size.normal,
+         tooltip    = "Reading " + tagSrc)
 
 // ── the "Riptide + ICT" comparison layer ────────────────────────────────────
 // Drawn with plotshape rather than labels on purpose: TradingView's 500-object
