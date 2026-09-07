@@ -189,9 +189,23 @@ def _headline(tag: str, is_long: bool, symbol: str, tf: str,
             f"{f' <i>{suffix}</i>' if suffix else ''}  <b>{symbol}</b>  {tf}")
 
 
+# MEXC's interval names to TradingView's, for the chart link.
+TV_INTERVAL = {"Min1": "1", "Min5": "5", "Min15": "15", "Min30": "30",
+               "Min60": "60", "Hour4": "240", "Hour8": "480", "Day1": "D"}
+
+
 def _footer(when: int, price: float, tv_symbol: str) -> str:
-    """Time, age and the price as of the scan, so a stale alert is obvious."""
-    tv = f"https://www.tradingview.com/chart/?symbol=MEXC%3A{tv_symbol.replace('_', '')}.P"
+    """Time, age and the price as of the scan, so a stale alert is obvious.
+
+    The link carries the TIMEFRAME as well as the symbol. Without it
+    TradingView opens on whatever interval the chart was last left on, and an
+    alert compared against the wrong timeframe looks like a bug in the bot:
+    the same ENA raid was a 30m SHORT and a 15m LONG on the same afternoon,
+    both correct, and the chart opened on 15m.
+    """
+    tf = TV_INTERVAL.get(INTERVAL)
+    tv = (f"https://www.tradingview.com/chart/?symbol=MEXC%3A"
+          f"{tv_symbol.replace('_', '')}.P" + (f"&interval={tf}" if tf else ""))
     px = f" · {fmt(price)}" if price else ""
     return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
 
