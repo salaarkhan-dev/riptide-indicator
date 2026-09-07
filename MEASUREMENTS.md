@@ -414,6 +414,66 @@ with positions open.
 
 `/stats`, scoring forward at 2R, is the number that decides this.
 
+## How losing trades actually fail
+
+`research/studies/losers.py`. Not a filter hunt — twenty-one attempts to
+separate winners from losers before the fact have failed. This asks what
+happened AFTER the entry.
+
+| | confirmed (88 losers) | early (675 losers) |
+|---|---|---|
+| never got into profit | 0% | 0% |
+| got under 0.5R | 36% | 38% |
+| got 0.5 – 1R | 35% | 35% |
+| got 1 – 1.5R | 17% | 17% |
+| got past 1.5R and still lost | **11%** | **9%** |
+| **price reached 2R AFTER the stop** | **25%** | **36%** |
+| stopped within 3 bars of filling | 24% | 31% |
+| median bars held — losers / winners | 8 / 22 | 7 / 14 |
+| worst 5 days hold | 27% of losers | 19% |
+
+Two things look immediately actionable and only one of them is.
+
+### The stop is NOT too tight — measured, and it is the opposite
+
+A quarter to a third of losers saw price reach the target after being stopped
+out, and on confirmed setups winners carry WIDER stops than losers (1.44%
+against 1.13%). The obvious read is that the stop needs room. `sl_buffer_atr`
+had been 0.0 since the beginning and had never been swept, so it was swept.
+
+| sl_buffer_atr | confirmed R | total | early R | total |
+|---|---|---|---|---|
+| **0 (shipped)** | **+0.227** | **+55.8** | **+0.020** | **+28.0** |
+| 0.1 | +0.149 | +32.8 | +0.011 | +15.4 |
+| 0.25 | +0.151 | +28.6 | +0.013 | +17.9 |
+| 0.5 | +0.033 | +4.9 | -0.007 | -9.1 |
+| 0.75 | -0.014 | -1.5 | -0.030 | -40.6 |
+| 1.0 | +0.052 | +3.7 | -0.028 | -36.4 |
+
+**Worse at every level, on both signal types.** Zero is the peak. R is measured
+in units of risk, so a wider stop shrinks every win in R terms; the trades it
+saves are not worth what it gives up on the ones that were already working. It
+also pushes setups over `max_risk_atr` — confirmed drops from 246 signals to
+72 at 1.0 ATR — so part of the decline is the cap eating the sample.
+
+The distinction worth keeping: a NATURALLY wide stop is good (winners have
+them) and an ARTIFICIALLY widened one is bad. A deep raid that leaves the stop
+far away is information; adding a buffer to a shallow one is just paying more
+for the same trade.
+
+### The clustering is the real finding
+
+27% of confirmed losers fall on five days out of forty-two. That is not
+twenty-four bad signals, it is five bad days — one market move taking out
+everything at once, which is correlation risk and not signal quality. Nothing
+about a single alert can see it coming.
+
+It is also the one thing already shown to be fixable. In the equity
+simulation, capping concurrent positions at five cut maximum drawdown from
+23% to 7% while keeping most of the return. That is a portfolio rule, not a
+strategy rule, and it is where the remaining improvement on this project
+plausibly lives.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,
