@@ -107,7 +107,15 @@ TRACK_HORIZON_BARS = int(os.getenv("RIPTIDE_TRACK_HORIZON_BARS", "60"))
 # Target in R for the simulated rule. 1.0 is what measured best; MFE and MAE
 # are stored per setup so another fixed target can be scored from the same
 # rows afterwards.
-TRACK_TARGET_R = float(os.getenv("RIPTIDE_TRACK_TARGET_R", "1.0"))
+# 2R, the minimum ratio actually traded. It was 1.0, so /stats was scoring a
+# trade nobody takes. Measured on the corrected scorer, confirmed setups,
+# total R across the whole window: 1R +20.4, 1.5R +39.5, 2R +52.8, 3R +61.9 —
+# monotone, though each step is only about 1.5 SE, so this follows the trade
+# rather than claiming the ladder is proven.
+#
+# Rows settled before this change were scored at 1R and are not comparable
+# with rows settled after it.
+TRACK_TARGET_R = float(os.getenv("RIPTIDE_TRACK_TARGET_R", "2.0"))
 
 # Log open interest and funding per bar, so they can be tested LATER.
 #
@@ -251,7 +259,17 @@ class Cfg:
     # Off by default: 295 weekly raids produced zero setups in 41.6 days. See
     # "Pool source" in MEASUREMENTS.md — it is a switch, not a deletion.
     use_weekly: bool = False
-    be_arm_r: float = 1.5
+    # OFF. It shipped at 1.5R for months and was never measured; when it
+    # finally was, it lost money at every setting on both signal types.
+    # Against no break-even, target 2R, confirmed setups:
+    #
+    #   arm 1.0R  -0.074  -2.5 SE       arm 1.5R  -0.019  -1.3 SE
+    #   arm 1.75R -0.008  -1.0 SE
+    #
+    # Early signals the same, -0.001 to -0.009. The mechanism is not subtle:
+    # it converts trades that would have reached the target into +0.1R
+    # scratches, and 26% of confirmed setups reach 3R. 0 leaves the stop alone.
+    be_arm_r: float = 0.0
     be_lock_r: float = 0.1     # break-even stop locks in this much,
                                # so a 'scratch' still covers fees.
                                # Mirrors beLockR in the Pine.

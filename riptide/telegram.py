@@ -268,12 +268,18 @@ def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
     """
     sign = 1 if is_long else -1
     riskpct = risk / entry * 100 if entry else 0
-    return (f"Entry  <b>{fmt(entry)}</b>\n"
-            f"Stop   <b>{fmt(stop)}</b>  <i>{riskpct:.2f}% risk</i>\n"
-            f"1R {fmt(entry + sign * risk)}  ·  "
-            f"3R {fmt(entry + sign * risk * 3)}\n"
-            f"<i>BE at {fmt(entry + sign * risk * CFG.be_arm_r)} → stop "
-            f"{fmt(entry + sign * risk * CFG.be_lock_r)}</i>")
+    out = (f"Entry  <b>{fmt(entry)}</b>\n"
+           f"Stop   <b>{fmt(stop)}</b>  <i>{riskpct:.2f}% risk</i>\n"
+           f"2R {fmt(entry + sign * risk * 2)}  ·  "
+           f"3R {fmt(entry + sign * risk * 3)}")
+    # The break-even line is gone unless it is switched back on. It advised a
+    # stop move for months without ever having been measured, and it loses
+    # money at every arm level on both signal types — see be_arm_r in
+    # config.py. Advice on an alert should have cleared a bar.
+    if CFG.be_arm_r > 0:
+        out += (f"\n<i>BE at {fmt(entry + sign * risk * CFG.be_arm_r)} → stop "
+                f"{fmt(entry + sign * risk * CFG.be_lock_r)}</i>")
+    return out
 
 
 def grade_letter(di_dir: int, is_long: bool, rsi_ext: float) -> str:

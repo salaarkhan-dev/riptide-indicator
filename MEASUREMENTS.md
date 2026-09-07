@@ -233,6 +233,28 @@ run in this batch, so a single 3.6 SE result is not the same evidence as a
 Not shipped. It needs its own pre-registration on fresh data, and the daily
 contradiction resolved.
 
+## Break-even, measured properly at last
+
+It shipped at `be_arm_r = 1.5` for months, printed on every alert as advice,
+and had never been tested. The first test used a 1.5R target, where a 1.5R arm
+can never trigger — so it registered as a harmless no-op. At the 2R target now
+in use it CAN trigger, which made the question real.
+
+| policy | confirmed R | vs none | early R | vs none |
+|---|---|---|---|---|
+| no break-even | **+0.216** | | **+0.008** | |
+| arm 1.0R lock 0.1R | +0.142 | **-2.5 SE** | -0.000 | -0.7 SE |
+| arm 1.5R lock 0.1R | +0.197 | -1.3 SE | +0.001 | -1.3 SE |
+| arm 1.75R lock 0.1R | +0.208 | -1.0 SE | +0.007 | -0.5 SE |
+
+**It loses at every arm level, on both signal types, and the earlier the arm
+the more it loses.** Total R on confirmed drops from +53.1 to +34.8 at a 1R
+arm. The mechanism is not subtle: it converts trades that would have reached
+target into +0.1R scratches, and 26% of confirmed setups reach 3R.
+
+Switched off, and the alert no longer prints the line. Advice on an alert
+should have cleared a bar before it was given; this one was never asked.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,
