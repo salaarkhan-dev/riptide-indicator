@@ -144,12 +144,14 @@ beLockR = input.float(0.1, "Break-even stop locks in (R)", minval = 0.0, step = 
 drawMode = input.string("On MSS confirmation", "When to draw a pattern",
      options = ["On MSS confirmation", "Live (as they form)"], group = gLook,
      tooltip = "On MSS confirmation: nothing appears until the whole sequence completes, then the full pattern is drawn back over the bars where it happened. Clean, and nothing on screen ever turns out to be a false start. Live: watch pools and raids form in real time — useful for trading it, much busier.")
-showLiquidity  = input.bool(true,  "Liquidity levels (dotted)",      group = gLook)
-showPivots     = input.bool(true,  "Swing markers (diamonds)",       group = gLook)
+showLiquidity  = input.bool(false, "Liquidity levels (dotted)",      group = gLook,
+     tooltip = "Off by default. The dotted level is the pool the raid marker already sits on, so it mostly restates the X while striping the chart.")
+showPivots     = input.bool(false, "Swing markers (diamonds)",       group = gLook,
+     tooltip = "Off by default. A pool needs two swings, so every pool carries at least two diamonds and they are the densest thing on the chart. The raid marker and the structure label already say where the pattern is.")
 hideDeadPivots = input.bool(true,  "  drop them once the pool dies",  group = gLook,
      tooltip = "Drops the swing markers of a pool that DIED having produced nothing — raided and never shifted, or expired untouched. Pools still waiting, and pools that went on to shift structure, keep theirs: a diamond group beside an X and an MSS label is the whole pattern and is the part worth seeing. Measured over 41.6 days this takes a 3.5-day screen from about 36 markers to 16, against roughly 14 for the reference indicator. Off keeps every diamond ever drawn, which is what this used to do because the label handle was discarded at draw time and nothing could ever delete it.")
 showGrab       = input.bool(true,  "Raid marker (X)",                group = gLook)
-showGrabTag    = input.bool(true,  "Label on the raid marker",       group = gLook,
+showGrabTag    = input.bool(false, "Label on the raid marker",       group = gLook,
      tooltip = "The small dark tag under the X naming what got raided: Pivot, Day, Week or a session name.")
 showMSS        = input.bool(true,  "Structure break label",          group = gLook)
 showStructLine = input.bool(true,  "Structure break level (dashed)", group = gLook,
@@ -159,7 +161,7 @@ setupLevelKeep = input.int(3,     "Keep levels for the last N setups", minval = 
      tooltip = "Entry, stop and target lines are drawn per setup and used to stay forever, so a long chart ended up striped with levels from trades that closed days ago. Only the most recent this-many setups keep theirs.")
 showRaidDot    = input.bool(true,  "Mark raids in progress",         group = gLook,
      tooltip = "A hollow dot on a raid that has taken liquidity but has NOT produced a structure shift yet — the state the bot's ⚡ EARLY alerts fire in. It follows the raid to each new extreme, becomes the solid X if the shift confirms, and disappears if the raid dies. Most raids die, which is why they get a provisional mark rather than an X.")
-raidDotKeep    = input.int(4,     "  how many in progress",  minval = 1, maxval = 20,
+raidDotKeep    = input.int(2,     "  how many in progress",  minval = 1, maxval = 20,
      group = gLook,
      tooltip = "Only the most recent this-many unresolved raids keep a dot. Older ones are dropped even if still technically alive, so the chart shows what is live rather than every raid of the session.")
 showFVGs       = input.bool(true,  "Entry zones (gaps)",             group = gLook)
@@ -168,7 +170,7 @@ showAllFvg     = input.bool(true,  "All imbalances (context only)",  group = gLo
      tooltip = "Every three-bar imbalance on the chart, drawn faintly and independently of the setup logic. These are NOT entry zones: the strategy only ever enters at a gap that passed the sweep, risk and 'Look for entry zones from' filters, and those keep their own solid boxes. Turn this on to read structure and see the imbalances the entry rules skipped over.")
 allFvgMinATR   = input.float(0.10, "  min size (ATR)", minval = 0, step = 0.05, group = gLook,
      tooltip = "Context imbalances smaller than this are ignored. Zero draws every one, which on a low-volatility chart is a lot of boxes.")
-allFvgKeep     = input.int(40,    "  how many to keep", minval = 5, maxval = 200, group = gLook,
+allFvgKeep     = input.int(5,     "  how many to keep", minval = 5, maxval = 200, group = gLook,
      tooltip = "Only the most recent this-many context imbalances stay on the chart. TradingView allows 500 drawings in total and entry zones, liquidity lines and labels share that budget.")
 allFvgFill     = input.int(85,    "  transparency", minval = 50, maxval = 99, group = gLook)
 allFvgRemove   = input.string("Body close", "  mitigated when",
@@ -180,7 +182,7 @@ showOB         = input.bool(true,  "Order block (yellow)",           group = gLo
      tooltip = "The last candle closing AGAINST the move before the entry gap — where the move that made the gap was loaded. Identical rule to last_opposing() in engine.py, same 20-bar cap, so the block drawn here is the one the alert's confluence score counts.")
 showBreaker    = input.bool(true,  "Breaker block (orange)",         group = gLook,
      tooltip = "The last opposing candle at or before the extreme the structure break went through. It needs a break, so an EARLY signal never has one — which is why an early alert can only score 0 or 1 on confluence while a confirmed setup can score 2.")
-blockLevel     = input.string("Mean threshold", "  block line at",
+blockLevel     = input.string("Proximal edge", "  block line at",
      options = ["Mean threshold", "Proximal edge", "Distal edge"], group = gLook,
      tooltip = "Which single price the block's line is drawn at. Mean threshold is the midpoint of the candle body, the usual one-line convention. Proximal is the edge price meets first coming back; distal is the far side. The reference indicator draws one line per block and its convention is not published, so this is a choice rather than a match — a Data Window reading off that indicator would settle it.")
 blockBars      = input.int(8, "  block bar length (bars)", minval = 1, maxval = 100, group = gLook)
@@ -224,8 +226,8 @@ fvgFill   = input.int(85, "Entry zone transparency", minval = 0, maxval = 100, g
 trendMode = input.string("SuperTrend", "Trend line",
      options = ["Off", "SuperTrend", "EMA", "Filter trend"], group = gTrend,
      tooltip = "Context only — switching it NEVER changes which signals appear. 'SuperTrend' and 'EMA' are computed on the CHART timeframe and are unrelated to the filter below, so they will disagree with it. 'Filter trend' draws the exact line the filter uses, which is the one to pick when you want to see why a setup was suppressed.")
-stFactor  = input.float(3.0, "SuperTrend factor", minval = 0.5, step = 0.1, group = gTrend)
-stAtrLen  = input.int(10, "SuperTrend length", minval = 1, group = gTrend)
+stFactor  = input.float(5.0, "SuperTrend factor", minval = 0.5, step = 0.1, group = gTrend)
+stAtrLen  = input.int(14, "SuperTrend length", minval = 1, group = gTrend)
 emaLen    = input.int(50, "EMA length", minval = 1, group = gTrend)
 
 // The trend line above is display only, and the note above it is right about
@@ -239,6 +241,12 @@ emaLen    = input.int(50, "EMA length", minval = 1, group = gTrend)
 // not a trailing stop — and it does separate the signals:
 //
 //   daily (14, 5)        with +0.111  against -0.018   +4.2 SE, meaningful
+//
+// The display line now defaults to (14, 5) — the filter's parameters, on the
+// CHART timeframe. That makes the two easier to read against each other and
+// does not make them the same measurement: the numbers above are what the
+// timeframe is worth, not the settings, so a chart-timeframe (14, 5) is still
+// the one that separates nothing. Pick "Filter trend" to see the real line.
 //
 // So the filter below is deliberately NOT wired to stLine. It matches
 // RIPTIDE_TREND_FILTER in the bot, so both agree on which setups survive.
@@ -1817,9 +1825,14 @@ plot(effTrendMode == "Filter trend" ? htfLine : na, "Filter trend",
 // back, so reading it effPivotRight-1 bars ago points at that same bar. Get
 // this wrong and the layer marks swings that are merely nearby, which looks
 // almost right and is worthless.
+// Gated on the preset alone, NOT on showPivots. It used to depend on it,
+// which was invisible while diamonds defaulted on and became a trap the
+// moment they defaulted off: picking the comparison preset would have drawn
+// nothing, with no error and no clue why. Choosing "Riptide + ICT" IS the
+// request to see these; Riptide's own diamonds stay under their own switch.
 int   cmpBack   = effPivotRight
-bool  ictOnlyPH = dualMode and showPivots and not na(ictPH[cmpBack - 1]) and na(ph)
-bool  ictOnlyPL = dualMode and showPivots and not na(ictPL[cmpBack - 1]) and na(pl)
+bool  ictOnlyPH = dualMode and not na(ictPH[cmpBack - 1]) and na(ph)
+bool  ictOnlyPL = dualMode and not na(ictPL[cmpBack - 1]) and na(pl)
 plotshape(ictOnlyPH ? high[cmpBack] : na, "ICT-only swing high",
      style = shape.diamond, location = location.absolute, color = ictBearCol,
      size = size.tiny, offset = -cmpBack)
