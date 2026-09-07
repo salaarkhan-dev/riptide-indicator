@@ -78,8 +78,9 @@ gEng   = "10. Engine and debug"
 // way to get them back. Whatever you tick under Appearance is what you get,
 // under either preset.
 markStyle      = input.string("Riptide", "Preset",
-     options = ["Riptide", "ICT Trades (matched ref)"], group = gPreset,
-     tooltip = "Which detection rules run. 'Riptide' is this indicator's own, tuned here and matching riptide.conf on the bot. 'ICT Trades (matched ref)' swaps in the reference indicator's values so the two charts mark the same events: pivot look-back/forward 1, max pool range 0.2 ATR, max tested range 0.1 ATR, grab-to-shift window 12 bars, all four liquidity types including weekly and session, and its GMT+0 session windows (08:00-17:00, 13:00-22:00, 00:00-09:00). Everything drawn on top — live raids in progress, imbalances, order blocks, breaker blocks, the trend line — stays exactly as you set it under Appearance. Two things to know: the 12-bar grab window is stricter than Riptide's 50, so matched ref produces FEWER setups, and that is detection, not drawing; and session pools are chart-only, since the bot's engine has no session source, so with them on the chart can mark a pool no alert will ever fire from. Measured over 41.6 days the complete reference set is 0.071 R behind ours at 1.4 SE — indistinguishable — so this is a viewing choice, not a claim either way. The bot is unaffected: it reads riptide.conf, not this panel.")
+     options = ["Riptide", "ICT Trades (matched ref)", "Riptide + ICT"],
+     group = gPreset,
+     tooltip = "Which detection rules run.\n\n'Riptide' — this indicator's own, tuned here and matching riptide.conf on the bot. Use this to trade.\n\n'ICT Trades (matched ref)' — swaps in the reference indicator's values so the two charts mark the same events: pivot look-back/forward 1, max pool range 0.2 ATR, max tested range 0.1 ATR, grab-to-shift window 12 bars, all four liquidity types including weekly and session, and its GMT+0 session windows (08:00-17:00, 13:00-22:00, 00:00-09:00). Its 12-bar grab window is stricter than Riptide's 50, so it produces FEWER setups — that is detection, not drawing. Session pools are chart-only, since the bot's engine has no session source, so the chart can mark a pool no alert will ever fire from.\n\n'Riptide + ICT' — Riptide detection, unchanged, so every mark still matches your alerts; on top of it the swings the reference's looser pivot rule sees and Riptide's does not, in the pale colours. Nothing is added to the engine and no signal changes: it is a comparison layer.\n\nEverything drawn — live raids in progress, imbalances, order blocks, breaker blocks, the trend line — stays exactly as you set it under Appearance, under all three. Measured over 41.6 days the complete reference set is 0.071 R behind ours at 1.4 SE, which is indistinguishable, so this is a viewing choice and not a claim either way. The bot is unaffected: it reads riptide.conf, not this panel.")
 
 // ── 1. What creates a signal ────────────────────────────────────────────────
 usePivotLiq   = input.bool(true,  "Swing highs / lows", group = gSrc,
@@ -202,6 +203,15 @@ setupExtendBars  = input.int(20, "Entry / stop line length (bars)", minval = 1, 
 staticExtendBars = input.int(96, "Day / week level length (bars)",  minval = 2, group = gLook)
 bullCol   = input.color(#26a69a, "Bullish", inline = "c1", group = gLook)
 bearCol   = input.color(#ef5350, "Bearish", inline = "c1", group = gLook)
+// The "Riptide + ICT" comparison layer. Same two hues as Riptide's own marks,
+// two steps lighter — Material 200 against Riptide's 400 — so an ICT-only
+// swing reads as the same kind of thing making a weaker claim, rather than as
+// a third category competing for attention. Riptide's own colours above are
+// untouched, which is the whole point: the marks that match your alerts must
+// not change appearance because a comparison layer was switched on.
+ictBullCol = input.color(#a5d6a7, "ICT-only bullish", inline = "c2", group = gLook,
+     tooltip = "Colour of the swing LOWS the reference's looser pivot rule finds and Riptide's does not. Only drawn under the 'Riptide + ICT' preset.")
+ictBearCol = input.color(#ef9a9a, "ICT-only bearish", inline = "c2", group = gLook)
 structCol = input.color(#787b86, "Structure break line", group = gLook)
 liqDirCol = input.bool(true, "Colour liquidity lines by direction", group = gLook)
 liqCol    = input.color(color.gray, "Liquidity colour when not by direction", group = gLook)
@@ -508,7 +518,11 @@ ctxTouch = allFvgRemove == "Touched"
 // boxes stayed ticked — no switch could bring them back. It no longer touches
 // anything drawn: the three eff* aliases below are now pass-throughs, kept so
 // the consumers further down do not have to know whether a preset exists.
-bool  refMode      = markStyle != "Riptide"
+bool  refMode      = markStyle == "ICT Trades (matched ref)"
+// "Riptide + ICT" leaves the engine alone and only adds a comparison layer,
+// so it is deliberately NOT part of refMode. Marks under it are Riptide's,
+// which is the point: the chart still matches the alerts.
+bool  dualMode     = markStyle == "Riptide + ICT"
 int   effPivotRight = refMode ? 1    : pivotRight
 float effTolATR     = refMode ? 0.2  : liquidityToleranceATR
 float effOvershoot  = refMode ? 0.1  : maxPivotOvershootATR
@@ -542,6 +556,19 @@ tol = atr * effTolATR
 
 ph = ta.pivothigh(high, pivotLeft, effPivotRight)
 pl = ta.pivotlow(low,  pivotLeft, effPivotRight)
+
+// The reference's pivot rule, run alongside for the "Riptide + ICT" layer.
+// Unconditional, like every other ta.* call — it carries state.
+//
+// THE TWO SETS ARE NESTED, and that is worth knowing before reading the
+// chart. Both rules use the same look-back; they differ only in bars-after,
+// 1 against Riptide's 2. A bar that is the extreme of a 4-bar window is
+// necessarily the extreme of the 3-bar window inside it, so every Riptide
+// swing is also an ICT swing and ICT simply sees more. There is therefore no
+// such thing as a Riptide-only swing, and no colour is wasted on one: a
+// Riptide-coloured diamond already means both rules agree.
+ictPH = ta.pivothigh(high, pivotLeft, 1)
+ictPL = ta.pivotlow(low,  pivotLeft, 1)
 
 // ta.* calls are unconditional: they carry state and must run every bar.
 [stLine, stDir] = ta.supertrend(stFactor, stAtrLen)
@@ -1763,6 +1790,27 @@ plot(effTrendMode == "EMA" ? emaLine : na, "EMA",
 // switched on, so its behaviour can be judged before committing to it.
 plot(effTrendMode == "Filter trend" ? htfLine : na, "Filter trend",
      color = htfDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 2)
+
+// ── the "Riptide + ICT" comparison layer ────────────────────────────────────
+// Drawn with plotshape rather than labels on purpose: TradingView's 500-object
+// budget is shared by liquidity lines, entry zones and every diamond the
+// engine draws, and a comparison layer has no business competing for it. A
+// plot costs nothing from that budget.
+//
+// Both series are lined up on the SAME bar before being compared. `ph` at this
+// bar describes the bar effPivotRight back; `ictPH` describes the bar one
+// back, so reading it effPivotRight-1 bars ago points at that same bar. Get
+// this wrong and the layer marks swings that are merely nearby, which looks
+// almost right and is worthless.
+int   cmpBack   = effPivotRight
+bool  ictOnlyPH = dualMode and showPivots and not na(ictPH[cmpBack - 1]) and na(ph)
+bool  ictOnlyPL = dualMode and showPivots and not na(ictPL[cmpBack - 1]) and na(pl)
+plotshape(ictOnlyPH ? high[cmpBack] : na, "ICT-only swing high",
+     style = shape.diamond, location = location.absolute, color = ictBearCol,
+     size = size.tiny, offset = -cmpBack)
+plotshape(ictOnlyPL ? low[cmpBack] : na, "ICT-only swing low",
+     style = shape.diamond, location = location.absolute, color = ictBullCol,
+     size = size.tiny, offset = -cmpBack)
 
 // Named conditions for the alert dropdown. Static text; the alert() calls
 // above carry the level and direction.

@@ -832,6 +832,34 @@ The three other largest AKE advances in the window read the same way — raids
 detected beforehand in every case, the shift level sitting above where price
 was when the move began.
 
+## The two pivot rules are nested, so one comparison colour is empty
+
+The "Riptide + ICT" preset was asked for with three colours: ICT-only,
+Riptide-only, and both. Only two of those can ever appear.
+
+Both rules use the same look-back (1) and differ only in bars-after — the
+reference uses 1, Riptide 2. A bar that is the strict extreme of a 4-bar
+window is necessarily the strict extreme of the 3-bar window inside it, so
+every Riptide swing is also an ICT swing. The reference does not see
+*different* swings, it sees *more* of them.
+
+Checked rather than argued, on 6 symbols over 41.6 days:
+
+| | ICT (right 1) | Riptide (right 2) | Riptide-only |
+|---|---|---|---|
+| swing highs | 2821 | 2194 | **0** |
+| swing lows | 2816 | 2212 | **0** |
+
+Zero out of roughly 12,000. 22% of the reference's marks are ones Riptide
+declines to take.
+
+So a Riptide-coloured diamond already means both rules agree, and the pale
+colour means the reference alone. A third colour would have been a legend
+entry for a case that cannot occur.
+
+This is also the whole of why their chart looks busier at the swing level, and
+it is a rule difference and not a bug in either.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their
