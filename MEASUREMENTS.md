@@ -363,6 +363,57 @@ be fitting the window, and the two that look worst — AKE and LTC — are also
 among the thinnest. It is recorded because per-symbol edge is a real question,
 and it needs per-symbol sample sizes this window cannot supply.
 
+## A 300 USDT account, simulated
+
+`research/studies/equity.py`. Chronological replay: risk 1% of the balance AT
+ENTRY so it compounds, 10x, target 2R, maker 0.02% / taker 0.06%. No slippage,
+no funding, no liquidation, no downtime.
+
+| strategy | trades | win | end USDT | return | max DD | skipped |
+|---|---|---|---|---|---|---|
+| confirmed only | 170 | 49% | 504.70 | +68% | 10% | 4 |
+| early only | 199 | 41% | 375.96 | +25% | 14% | 908 |
+| early, BTC agrees only | 152 | 40% | 347.81 | +16% | 18% | 467 |
+| **confirmed + early(BTC agrees)** | 343 | 44% | **546.18** | **+82%** | 23% | 450 |
+| everything | 329 | 39% | 349.38 | +16% | 21% | 952 |
+| — max 5 open | 126 | 51% | 488.08 | +63% | **7%** | 667 |
+| — max 10 open | 317 | 46% | 623.41 | +108% | 16% | 476 |
+| — risk 0.5% | 394 | 43% | 428.69 | +43% | 9% | 399 |
+| — risk 2% | 286 | 44% | 750.28 | +150% | **34%** | 507 |
+| — risk 3% | 151 | 44% | 569.71 | +90% | 27% | 642 |
+
+### The finding is the "skipped" column, not the returns
+
+**450 to 950 signals could not be taken because the margin was already
+committed.** At 1% risk on a 1.24% stop the position is 242 USDT of notional —
+24 USDT of margin at 10x — so a 300 USDT account holds about twelve at once,
+and the engine produces 1630 signals in 41.6 days. **At this size the binding
+constraint is capacity, not signal quality.**
+
+That is why raising the risk lowers the trade count (394 trades at 0.5%, 151
+at 3%): a bigger position fills the margin faster and blocks the next signal.
+And it is why "everything" underperforms the filtered set — the losing early
+signals do not merely lose, they occupy margin a better signal needed.
+
+A real system would prioritise by grade when margin is short. This one takes
+whatever arrives first, which is the honest baseline and beatable.
+
+### What these numbers are not
+
+**They are not a forecast, and the differences between the variants are
+mostly noise.** Every parameter in the shipped configuration was chosen on
+this exact 41.6-day window — the 2.5 ATR cap, the 2R target, the BTC split.
+Replaying it here measures how well the choices fit the data they were chosen
+from. That is an upper bound.
+
++82% in 41.6 days is roughly +1.5% a day compounding, which nothing sustains.
+The max drawdown numbers are the more useful half: 23% on the headline
+variant, 34% at 2% risk. And drawdown is the one figure a backtest
+systematically understates, because it never models the day the API is down
+with positions open.
+
+`/stats`, scoring forward at 2R, is the number that decides this.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,

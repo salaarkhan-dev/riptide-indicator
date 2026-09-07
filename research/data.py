@@ -39,6 +39,8 @@ class Row:
     split_symbol: int         # 0/1, for the symbol-half split
     split_window: bool        # True in the first half of the window
     bar: int
+    fill_time: int            # when the entry was touched, 0 if never
+    exit_time: int            # when the trade closed, 0 if it never opened
     signal: object            # the Setup or Early itself
     candles: list = field(repr=False, default_factory=list)
 
@@ -82,6 +84,8 @@ async def load(symbols=SYMBOLS, cfg: Cfg = CFG, interval: str = "",
                     if o.exit_bar is None and o.filled:
                         continue
                     rows.append(Row(symbol=sym, kind=kind, r=o.r,
+                                    fill_time=cs[o.fill_bar].t if o.fill_bar else 0,
+                                    exit_time=cs[o.exit_bar].t if o.exit_bar else 0,
                                     filled=o.filled, mfe=o.mfe, mae=o.mae,
                                     risk_pct=100 * risk / x.entry,
                                     split_symbol=n % 2,
