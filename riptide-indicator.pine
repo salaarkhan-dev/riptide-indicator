@@ -224,11 +224,9 @@ fvgFill   = input.int(85, "Entry zone transparency", minval = 0, maxval = 100, g
 // trend line still points the old way when the signal fires; filtering on it
 // would remove the setups this looks for.
 trendMode = input.string("SuperTrend", "Trend line",
-     options = ["Off", "SuperTrend", "EMA", "Filter trend"], group = gTrend,
-     tooltip = "Context only — switching it NEVER changes which signals appear. 'SuperTrend' and 'EMA' are computed on the CHART timeframe and are unrelated to the filter below, so they will disagree with it. 'Filter trend' draws the exact line the filter uses, which is the one to pick when you want to see why a setup was suppressed.")
-stFactor  = input.float(5.0, "SuperTrend factor", minval = 0.5, step = 0.1, group = gTrend)
-stAtrLen  = input.int(14, "SuperTrend length", minval = 1, group = gTrend)
-emaLen    = input.int(50, "EMA length", minval = 1, group = gTrend)
+     options = ["Off", "SuperTrend", "EMA"], group = gTrend,
+     tooltip = "Context only — switching it NEVER changes which signals appear.\n\n'SuperTrend' draws the higher-timeframe line the FILTER decides on, read from the timeframe and settings below, so what you see and what would be suppressed are the same line. It used to be a second SuperTrend computed on the chart timeframe with its own duplicate factor and length, which meant the panel carried two of everything and the line on screen disagreed with the filter under it. Those duplicates are gone and the old 'Filter trend' option with them: there is one SuperTrend now and this is it.\n\n'EMA' is still a CHART-timeframe average and is unrelated to the filter — it is a different question, not a second opinion on the same one.")
+emaLen    = input.int(50, "EMA length (chart timeframe)", minval = 1, group = gTrend)
 
 // The trend line above is display only, and the note above it is right about
 // it: a chart-timeframe SuperTrend flips at the reversal you are trading, so
@@ -242,21 +240,23 @@ emaLen    = input.int(50, "EMA length", minval = 1, group = gTrend)
 //
 //   daily (14, 5)        with +0.111  against -0.018   +4.2 SE, meaningful
 //
-// The display line now defaults to (14, 5) — the filter's parameters, on the
-// CHART timeframe. That makes the two easier to read against each other and
-// does not make them the same measurement: the numbers above are what the
-// timeframe is worth, not the settings, so a chart-timeframe (14, 5) is still
-// the one that separates nothing. Pick "Filter trend" to see the real line.
+// Which is why the chart-timeframe SuperTrend is no longer drawn at all. It
+// existed as a display line with its own factor and length, sitting directly
+// above the filter's factor and length in the panel — two near-identical pairs
+// of inputs for two different lines, and the one on screen was the one that
+// separates nothing. Drawing the filter's line under the name "SuperTrend"
+// removes the duplicate inputs and the disagreement in one go.
 //
-// So the filter below is deliberately NOT wired to stLine. It matches
-// RIPTIDE_TREND_FILTER in the bot, so both agree on which setups survive.
+// The filter still matches RIPTIDE_TREND_FILTER in the bot, so both agree on
+// which setups survive.
 trendFilter    = input.bool(false, "Only take setups with the higher-timeframe trend",
      group = gTrend,
      tooltip = "Suppresses setups and raid markers that face against a slow trend on a higher timeframe. This is NOT the trend line above — that one is display only and filtering on it does nothing. Measured: with the daily trend +0.111 R per setup, against it -0.018, a 4.2 standard error separation over 1961 setups in one 41.6-day window. Off by default; turning it on roughly halves the signals.")
-trendFilterTf  = input.timeframe("D", "Filter timeframe", group = gTrend)
-trendFilterFac = input.float(5.0, "Filter SuperTrend factor", minval = 0.5, step = 0.1,
+trendFilterTf  = input.timeframe("D", "Higher timeframe", group = gTrend,
+     tooltip = "The timeframe the SuperTrend above is read from, and the one the filter judges on. One setting, because they are now one line.")
+trendFilterFac = input.float(5.0, "SuperTrend factor", minval = 0.5, step = 0.1,
      group = gTrend)
-trendFilterLen = input.int(14, "Filter SuperTrend length", minval = 1, group = gTrend)
+trendFilterLen = input.int(14, "SuperTrend length", minval = 1, group = gTrend)
 
 // ── 7. Alerts ───────────────────────────────────────────────────────────────
 alertOnGrab  = input.bool(true, "Liquidity raided", group = gAlert,
@@ -579,7 +579,6 @@ ictPH = ta.pivothigh(high, pivotLeft, 1)
 ictPL = ta.pivotlow(low,  pivotLeft, 1)
 
 // ta.* calls are unconditional: they carry state and must run every bar.
-[stLine, stDir] = ta.supertrend(stFactor, stAtrLen)
 emaLine = ta.ema(close, emaLen)
 // ta.supertrend direction: -1 up, 1 down. Not read by the engine.
 
@@ -1805,14 +1804,14 @@ if engineOk
 
 // ═════════════════════════ 9. TREND PLOT + ALERTS ══════════════════════════
 // plot() and alertcondition() are global scope only, hence the flags above.
-plot(effTrendMode == "SuperTrend" ? stLine : na, "SuperTrend",
-     color = stDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
+// The line the filter actually decides on. Drawn whether or not the filter is
+// switched on, so its behaviour can be judged before committing to it. It
+// steps rather than slopes, because one higher-timeframe value spans many
+// chart bars — that is the line being honest about its resolution.
+plot(effTrendMode == "SuperTrend" ? htfLine : na, "SuperTrend",
+     color = htfDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 2)
 plot(effTrendMode == "EMA" ? emaLine : na, "EMA",
      color = close > emaLine ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
-// The line the filter actually decides on. Drawn whether or not the filter is
-// switched on, so its behaviour can be judged before committing to it.
-plot(effTrendMode == "Filter trend" ? htfLine : na, "Filter trend",
-     color = htfDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 2)
 
 // ── the "Riptide + ICT" comparison layer ────────────────────────────────────
 // Drawn with plotshape rather than labels on purpose: TradingView's 500-object
