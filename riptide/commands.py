@@ -19,7 +19,7 @@ from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
                      LOG_MARKET,
                      SWEEP_ALERTS, TG_CHAT, TG_TOKEN, TRACK,
                      TRACK_FILL_BARS, TRACK_HORIZON_BARS, TRACK_TARGET_R,
-                     DI_INTERVAL, TREND_FACTOR, TREND_FILTER,
+                     DI_INTERVAL, RISK_PCT, TREND_FACTOR, TREND_FILTER,
                      TREND_INTERVAL, TREND_LEN,
                      build_id, log)
 from .engine import band_stats
@@ -31,7 +31,8 @@ HELP = (
     "/status — build, symbols, last and next scan\n"
     "/stats — how the alerts have actually scored\n"
     "/scan — run a scan now\n"
-    "/trend on|off — filter setups by the daily trend\n"
+    "/trend on|off — filter setups by the higher-timeframe trend\n"
+    "/size 500 — print the exact position to open on each alert\n"
     "/pause — record setups but stop sending\n"
     "/resume — start sending again\n"
     "/update — check GitHub for a new build now\n"
@@ -244,6 +245,47 @@ async def handle_command(sess, db, state, text: str) -> None:
                          "<i>This overrides RIPTIDE_TREND_FILTER in riptide.conf and "
                          "survives updates, so a change on GitHub will not take "
                          "effect until you /trend the other way.</i>")
+
+    elif cmd == "size":
+        want = (arg or "").strip().lower().replace(",", "")
+        if not want:
+            cur = meta_get(db, "account_usdt", "")
+            now = f"{float(cur):,.2f} USDT" if cur else "not set"
+            await tg.tg_send(sess,
+                             f"<b>Account size</b> — {now}\n\n"
+                             "<code>/size 500</code> — alerts print the exact "
+                             "position to open\n"
+                             "<code>/size off</code> — back to the multiplier\n\n"
+                             "<i>Set it here rather than in riptide.conf: a balance "
+                             "changes every time a trade closes, and a stale one "
+                             "gives a confidently wrong size. Unset, the alert prints "
+                             "'27.9x what you risk' instead, which cannot go stale "
+                             "because it never knew your balance.\n\n"
+                             "Either way the number is NOTIONAL — MEXC's 'Order by "
+                             "Quantity → USDT'. Not 'Order by Cost', which is margin "
+                             "and moves with leverage.</i>")
+            return
+        if want in ("off", "0", "none", "clear"):
+            meta_set(db, "account_usdt", "")
+            await tg.tg_send(sess, "Account size cleared. Alerts will print the "
+                                   "multiplier from the next scan.")
+            return
+        try:
+            value = float(want)
+        except ValueError:
+            await tg.tg_send(sess, f"<code>{want}</code> is not a number. "
+                                   "Try <code>/size 500</code>.")
+            return
+        if value <= 0:
+            await tg.tg_send(sess, "Account size must be positive. "
+                                   "<code>/size off</code> clears it.")
+            return
+        meta_set(db, "account_usdt", value)
+        await tg.tg_send(sess,
+                         f"Account size <b>{value:,.2f} USDT</b>, risking "
+                         f"{RISK_PCT:g}% a trade. Applies from the next scan.\n\n"
+                         "<i>Nothing reads your exchange balance — this is the "
+                         "number you just typed. Re-send /size when it moves.</i>")
 
     elif cmd == "pause":
         meta_set(db, "alerts_paused", "1")

@@ -286,29 +286,39 @@ def _qty(v: float) -> str:
     return f"{v:.6g}"
 
 
-def _size_line(symbol: str, entry: float, risk: float) -> str | None:
+def _size_line(symbol: str, entry: float, risk: float,
+               account: float = 0.0) -> str | None:
     """
-    How much to open, in the two units MEXC's order form actually takes.
+    How much to open. Two forms, and the first needs no configuration:
 
-    position = account x risk% / stop%
+        position = risk you are taking x (entry / stop distance)
 
-    Printed as NOTIONAL, not margin, because notional is the number that does
-    not move when leverage does — the same trade is the same size at 10x and
-    at 500x, and only the margin locked behind it changes. Sizing off a
-    percentage of balance instead is what makes stop distance drive loss size:
-    a fixed notional with a 3.5% stop risks nearly three times a 1.25% one.
+    so the alert prints that MULTIPLIER, which is a property of the trade and
+    nothing else. Risk 5 USDT on a x27.9 trade and you open 140. It cannot go
+    stale, because it never knew your balance.
 
-    Silent unless RIPTIDE_ACCOUNT_USDT is set. The bot cannot read a balance
-    and never will — no exchange key exists here — so this is arithmetic on a
-    number you typed into riptide.conf, and a stale one gives a confidently
-    wrong size. Off is the honest default.
+    The finished number appears too, but only when a balance has been given
+    through /size. An account figure typed into a config file goes out of date
+    the first time a trade closes, and a size line looks authoritative whatever
+    produced it — so the default is the form that cannot be wrong.
+
+    NOTIONAL in both cases, which is what MEXC's "Order by Quantity -> USDT"
+    takes. Notional does not move when leverage does: the same trade is the
+    same size at 10x and at 500x, only the margin behind it changes. "Order by
+    Cost" is margin, and sizing by a percentage of balance is exactly what
+    makes stop distance drive loss size.
     """
-    if ACCOUNT_USDT <= 0 or entry <= 0 or risk <= 0:
+    if entry <= 0 or risk <= 0:
         return None
-    notional = ACCOUNT_USDT * (RISK_PCT / 100) * entry / risk
+    mult = entry / risk
     coin = symbol.split("_")[0]
-    return (f"Size  <b>{_qty(notional)}</b> USDT  ·  {_qty(notional / entry)} {coin}"
-            f"\n<i>{RISK_PCT:g}% of {_qty(ACCOUNT_USDT)} · order by QUANTITY, "
+    if account > 0:
+        n = account * (RISK_PCT / 100) * mult
+        return (f"Size  <b>{_qty(n)}</b> USDT  ·  {_qty(n / entry)} {coin}"
+                f"\n<i>{RISK_PCT:g}% of {_qty(account)} · order by QUANTITY, "
+                f"not cost</i>")
+    return (f"Size  <b>{mult:,.1f}x</b> what you risk"
+            f"\n<i>risk 5 USDT → open {_qty(5 * mult)} USDT · by QUANTITY, "
             f"not cost</i>")
 
 
@@ -317,7 +327,7 @@ def grade_letter(di_dir: int, is_long: bool, rsi_ext: float) -> str:
     return grade_of(di_dir, is_long, rsi_ext)[0]
 
 
-def setup_message(s: Setup, live=None) -> str:
+def setup_message(s: Setup, live=None, account: float = 0.0) -> str:
     tf = (f"{tf_label(INTERVAL)}→{tf_label(ENTRY_INTERVAL)}"
           if s.entry_tf == "LTF" else tf_label(INTERVAL))
     # The gap sits on whichever timeframe produced the entry.
@@ -335,7 +345,7 @@ def setup_message(s: Setup, live=None) -> str:
         f"<i>sweep → shift → FVG{also}</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        _size_line(s.symbol, s.entry, s.risk),
+        _size_line(s.symbol, s.entry, s.risk, account),
         *_grade(s.di_dir, s.is_long, s.rsi_ext, live=live),
         trend_note(s.trend_dir, s.is_long) or None,
         _pool(s.src, s.level, s.pivots),
@@ -343,7 +353,7 @@ def setup_message(s: Setup, live=None) -> str:
     ) if x is not None)
 
 
-def early_message(s: Early, live=None) -> str:
+def early_message(s: Early, live=None, account: float = 0.0) -> str:
     """
     The no-shift entry. Labelled distinctly from the confirmed setup because
     it is a different bet, not an earlier version of the same one: nothing has
@@ -358,7 +368,7 @@ def early_message(s: Early, live=None) -> str:
         f"bar{'' if bars == 1 else 's'} after the raid</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        _size_line(s.symbol, s.entry, s.risk),
+        _size_line(s.symbol, s.entry, s.risk, account),
         *_grade(s.di_dir, s.is_long, s.rsi_ext, early=True, live=live),
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
