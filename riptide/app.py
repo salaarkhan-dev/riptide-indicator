@@ -11,7 +11,8 @@ import aiohttp
 
 from . import telegram as tg
 from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
-                     SCAN_ON_START, TG_COMMANDS, build_id, log)
+                     INTERVALS, POI_REQUIRED, SCAN_ON_START, TG_COMMANDS,
+                     build_id, log)
 from .commands import command_loop
 from .exchange import list_symbols
 from .scanner import cycle, scan_loop
@@ -23,9 +24,19 @@ async def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
         stream=sys.stdout)
-    if INTERVAL not in BAR_SECONDS:
-        log.error("bad interval %s", INTERVAL)
+    bad = [i for i in INTERVALS if i not in BAR_SECONDS]
+    if bad:
+        log.error("bad interval(s) %s; valid: %s",
+                  ", ".join(bad), ", ".join(BAR_SECONDS))
         return
+    if len(INTERVALS) > 1 and not POI_REQUIRED:
+        # Measured: Min15 alone is -0.095 R per confirmed setup and -0.039 per
+        # early. It only turns positive inside a daily POI. Scanning a second
+        # timeframe without the filter that makes it work is strictly worse
+        # than not scanning it, so this is loud rather than silent.
+        log.warning("scanning %s with POI_REQUIRED off — the faster "
+                    "timeframes measured NEGATIVE without the POI filter; "
+                    "see MEASUREMENTS.md", ", ".join(INTERVALS))
     if ENTRY_INTERVAL and ENTRY_INTERVAL not in BAR_SECONDS:
         log.error("bad entry interval %s", ENTRY_INTERVAL)
         return
@@ -45,11 +56,13 @@ async def main() -> None:
                         ", ".join(f"{k} {a}->{b}"
                                   for k, (a, b) in sorted(CFG_OVERRIDES.items())))
         log.info("riptide up: %d symbols, %s bars%s, build %s",
-                 len(symbols), INTERVAL,
+                 len(symbols), "+".join(INTERVALS),
                  f" + {ENTRY_INTERVAL} entries" if ENTRY_INTERVAL else "",
                  build_id())
         await tg.tg_send(sess, f"Riptide scanner started\n"
-                               f"{len(symbols)} symbols · {INTERVAL} bars")
+                               f"{len(symbols)} symbols · "
+                               f"{'+'.join(INTERVALS)} bars"
+                               + (" · POI filter on" if POI_REQUIRED else ""))
 
         # Shared with the command listener so /status reports live values.
         state = {"symbols": symbols, "started": time.time(),

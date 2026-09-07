@@ -20,6 +20,31 @@ TG_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 TG_CHAT = os.getenv("TELEGRAM_CHAT_ID", "")
 
 INTERVAL = os.getenv("RIPTIDE_INTERVAL", "Min30")     # Min15 Min30 Min60 Hour4
+
+# Structure timeframes actually scanned. Every one of them is scanned in full
+# — its own pools, its own sweeps, its own shifts — which is NOT what
+# RIPTIDE_ENTRY_INTERVAL does (that moves the entry of a signal found on the
+# main timeframe, and it is off and staying off; see riptide/mtf.py).
+#
+# Measured: Min15 alone is NEGATIVE (-0.095 confirmed, -0.039 early) and only
+# turns positive inside a daily POI (+0.417 and +0.159). So a second timeframe
+# is worth having ONLY with POI_REQUIRED on, and turning one on without the
+# other makes the bot worse. See MEASUREMENTS.md, "The cell table".
+INTERVALS = tuple(dict.fromkeys(
+    i.strip() for i in os.getenv("RIPTIDE_INTERVALS", "Min30,Min15").split(",")
+    if i.strip()) ) or (INTERVAL,)
+
+# Send only signals whose raid landed inside a daily order block or fair value
+# gap. The single largest separation measured here and the only filter to pass
+# a pre-registered held-out test on symbols it was not found on. Policy G in
+# research/studies/hybrid.py: return per unit of drawdown 6.94 -> 21.53 on a
+# 300 USDT account.
+#
+# It suppresses roughly two thirds of alerts, and TOTAL R falls while R PER
+# SIGNAL roughly doubles. That trade is only right while a position slot is
+# the scarce thing. On a large enough account to take every signal, turn this
+# off.
+POI_REQUIRED = os.getenv("RIPTIDE_POI_REQUIRED", "1") == "1"
 BAR_SECONDS = {"Min1": 60, "Min5": 300, "Min15": 900, "Min30": 1800,
                "Min60": 3600, "Hour4": 14400, "Hour8": 28800, "Day1": 86400}
 LOOKBACK = int(os.getenv("RIPTIDE_LOOKBACK", "600"))   # bars fetched per symbol
@@ -55,7 +80,10 @@ ENTRY_INTERVAL = os.getenv("RIPTIDE_ENTRY_INTERVAL", "").strip()
 # The cadence the scanner wakes on. With an entry timeframe set it follows the
 # faster one, otherwise a gap could form and be up to a full HTF bar stale
 # before anything looked for it.
-SCAN_INTERVAL = ENTRY_INTERVAL or INTERVAL
+# The loop has to wake at least once per bar of the FASTEST thing it scans,
+# or 15m signals would be looked at on a 30m cadence and half of them would
+# already be past the freshness window by the time they were seen.
+SCAN_INTERVAL = ENTRY_INTERVAL or min(INTERVALS, key=lambda i: BAR_SECONDS.get(i, 1 << 30))
 # How long to hold a setup back waiting for a lower-timeframe gap before
 # falling back to the higher-timeframe entry, in HTF bars. The gap cannot
 # exist at the first scan after the shift, so 0 would defeat the feature.

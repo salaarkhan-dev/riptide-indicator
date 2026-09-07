@@ -16,9 +16,8 @@ from . import tracker
 from . import trend
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      EARLY_ALERTS, ENTRY_INTERVAL, FRESH_BARS, INTERVAL,
-                     LOG_MARKET,
-                     MTF_GRACE_BARS, SCAN_INTERVAL,
-                     SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC,
+                     INTERVALS, LOG_MARKET, MTF_GRACE_BARS, POI_REQUIRED,
+                     SCAN_INTERVAL, SWEEP_ALERTS, SWEEP_FRESH_BARS, SWEEP_SRC,
                      TREND_FILTER, TREND_INTERVAL, log)
 from .engine import Early, Sweep, atr_series, run_engine
 from .exchange import fetch_candles, list_symbols
@@ -26,7 +25,7 @@ from .storage import (already_sent, early_already_sent, early_sig, first_run,
                       meta_get, meta_set, record, record_early,
                       record_sweep, sweep_already_sent, sweep_sig, sig_id)
 
-async def scan_symbol(sess, sem, symbol, trend_on=None):
+async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
     """
     Returns (setups, sweeps, early, candles). sweeps and early are empty
     unless their alerts are enabled; the candles are handed back so outcome
@@ -38,8 +37,9 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
     """
     if trend_on is None:
         trend_on = TREND_FILTER
+    interval = interval or INTERVAL
     async with sem:
-        cs = await fetch_candles(sess, symbol)
+        cs = await fetch_candles(sess, symbol, interval)
         if len(cs) < 100:
             return [], [], [], cs
         # Structure always comes from the higher timeframe; only the entry can
@@ -56,6 +56,8 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
         try:
             setups = run_engine(symbol, cs, sweeps_out=sweeps,
                                 early_out=early)
+            for x in list(setups) + list(early) + list(sweeps or []):
+                x.tf = interval
         except Exception as e:
             log.warning("engine failed on %s: %s", symbol, e)
             return [], [], [], cs
@@ -180,6 +182,21 @@ def _same_trade(e: Early, s) -> bool:
             and abs(e.stop - s.stop) / scale < 1e-9)
 
 
+def poi_ok(x) -> bool:
+    """Should this signal be SENT under the POI policy?
+
+    Gates sending only. The signal is still recorded and still armed, because
+    muting a strategy must not also stop measuring it — /stats is the only
+    forward, out-of-sample evidence this project has, and a suppressed band is
+    exactly the one whose live numbers decide whether the policy was right.
+
+    Policy G, research/studies/hybrid.py: requiring a daily POI on every
+    timeframe took return per unit of drawdown from 6.94 to 21.53 on a 300
+    USDT account. It suppresses roughly two thirds of alerts.
+    """
+    return not POI_REQUIRED or bool(getattr(x, "poi", False))
+
+
 def pair_early(results) -> dict:
     """
     Find early signals that describe the same trade as a confirmed setup.
@@ -200,12 +217,15 @@ def pair_early(results) -> dict:
     """
     suppress = set()
     for setups, _, early, _ in results:
-        keyed = {(s.symbol, s.fvg_time, s.is_long): s for s in setups}
+        # The timeframe is part of the key. A 30m bar open is also a 15m bar
+        # open, so without it a 30m confirmed setup would suppress an
+        # unrelated 15m early that merely shares a timestamp.
+        keyed = {(s.symbol, s.tf, s.fvg_time, s.is_long): s for s in setups}
         for e in early:
-            s = keyed.get((e.symbol, e.fvg_time, e.is_long))
+            s = keyed.get((e.symbol, e.tf, e.fvg_time, e.is_long))
             if s is not None and _same_trade(e, s):
                 s.also_early = e.bars_from_sweep or 0
-                suppress.add((e.symbol, e.fvg_time, e.is_long))
+                suppress.add((e.symbol, e.tf, e.fvg_time, e.is_long))
     return suppress
 
 
@@ -219,15 +239,21 @@ async def cycle(sess, db, symbols):
     sem = asyncio.Semaphore(CONCURRENCY)
     # Read once per cycle so every symbol in it sees the same setting.
     tf_on = trend_on(db)
+    # One task per (symbol, timeframe). Both timeframes go through the same
+    # semaphore, so CONCURRENCY still bounds requests in flight rather than
+    # being quietly multiplied by the number of intervals.
+    jobs = [(s, tf) for tf in INTERVALS for s in symbols]
     results = await asyncio.gather(
-        *(scan_symbol(sess, sem, s, tf_on) for s in symbols))
+        *(scan_symbol(sess, sem, s, tf_on, tf) for s, tf in jobs))
 
     bootstrap = first_run(db) and not ALERT_ON_FIRST_RUN
     # /pause records everything as usual but sends nothing, so resuming does
     # not replay the backlog.
     paused = meta_get(db, "alerts_paused", "0") == "1"
     mute = bootstrap or paused
-    step = BAR_SECONDS[INTERVAL]
+    # Freshness is counted in BARS, and a bar is a different length on each
+    # timeframe, so it is read off the signal rather than off a single global.
+    step_of = lambda x: BAR_SECONDS[getattr(x, "tf", "") or INTERVAL]
     now = int(time.time())
     sent = 0
 
@@ -235,11 +261,11 @@ async def cycle(sess, db, symbols):
     # this cycle just fetched. Ordering matters only in that a setup armed
     # below cannot resolve on the bar that created it — its fill window starts
     # after the gap bar, and update() walks each bar once per row.
-    for symbol, (_, _, _, cs) in zip(symbols, results):
+    for (symbol, tf), (_, _, _, cs) in zip(jobs, results):
         try:
-            tracker.update(db, symbol, cs)
+            tracker.update(db, symbol, cs, tf)
         except Exception as e:
-            log.warning("outcome tracking failed on %s: %s", symbol, e)
+            log.warning("outcome tracking failed on %s %s: %s", symbol, tf, e)
     try:
         tracker.expire_stale(db)
     except Exception as e:
@@ -264,12 +290,12 @@ async def cycle(sess, db, symbols):
         for w in sweeps:
             if SWEEP_SRC is not None and w.src not in SWEEP_SRC:
                 continue
-            fresh = (now - w.sweep_time) <= SWEEP_FRESH_BARS * step
+            fresh = (now - w.sweep_time) <= SWEEP_FRESH_BARS * step_of(w)
             sid = sweep_sig(w)
             if sweep_already_sent(db, sid):
                 continue
             record_sweep(db, sid, w)
-            if fresh and not mute:
+            if fresh and not mute and poi_ok(w):
                 if await tg.tg_send(sess, tg.sweep_message(w)):
                     swept += 1
 
@@ -280,7 +306,7 @@ async def cycle(sess, db, symbols):
     paired = pair_early(results)
     for _, _, early, _ in results:
         for e in early:
-            fresh = (now - e.detected_time) <= FRESH_BARS * step
+            fresh = (now - e.detected_time) <= FRESH_BARS * step_of(e)
             sid = early_sig(e)
             if early_already_sent(db, sid):
                 continue
@@ -290,11 +316,11 @@ async def cycle(sess, db, symbols):
             # below carries it. Deliberately NOT armed either — two outcome
             # rows for one trade would double-count it in /stats and correlate
             # the sample, which is worse than the duplicate message.
-            if (e.symbol, e.fvg_time, e.is_long) in paired:
+            if (e.symbol, e.tf, e.fvg_time, e.is_long) in paired:
                 continue
             if fresh:
                 tracker.arm(db, sid, e, kind=tracker.EARLY)
-            if fresh and not mute and EARLY_ALERTS:
+            if fresh and not mute and EARLY_ALERTS and poi_ok(e):
                 if await tg.tg_send(sess, tg.early_message(
                         e, tracker.live_band(db, tg.grade_letter(e, True),
                                              tracker.EARLY))):
@@ -310,7 +336,7 @@ async def cycle(sess, db, symbols):
             # based window silently binned every setup slower than FRESH_BARS
             # — 3% of them — while still recording each one, so dedupe made the
             # loss permanent. The setup is not late; it did not exist yet.
-            fresh = (now - s.detected_time) <= FRESH_BARS * step
+            fresh = (now - s.detected_time) <= FRESH_BARS * step_of(s)
             sid = sig_id(s)
             if already_sent(db, sid):
                 continue
@@ -321,7 +347,7 @@ async def cycle(sess, db, symbols):
             # bars of recorded history are all stale, so none of them arm.
             if fresh:
                 tracker.arm(db, sid, s, kind=tracker.CONFIRMED)
-            if fresh and not mute:
+            if fresh and not mute and poi_ok(s):
                 if await tg.tg_send(sess, tg.setup_message(
                         s, tracker.live_band(db, tg.grade_letter(s),
                                              tracker.CONFIRMED))):

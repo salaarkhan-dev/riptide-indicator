@@ -36,7 +36,7 @@ from __future__ import annotations
 import statistics
 import time
 
-from .config import (BAR_SECONDS, INTERVAL, TRACK, TRACK_FILL_BARS,
+from .config import (BAR_SECONDS, INTERVAL, INTERVALS, TRACK, TRACK_FILL_BARS,
                      TRACK_HORIZON_BARS, TRACK_TARGET_R, log)
 from .engine import Candle, Setup, grade_of
 
@@ -51,7 +51,7 @@ RESOLVED = (WON, LOST, TIMEOUT)
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
             "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence, "
-            "di_dir, rsi_ext, poi, regraded")
+            "di_dir, rsi_ext, poi, regraded, tf")
 
 CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
@@ -96,6 +96,15 @@ def init(db) -> None:
     if "poi" not in have:
         db.execute("ALTER TABLE outcomes ADD COLUMN poi INT DEFAULT 0")
         db.execute("ALTER TABLE outcomes ADD COLUMN regraded INT DEFAULT 0")
+        # Rows predating multi-timeframe scanning were all on RIPTIDE_INTERVAL,
+        # so that is the honest backfill here — unlike poi, this one is known.
+        #
+        # Interpolated rather than bound: SQLite requires a literal in ALTER
+        # TABLE ... DEFAULT and rejects a placeholder. INTERVAL is checked
+        # against BAR_SECONDS first so nothing from the environment reaches
+        # the statement unvalidated.
+        base = INTERVAL if INTERVAL in BAR_SECONDS else "Min30"
+        db.execute(f"ALTER TABLE outcomes ADD COLUMN tf TEXT DEFAULT '{base}'")
         log.info("outcomes: added poi; rows armed before the grade moved to "
                  "the cell table stay out of the live band figures")
     db.execute("CREATE INDEX IF NOT EXISTS outcomes_live "
@@ -103,10 +112,10 @@ def init(db) -> None:
     db.commit()
 
 
-def last_closed_bar(now: int | None = None) -> int:
-    """Open time of the most recently closed RIPTIDE_INTERVAL bar."""
+def last_closed_bar(now: int | None = None, interval: str = "") -> int:
+    """Open time of the most recently closed bar on `interval`."""
     now = int(time.time()) if now is None else now
-    step = BAR_SECONDS[INTERVAL]
+    step = BAR_SECONDS[interval or INTERVAL]
     return now - (now % step) - step
 
 
@@ -142,9 +151,9 @@ def arm(db, sid: str, s, from_bar: int | None = None,
     now = int(time.time())
     detected = s.detected_time
     start = from_bar if from_bar is not None \
-        else max(detected, last_closed_bar(now))
+        else max(detected, last_closed_bar(now, getattr(s, "tf", "")))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
                 # Early has no shift; its sweep bar is the comparable anchor.
@@ -152,28 +161,35 @@ def arm(db, sid: str, s, from_bar: int | None = None,
                 PENDING, 0, 0, None, 0.0, 0.0, start, now, kind,
                 getattr(s, "confluence", 0),
                 getattr(s, "di_dir", 0), getattr(s, "rsi_ext", 0.0),
-                int(getattr(s, "poi", False)), 1))
+                int(getattr(s, "poi", False)), 1,
+                getattr(s, "tf", "") or INTERVAL))
     db.commit()
 
 
-def update(db, symbol: str, cs: list[Candle]) -> None:
+def update(db, symbol: str, cs: list[Candle], interval: str = "") -> None:
     """
     Advance every live row for one symbol over the candles just fetched.
 
     last_bar makes this idempotent: a bar is only ever walked once per row, so
     a re-scan, a restart, or a manual /scan cannot double-count an excursion.
+
+    `interval` scopes the walk to rows found on the SAME timeframe as `cs`.
+    Without it, 15m candles would advance a 30m row four bars at a time and
+    expire it in a quarter of its fill window — and the fill and horizon
+    windows are counted in bars, so a row must only ever be walked by its own.
     """
     if not TRACK or not cs:
         return
+    interval = interval or INTERVAL
     rows = db.execute(
         "SELECT sig, side, entry, stop, risk, status, armed_time, fill_time, "
         "mfe_r, mae_r, last_bar FROM outcomes "
-        "WHERE symbol=? AND status IN (?,?)",
-        (symbol, PENDING, OPEN)).fetchall()
+        "WHERE symbol=? AND status IN (?,?) AND tf=?",
+        (symbol, PENDING, OPEN, interval)).fetchall()
     if not rows:
         return
 
-    step = BAR_SECONDS[INTERVAL]
+    step = BAR_SECONDS[interval]
     now = int(time.time())
     writes = []
 
@@ -254,17 +270,23 @@ def expire_stale(db) -> int:
     if not TRACK:
         return 0
     now = int(time.time())
-    deadline = (TRACK_FILL_BARS + TRACK_HORIZON_BARS + 4) * BAR_SECONDS[INTERVAL]
-    cur = db.execute(
-        "UPDATE outcomes SET status=?, exit_time=?, updated_at=? "
-        "WHERE status IN (?,?) AND armed_time < ?",
-        (STALE, now, now, PENDING, OPEN, now - deadline))
+    bars = TRACK_FILL_BARS + TRACK_HORIZON_BARS + 4
+    # Per timeframe: a 15m row goes stale in a quarter of the wall-clock time a
+    # 30m one does, and using the slowest deadline for all of them would leave
+    # fast rows live for days after they could no longer resolve.
+    total = 0
+    for tf in INTERVALS:
+        cur = db.execute(
+            "UPDATE outcomes SET status=?, exit_time=?, updated_at=? "
+            "WHERE status IN (?,?) AND tf=? AND armed_time < ?",
+            (STALE, now, now, PENDING, OPEN, tf,
+             now - bars * BAR_SECONDS[tf]))
+        total += cur.rowcount or 0
     db.commit()
-    if cur.rowcount:
+    if total:
         log.info("%d tracked setup(s) went stale — no candles to score them "
-                 "against, probably a symbol that left the scan list",
-                 cur.rowcount)
-    return cur.rowcount
+                 "against, probably a symbol that left the scan list", total)
+    return total
 
 
 def _mean_se(values: list[float]) -> tuple[float, float]:

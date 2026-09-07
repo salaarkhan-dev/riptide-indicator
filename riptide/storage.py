@@ -37,8 +37,16 @@ def db_init():
     return db
 
 
+def tf_of(s) -> str:
+    """The timeframe a signal was found on. Part of every dedupe key, so the
+    same structure seen on 30m and on 15m stays two signals rather than one
+    silently suppressing the other."""
+    return getattr(s, "tf", "") or INTERVAL
+
+
 def sig_id(s: Setup) -> str:
-    return f"{s.symbol}|{INTERVAL}|{s.anchor_time}|{s.mss_time}|{'L' if s.is_long else 'S'}"
+    return (f"{s.symbol}|{tf_of(s)}|{s.anchor_time}|{s.mss_time}|"
+            f"{'L' if s.is_long else 'S'}")
 
 
 def already_sent(db, sid) -> bool:
@@ -68,7 +76,7 @@ def meta_set(db, k: str, v) -> None:
 
 
 def sweep_sig(s: Sweep) -> str:
-    return (f"SWP|{s.symbol}|{INTERVAL}|{s.anchor_time}|{s.sweep_time}|"
+    return (f"SWP|{s.symbol}|{tf_of(s)}|{s.anchor_time}|{s.sweep_time}|"
             f"{'H' if s.is_high else 'L'}")
 
 
@@ -78,7 +86,7 @@ def sweep_already_sent(db, sid) -> bool:
 
 
 def early_sig(s: Early) -> str:
-    return (f"EAR|{s.symbol}|{INTERVAL}|{s.anchor_time}|{s.sweep_time}|"
+    return (f"EAR|{s.symbol}|{tf_of(s)}|{s.anchor_time}|{s.sweep_time}|"
             f"{s.fvg_time}|{'L' if s.is_long else 'S'}")
 
 

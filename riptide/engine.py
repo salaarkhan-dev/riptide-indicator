@@ -80,6 +80,9 @@ class Setup:
                              # gap's price area. 0-2. See confluence_of.
     pools: int = 0           # how many clusters reached this same gap. Set by
                              # collapse(), not by detection.
+    tf: str = ""             # the structure timeframe this was found on.
+                             # Blank means RIPTIDE_INTERVAL; the scanner sets
+                             # it explicitly once more than one is scanned.
     poi: bool = False        # the raid landed inside an aligned daily order
                              # block or fair value gap. Set by the scanner,
                              # never by the engine. See daily_zones.
@@ -159,6 +162,7 @@ class Early:
     confluence: int = 0    # order-block agreement only, 0-1: with no shift
                            # there is no breaker to agree with.
     trend_dir: int = 0
+    tf: str = ""              # as on Setup
     poi: bool = False         # as on Setup
     di_dir: int = 0           # as on Setup
     rsi_ext: float = 0.0      # as on Setup
@@ -195,6 +199,7 @@ class Sweep:
     pools: int = 0         # how many pools this one bar took out. Set when
                            # duplicates are collapsed, not by detection.
     trend_dir: int = 0     # as above
+    tf: str = ""           # as above
     poi: bool = False      # as above
     di_dir: int = 0        # as above
     rsi_ext: float = 0.0   # as above

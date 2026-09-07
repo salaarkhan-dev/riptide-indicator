@@ -203,7 +203,8 @@ TV_INTERVAL = {"Min1": "1", "Min5": "5", "Min15": "15", "Min30": "30",
                "Min60": "60", "Hour4": "240", "Hour8": "480", "Day1": "D"}
 
 
-def _footer(when: int, price: float, tv_symbol: str) -> str:
+def _footer(when: int, price: float, tv_symbol: str,
+            interval: str = "") -> str:
     """Time, age and the price as of the scan, so a stale alert is obvious.
 
     The link carries the TIMEFRAME as well as the symbol. Without it
@@ -212,7 +213,7 @@ def _footer(when: int, price: float, tv_symbol: str) -> str:
     the same ENA raid was a 30m SHORT and a 15m LONG on the same afternoon,
     both correct, and the chart opened on 15m.
     """
-    tf = TV_INTERVAL.get(INTERVAL)
+    tf = TV_INTERVAL.get(interval or INTERVAL)
     tv = (f"https://www.tradingview.com/chart/?symbol=MEXC%3A"
           f"{tv_symbol.replace('_', '')}.P" + (f"&interval={tf}" if tf else ""))
     px = f" · {fmt(price)}" if price else ""
@@ -299,11 +300,11 @@ def grade_letter(x, early: bool = False) -> str:
 
 
 def setup_message(s: Setup, live=None) -> str:
-    tf = (f"{tf_label(INTERVAL)}→{tf_label(ENTRY_INTERVAL)}"
-          if s.entry_tf == "LTF" else tf_label(INTERVAL))
+    tf = (f"{tf_label(s.tf or INTERVAL)}→{tf_label(ENTRY_INTERVAL)}"
+          if s.entry_tf == "LTF" else tf_label(s.tf or INTERVAL))
     # The gap sits on whichever timeframe produced the entry.
     gap_step = BAR_SECONDS[ENTRY_INTERVAL] if s.entry_tf == "LTF" \
-        else BAR_SECONDS[INTERVAL]
+        else BAR_SECONDS[s.tf or INTERVAL]
     # When the same gap also produced an early signal, this one message stands
     # for both — the scanner suppressed the duplicate rather than sending the
     # identical entry and stop twice. Saying so keeps the early strategy
@@ -319,7 +320,7 @@ def setup_message(s: Setup, live=None) -> str:
         *_grade(s, live=live),
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _pool(s.src, s.level, s.pivots),
-        _footer(s.detected_time + gap_step, s.last_price, s.symbol),
+        _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf),
     ) if x is not None)
 
 
@@ -341,7 +342,8 @@ def early_message(s: Early, live=None) -> str:
         *_grade(s, early=True, live=live),
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _pool(s.src, s.level, s.pivots, s.pools),
-        _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
+        _footer(s.fvg_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
+                s.symbol, s.tf),
     ) if x is not None)
 
 
@@ -368,7 +370,7 @@ def sweep_message(s: Sweep) -> str:
     direction = "below" if s.is_high else "above"
     note = trend_note(s.trend_dir, is_long, s.btc_dir, s.symbol)
     return "\n".join(x for x in (
-        _headline("👀 <b>SWEEP</b>", is_long, s.symbol, tf_label(INTERVAL),
+        _headline("👀 <b>SWEEP</b>", is_long, s.symbol, tf_label(s.tf or INTERVAL),
                   suffix="bias"),
         "<i>liquidity taken · no entry yet</i>",
         "",
@@ -377,5 +379,6 @@ def sweep_message(s: Sweep) -> str:
         f"{_shift_distance(s.sweep_extreme, s.struct_level)}",
         note or None,
         _pool(s.src, s.level, s.pivots, s.pools),
-        _footer(s.sweep_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
+        _footer(s.sweep_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
+                s.symbol, s.tf),
     ) if x is not None)
