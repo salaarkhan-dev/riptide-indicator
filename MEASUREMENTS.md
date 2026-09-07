@@ -255,6 +255,49 @@ target into +0.1R scratches, and 26% of confirmed setups reach 3R.
 Switched off, and the alert no longer prints the line. Advice on an alert
 should have cleared a bar before it was given; this one was never asked.
 
+## BTC regime — pre-registered, held out, and the honest verdict
+
+The one candidate to survive the scorer correction, tested the way it should
+have been from the start. Pre-registration in
+`research/studies/PREREG_btc.md`, written before the held-out data was
+fetched: direction stated in advance (BTC 30m AGREEING predicts higher R), the
+daily contradiction named as the thing that had to resolve, and the bar set at
+3 SE on held-out data alone.
+
+**Held-out window: 16 Jun – 27 Jul 2026, 1390 early signals.** It ends where
+the discovery window begins. Nothing in this project had ever looked at it.
+
+| BTC timeframe | disagrees | agrees | difference | |
+|---|---|---|---|---|
+| **30m** | -0.113 | +0.010 | **+0.123** | +1.8 SE |
+| **1h** | -0.140 | +0.041 | **+0.182** | +2.7 SE |
+| 4h | -0.013 | -0.065 | -0.051 | -0.8 SE |
+| daily | -0.065 | -0.014 | +0.051 | +0.8 SE |
+
+**The direction replicated. The magnitude did not.** 30m came back at +0.123
+against the +0.174 it was found at — about 70%, with the same sign on all four
+splits. That is the classic shape of a real effect overestimated in the window
+that discovered it. It did not clear 3 SE, so by the pre-registered rule it is
+**not shipped as a filter**.
+
+**The contradiction resolved, and in the effect's favour.** The daily BTC
+trend read -0.122 at -2.6 SE on the discovery window and +0.051 at +0.8 SE
+here — it was noise, not a competing mechanism. What is left is coherent:
+short BTC timeframes carry the signal (30m +1.8 SE, 1h +2.7 SE) and it decays
+to nothing by 4h. Alts follow BTC intraday and stop following it by the day.
+
+**1h is stronger than 30m on held-out data**, which was not predicted and is
+therefore exploratory. Not acted on.
+
+What shipped: the alert now says whether BTC agrees, appended to the existing
+trend line rather than given one of its own, on confirmed and early alerts
+alike. `btc_dir` is recorded on every signal, so `/stats` accumulates forward
+evidence on it out of sample. Nothing is suppressed.
+
+That is the whole point of the distinction: a filter would have been a claim,
+and the evidence does not support a claim. A line on the alert is context, and
+the evidence supports that.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,

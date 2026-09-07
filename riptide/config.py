@@ -91,6 +91,12 @@ TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Day1")
 # question is separable, which the 4h experiment proved even though the 4h
 # answer was wrong; both now sit on Day1.
 DI_INTERVAL = os.getenv("RIPTIDE_DI_INTERVAL", "Day1")
+
+# The timeframe BTC's own trend is read on, for the market-context line on each
+# alert. 30m — the effect is in the SHORT timeframes and vanishes by 4h. Early
+# signals, held-out window: 30m +0.123 (1.8 SE), 1h +0.182 (2.7), 4h -0.051,
+# daily +0.051. Never filters anything; see trend.btc_at.
+BTC_REGIME_INTERVAL = os.getenv("RIPTIDE_BTC_REGIME_INTERVAL", "Min30")
 TREND_LEN = int(os.getenv("RIPTIDE_TREND_LEN", "14"))
 TREND_FACTOR = float(os.getenv("RIPTIDE_TREND_FACTOR", "5.0"))
 

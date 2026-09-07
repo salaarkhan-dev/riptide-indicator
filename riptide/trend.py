@@ -40,8 +40,8 @@ from __future__ import annotations
 import time
 from bisect import bisect_right
 
-from .config import (BAR_SECONDS, DI_INTERVAL, TREND_FACTOR, TREND_INTERVAL,
-                     TREND_LEN, log)
+from .config import (BAR_SECONDS, BTC_REGIME_INTERVAL, DI_INTERVAL,
+                     TREND_FACTOR, TREND_INTERVAL, TREND_LEN, log)
 from .engine import Candle, atr_series, rma as atr_rma
 
 # Daily bars change once a day; refetching them every scan is pure waste.
@@ -147,6 +147,29 @@ def _at(times, series, when, interval: str) -> int | None:
     interval is passed rather than assumed."""
     i = bisect_right(times, when - BAR_SECONDS[interval]) - 1
     return series[i] if 0 <= i < len(series) else None
+
+
+async def btc_at(sess, when: int, fetch) -> int | None:
+    """BTC's SuperTrend direction on BTC_REGIME_INTERVAL, at `when`.
+
+    Market context rather than symbol context: most alts follow BTC intraday,
+    so the same setup is a different bet depending on which way BTC is going.
+    Uses the same cache and the same last-closed-bar arithmetic as the rest of
+    this module, so it costs one extra fetch per TTL for the whole scan, not
+    one per symbol.
+
+    Shown on the alert, never used to suppress one. Measured on early signals:
+    on the discovery window, agreeing +0.045 against disagreeing -0.129
+    (+0.174, 3.6 SE); on a held-out window that had never been looked at,
+    +0.010 against -0.113 (+0.123, 1.8 SE), same sign on all four splits. The
+    direction replicated at about 70% of the discovered size — the shape of a
+    real effect that was overestimated where it was found — but it did not
+    clear the pre-registered 3 SE bar, so it informs and does not decide.
+    """
+    hit = await _series(sess, "BTC_USDT", fetch, BTC_REGIME_INTERVAL)
+    if hit is None:
+        return None
+    return _at(hit[1], hit[2], when, BTC_REGIME_INTERVAL) or None
 
 
 async def di_at(sess, symbol: str, when: int, fetch) -> int | None:

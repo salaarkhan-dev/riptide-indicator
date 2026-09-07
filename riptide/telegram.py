@@ -151,7 +151,8 @@ def tf_label(interval: str) -> str:
     return TF_LABEL.get(interval, interval)
 
 
-def trend_note(trend_dir: int, is_long: bool) -> str:
+def trend_note(trend_dir: int, is_long: bool, btc_dir: int = 0,
+               symbol: str = "") -> str:
     """
     Which side of the higher-timeframe trend the signal sits on.
 
@@ -165,8 +166,15 @@ def trend_note(trend_dir: int, is_long: bool) -> str:
     name = {"Day1": "daily", "Hour4": "4h", "Hour8": "8h",
             "Min60": "hourly"}.get(TREND_INTERVAL, tf_label(TREND_INTERVAL))
     aligned = (trend_dir > 0) == is_long
-    return (f"✅ with the {name} trend" if aligned
-            else f"⚠️ AGAINST the {name} trend")
+    out = (f"✅ with the {name} trend" if aligned
+           else f"⚠️ AGAINST the {name} trend")
+    # BTC's own direction, appended rather than given a line of its own. Most
+    # alts follow BTC intraday, so the same setup is a different bet depending
+    # on which way BTC is going — but it is context, not a verdict, and a
+    # second line would read as a second instruction.
+    if btc_dir and symbol != "BTC_USDT":
+        out += ("  ·  BTC with" if (btc_dir > 0) == is_long else "  ·  BTC against")
+    return out
 
 
 def bar_label(t: int) -> str:
@@ -306,7 +314,7 @@ def setup_message(s: Setup, live=None) -> str:
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         *_grade(s.di_dir, s.is_long, s.rsi_ext, live=live),
-        trend_note(s.trend_dir, s.is_long) or None,
+        trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _pool(s.src, s.level, s.pivots),
         _footer(s.detected_time + gap_step, s.last_price, s.symbol),
     ) if x is not None)
@@ -328,6 +336,7 @@ def early_message(s: Early, live=None) -> str:
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         *_grade(s.di_dir, s.is_long, s.rsi_ext, early=True, live=live),
+        trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),
     ) if x is not None)
@@ -354,7 +363,7 @@ def sweep_message(s: Sweep) -> str:
     is_long = not s.is_high
     took = "high" if s.is_high else "low"
     direction = "below" if s.is_high else "above"
-    note = trend_note(s.trend_dir, is_long)
+    note = trend_note(s.trend_dir, is_long, s.btc_dir, s.symbol)
     return "\n".join(x for x in (
         _headline("👀 <b>SWEEP</b>", is_long, s.symbol, tf_label(INTERVAL),
                   suffix="bias"),

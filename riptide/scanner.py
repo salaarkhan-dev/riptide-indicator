@@ -119,6 +119,8 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
             # still keys on the SuperTrend: DI has replicated on splits of one
             # window, which earns it the letter, not the power to suppress an
             # alert before /stats has seen it forward.
+            x.btc_dir = await trend.btc_at(sess, x.detected_time,
+                                          fetch_candles) or 0
             x.di_dir = await trend.di_at(sess, symbol, x.detected_time,
                                          fetch_candles) or 0
             with_trend = d is None or (d > 0) == x.is_long
@@ -127,6 +129,8 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
         for w in (sweeps or []):
             d = await trend.direction_at(sess, symbol, w.sweep_time, fetch_candles)
             w.trend_dir = d or 0
+            w.btc_dir = await trend.btc_at(sess, w.sweep_time,
+                                          fetch_candles) or 0
             w.di_dir = await trend.di_at(sess, symbol, w.sweep_time,
                                          fetch_candles) or 0
             # A swept high implies a short, so it wants a downtrend.
@@ -136,6 +140,8 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
         for e in (early or []):
             d = await trend.direction_at(sess, symbol, e.fvg_time, fetch_candles)
             e.trend_dir = d or 0
+            e.btc_dir = await trend.btc_at(sess, e.fvg_time,
+                                          fetch_candles) or 0
             e.di_dir = await trend.di_at(sess, symbol, e.fvg_time,
                                          fetch_candles) or 0
             with_trend = d is None or (d > 0) == e.is_long

@@ -85,6 +85,9 @@ class Setup:
                              # trend_dir — the engine has no daily bars.
     rsi_ext: float = 0.0     # RSI stretch at the raid, in the trade's favour.
                              # See rsi_extension.
+    btc_dir: int = 0         # BTC's own trend at detection, +1 up / -1 down.
+                             # Market context, set by the scanner. Never
+                             # suppresses anything — see trend.btc_at.
     also_early: int = 0      # bars from raid to gap, when this exact trade
                              # also fired as an Early on the same bar. Set by
                              # the scanner when it pairs the two, so one trade
@@ -155,6 +158,7 @@ class Early:
     trend_dir: int = 0
     di_dir: int = 0           # as on Setup
     rsi_ext: float = 0.0      # as on Setup
+    btc_dir: int = 0          # as on Setup
     last_price: float = 0.0   # display only, as on Setup
 
     @property
@@ -189,6 +193,7 @@ class Sweep:
     trend_dir: int = 0     # as above
     di_dir: int = 0        # as above
     rsi_ext: float = 0.0   # as above
+    btc_dir: int = 0       # as above
     last_price: float = 0.0   # display only, as above
 
 
