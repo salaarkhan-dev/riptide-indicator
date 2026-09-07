@@ -925,6 +925,67 @@ Not acted on.
 What changed: the sweep alert now prints the distance and the base rate for
 it, and the two input labels no longer claim the levels are yesterday's.
 
+## The raid dot never moved
+
+Reported as "this live sweep is invalidated, there is a new high — shouldn't
+it be here". It should have been. The dot was in the wrong place.
+
+`drawRaidDot` puts the provisional dot on the chart in EITHER draw mode — the
+comment beside it says so, deliberately, because most raids never produce a
+shift and the dot is what stands in for the X until one does. But the call
+that moves a raid's marks to each new extreme was guarded:
+
+    if trailed and not deferred
+        moveGrab(c)
+
+`deferred` is the DEFAULT draw mode ("On MSS confirmation"). So on default
+settings every raid dot was pinned to the first bar of the raid and never
+moved again, while the engine underneath went on trailing the extreme.
+
+The guard was right for the X and its tag, which genuinely do not exist yet in
+deferred mode, and wrong for the dot, which does. `moveGrab` is na-safe per
+handle, so dropping the guard moves only what is on screen.
+
+How wrong it was, over 3703 raids on 23 symbols:
+
+| | extension past the pinned bar |
+|---|---|
+| moved at all | 88% |
+| moved more than 0.5% | 75% |
+| median | 1.71% |
+| 75th percentile | 4.22% |
+| 90th percentile | 9.24% |
+
+**Chart only. The bot was never affected** — `riptide/engine.py` trails
+`grab_high`/`grab_low` in the same block it always did, so stops on ⚡ EARLY
+alerts were always measured from the real extreme.
+
+### And no, a new extreme does not invalidate the raid
+
+The obvious follow-on question, and the first cut of it looked emphatic:
+grouping raids by how far the extreme ran, conversion to a confirmed setup
+fell 35.4% → 7.2% and early R fell +0.532 → -0.085.
+
+**That table is worthless and I nearly reported it.** The extension was
+measured over the whole grab window, which includes bars after the signal. "A
+raid that kept running against you did badly" is the outcome restated, not a
+predictor.
+
+Measured causally — extension known AT the signal bar, and split by stop size,
+since a longer raid mechanically means a wider stop:
+
+| extension at signal | early, tight stops | mid | wide |
+|---|---|---|---|
+| under 0.25% | +0.224 | +0.209 | +0.055 |
+| 0.25 – 0.75% | +0.391 | +0.183 | +0.090 |
+| 0.75 – 1.5% | — | +0.142 | +0.146 |
+| over 1.5% | — | +0.300 | +0.156 |
+
+No gradient, no consistent sign, and the wide-stop column runs the *opposite*
+way to the contaminated version. Confirmed setups behave the same. Nothing
+changed on the strategy: the raid keeps trailing to the new extreme, and the
+only thing that expires it is the grab window.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their

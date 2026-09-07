@@ -1546,10 +1546,25 @@ if engineOk
                             c.grabHigh  := high
                             c.grabClose := close
                             trailed     := true
-                        // Live mode has already drawn the X, so move it rather
-                        // than leave it on the first bar of the raid. Deferred
-                        // mode has drawn nothing yet and needs no move.
-                        if trailed and not deferred
+                        // Move whatever is on screen to the new extreme.
+                        //
+                        // This used to be guarded by `not deferred`, on the
+                        // reasoning that deferred mode has drawn nothing yet.
+                        // That was true of the X and its tag and false of the
+                        // raid DOT, which drawRaidDot puts on the chart in
+                        // EITHER mode — so on the default draw mode every dot
+                        // froze on the first bar of the raid while the raid
+                        // went on making new extremes. A raid that ran 1% past
+                        // its own dot read as a raid price had already
+                        // invalidated, which is the opposite of what the
+                        // engine thought: it was still tracking it, deeper.
+                        //
+                        // moveGrab is na-safe per handle, so the unguarded
+                        // call moves only what exists. In deferred mode that
+                        // is the dot alone; the X and tag are still na and are
+                        // drawn at their final position when the shift
+                        // confirms.
+                        if trailed
                             moveGrab(c)
                         bool broke = c.isHigh
                              ? (mssMode == "close" ? close < c.structLevel : low  < c.structLevel)
