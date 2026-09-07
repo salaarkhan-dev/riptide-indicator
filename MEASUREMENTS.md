@@ -1171,6 +1171,44 @@ and the grade's reason string interpolates the interval instead of hardcoding
 On EARLY signals the 4h SuperTrend does not replicate: +1.9 SE overall with
 one split at +0.1 SE. A confirmed-setup effect, recorded as such.
 
+## 15m alerts with the 4h trend filter on
+
+Asked directly. Reported with VOLUME as well as rate, because a filter that
+lifts R per signal while halving the signals can still leave less on the
+table, and R per signal alone hides that. 41.6 days, 23 symbols, net of fees.
+
+| setup | n | per day | R/signal | total R |
+|---|---|---|---|---|
+| Min15 early — everything | 1314 | 31.6 | +0.073 | +95.8 |
+| Min15 early — with 4h trend | 665 | 16.0 | +0.121 | +80.2 |
+| Min15 confirmed — everything | 512 | 12.3 | +0.075 | +38.4 |
+| Min15 confirmed — with 4h trend | 265 | 6.4 | +0.123 | +32.6 |
+| Min30 early — everything | 1347 | 32.4 | +0.114 | **+153.4** |
+| Min30 early — with 4h trend | 634 | 15.2 | +0.161 | +101.8 |
+| Min30 confirmed — everything | 544 | 13.1 | +0.110 | +59.7 |
+| **Min30 confirmed — with 4h trend** | 273 | 6.6 | **+0.237** | **+64.7** |
+
+**30m beats 15m in every cell, per signal and in total.** On confirmed setups
+with the filter it is nearly double: +0.237 against +0.123, +64.7 total R
+against +32.6. Nothing about the 4h filter rescues the faster timeframe.
+
+**The filter is worth turning on for exactly one of the four cells.** Min30
+confirmed is the only one where filtering RAISES total R — +64.7 from +59.7 —
+while halving the trades, which is a real improvement in return per unit of
+risk taken. In the other three it costs total R: Min30 early drops 153.4 to
+101.8, and both Min15 cells fall too. The per-signal number rises everywhere,
+which is exactly the trap volume is reported to avoid.
+
+`RIPTIDE_TREND_FILTER` is one switch across both signal types, so turning it
+on today buys +5 R on confirmed and gives up 51.6 R on early — 166.5 against
+213.1 overall. It stays OFF. Making it per-signal-type is the change that
+would let the useful half be taken.
+
+Out of sample on the 15m with-trend cells: early +0.101 / +0.144 / +0.164 /
++0.078, confirmed +0.063 / +0.189 / +0.141 / +0.106. Positive in all eight,
+but two splits sit under 1 SE and the level is roughly half the Min30
+equivalent throughout.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their
