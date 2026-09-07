@@ -19,7 +19,7 @@ from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
                      TREND_INTERVAL, log)
 from .engine import (Early, Setup, Sweep, grade_of, shift_odds,
-                     sweep_tier)
+                     sweep_worth)
 
 async def tg_send(sess, text: str) -> bool:
     """
@@ -391,7 +391,9 @@ def sweep_message(s: Sweep) -> str:
     return "\n".join(x for x in (
         _headline("👀 <b>SWEEP</b>", is_long, s.symbol, tf_label(s.tf or INTERVAL),
                   suffix="bias",
-                  grade=sweep_tier(s.sweep_extreme, s.struct_level)),
+                  grade=("WATCH" if sweep_worth(
+                      s.sweep_extreme, s.struct_level, s.poi)
+                      else "SKIP")),
         f"<i>liquidity taken{where} · no entry yet</i>",
         "",
         f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",

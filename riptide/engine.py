@@ -620,25 +620,49 @@ def shift_odds(extreme: float, struct_level: float):
     return None
 
 
-# How a raid is worth treating, from the distance alone. The bands are the
-# SHIFT_ODDS bands, collapsed to three because a sweep alert is triaged in
-# about a second and five numbers is not a triage.
+# WATCH_MAX_DIST — the one number behind the sweep verdict.
 #
-#   NEAR  under 2% away   13-24% become a setup
-#   MID   2-4% away        6%
-#   FAR   over 4% away     1-2%, and 40% of all raids land here
+# A sweep answers exactly one question: is this chart worth looking at. So it
+# gets one answer, yes or no, rather than a tier the reader has to interpret.
+# The cut is where the value stops arriving. Measured over 5098 raids that
+# landed in a daily POI, by how far the shift level still was:
 #
-# The tier deliberately reads off the DISTANCE only, not the POI. They are
-# independent axes — measured, see MEASUREMENTS.md "Sweeps in a POI" — and
-# they answer different questions: distance says how likely a setup is to
-# appear at all, the POI says whether it will be worth taking. Folding them
-# into one word would destroy exactly the distinction that makes both worth
-# printing.
-def sweep_tier(extreme: float, struct_level: float) -> str:
+#     band     share of raids   convert   total R produced
+#     <1%            8%          22.7%         +15.9
+#     1-2%          22%          14.8%         +16.5
+#     2-3%          18%           6.6%         +10.8
+#     3-4%          13%           3.1%          +0.6
+#     4-6%          14%           1.8%          +2.9
+#     >6%           25%           0.7%          +3.0
+#
+#     cumulative:  under 2% = 30% of raids, 65% of the R
+#                  under 3% = 48% of raids, 87% of the R   <- the knee
+#                  under 4% = 61% of raids, 88% of the R
+#
+# Three per cent is where the curve flattens: the next band adds 13% more
+# raids and 1% more value. Half the raids carry seven eighths of everything
+# that follows from any of them.
+WATCH_MAX_DIST = 3.0
+
+
+def sweep_worth(extreme: float, struct_level: float, poi: bool = True) -> bool:
+    """Is this raid worth opening the chart for? Yes or no, nothing else.
+
+    BOTH measured axes have to agree, and they are independent — see
+    MEASUREMENTS.md, "Sweeps in a POI":
+
+      distance  how likely a setup is to appear at all. Under 3% away, 7-23%
+                of raids convert; beyond it, 1-3%.
+      POI       whether that setup is worth taking when it comes. Raids inside
+                a daily zone produce setups worth +0.141 R; those outside
+                produce -0.055.
+
+    A near raid outside a zone converts often into something that loses money,
+    and a far raid inside one almost never converts at all. Neither is worth a
+    look, which is why this is an AND rather than a score.
+    """
     odds = shift_odds(extreme, struct_level)
-    if not odds:
-        return ""
-    return "NEAR" if odds[0] < 2.0 else "MID" if odds[0] < 4.0 else "FAR"
+    return bool(poi) and odds is not None and odds[0] < WATCH_MAX_DIST
 
 
 def collapse(items: list, key, better) -> list:

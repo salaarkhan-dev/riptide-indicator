@@ -238,10 +238,11 @@ POI_SWEEPS = os.getenv("RIPTIDE_POI_SWEEPS", "1") == "1"
 # off, which is the default because it is a volume decision, not a correctness
 # one, and it should be made on lived experience rather than on a backtest.
 #
-# The number to make it with, measured on 8984 Min30 raids: 40% of every raid
-# sits further than 4% from its shift level, and those convert 1-2% of the
-# time. At 65 sweeps a day that is about 26 daily messages with a one-in-fifty
-# chance of leading anywhere. Setting this to 4 removes them.
+# The number to make it with: raids further than 3% from their shift level are
+# 52% of all of them and carry 13% of the value (see engine.WATCH_MAX_DIST).
+# Those are exactly the ones the alert now labels SKIP, so setting this to 3
+# stops sending them rather than sending them labelled — about 34 of the 65
+# daily sweeps.
 SWEEP_MAX_DIST = float(os.getenv("RIPTIDE_SWEEP_MAX_DIST", "0"))
 # Which pool types raise a heads-up. Unset means all of them — the right
 # default while the output is being checked against the chart, since
