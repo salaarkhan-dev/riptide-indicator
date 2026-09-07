@@ -51,7 +51,7 @@ RESOLVED = (WON, LOST, TIMEOUT)
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
             "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence, "
-            "di_dir, rsi_ext")
+            "di_dir, rsi_ext, poi, regraded")
 
 CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
@@ -87,6 +87,17 @@ def init(db) -> None:
         db.execute("ALTER TABLE outcomes ADD COLUMN rsi_ext REAL DEFAULT 0.0")
         log.info("outcomes: added di_dir and rsi_ext; rows armed before the "
                  "grade moved to DI stay ungraded rather than being back-dated")
+    # The grade moved to (POI, daily trend) on the cell table. Rows armed
+    # before that have poi = 0, which is indistinguishable from a genuine "not
+    # in a zone" — so live_band skips any row whose trend_dir is 0 rather than
+    # back-dating a letter. Old rows all carry a trend_dir, but a row armed
+    # before this column existed cannot be regraded honestly either way, and
+    # the number worth having is the forward one.
+    if "poi" not in have:
+        db.execute("ALTER TABLE outcomes ADD COLUMN poi INT DEFAULT 0")
+        db.execute("ALTER TABLE outcomes ADD COLUMN regraded INT DEFAULT 0")
+        log.info("outcomes: added poi; rows armed before the grade moved to "
+                 "the cell table stay out of the live band figures")
     db.execute("CREATE INDEX IF NOT EXISTS outcomes_live "
                "ON outcomes(symbol, status)")
     db.commit()
@@ -133,14 +144,15 @@ def arm(db, sid: str, s, from_bar: int | None = None,
     start = from_bar if from_bar is not None \
         else max(detected, last_closed_bar(now))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
                 # Early has no shift; its sweep bar is the comparable anchor.
                 getattr(s, "mss_time", 0) or s.sweep_time, detected, now,
                 PENDING, 0, 0, None, 0.0, 0.0, start, now, kind,
                 getattr(s, "confluence", 0),
-                getattr(s, "di_dir", 0), getattr(s, "rsi_ext", 0.0)))
+                getattr(s, "di_dir", 0), getattr(s, "rsi_ext", 0.0),
+                int(getattr(s, "poi", False)), 1))
     db.commit()
 
 
@@ -295,10 +307,11 @@ def live_band(db, letter: str, kind: str, min_n: int = 30):
     which is worse than saying nothing.
     """
     rows = db.execute(
-        "SELECT status, r, side, di_dir, rsi_ext FROM outcomes WHERE kind=?",
-        (kind,)).fetchall()
-    mine = [r for r in rows
-            if grade_of(r[3], r[2] == "long", r[4])[0] == letter]
+        "SELECT status, r, side, di_dir, poi, trend_dir, regraded "
+        "FROM outcomes WHERE kind=?", (kind,)).fetchall()
+    mine = [r for r in rows if r[6]
+            and grade_of(kind == EARLY, bool(r[4]), r[5], r[2] == "long",
+                         r[3])[0] == letter]
     settled = [r for r in mine if r[0] in RESOLVED or r[0] == EXPIRED]
     if len(settled) < min_n:
         return None
@@ -315,20 +328,23 @@ def live_band(db, letter: str, kind: str, min_n: int = 30):
 def summary(db, kind: str | None = None) -> dict:
     """Pass a kind to describe one strategy alone; omit it for both together."""
     sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind, "
-           "confluence, di_dir, rsi_ext FROM outcomes")
+           "confluence, di_dir, rsi_ext, poi, regraded FROM outcomes")
     rows = (db.execute(sql + " WHERE kind=?", (kind,)).fetchall() if kind
             else db.execute(sql).fetchall())
     if not rows:
         return {"armed": 0}
 
+    # Indexed rather than unpacked: this loop has been broken twice by a
+    # column being added to the SELECT above, and a fixed-width unpack gives
+    # no hint which end is wrong.
     aligned, against = [], []
-    for st, r, td, side, _, _, _, _, _, _, _ in rows:
+    for r_ in rows:
+        st, r, td, side = r_[0], r_[1], r_[2], r_[3]
         if not td:
             continue
         (aligned if (td > 0) == (side == "long") else against).append((st, r))
 
-    filled = [(mfe, mae) for st, _, _, _, mfe, mae, _, _, _, _, _ in rows
-              if st in RESOLVED]
+    filled = [(r_[4], r_[5]) for r_ in rows if r_[0] in RESOLVED]
     return {
         "armed": len(rows),
         "since": min(r[6] for r in rows),
@@ -341,11 +357,14 @@ def summary(db, kind: str | None = None) -> dict:
         "against": _bucket(against),
         "mfe": statistics.fmean([m for m, _ in filled]) if filled else 0.0,
         "mae": statistics.fmean([m for _, m in filled]) if filled else 0.0,
-        # By grade — the view worth acting on, since it crosses the one
-        # established effect with the one open hypothesis. Computed from the
-        # same trend_dir and confluence columns, not stored separately, so a
-        # change to the ladder re-grades history rather than stranding it.
-        "grades": {g: _bucket([(r[0], r[1]) for r in rows
-                               if grade_of(r[9], r[3] == "long", r[10])[0] == g])
-                   for g in ("A", "B", "C", "?")},
+        # By grade. Computed from the stored poi and trend_dir columns rather
+        # than a saved letter, so a change to the ladder re-grades history
+        # instead of stranding it. Rows armed before the POI column existed
+        # carry regraded = 0 and are left out: they would all land in the
+        # no-POI bands and manufacture a difference that is really just an
+        # ordering by arming date.
+        "grades": {g: _bucket([(r[0], r[1]) for r in rows if r[12]
+                               and grade_of(r[7] == EARLY, bool(r[11]), r[2],
+                                            r[3] == "long", r[9])[0] == g])
+                   for g in ("A", "B", "C", "D")},
     }

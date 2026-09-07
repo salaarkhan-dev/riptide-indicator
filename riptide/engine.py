@@ -80,6 +80,9 @@ class Setup:
                              # gap's price area. 0-2. See confluence_of.
     pools: int = 0           # how many clusters reached this same gap. Set by
                              # collapse(), not by detection.
+    poi: bool = False        # the raid landed inside an aligned daily order
+                             # block or fair value gap. Set by the scanner,
+                             # never by the engine. See daily_zones.
     di_dir: int = 0          # daily DI+/DI- direction at detection: +1 up,
                              # -1 down, 0 unknown. Set by the scanner, like
                              # trend_dir — the engine has no daily bars.
@@ -156,6 +159,7 @@ class Early:
     confluence: int = 0    # order-block agreement only, 0-1: with no shift
                            # there is no breaker to agree with.
     trend_dir: int = 0
+    poi: bool = False         # as on Setup
     di_dir: int = 0           # as on Setup
     rsi_ext: float = 0.0      # as on Setup
     btc_dir: int = 0          # as on Setup
@@ -191,6 +195,7 @@ class Sweep:
     pools: int = 0         # how many pools this one bar took out. Set when
                            # duplicates are collapsed, not by detection.
     trend_dir: int = 0     # as above
+    poi: bool = False      # as above
     di_dir: int = 0        # as above
     rsi_ext: float = 0.0   # as above
     btc_dir: int = 0       # as above
@@ -282,6 +287,59 @@ def entry_of(is_long: bool, top: float, bot: float, mode: str) -> float:
     if mode == "distal":
         return bot if is_long else top
     return top if is_long else bot
+
+
+# The daily point of interest. A raid that lands inside a recent daily order
+# block or fair value gap is the largest single separation this project has
+# measured, and the only filter to pass a pre-registered held-out test on
+# symbols it was not found on. See MEASUREMENTS.md, "The multi-timeframe model".
+#
+# ZONES EXPIRE. Without an age limit this flags 90% of raids and means nothing:
+# a year of daily bars accumulates enough blocks and gaps to cover most of the
+# price range. Thirty days is what was measured, and it is a real parameter, not
+# a rounding — the unconstrained version pointed the WRONG way.
+POI_MAX_AGE_BARS = 30
+
+
+def daily_zones(cs: list[Candle], atr: list[float]) -> list[tuple]:
+    """(formed_at, is_bull, lo, hi) for every daily order block and gap.
+
+    formed_at is the bar the zone COMPLETED on, not the bar it started from.
+    A three-candle gap is not knowable until the third candle closes, and an
+    order block is not identifiable until the displacement that names it has
+    printed; dating either one earlier would let a signal react to a zone that
+    did not yet exist.
+    """
+    out = []
+    for j in range(2, len(cs)):
+        a = atr[j] if j < len(atr) else 0.0
+        if a <= 0:
+            continue
+        if cs[j].l > cs[j - 2].h:
+            out.append((cs[j].t, True, cs[j - 2].h, cs[j].l))
+        elif cs[j].h < cs[j - 2].l:
+            out.append((cs[j].t, False, cs[j].h, cs[j - 2].l))
+        # Order block: the last opposite-closing candle before a displacement
+        # of more than one ATR.
+        if cs[j].c - cs[j].o > a and cs[j - 1].c < cs[j - 1].o:
+            out.append((cs[j].t, True, cs[j - 1].l, cs[j - 1].h))
+        elif cs[j].o - cs[j].c > a and cs[j - 1].c > cs[j - 1].o:
+            out.append((cs[j].t, False, cs[j - 1].l, cs[j - 1].h))
+    return out
+
+
+def in_zone(zones, when: int, price: float, is_long: bool, step: int) -> bool:
+    """Did `price` at `when` sit inside an aligned zone still inside its life?
+
+    `price` is the STOP, which sits just beyond the raid extreme — the raid is
+    what has to land in the zone, not the entry, and the stop is the closest
+    thing to the extreme that every signal type carries.
+    """
+    for t, bull, lo, hi in zones:
+        if (t <= when and bull == is_long and lo <= price <= hi
+                and when - t <= POI_MAX_AGE_BARS * step):
+            return True
+    return False
 
 
 def last_opposing(cs: list[Candle], before: int, is_bull: bool,
@@ -402,53 +460,101 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
 # window; this project has watched the LEVEL of an effect move from -0.05 to
 # +0.32 across windows while the separation between bands held. The ordering
 # is the finding. The percentages are context for it.
-# The interval is interpolated rather than written as "daily". DI's timeframe
-# used to be the same setting as the SuperTrend filter's; they were split once
-# 4h DI measured as a flat null, and a hardcoded "daily" here would have gone
-# on claiming daily whatever DI_INTERVAL was actually read from.
-_DI = {"Day1": "daily", "Hour4": "4h", "Hour8": "8h",
-       "Min60": "hourly"}.get(DI_INTERVAL, DI_INTERVAL)
+# THE GRADE, REBUILT — see MEASUREMENTS.md, "The cell table".
+#
+# The previous version graded on daily DI with an RSI tiebreak. It was the best
+# available when it was written and it is now two findings out of date: the
+# daily POI turned out to be a larger separation than DI, and the two are
+# MULTIPLICATIVE rather than additive, which no letter built on one axis can
+# express.
+#
+#   POI    the raid landed inside a daily order block or fair value gap less
+#          than 30 days old. Discovered on 14 symbols, held out on 9 it had
+#          never seen, and it then improved every arm of two other entry models
+#          built on a different premise. The only filter here to survive a
+#          pre-registered held-out test.
+#   TREND  the daily SuperTrend and daily DI agree with the trade. Stricter
+#          than the old DI-alone reading and measured on the same cells.
+#
+# Measured, 23 symbols, 41 days, 2R target, maker/taker fees, from the FILL bar:
+#
+#     kind        POI  trend     n    fill   win     R per signal
+#     confirmed   yes  yes      43     67%   76%     +0.822 ± 0.187   <- A
+#     confirmed   no   yes      66     73%   46%     +0.206 ± 0.157   <- B
+#     early       yes  yes     214     78%   46%     +0.188 ± 0.087   <- B
+#     confirmed   yes  no       38     61%   43%     +0.105 ± 0.189   <- C
+#     confirmed   no   no      100     72%   44%     +0.082 ± 0.119   <- C
+#     early       no   yes     331     80%   40%     +0.048 ± 0.070   <- C
+#     early       yes  no      228     78%   38%     +0.018 ± 0.084   <- C
+#     early       no   no      624     80%   36%     -0.050 ± 0.049   <- D
+#
+# Four bands now, and D is new and deliberate. It is the only cell measuring
+# NEGATIVE, and it is 38% of everything the bot sends. A letter that never says
+# "this one is worse than not trading" was hiding the most useful thing it knew.
+#
+# The bands are cut on measured R, not on a points system. A points scheme —
+# two for confirmed, one each for POI and trend — would put confirmed-with-POI
+# and confirmed-with-trend in the same band, and they measure +0.105 against
+# +0.206. The table is the finding; a formula would be a tidier lie.
+#
+# READ THE NUMBERS AS HISTORY, NOT AS A FORECAST. One 41-day window. This
+# project has watched the LEVEL of an effect move from -0.05 to +0.32 across
+# windows while the separation between bands held. The ordering is the finding.
+# Band A rests on 43 signals and has never been held out on its own.
+_POI = "daily POI"
+
+# (letter, why) keyed by (early?, in a POI?, trend agrees?)
 GRADES = {
-    ("with", True): ("A", f"{_DI} DI agrees"),
-    ("with", False): ("A", f"{_DI} DI agrees"),
-    ("against", True): ("B", "DI disagrees · RSI stretched your way"),
-    ("against", False): ("C", "DI disagrees · RSI offers nothing"),
+    (False, True,  True):  ("A", f"{_POI} · daily trend agrees"),
+    (False, False, True):  ("B", "daily trend agrees · no POI"),
+    (True,  True,  True):  ("B", f"{_POI} · daily trend agrees"),
+    (False, True,  False): ("C", f"{_POI} · against the daily trend"),
+    (False, False, False): ("C", "no POI · against the daily trend"),
+    (True,  False, True):  ("C", "daily trend agrees · no POI"),
+    (True,  True,  False): ("C", f"{_POI} · against the daily trend"),
+    (True,  False, False): ("D", "no POI · against the daily trend"),
 }
 
-# Historical rate for each band: (setups, fill %, win % of fills, R, SE).
-# Shown on the alert so a letter is never a bare assertion, and replaced by
-# the live figure from /stats as soon as a band has enough settled rows.
+# Historical rate for each band: (signals, fill %, win % of fills, R, SE).
+# Shown on the alert so a letter is never a bare assertion, and replaced by the
+# live figure from /stats as soon as a band has enough settled rows. Bands
+# pool the cells above, so these are the pooled figures, not one cell's.
 BAND_STATS = {
-    "A": (587, 70, 61, +0.158, 0.033),
-    "B": (486, 74, 47, -0.030, 0.037),
-    "C": (112, 71, 35, -0.206, 0.076),
+    "A": (43, 67, 76, +0.822, 0.187),
+    "B": (66, 73, 46, +0.206, 0.157),
+    "C": (138, 68, 44, +0.089, 0.100),
+    "D": (0, 0, 0, 0.0, 0.0),          # no confirmed signal can reach D
 }
 
-# The same bands applied to early signals, which is a different and much
-# weaker story: +0.063 / +0.044 / +0.002, win rates 54% / 53% / 50% over 2945
-# signals. A minus C is +0.8 SE — the ladder barely sorts them. Neither DI nor
-# the SuperTrend nor RSI separates early signals; nothing tested so far does.
-# So an early alert shows its band's OWN early numbers, and they are flat on
-# purpose: the honest message is that the letter means little there.
+# The same bands on early signals. Unlike the old table these are NOT flat:
+# the POI is the first thing ever measured to sort early signals, and it sorts
+# them from -0.050 to +0.188. That is the single biggest change here — an early
+# alert's letter used to mean almost nothing and now carries most of what is
+# known about it.
 EARLY_BAND_STATS = {
-    "A": (1432, 79, 54, +0.063, 0.023),
-    "B": (1349, 78, 53, +0.044, 0.024),
-    "C": (164, 82, 50, +0.002, 0.070),
+    "A": (0, 0, 0, 0.0, 0.0),          # no early signal can reach A
+    "B": (214, 78, 46, +0.188, 0.087),
+    "C": (559, 79, 39, +0.036, 0.054),
+    "D": (624, 80, 36, -0.050, 0.049),
 }
 
 
-def grade_of(di_dir: int, is_long: bool, rsi_ext: float) -> tuple[str, str]:
+def grade_of(is_early: bool, poi: bool, trend_dir: int, is_long: bool,
+             di_dir: int = 0) -> tuple[str, str]:
     """
     (letter, why) for one signal. Presentation only — nothing decides on it,
     and no signal is suppressed by it.
 
-    Returns ("?", ...) when the daily DI is unknown, which is honest: the axis
-    carrying the separation is missing, so there is nothing to grade on.
+    "Trend agrees" means the daily SuperTrend AND the daily DI both agree,
+    which is how the cells were measured. When either reading is missing the
+    trend cannot agree, so the signal grades as though it did not — that is
+    the conservative direction, and unlike the old "?" it still gives the POI
+    axis somewhere to show up.
     """
-    if not di_dir:
-        return "?", "daily direction unknown"
-    side = "with" if (di_dir > 0) == is_long else "against"
-    return GRADES[(side, rsi_ext > 0.0)]
+    trend_ok = bool(trend_dir) and (trend_dir > 0) == is_long
+    if di_dir:
+        trend_ok = trend_ok and (di_dir > 0) == is_long
+    return GRADES[(bool(is_early), bool(poi), trend_ok)]
 
 
 def band_stats(letter: str, kind_early: bool = False):

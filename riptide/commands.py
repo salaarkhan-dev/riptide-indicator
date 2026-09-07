@@ -88,11 +88,11 @@ def status_text(db, state) -> str:
     sweeps = "on" if SWEEP_ALERTS else "off"
     live = trend_on(db)
     src = "" if (meta_get(db, "trend_filter", "") not in ("0", "1")) else " (/trend)"
-    # DI's interval is shown next to the filter's because they are separate
-    # settings now and the grade letter comes off the DI one, not this one.
+    # The grade now reads the daily POI and the daily trend (SuperTrend AND
+    # DI agreeing), so both intervals are shown next to the filter's.
     trend_line = ((f"ON · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})"
                    if live else "off") + src
-                  + f" · grade DI on {DI_INTERVAL}")
+                  + f" · grade POI+trend on {TREND_INTERVAL}/{DI_INTERVAL}")
     return (
         f"<b>Riptide status</b>\n\n"
         f"build      <code>{build_id()}</code>\n"
@@ -169,16 +169,18 @@ def stats_text(db) -> str:
 
     g = s.get("grades") or {}
     if any(b["setups"] for b in g.values()):
-        body += "\n<b>by grade</b>  <i>(A DI agrees · B/C it does not)</i>\n"
-        for k in ("A", "B", "C", "?"):
+        body += ("\n<b>by grade</b>  <i>(daily POI × daily trend; "
+                 "D is the cell that measured negative)</i>\n")
+        for k in ("A", "B", "C", "D"):
             b = g.get(k)
             if b and b["setups"]:
                 hist = band_stats(k)
                 mark = f"   vs {hist[3]:+.3f} back" if hist else ""
                 body += f"<code>{_bucket_line('  ' + k, b)}{mark}</code>\n"
-        body += ("<i>The backtest column is what these rows exist to overturn. "
-                 "A over C measured +0.36 R there; the ordering is what "
-                 "replicated across splits, not the level.</i>\n")
+        body += ("<i>The backtest column is what these rows exist to "
+                 "overturn. A over D measured +0.87 R there, and the POI half "
+                 "of it is the only filter that has passed a held-out test. "
+                 "The ordering is what replicates, not the level.</i>\n")
 
     body += (f"\n<b>both together</b>\n"
              f"<code>{_bucket_line('  all', a)}</code>\n"

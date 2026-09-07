@@ -123,6 +123,11 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
                                           fetch_candles) or 0
             x.di_dir = await trend.di_at(sess, symbol, x.detected_time,
                                          fetch_candles) or 0
+            # The stop sits just beyond the raid extreme, and it is the raid
+            # that has to land in the daily zone — not the entry, which is a
+            # retracement away from it.
+            x.poi = await trend.poi_at(sess, symbol, x.detected_time, x.stop,
+                                       x.is_long, fetch_candles)
             with_trend = d is None or (d > 0) == x.is_long
             if with_trend or not trend_on:
                 keep_s.append(x)
@@ -133,6 +138,8 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
                                           fetch_candles) or 0
             w.di_dir = await trend.di_at(sess, symbol, w.sweep_time,
                                          fetch_candles) or 0
+            w.poi = await trend.poi_at(sess, symbol, w.sweep_time, w.stop,
+                                       w.is_long, fetch_candles)
             # A swept high implies a short, so it wants a downtrend.
             with_trend = d is None or (d < 0) == w.is_high
             if with_trend or not trend_on:
@@ -144,6 +151,8 @@ async def scan_symbol(sess, sem, symbol, trend_on=None):
                                           fetch_candles) or 0
             e.di_dir = await trend.di_at(sess, symbol, e.fvg_time,
                                          fetch_candles) or 0
+            e.poi = await trend.poi_at(sess, symbol, e.fvg_time, e.stop,
+                                       e.is_long, fetch_candles)
             with_trend = d is None or (d > 0) == e.is_long
             if with_trend or not trend_on:
                 keep_e.append(e)
@@ -287,8 +296,8 @@ async def cycle(sess, db, symbols):
                 tracker.arm(db, sid, e, kind=tracker.EARLY)
             if fresh and not mute and EARLY_ALERTS:
                 if await tg.tg_send(sess, tg.early_message(
-                        e, tracker.live_band(db, tg.grade_letter(
-                            e.di_dir, e.is_long, e.rsi_ext), tracker.EARLY))):
+                        e, tracker.live_band(db, tg.grade_letter(e, True),
+                                             tracker.EARLY))):
                     quick += 1
 
     for setups, _, _, _ in results:
@@ -314,9 +323,8 @@ async def cycle(sess, db, symbols):
                 tracker.arm(db, sid, s, kind=tracker.CONFIRMED)
             if fresh and not mute:
                 if await tg.tg_send(sess, tg.setup_message(
-                        s, tracker.live_band(db, tg.grade_letter(
-                            s.di_dir, s.is_long, s.rsi_ext),
-                            tracker.CONFIRMED))):
+                        s, tracker.live_band(db, tg.grade_letter(s),
+                                             tracker.CONFIRMED))):
                     sent += 1
     if bootstrap:
         log.info("first run: history recorded, nothing sent")

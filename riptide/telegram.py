@@ -16,7 +16,8 @@ from zoneinfo import ZoneInfo
 import aiohttp
 
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
-                     TG_CHAT, TG_RETRIES, TG_TOKEN, TREND_INTERVAL, log)
+                     TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
+                     TREND_INTERVAL, log)
 from .engine import (Early, Setup, Sweep, band_stats, grade_of, shift_odds)
 
 async def tg_send(sess, text: str) -> bool:
@@ -218,8 +219,7 @@ def _footer(when: int, price: float, tv_symbol: str) -> str:
     return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
 
 
-def _grade(di_dir: int, is_long: bool, rsi_ext: float,
-           early: bool = False, live=None) -> list[str]:
+def _grade(x, early: bool = False, live=None) -> list[str]:
     """
     Two lines: the letter with the reason it got that letter, and the rate
     that band has actually run at.
@@ -240,16 +240,19 @@ def _grade(di_dir: int, is_long: bool, rsi_ext: float,
     historical one — forward data is the number worth trusting, and until it
     exists the alert says so by showing history instead.
     """
-    letter, why = grade_of(di_dir, is_long, rsi_ext)
-    dot = {"A": "🟢", "B": "🟡", "C": "🟠", "?": "⚪"}[letter]
+    letter, why = grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)
+    dot = {"A": "🟢", "B": "🟡", "C": "🟠", "D": "⚪"}[letter]
     out = [f"{dot} <b>{letter}</b>  <i>{why}</i>"]
 
     st = live if live else band_stats(letter, early)
     if st:
         n, fill, win, r, se = st
         src = "live" if live else "backtest"
-        out.append(f"<i>band {letter}: {win}% of fills reached 1R, "
-                   f"{fill}% filled · {n} {src}</i>")
+        # The target moved to 2R; the band figures are measured at whatever
+        # TRACK_TARGET_R is, so the number is interpolated rather than written
+        # as "1R" — which is what it used to say, and stopped being true.
+        out.append(f"<i>band {letter}: {win}% of fills reached "
+                   f"{TRACK_TARGET_R:g}R, {fill}% filled · {n} {src}</i>")
     return out
 
 
@@ -290,9 +293,9 @@ def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
     return out
 
 
-def grade_letter(di_dir: int, is_long: bool, rsi_ext: float) -> str:
+def grade_letter(x, early: bool = False) -> str:
     """Just the letter, for looking up a band's live rate before rendering."""
-    return grade_of(di_dir, is_long, rsi_ext)[0]
+    return grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[0]
 
 
 def setup_message(s: Setup, live=None) -> str:
@@ -313,7 +316,7 @@ def setup_message(s: Setup, live=None) -> str:
         f"<i>sweep → shift → FVG{also}</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        *_grade(s.di_dir, s.is_long, s.rsi_ext, live=live),
+        *_grade(s, live=live),
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _pool(s.src, s.level, s.pivots),
         _footer(s.detected_time + gap_step, s.last_price, s.symbol),
@@ -335,7 +338,7 @@ def early_message(s: Early, live=None) -> str:
         f"bar{'' if bars == 1 else 's'} after the raid</i>",
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        *_grade(s.di_dir, s.is_long, s.rsi_ext, early=True, live=live),
+        *_grade(s, early=True, live=live),
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[INTERVAL], s.last_price, s.symbol),

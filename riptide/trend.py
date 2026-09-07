@@ -40,9 +40,10 @@ from __future__ import annotations
 import time
 from bisect import bisect_right
 
-from .config import (BAR_SECONDS, BTC_REGIME_INTERVAL, DI_INTERVAL,
+from .config import (BAR_SECONDS, BTC_REGIME_INTERVAL, CFG, DI_INTERVAL,
                      TREND_FACTOR, TREND_INTERVAL, TREND_LEN, log)
-from .engine import Candle, atr_series, rma as atr_rma
+from .engine import (Candle, atr_series, daily_zones, in_zone,
+                     rma as atr_rma)
 
 # Daily bars change once a day; refetching them every scan is pure waste.
 # (fetched_at, bar times, supertrend dirs, DI dirs)
@@ -131,10 +132,11 @@ async def _series(sess, symbol: str, fetch, interval: str):
         if len(cs) < TREND_LEN + 5:
             log.warning("%s: only %d %s bars, trend readings skipped",
                         symbol, len(cs), interval)
-            _CACHE[key] = (now, [], [], [])
+            _CACHE[key] = (now, [], [], [], [])
             return None
         _CACHE[key] = (now, [c.t for c in cs], supertrend(cs),
-                       di_direction(cs))
+                       di_direction(cs),
+                       daily_zones(cs, atr_series(cs, CFG.atr_len)))
         hit = _CACHE[key]
     return hit if hit[1] else None
 
@@ -172,6 +174,21 @@ async def btc_at(sess, when: int, fetch) -> int | None:
     return _at(hit[1], hit[2], when, BTC_REGIME_INTERVAL) or None
 
 
+async def poi_at(sess, symbol: str, when: int, price: float, is_long: bool,
+                 fetch) -> bool:
+    """Did the raid land inside an aligned daily order block or fair value gap?
+
+    Reads the same cached daily bars as the SuperTrend and DI, so it costs no
+    extra request. Returns False when the history is missing, which grades the
+    signal as though there were no POI — the conservative direction, and the
+    same choice the trend readings make.
+    """
+    hit = await _series(sess, symbol, fetch, TREND_INTERVAL)
+    if hit is None:
+        return False
+    return in_zone(hit[4], when, price, is_long, BAR_SECONDS[TREND_INTERVAL])
+
+
 async def di_at(sess, symbol: str, when: int, fetch) -> int | None:
     """DI direction on DI_INTERVAL's last closed bar at `when`. +1, -1, None."""
     hit = await _series(sess, symbol, fetch, DI_INTERVAL)
@@ -189,7 +206,7 @@ async def direction_at(sess, symbol: str, when: int, fetch) -> int | None:
     hit = await _series(sess, symbol, fetch, TREND_INTERVAL)
     if hit is None:
         return None
-    _, times, dirs, _ = hit
+    _, times, dirs, _, _ = hit
     if not times:
         return None
     # Candle.t is a bar OPEN time, so the last bar that had already CLOSED at
