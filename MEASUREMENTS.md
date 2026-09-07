@@ -1976,3 +1976,81 @@ are profitable because they are unfilled.** The limit order is not failing to
 catch them, it is doing the selecting — the same discipline that refuses the
 runaway winner is what refuses the entries that were never going to offer a
 good price. Removing the refusal removes both.
+
+## How long to leave the order working — 2 to 20 bars, paired
+
+`research/studies/wait.py`. Every value from 2 to 20 bars, each paired against
+the shipped 10 on the same signal set.
+
+    CONFIRMED n=246       fill     win    R/signal   total   vs 10
+       2 bars            43.9%   50.0%     +0.159    +39.2   -0.090  -1.8 SE
+       5 bars            58.5%   48.6%     +0.181    +44.4   -0.069  -2.0 SE
+       8 bars            64.2%   50.0%     +0.230    +56.6   -0.020  -0.8 SE
+      10 bars  <-        69.9%   50.0%     +0.250    +61.4
+      12 bars            74.0%   50.5%     +0.280    +68.8   +0.030  +1.4 SE
+      15 bars            77.6%   49.2%     +0.267    +65.6   +0.017  +0.6 SE
+      20 bars            80.9%   48.2%     +0.256    +63.1   +0.007  +0.2 SE
+
+    EARLY n=1388 is flat everywhere: every value from 2 to 20 sits between
+    +0.012 and +0.030 R/signal, and the largest paired difference against 10
+    is +0.010 (1.1 SE) at 18 bars.
+
+**Win rate does not move.** Fill rate nearly doubles from 2 bars to 20 —
+43.9% to 80.9% — and the win rate stays pinned at 48-50% the whole way. The
+setups that take twelve bars to retrace win as often as the ones that fill in
+two. That is the single most useful number here: waiting longer is not
+"accepting worse trades", it is the same trades arriving later.
+
+**The curve has a floor, not a peak.** Below 8 bars it costs real money (2
+bars is -0.090, 5 bars -0.069, both about 2 SE) because the setup is being
+abandoned before it has retraced. From 9 to 20 it is a plateau: 12 is the
+nominal argmax at +0.030, which is 1.4 SE and nowhere near the 3 SE bar.
+
+**Per-symbol tuning is noise, and this is how we know.** Each symbol's own
+best wait, confirmed signals: 2, 2, 3, 3, 7, 7, 9, 10, 10, 11, 12, 13, 14, 17
+— spread across almost the whole tested range, stdev 4.6, median 6. Early is
+the same, min 2 max 18 stdev 5.4. If 10 were wrong for a symbol there would be
+a cluster somewhere else; instead every symbol picks a different value, which
+is what fitting ~10 observations looks like.
+
+    => 10 stays. 12 is not distinguishable from it and per-symbol values are
+       noise. The rule that IS supported: never cancel before 8 bars.
+
+## Why chasing the entry fails — it is not the risk, it is the stop
+
+`research/studies/decouple.py`. The buffer result in the previous section held
+the stop at the raid extreme, so it proved something narrower than it looked:
+chasing loses WHEN THE STOP STAYS PUT. That is a coupling — entry and stop are
+welded, so every tick of chase is a tick of extra risk on all 246 trades. Break
+the weld and the arithmetic should change. Four stop rules x four chase
+distances:
+
+    CONFIRMED n=246      chase   fill     win   risk%    R/signal   total
+      raid extreme <-     0.00  69.9%   50.0%   1.83      +0.250    +61.4
+      raid extreme        1.00  95.1%   40.2%   2.86      +0.020     +4.9
+      constant risk       0.25  80.9%   42.2%   1.82      +0.126    +30.9
+      constant risk       0.50  87.4%   42.8%   1.82      +0.165    +40.5
+      constant risk       1.00  95.1%   35.9%   1.82      -0.047    -11.5
+      gap far edge        0.00  69.9%   40.1%   0.54      -0.057    -14.1
+      5-bar swing         0.00  69.9%   45.9%   1.68      +0.190    +46.7
+
+`constant risk` holds |entry - stop| at exactly what it was — risk% stays 1.82
+across the whole chase, so risk inflation is eliminated by construction. **It
+still loses**, and the win rate column says why: 50.0% at the gap edge, 42.2%
+after a quarter-ATR chase, 35.9% after a full one, at identical risk. Fourteen
+points of win rate bought with nothing but a worse entry price.
+
+So the coupling was never the problem. **The raid extreme is not merely where
+a stop fits; it is the price beyond which the setup is wrong.** Any stop nearer
+than that sits inside normal retracement noise and gets taken by the pullback
+the setup was always going to have. `gap far edge` is the clean proof: it
+places a very tight stop (0.54% vs 1.83%), and the win rate falls to 40% on
+confirmed and 28% on early, for -0.057 and -0.398 R per signal. Cheap risk,
+bought at a price that more than consumes it. Even the 5-bar swing low — a
+real structural level, only slightly nearer than the raid — is worse than the
+raid extreme with no chase at all (+0.190 vs +0.250).
+
+    => sixteen cells, nothing beats the shipped entry-at-gap-edge with the
+       stop beyond the raid. The fill-rate ceiling from the previous section
+       is not reachable by any repositioning of entry or stop. It is not a
+       parameter problem.
