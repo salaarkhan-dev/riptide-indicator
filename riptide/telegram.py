@@ -370,10 +370,21 @@ def sweep_message(s: Sweep) -> str:
     took = "high" if s.is_high else "low"
     direction = "below" if s.is_high else "above"
     note = trend_note(s.trend_dir, is_long, s.btc_dir, s.symbol)
+    # The POI goes on the line that already exists rather than getting one of
+    # its own. On a sweep it is not a verdict — there is nothing to grade yet
+    # — it is the reason THIS raid was sent when dozens of others were not,
+    # and it is the same test any setup born from this raid will face.
+    #
+    # With POI_SWEEPS on it is true of every sweep that arrives, so it reads
+    # as a label rather than as news. That is the point: it says what the
+    # filter let through. When the filter is off it varies, and then it is the
+    # single most useful word in the message.
+    where = (" in a daily POI" if s.poi
+             else "" if s.poi_known else " · POI unknown")
     return "\n".join(x for x in (
         _headline("👀 <b>SWEEP</b>", is_long, s.symbol, tf_label(s.tf or INTERVAL),
                   suffix="bias"),
-        "<i>liquidity taken · no entry yet</i>",
+        f"<i>liquidity taken{where} · no entry yet</i>",
         "",
         f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",
         f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>"
