@@ -11,7 +11,8 @@ import time
 
 import aiohttp
 
-from .config import (BASE, INTERVAL, LOOKBACK, MIN_VOL_USDT,
+from .config import (BASE, EXCLUDE_TRADFI, INTERVAL, LOOKBACK, MIN_VOL_USDT,
+                     TOP_N,
                      QUOTE, SYMBOLS_ENV, BAR_SECONDS, log)
 from .engine import Candle
 
@@ -39,7 +40,7 @@ async def list_symbols(sess) -> list[str]:
     d = await get_json(sess, f"{BASE}/api/v1/contract/detail")
     if not d or not d.get("data"):
         return []
-    out = []
+    out, skipped = [], 0
     for c in d["data"]:
         if c.get("quoteCoin") != QUOTE:
             continue
@@ -47,7 +48,14 @@ async def list_symbols(sess) -> list[str]:
             continue
         if c.get("apiAllowed") is False:
             continue
+        if EXCLUDE_TRADFI and any("tradfi" in p for p in
+                                  (c.get("conceptPlate") or [])):
+            skipped += 1
+            continue
         out.append(c["symbol"])
+    if skipped:
+        log.info("skipped %d tokenised stock/commodity contracts; every "
+                 "measurement here assumes 24/7 crypto perpetuals", skipped)
     return await filter_by_turnover(sess, out)
 
 
@@ -82,6 +90,11 @@ async def filter_by_turnover(sess, symbols: list[str]) -> list[str]:
             continue
 
     kept = [s for s in symbols if turnover.get(s, 0.0) >= MIN_VOL_USDT]
+    if kept and TOP_N > 0 and len(kept) > TOP_N:
+        kept.sort(key=lambda s: turnover.get(s, 0.0), reverse=True)
+        log.info("universe capped at the top %d by turnover; the cut is at "
+                 "%.1fM 24h", TOP_N, turnover.get(kept[TOP_N - 1], 0.0) / 1e6)
+        kept = kept[:TOP_N]
     if not kept:
         log.warning("volume filter (%.0f USDT) matched no symbols; "
                     "threshold looks too high, keeping %d unfiltered",

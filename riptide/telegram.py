@@ -162,20 +162,20 @@ def trend_note(trend_dir: int, is_long: bool, btc_dir: int = 0,
     Measured: with the trend +0.119 R per setup, against it -0.016.
     Empty when the trend is unknown, which is honest about not knowing.
     """
-    if not trend_dir:
+    # The daily trend used to get a line here. It is now half of the grade —
+    # every letter's reason names it explicitly — so printing it again was the
+    # same fact twice, in an alert that has to be read in about two seconds.
+    # What is left is BTC, which the grade does NOT carry.
+    #
+    # Most alts follow BTC intraday, so the same setup is a different bet
+    # depending on which way BTC is going. It is context, not a verdict.
+    # Measured on early signals: agreeing +0.179, disagreeing -0.055; it
+    # replicated at about 70% of its discovered size on a held-out window but
+    # did not clear the 3 SE bar, so it informs and does not decide.
+    if not btc_dir or symbol == "BTC_USDT":
         return ""
-    name = {"Day1": "daily", "Hour4": "4h", "Hour8": "8h",
-            "Min60": "hourly"}.get(TREND_INTERVAL, tf_label(TREND_INTERVAL))
-    aligned = (trend_dir > 0) == is_long
-    out = (f"✅ with the {name} trend" if aligned
-           else f"⚠️ AGAINST the {name} trend")
-    # BTC's own direction, appended rather than given a line of its own. Most
-    # alts follow BTC intraday, so the same setup is a different bet depending
-    # on which way BTC is going — but it is context, not a verdict, and a
-    # second line would read as a second instruction.
-    if btc_dir and symbol != "BTC_USDT":
-        out += ("  ·  BTC with" if (btc_dir > 0) == is_long else "  ·  BTC against")
-    return out
+    return ("🟢 BTC going your way" if (btc_dir > 0) == is_long
+            else "🔻 BTC going the other way")
 
 
 def bar_label(t: int) -> str:
@@ -184,17 +184,26 @@ def bar_label(t: int) -> str:
 
 
 def _headline(tag: str, is_long: bool, symbol: str, tf: str,
-              suffix: str = "") -> str:
+              suffix: str = "", grade: str = "") -> str:
     """
     First line of every alert, and the only line Telegram shows in the
-    notification preview — so it carries all three things needed to triage
-    without opening the chat: which strategy, which way, which symbol.
+    notification preview — so it carries everything needed to triage without
+    opening the chat: which strategy, how good, which way, which symbol.
+
+    The GRADE goes here, in the preview, because it is the one thing that
+    decides whether to open the message at all. It used to sit seven lines
+    down, below the entry and stop — which meant reading the numbers of a
+    trade before finding out it was a D.
 
     suffix qualifies the direction ("bias" on a sweep, where nothing is
     tradeable yet) and belongs beside it, not after the timeframe.
     """
     side = "LONG" if is_long else "SHORT"
-    return (f"{tag}  {'🟢' if is_long else '🔴'} <b>{side}</b>"
+    # The grade is a bare bold letter, not a coloured dot. The direction
+    # already owns the green/red dot on this line and a second coloured circle
+    # beside it reads as noise rather than as a second signal.
+    return (f"{tag}{f' <b>{grade}</b>' if grade else ''}"
+            f"  {'🟢' if is_long else '🔴'} <b>{side}</b>"
             f"{f' <i>{suffix}</i>' if suffix else ''}  <b>{symbol}</b>  {tf}")
 
 
@@ -242,11 +251,10 @@ def _grade(x, early: bool = False, live=None) -> list[str]:
     exists the alert says so by showing history instead.
     """
     letter, why = grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)
-    dot = {"A": "🟢", "B": "🟡", "C": "🟠", "D": "⚪"}[letter]
-    out = [f"{dot} <b>{letter}</b>  <i>{why}</i>"]
+    out = [f"<i>{why}</i>"]
 
     st = live if live else band_stats(letter, early)
-    if st:
+    if st and st[0]:
         n, fill, win, r, se = st
         src = "live" if live else "backtest"
         # The target moved to 2R; the band figures are measured at whatever
@@ -294,6 +302,11 @@ def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
     return out
 
 
+def grade_chip(x, early: bool = False) -> str:
+    """The grade as it appears in the headline."""
+    return grade_letter(x, early)
+
+
 def grade_letter(x, early: bool = False) -> str:
     """Just the letter, for looking up a band's live rate before rendering."""
     return grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[0]
@@ -312,14 +325,18 @@ def setup_message(s: Setup, live=None) -> str:
     also = (f" · ⚡ also early, gap {s.also_early} "
             f"bar{'' if s.also_early == 1 else 's'} after the raid"
             if s.also_early else "")
+    why, *band = _grade(s, live=live)
     return "\n".join(x for x in (
-        _headline("🎯 <b>CONFIRMED</b>", s.is_long, s.symbol, tf),
-        f"<i>sweep → shift → FVG{also}</i>",
+        _headline("🎯 CONFIRMED", s.is_long, s.symbol, tf,
+                  grade=grade_chip(s)),
+        why,
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        *_grade(s, live=live),
+        "",
+        f"<i>sweep → shift → FVG{also} · "
+        f"{_pool(s.src, s.level, s.pivots)}</i>",
+        *band,
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
-        _pool(s.src, s.level, s.pivots),
         _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf),
     ) if x is not None)
 
@@ -333,15 +350,19 @@ def early_message(s: Early, live=None) -> str:
     rather than a whole leg back.
     """
     bars = s.bars_from_sweep
+    why, *band = _grade(s, early=True, live=live)
     return "\n".join(x for x in (
-        _headline("⚡ <b>EARLY</b>", s.is_long, s.symbol, tf_label(INTERVAL)),
-        f"<i>sweep → FVG · no shift · gap {bars} "
-        f"bar{'' if bars == 1 else 's'} after the raid</i>",
+        _headline("⚡ EARLY", s.is_long, s.symbol, tf_label(s.tf or INTERVAL),
+                  grade=grade_chip(s, True)),
+        why,
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
-        *_grade(s, early=True, live=live),
+        "",
+        f"<i>sweep → FVG · no shift · gap {bars} bar"
+        f"{'' if bars == 1 else 's'} after the raid · "
+        f"{_pool(s.src, s.level, s.pivots, s.pools)}</i>",
+        *band,
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
-        _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.fvg_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
                 s.symbol, s.tf),
     ) if x is not None)

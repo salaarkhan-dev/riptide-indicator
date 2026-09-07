@@ -61,6 +61,30 @@ CONCURRENCY = int(os.getenv("RIPTIDE_CONCURRENCY", "8"))
 QUOTE = os.getenv("RIPTIDE_QUOTE", "USDT")
 SYMBOLS_ENV = os.getenv("RIPTIDE_SYMBOLS", "")          # comma list, or blank
 MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
+
+# Cap the universe at the N most liquid symbols rather than everything above a
+# turnover floor. A floor drifts with the market — 3M matched 91 symbols on one
+# day and would match a different number on any other — while a top-N is a
+# scan cost you can actually plan around: N x len(INTERVALS) kline requests per
+# cycle. 0 disables the cap and keeps the floor alone.
+TOP_N = int(os.getenv("RIPTIDE_TOP_N", "60"))
+
+# Skip MEXC's tokenised stocks, indices and commodities — XAU, USOIL, SPX500,
+# MUSTOCK and the rest. They are 428 of the 1024 USDT perps and 13 of the 60
+# most active, so at any useful universe size they are most of what expanding
+# would ADD.
+#
+# They must not be in it. Every measurement in this project was made on 24/7
+# crypto perpetuals, and several depend on that directly: the Piercing Line
+# and Dark Cloud Cover result rests on there being NO GAPS (0 of 1999 bars),
+# because bar i opens exactly where bar i-1 closed. A tokenised stock follows
+# an equity session — it gaps over the close, it gaps over the weekend, and a
+# liquidity sweep across a session gap is a different event from the one
+# measured here.
+#
+# The exchange's own conceptPlate tagging is the discriminator, so this
+# follows MEXC's classification rather than guessing from ticker names.
+EXCLUDE_TRADFI = os.getenv("RIPTIDE_EXCLUDE_TRADFI", "1") == "1"
 ALERT_ON_FIRST_RUN = os.getenv("RIPTIDE_ALERT_FIRST_RUN", "0") == "1"
 # Scan immediately on startup instead of waiting for the next bar close.
 SCAN_ON_START = os.getenv("RIPTIDE_SCAN_ON_START", "1") == "1"
