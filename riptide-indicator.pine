@@ -169,7 +169,8 @@ showBreaker    = input.bool(true,  "Breaker block (orange)",         group = gLo
 blockLevel     = input.string("Mean threshold", "  block line at",
      options = ["Mean threshold", "Proximal edge", "Distal edge"], group = gLook,
      tooltip = "Which single price the block's line is drawn at. Mean threshold is the midpoint of the candle body, the usual one-line convention. Proximal is the edge price meets first coming back; distal is the far side. The reference indicator draws one line per block and its convention is not published, so this is a choice rather than a match — a Data Window reading off that indicator would settle it.")
-blockBars      = input.int(8, "  block line length (bars)", minval = 1, maxval = 100, group = gLook)
+blockBars      = input.int(8, "  block bar length (bars)", minval = 1, maxval = 100, group = gLook)
+blockWidth     = input.int(3, "  block bar thickness", minval = 1, maxval = 8, group = gLook)
 obCol          = input.color(#ffd54f, "  order block", inline = "blk", group = gLook)
 bbCol          = input.color(#ff8f00, "  breaker",     inline = "blk", group = gLook)
 showEntryLine  = input.bool(true,  "Entry line",                     group = gLook)
@@ -496,6 +497,25 @@ int   effGrabBars   = refMode ? 12   : maxBarsAfterGrab
 bool  effAllFvg     = refMode ? false : showAllFvg
 bool  effRaidDot    = refMode ? false : showRaidDot
 string effTrendMode = refMode ? "Off" : trendMode
+// The reference ships FOUR liquidity types enabled — pivot, daily, weekly and
+// session — where Riptide ships two. Weekly is off here because 295 weekly
+// raids produced zero setups in 41.6 days, and session was never turned on at
+// all. That is marks their chart draws which ours cannot, and no amount of
+// tuning the pivot rules closes it, so the preset switches them on.
+bool  effUseWeekly  = refMode ? true : useWeeklyLiq
+// Session pools are PINE-ONLY. riptide/engine.py builds Day and Week levels
+// and has no session source at all, so with this on the chart draws pools the
+// bot can never alert on. That is the one place the preset knowingly breaks
+// the chart/bot correspondence, and it is why it is worth knowing that the
+// reference runs four types where the engine implements three.
+bool  effUseSession = refMode ? true : useSessionLiq
+// And their session windows are not ours: GMT+0 08:00-17:00, 13:00-22:00 and
+// 00:00-09:00, against Riptide's Asia/London/NY split. Same switch, or the
+// session pools land in different places and the comparison is meaningless.
+string effSess1     = refMode ? "0800-1700" : sess1Spec
+string effSess2     = refMode ? "1300-2200" : sess2Spec
+string effSess3     = refMode ? "0000-0900" : sess3Spec
+string effSessTz    = refMode ? "UTC" : sessTz
 
 // ═════════════════════════ 4. BAR-LEVEL SERIES ══════════════════════════════
 atr = ta.atr(atrLength)
@@ -541,9 +561,9 @@ trendOk(bool isLong) =>
 // Period boundaries and session membership, global scope for series consistency.
 newDay   = timeframe.change("D")
 newWeek  = timeframe.change("W")
-inSess1  = sess1On and not na(time(timeframe.period, sess1Spec, sessTz))
-inSess2  = sess2On and not na(time(timeframe.period, sess2Spec, sessTz))
-inSess3  = sess3On and not na(time(timeframe.period, sess3Spec, sessTz))
+inSess1  = sess1On and not na(time(timeframe.period, effSess1, effSessTz))
+inSess2  = sess2On and not na(time(timeframe.period, effSess2, effSessTz))
+inSess3  = sess3On and not na(time(timeframe.period, effSess3, effSessTz))
 
 // Seeds a new cluster's running extremes at its oldest pivot bar
 // (bar_index - pivotRight) without dynamic history indexing.
@@ -950,7 +970,7 @@ drawBlock(LevelGroup g, int off, bool isBull, color col, string name) =>
              xloc  = xloc.bar_index,
              color = col,
              style = line.style_solid,
-             width = 2))
+             width = blockWidth))
         g.lbs.push(label.new(b, y, "",
              xloc      = xloc.bar_index,
              yloc      = yloc.price,
@@ -1291,14 +1311,14 @@ if engineOk
         if not newDay
             trackerUpdate(dayT)
 
-    if useWeeklyLiq
+    if effUseWeekly
         if newWeek
             closePeriod(weekT, 2, "Week", showPrevWeekHL, "PWH", "PWL")
             trackerReset(weekT)
         if not newWeek
             trackerUpdate(weekT)
 
-    if useSessionLiq
+    if effUseSession
         // session 1
         if inSess1 and not inSess1[1]
             trackerReset(s1T)
