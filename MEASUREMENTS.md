@@ -1209,6 +1209,63 @@ Out of sample on the 15m with-trend cells: early +0.101 / +0.144 / +0.164 /
 but two splits sit under 1 SE and the level is roughly half the Min30
 equivalent throughout.
 
+## The risk cap, swept properly
+
+Raised from a BTC 30m example: a raid candle with a 75% lower wick (range
+525, low 78,959.9 against a body at 79,390) puts the early stop a very long
+way from the entry.
+
+Swept by running the ENGINE at each cap, not by filtering signals afterwards.
+That distinction matters: a rejected gap does not end the search, so a tighter
+cap produces DIFFERENT signals — a later, tighter gap off the same raid — not
+merely fewer. Filtering post-hoc answers a question nobody asked.
+
+| max risk | early n | R/signal | total R | confirmed n | R/signal | total R |
+|---|---|---|---|---|---|---|
+| 1 ATR | 180 | +0.235 | +42.4 | 14 | +0.398 | +5.6 |
+| 1.5 ATR | 586 | +0.179 | +105.0 | 71 | +0.323 | +22.9 |
+| 2 ATR | 961 | +0.141 | +135.5 | 143 | +0.239 | +34.2 |
+| **2.5 ATR** | 1186 | +0.121 | +143.2 | **242** | **+0.260** | **+63.0** |
+| 3 ATR | 1281 | +0.118 | +151.3 | 348 | +0.181 | +63.1 |
+| 4 ATR (current) | 1347 | +0.114 | **+153.4** | 544 | +0.110 | +59.7 |
+| none | 1373 | +0.111 | +152.5 | 787 | +0.075 | +59.4 |
+
+**The two signal types want different caps, and they currently share one.**
+
+For EARLY, 4 ATR is already about right. R per signal rises all the way down
+to +0.235 at 1 ATR, and total R falls the whole way — the tighter caps are
+deleting winners. Against 4.0 the difference is +0.007 at 0.035 SE, and total
+R drops 153.4 to 143.2.
+
+For CONFIRMED, 2.5 ATR beats it:
+
+| split | n 2.5 | R 2.5 | n 4.0 | R 4.0 | diff | total 2.5 | total 4.0 |
+|---|---|---|---|---|---|---|---|
+| all | 242 | +0.260 | 544 | +0.110 | +0.151 (2.5 SE) | +63.0 | +59.7 |
+| symbols A | 119 | +0.329 | 273 | +0.145 | +0.184 | +39.1 | +39.6 |
+| symbols B | 123 | +0.194 | 271 | +0.074 | +0.120 | +23.9 | +20.2 |
+| window 1st | 114 | +0.278 | 266 | +0.118 | +0.161 | +31.7 | +31.3 |
+| window 2nd | 128 | +0.244 | 278 | +0.102 | +0.142 | +31.3 | +28.4 |
+
+Same sign on all four splits. **Read what it is, though: the same total return
+from 44% of the trades**, not more money. Total R is 63.0 against 59.7, which
+is inside noise. What actually improves is efficiency — 2.4x the R per trade,
+less than half the exposure, less time in market, and the widest-stop setups
+gone. That is worth taking, and it is not an edge increase.
+
+### The part the cap does not fix
+
+A far stop is not a bigger loss. A -1R loss is -1R whether the stop sits 0.2%
+or 5% away, provided the position is sized by RISK rather than by notional: a
+wide stop means a smaller position, not a larger loss. In the BTC case a
+78,959.9 stop against a ~79,500 entry is 0.68% risk, so risking 1% of an
+account is 1.5x notional — less leverage than a tight-stop setup would need,
+not more. Sizing by a fixed contract count is what turns stop distance into
+loss size, and no cap in the engine can repair that.
+
+Fees also run the other way from intuition: cost in R is 0.08 / risk_pct, so a
+wide stop is CHEAPER per unit of risk, not dearer.
+
 ## The standing caveat
 
 Everything above shares one 41.6-day window, on symbols chosen by their
