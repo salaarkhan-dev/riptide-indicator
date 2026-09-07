@@ -2424,3 +2424,63 @@ also coherent rather than merely quiet: a sweep's POI is evaluated at the same
 raid a setup's would be, so a sweep outside a zone can only lead to signals
 POI_REQUIRED then suppresses — sending it would advertise a setup the bot has
 already decided not to alert on.
+
+## Sweeps in a POI: same chance, different payoff
+
+`research/studies/sweeps.py`. 16347 raids, live 60-symbol universe, both
+timeframes, 42 days. A sweep has no entry so it cannot be scored as a trade,
+but "does a POI raid have more chances" is still a measurable claim — and it
+turns out to mean two things that answer differently.
+
+    sweeps       -> setup   -> early    R of the setups that followed
+      outside a POI      11249    7.5%    41.4%    -0.055 ± 0.041
+      inside a POI        5098    7.0%    41.2%    +0.141 ± 0.067
+
+**The conversion rate is the same.** 7.0% against 7.5% — if anything a POI raid
+is marginally LESS likely to produce a confirmed setup. Early conversion is
+identical too, 41.2% against 41.4%. Being in a daily zone does not make a raid
+more likely to turn into anything.
+
+**What follows is worth +0.196 R more.** The setups born from POI raids score
++0.141; those born outside score -0.055. Same split on both timeframes:
+Min30 +0.143 against -0.071, Min15 +0.140 against -0.037.
+
+So the POI does not change the ODDS of a setup appearing. It changes whether
+the setup, once it appears, is worth taking.
+
+### It is a genuinely separate axis from the shift distance
+
+The engine already predicts conversion from how far price must travel back for
+the shift to confirm, and that gradient is steep. If POI raids were simply
+raids sitting closer to their shift level, the label would add nothing. Crossed:
+
+    band            no POI                    in POI
+    under 1%   24.8% conv   -0.137       22.5% conv   +0.191
+    1-2%       13.5% conv   -0.051       14.8% conv   +0.100
+    2-4%        5.6% conv   +0.013        5.2% conv   +0.139
+
+Conversion tracks the distance and ignores the POI. R tracks the POI and
+ignores the distance. Median shift distance is 3.10% inside a POI and 2.96%
+outside — the same. Two independent axes, which is why the sweep alert
+usefully carries both:
+
+    "3.9% away"        how likely a setup is to appear at all
+    "in a daily POI"   whether it will be worth taking when it does
+
+### The conversion table was stale, and is now updated
+
+`SHIFT_ODDS` in engine.py was measured on 23 hand-picked symbols. Re-measured
+on the live universe, Min30, 8984 raids:
+
+    distance     old        new
+    under 1%     37%        24%
+    1-2%         25%        13%
+    2-4%         17%         6%
+    4-8%          7%         2%
+    over 8%       3%         1%
+
+Every band converts less often than the old table claimed. The shape is
+identical and the gradient is steeper; only the level moved, because the wider
+universe is thinner — the same finding the POI work produced from the other
+direction. The table is not shown on any alert (only the distance is), so
+nothing user-facing was ever wrong; the comment beside it was.

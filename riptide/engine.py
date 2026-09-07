@@ -594,8 +594,14 @@ def band_stats(letter: str, kind_early: bool = False):
 # same buckets), so a far shift level says the CONFIRMED path is unlikely and
 # says nothing against the early one. Suppressing these raids would cost real
 # early signals to remove a mark that is merely uninformative.
-SHIFT_ODDS = ((1.0, 37, 322), (2.0, 25, 830), (4.0, 17, 1128),
-              (8.0, 7, 865), (float("inf"), 3, 557))
+# Re-measured 8 Sep on the live 60-symbol universe, Min30, 8984 raids —
+# against 3702 on 23 hand-picked symbols before. Every band converts LESS
+# often than the old table said (37/25/17/7/3 became 24/13/6/2/1). The shape
+# is identical and the gradient is if anything steeper; the level moved
+# because the wider universe is thinner, which is the same finding the POI
+# work produced from the other direction.
+SHIFT_ODDS = ((1.0, 24, 652), (2.0, 13, 1962), (4.0, 6, 2807),
+              (8.0, 2, 2155), (float("inf"), 1, 1408))
 
 
 def shift_odds(extreme: float, struct_level: float):
