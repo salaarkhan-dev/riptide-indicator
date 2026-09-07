@@ -298,6 +298,71 @@ That is the whole point of the distinction: a filter would have been a claim,
 and the evidence does not support a claim. A line on the alert is context, and
 the evidence supports that.
 
+## Where it stands — the shipped configuration, 41.6 days, 23 symbols
+
+`research/studies/standing.py`. Min30, target 2R, cap 2.5 ATR confirmed and
+4.0 early, break-even off. "win" is the share of FILLED trades ending
+positive; R per signal counts an unfilled setup as zero.
+
+| | n | fill | win | median risk | GROSS R | total | net R | total |
+|---|---|---|---|---|---|---|---|---|
+| CONFIRMED | 246 | 71% | 49% | 1.26% | **+0.270** | +66.5 | +0.227 | +55.8 |
+| EARLY | 1384 | 80% | 39% | 1.24% | **+0.080** | +110.9 | +0.021 | +28.9 |
+| BOTH | 1630 | 79% | 41% | 1.24% | +0.109 | +177.5 | +0.052 | +84.7 |
+
+Gross is with no fees and no slippage. Net models the fees a limit-entry
+strategy actually pays.
+
+### Fees were being overstated, and it mattered most where the edge was thinnest
+
+Every earlier number charged 0.08% — taker on both sides — to every trade.
+That is wrong for this strategy. **The entry is always a LIMIT order at the
+gap, so it pays maker (0.02%), and a target exit is also a limit.** Only the
+stop is a market order. So a winner costs 0.04% round trip and a loser 0.08%.
+
+| | flat 0.08% | maker/taker modelled |
+|---|---|---|
+| confirmed | +0.216 (+53.1) | **+0.227 (+55.8)** |
+| early | +0.008 (+11.5) | **+0.021 (+28.9)** |
+
+Early's net total goes from +11.5 to +28.9 — it was being charged taker fees
+on trades it exits with a limit. `simulate` now takes `fee_maker`/`fee_taker`;
+the flat `fee_pct` remains so older numbers stay reproducible.
+
+**Fees still take 74% of the early edge and 16% of the confirmed edge**, and
+that ratio is the whole story of the difference between them. Cost in R is
+`fee / risk_pct`, and the median stop here is 1.24%, so every round trip is
+3-6% of the risk taken. Early signals earn +0.080 R gross; there is not much
+room in that for anything.
+
+### Early signals, split by BTC
+
+| | n | fill | win | GROSS R | total | net R | total |
+|---|---|---|---|---|---|---|---|
+| BTC 30m agrees | 800 | 77% | 44% | **+0.179** | +143.1 | +0.125 | +99.8 |
+| BTC 30m against | 584 | 84% | 33% | **-0.055** | -32.2 | -0.121 | -70.9 |
+
+At the 2R target the split is much starker than it was at 1R: the agreeing
+half is the better of the two signal types on a per-signal basis, and the
+disagreeing half is a straight bleed. Note the fill rates run the wrong way —
+the losing half fills MORE often (84% against 77%), which is what a losing
+trade looks like from the entry side: price comes back to you because it is
+going through you.
+
+Still not a filter. It is 1.8 SE on held-out data and the bar is 3.
+
+### Per symbol
+
+Best five by total gross R: PUMPFUN +30, ZEC +24, BTC +19, SOL +19, HYPE +18.
+Worst five: ADA +2, LINK -2, DASH -7, LTC -12, AKE -13.
+
+**Do not act on this.** 23 symbols scored twice is 46 comparisons on 41.6 days
+with 5-17 confirmed signals per symbol; a spread from +30 to -13 is what
+random numbers look like at that sample size. Dropping the bottom five would
+be fitting the window, and the two that look worst — AKE and LTC — are also
+among the thinnest. It is recorded because per-symbol edge is a real question,
+and it needs per-symbol sample sizes this window cannot supply.
+
 ## Method
 
 Unless stated otherwise: 50 MEXC USDT perpetuals ranked by 24h turnover,

@@ -62,7 +62,9 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
              horizon_bars: int = TRACK_HORIZON_BARS,
              be_arm_r: float = 0.0, be_lock_r: float = 0.0,
              part_at_r: float = 0.0, part_to_r: float = 0.0,
-             fee_pct: float = FEE_PCT) -> Outcome:
+             fee_pct: float = FEE_PCT,
+             fee_maker: float = 0.0,
+             fee_taker: float = 0.06) -> Outcome:
     """One trade, scored from the bar the entry was actually touched on."""
     risk = abs(entry - stop)
     if risk <= 0 or entry <= 0:
@@ -78,7 +80,15 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
     if fill is None:
         return Outcome(0.0, False, None, 0.0, 0.0, None)
 
-    fee = fee_pct / (100 * risk / entry)
+    # Fees, honestly. The entry is always a LIMIT order at the gap, so it pays
+    # maker. The exit depends on how the trade ends: a target is a limit
+    # (maker), a stop is a market order (taker). Charging taker on both sides
+    # of every trade — which the flat fee_pct does — overstates the cost of
+    # every winner. fee_maker/fee_taker model it properly; fee_pct alone keeps
+    # the old flat behaviour so earlier numbers stay reproducible.
+    fee_win = fee_maker * 2 if fee_maker else fee_pct
+    fee_lose = (fee_maker + fee_taker) if fee_maker else fee_pct
+    to_r = 1.0 / (100 * risk / entry)
     cur_stop, armed, part_done, banked, size = stop, False, False, 0.0, 1.0
     tgt = part_at_r or target_r
     mfe = mae = 0.0
@@ -91,7 +101,7 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
 
         if (c.l <= cur_stop) if is_long else (c.h >= cur_stop):
             r = banked + size * sgn * (cur_stop - entry) / risk
-            return Outcome(r - fee, True, fill, mfe, mae, k)
+            return Outcome(r - fee_lose * to_r, True, fill, mfe, mae, k)
         # On the FILL bar the target cannot resolve, and this is not fussiness.
         # A long entry is approached from ABOVE, so the bar's high may well
         # have printed before price came down to the entry — counting it as a
@@ -108,14 +118,15 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
                 size, part_done, tgt = 0.5, True, part_to_r
                 cur_stop, armed = lvl(be_lock_r), True
                 continue
-            return Outcome(banked + size * tgt - fee, True, fill, mfe, mae, k)
+            return Outcome(banked + size * tgt - fee_win * to_r,
+                           True, fill, mfe, mae, k)
         if be_arm_r and not armed:
             if (c.c >= lvl(be_arm_r)) if is_long else (c.c <= lvl(be_arm_r)):
                 cur_stop, armed = lvl(be_lock_r), True
 
     last = min(fill + horizon_bars, len(cs)) - 1
     r = banked + size * sgn * (cs[last].c - entry) / risk
-    return Outcome(r - fee, True, fill, mfe, mae, last)
+    return Outcome(r - fee_lose * to_r, True, fill, mfe, mae, last)
 
 
 def mean_se(v) -> tuple[float, float]:
