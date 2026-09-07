@@ -2290,3 +2290,83 @@ The grid ran on 14 symbols; this run is all 23, and the ablation lands in the
 same place: +0.248 raw, +0.486 with the POI, +0.449 with the trend, +0.822
 with both, against +0.317 / +0.520 / +0.522 / +0.889 on the 14. The 43-signal
 "both" arm wins 75.9% of its fills.
+
+## The cell table, and hybrid alert policies on 300 USDT
+
+`research/studies/hybrid.py`. 3215 signals, 23 symbols, 41 days, both
+timeframes, daily context. Every signal falls into (timeframe, kind, daily
+POI, daily trend) — four axes, all known at signal time, all separately
+measured. This is the table a grade should be built from.
+
+    tf     kind       POI  trend     n   fill   win     R/signal
+    Min30  confirmed  no   no      100   72%   44%   +0.082 ± 0.119
+    Min30  confirmed  no   yes      66   73%   46%   +0.206 ± 0.157
+    Min30  confirmed  yes  no       38   61%   43%   +0.105 ± 0.189
+    Min30  confirmed  yes  yes      43   67%   76%   +0.822 ± 0.187
+    Min30  early      no   no      624   80%   36%   -0.050 ± 0.049
+    Min30  early      no   yes     331   80%   40%   +0.048 ± 0.070
+    Min30  early      yes  no      228   78%   38%   +0.018 ± 0.084
+    Min30  early      yes  yes     214   78%   46%   +0.188 ± 0.087
+    Min15  confirmed  yes  no       28   93%   58%   +0.605 ± 0.287
+    Min15  confirmed  yes  yes      31   61%   58%   +0.417 ± 0.222
+    Min15  early      yes  yes     197   81%   49%   +0.281 ± 0.096
+    Min15  early      no   no      541   86%   31%   -0.131 ± 0.056
+    (Min15 confirmed without a POI is -0.177 and -0.241; Min15 is only
+     tradeable inside a POI, which is the opposite of "add a 15m feed".)
+
+The two filters are not additive, they are multiplicative. Confirmed with
+neither is +0.082; with the trend alone +0.206; with the POI alone +0.105;
+with both +0.822 and a 76% win rate. **The single largest cell in the project
+is the one where both agree**, and 624 of 1644 Min30 signals — 38% of
+everything the bot currently sends — sit in the one cell that is negative.
+
+### Policies on a 300 USDT account
+
+Judged on return per unit of drawdown. 10x, 1% risk, max 8 open, 2 reserved
+for confirmed, compounding.
+
+    policy                                    alerts taken  ret  maxDD  ret/DD
+    A  everything, 30m only (shipped)           1644   177  +94%   14%    6.94
+    B  30m confirmed only                        247   157  +78%    8%    9.78
+    C  30m, POI required on both                 523   214 +101%    6%   16.22
+    D  30m confirmed all + 30m early in POI      689   221  +88%   12%    7.20
+    E  D + 15m early in POI                     1045   235 +127%   12%   10.38
+    G  both tf, POI required on everything       938   237 +141%    7%   21.53
+    H  POI and trend on everything               485   144  +24%   10%    2.24
+
+**Policy H is the important one.** Its cells are the best in the table — every
+signal it takes comes from a POI+trend cell scoring +0.188 to +0.822 — and it
+finishes second to last. Requiring the daily trend concentrates every position
+on the same side of the same market at the same time, so the individually best
+signals arrive as one correlated bundle. Highest R per signal is not the same
+objective as best account outcome, and this is the cleanest demonstration of it
+the project has produced.
+
+### A flaw in the first version of this simulation, and what it was worth
+
+The first run let a 30m early and a 15m early on the same symbol hold two
+positions at once. They are the same idea twice. With one position per symbol
+enforced:
+
+    policy   with the rule        without it
+    E          10.38                25.29
+    G          21.53                13.79
+    A           6.94                 3.24
+
+E's apparent lead was mostly a free doubling of size on exactly the moves both
+charts agreed about — which is where a multi-timeframe policy must not be given
+a discount, since agreement is the thing being tested. The ranking inverts
+once it is removed. Recorded rather than quietly fixed, because the first
+number is the one that would have been believed.
+
+    => the POI requirement is the whole win: 6.94 -> 16.22 on 30m alone, and
+       21.53 using both timeframes. The second timeframe adds real value ONLY
+       inside a POI and ONLY without doubling up per symbol. Requiring the
+       daily trend as well is actively harmful at the portfolio level despite
+       being the best filter per signal.
+
+Caveat: nine policies were compared on one dataset and C, E and G are within a
+plausible noise band of each other. What is NOT within noise is that every
+POI-requiring policy beats the shipped one by 2-3x on return per drawdown, and
+the POI component is the one thing here that has passed a pre-registered
+held-out test.
