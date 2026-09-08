@@ -388,15 +388,17 @@ def sweep_message(s: Sweep) -> str:
     # single most useful word in the message.
     where = (" in a daily POI" if s.poi
              else "" if s.poi_known else " · POI unknown")
-    # The lead emoji carries the verdict, not just the word. Eyes on a raid
-    # the bot is telling you to ignore is a contradiction you have to read
-    # past; at a glance down a chat full of these, the icon is what separates
-    # them, so the icon has to disagree when the verdict does.
+    # No "WATCH" on a watchable sweep. With SWEEP_WATCH_ONLY on, every sweep
+    # that arrives is one, so the word said nothing — the same reason the
+    # band's historical rate came off the trade alerts. What stays is the
+    # marking for the case where the filter is OFF: a skipped raid gets a
+    # different icon and a lowercase tag, because eyes on a raid the bot is
+    # telling you to ignore is a contradiction the reader has to look past.
     watch = sweep_worth(s.sweep_extreme, s.struct_level, s.poi)
     return "\n".join(x for x in (
         _headline("👀 <b>SWEEP</b>" if watch else "💤 <b>sweep</b>",
                   is_long, s.symbol, tf_label(s.tf or INTERVAL),
-                  suffix="bias", grade="WATCH" if watch else "skip"),
+                  suffix="bias", grade="" if watch else "skip"),
         f"<i>liquidity taken{where} · no entry yet</i>",
         "",
         f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",
