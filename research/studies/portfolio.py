@@ -34,7 +34,7 @@ def btc_ok(r):
         return True
     t, st = got
     j = bisect_right(t, r.candles[r.bar].t - BAR_SECONDS[BTC_REGIME_INTERVAL]) - 1
-    return True if not (0 <= j < len(st) and st[j]) else (st[j] < 0) == r.signal.is_long
+    return True if not (0 <= j < len(st) and st[j]) else (st[j] > 0) == r.signal.is_long
 
 
 @dataclass

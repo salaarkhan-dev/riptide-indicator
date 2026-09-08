@@ -6,9 +6,10 @@ it is what the measurements say IF you do.
 
 **The single most important caveat:** almost every number below comes from one
 ~42-day backtest window, and the parameters were chosen on that same window.
-Two effects have been held out on data they were not found on: the BTC regime
-came back at 70% of its discovered size, and the daily POI kept its sign on
-all three measurable arms. Assume shrinkage on everything else.
+One effect has been held out on data it was not found on: the daily POI kept
+its sign on all three measurable arms. The BTC regime was held out too and
+replicated, but with its labels inverted by a sign bug — see below. Assume
+shrinkage on everything else.
 
 ## Read the grade first
 
@@ -51,11 +52,9 @@ not a rule.
      more than +0.2 R per signal.
   2. Between two A's, prefer the 30m one and the one with the wider stop. Both
      are sub-1 SE tiebreakers, so use them only to break an actual tie.
-  3. Between two of the same letter, take the one whose BTC line agrees.
-     Measured on EARLY signals: agreeing +0.179, disagreeing -0.055, and held
-     out at +0.123 (1.8 SE). It has never been established on confirmed
-     setups, and inside grade A it measures backwards — so on an A, ignore the
-     BTC line entirely rather than reading it either way.
+  3. The BTC line is not a tiebreaker in either direction. See below — the
+     numbers this file used to quote had their labels inverted by a bug, and
+     the corrected reading is not stable enough to act on.
   4. Never fill the last slot with a C when the day is young. Slots are the
      scarce resource, not signals — the account simulation had to skip
      hundreds of signals for want of one.
@@ -78,6 +77,42 @@ not a rule.
     named as such. One chart cannot move any of them.
   - **Do not act on a sweep heads-up.** It has no entry and no stop because
     neither exists yet. It means go and look, nothing more.
+
+## The BTC line — read it as a fact, not as a verdict
+
+**A sign bug inverted the label on every BTC measurement this project ever
+made.** Six research scripts compared `supertrend() < 0` against the trade
+direction, under a comment reading "-1 is up". It returns **+1** for up — the
+alert code always had it right, the studies did not. So every number this file
+and the code comments quoted for "BTC agrees" was in fact measured on BTC
+going the *other* way.
+
+Re-measured on the correct sign, 6970 early signals, 42 days, live universe:
+
+| | n | fill | win | R/signal |
+|---|---|---|---|---|
+| BTC 30m trending WITH you | 3253 | 84% | 31% | **-0.150** |
+| BTC 30m trending AGAINST you | 3717 | 81% | 41% | **+0.081** |
+
+Once relabelled, the earlier work replicates rather than contradicting this:
+discovery, held-out window, and now the current window all point the same way.
+Three windows, same direction. And it is mechanically coherent — these are
+reversal setups off a liquidity sweep, and a reversal needs something to
+reverse against.
+
+**It is still not a rule, and you should not trade it yet.** Inside grade B —
+the band you actually receive most of — the split reverses between the two
+halves of the window: +0.289 in the first half, -0.641 in the second. An
+effect that changes sign inside 42 days is a regime relationship, not an edge,
+whatever the pooled standard error says.
+
+So: **the BTC line tells you which way BTC is pointing. Nothing more.** Do not
+skip a B because BTC disagrees, and do not take one because it does. `/stats`
+records `btc_dir` on every signal and is the only place this gets settled.
+
+The alert wording changed with this correction — 🟢/🔻 implied a verdict the
+evidence does not support, so both cases now read "⛓️ BTC trending with/against
+you" and neither is coloured as good or bad.
 
 ## Per trade
 

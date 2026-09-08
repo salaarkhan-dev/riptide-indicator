@@ -85,7 +85,7 @@ async def main():
             j = bisect_right(times, r.candles[r.bar].t - BAR_SECONDS[tf]) - 1
             if not 0 <= j < len(st) or not st[j]:
                 return None
-            return (st[j] < 0) == r.signal.is_long     # -1 is up
+            return (st[j] > 0) == r.signal.is_long     # +1 is up
         f.__name__ = f"btc_{tf}"
         return f
 

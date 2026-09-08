@@ -28,7 +28,7 @@ def btc_agrees(r):
         return None
     t, st = got
     j = bisect_right(t, r.candles[r.bar].t - BAR_SECONDS[BTC_REGIME_INTERVAL]) - 1
-    return None if not (0 <= j < len(st) and st[j]) else (st[j] < 0) == r.signal.is_long
+    return None if not (0 <= j < len(st) and st[j]) else (st[j] > 0) == r.signal.is_long
 
 
 def run(rows, label, max_open=99, risk_pct=RISK_PCT):

@@ -75,7 +75,7 @@ async def main():
     def agrees(r):
         t, st = BTC["x"]
         j = bisect_right(t, r.candles[r.bar].t - BAR_SECONDS[BTC_REGIME_INTERVAL]) - 1
-        return None if not (0 <= j < len(st) and st[j]) else (st[j] < 0) == r.signal.is_long
+        return None if not (0 <= j < len(st) and st[j]) else (st[j] > 0) == r.signal.is_long
     for lab, want in (("BTC agrees", True), ("BTC against", False)):
         show(lab, stats([r for r in gross if r.kind == "early" and agrees(r) is want]),
              stats([r for r in real if r.kind == "early" and agrees(r) is want]))

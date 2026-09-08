@@ -182,13 +182,26 @@ async def btc_at(sess, when: int, fetch) -> int | None:
     this module, so it costs one extra fetch per TTL for the whole scan, not
     one per symbol.
 
-    Shown on the alert, never used to suppress one. Measured on early signals:
-    on the discovery window, agreeing +0.045 against disagreeing -0.129
-    (+0.174, 3.6 SE); on a held-out window that had never been looked at,
-    +0.010 against -0.113 (+0.123, 1.8 SE), same sign on all four splits. The
-    direction replicated at about 70% of the discovered size — the shape of a
-    real effect that was overestimated where it was found — but it did not
-    clear the pre-registered 3 SE bar, so it informs and does not decide.
+    Shown on the alert, never used to suppress one.
+
+    THE LABELS ON EVERY EARLIER MEASUREMENT OF THIS WERE INVERTED. Six
+    research scripts tested `supertrend() < 0` against is_long under a comment
+    reading "-1 is up". It is +1 for up — this function and the alert always
+    had it right, the studies did not. So the discovery (+0.174, 3.6 SE) and
+    the held-out replication (+0.123, 1.8 SE) were both measuring BTC going
+    the OTHER way and calling it "agrees".
+
+    Re-measured on the correct sign, 6970 early signals on the live universe:
+    BTC agreeing -0.150, BTC against +0.081, a -0.231 gap at -7.6 SE. Same
+    direction as the two earlier windows once relabelled, so the effect
+    replicated three times; only its name was wrong. Coherent, too: these are
+    reversal setups off a liquidity sweep, and a counter-trend backdrop is
+    where a reversal has somewhere to go.
+
+    Still not a filter. Inside grade B the split reverses between the two
+    halves of the 42-day window (+0.289 then -0.641), which is what an
+    unstable regime relationship looks like however large the pooled SE.
+    `/stats` carries btc_dir forward and is the only place this settles.
     """
     hit = await _series(sess, "BTC_USDT", fetch, BTC_REGIME_INTERVAL)
     if hit is None:

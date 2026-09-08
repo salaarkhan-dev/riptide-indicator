@@ -88,7 +88,7 @@ def f_btc(r):
     j = bisect_right(times, r.candles[r.bar].t - BAR_SECONDS["Day1"]) - 1
     if not 0 <= j < len(st) or not st[j]:
         return None
-    return (st[j] < 0) == r.signal.is_long        # -1 is up in supertrend()
+    return (st[j] > 0) == r.signal.is_long        # +1 is up in supertrend()
 
 
 def f_btc_30m(r):
@@ -98,7 +98,7 @@ def f_btc_30m(r):
     j = bisect_right(times, r.candles[r.bar].t - BAR_SECONDS["Min30"]) - 1
     if not 0 <= j < len(st) or not st[j]:
         return None
-    return (st[j] < 0) == r.signal.is_long
+    return (st[j] > 0) == r.signal.is_long
 
 
 FEATURES = [

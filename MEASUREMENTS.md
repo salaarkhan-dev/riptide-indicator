@@ -2578,3 +2578,77 @@ loser is held 8 bars against 23 for a winner, and 27% of losers see the target
 after the stop. This trade is the median loser almost exactly. There is no
 diagnosis to make beyond that — it is what a 52%-probability outcome looks
 like from the inside.
+
+## CORRECTION — the BTC regime sign was inverted in every study that measured it
+
+Found on 8 Sep while measuring grade B split by BTC, which was run only to
+check whether the daily POI absorbed a split established elsewhere.
+
+`riptide/trend.py:supertrend` returns **+1 for an uptrend**, as its docstring
+says and as an empirical check confirms (BTC 30m, `+1` bars carry a median
+trailing 20-bar move of +0.298% against −0.062% for `−1`). Six research
+scripts tested the BTC regime as:
+
+    return (st[j] < 0) == r.signal.is_long     # -1 is up
+
+`btc_regime.py`, `context.py` (twice), `equity.py`, `portfolio.py`,
+`standing.py`. All six fixed. `riptide/trend.py:btc_at` and
+`riptide/telegram.py:trend_note` used `> 0` and were always correct — the
+shipped alert has never told anyone the wrong direction, only the wrong thing
+about what that direction is worth.
+
+**What this invalidates.** Every "BTC agrees" figure in this file, in
+`TRADING.md`, and in the `btc_at` and `trend_note` docstrings had its two
+columns swapped. The discovery result (+0.174, 3.6 SE) and the pre-registered
+held-out replication (+0.123, 1.8 SE) were both measuring BTC going the OTHER
+way. `PREREG_btc.md` stated its direction in advance under the wrong label, so
+the pre-registration is intact as a procedure and wrong as a claim.
+
+**What survives.** The effect. All three windows point the same way once the
+label is corrected, so this is a naming failure rather than a measurement
+failure, and it is coherent: a liquidity-sweep reversal wants something to
+reverse against.
+
+### Re-measured, correct sign — `research/studies/btc_by_grade.py`
+
+Live universe, both timeframes, 2R, fees in. Direction pre-registered by the
+held-out study (which, corrected, predicts AGAINST scores higher).
+
+| slice | agrees n | R | against n | R | diff | SE |
+|---|---|---|---|---|---|---|
+| **grade B** (early+POI+trend) | 471 | −0.023 | 889 | **+0.198** | −0.221 | −3.0 |
+| grade A (conf+POI+trend) | 57 | −0.100 | 128 | +0.458 | −0.557 | −2.9 |
+| grade C, in a POI | 853 | −0.083 | 686 | +0.122 | −0.205 | −3.2 |
+| everything sent (A+B) | 528 | −0.031 | 1017 | +0.231 | −0.262 | −3.8 |
+| **all early, POI or not** | 3253 | −0.150 | 3717 | +0.081 | −0.231 | **−7.6** |
+| all early, outside a POI | 2198 | −0.184 | 2446 | +0.013 | −0.197 | −5.3 |
+
+The POI does not absorb the split; the two stack. Win rates move with it —
+grade B is 36% with BTC and 46% against.
+
+**And it is still not shipped, because grade B fails its robustness arms:**
+
+| grade B split | diff | SE |
+|---|---|---|
+| symbols A (even index) | −0.126 | −1.2 |
+| symbols B (odd index) | −0.321 | −3.1 |
+| first half of window | **+0.289** | **+2.7** |
+| second half of window | **−0.641** | **−6.2** |
+
+The window halves have opposite signs, each at more than 2 SE. That is a
+regime relationship that changed inside 42 days, and it is exactly why the
+overall −3.0 must not be traded. The symbol halves agree in sign but differ
+2.5x in size.
+
+**This also settles the grade-A "inversion" recorded in the section above.**
+It was not an inversion and it was not noise — it pointed the same way as
+everything else, and it was dismissed because it was checked against a prior
+that was itself backwards. The entry above stands as written for the two axes
+it tested; its BTC paragraph is wrong and is superseded here.
+
+**What changed.** The six studies. The `btc_at` and `trend_note` docstrings.
+`TRADING.md`, which had been telling the reader to prefer the agreeing signal
+— the worse half. And the alert text: 🟢/🔻 asserted a verdict the evidence
+never supported in that direction and does not support strongly in the other,
+so both now read "⛓️ BTC trending with/against you", uncoloured. No filter,
+no grade change, no suppression.

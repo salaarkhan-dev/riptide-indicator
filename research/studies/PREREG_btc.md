@@ -36,3 +36,29 @@ windows, target 2.0R (the shipped setting).
 On the HELD-OUT window alone: the stated direction, >= 3 SE, and the same sign
 on all four splits. The discovery window does not count towards it — it is
 where the hypothesis came from.
+
+---
+
+## POST-HOC NOTE — 8 Sep 2026: the labels in this document are inverted
+
+This pre-registration is procedurally intact and its claim is backwards.
+
+`agree()` in `btc_regime.py` tested `supertrend() < 0` against `is_long` under
+a comment reading "-1 is up". `riptide/trend.py:supertrend` returns **+1** for
+up. So everywhere this document says AGREEING, read AGAINST.
+
+The prediction — "the labelled-agreeing column scores higher" — was stated in
+advance and did come true, on a window nobody had looked at, on the exact
+statistic named. What it established is that **BTC 30m trending AGAINST the
+trade direction predicts a higher R per signal**. Re-measured on the correct
+sign over the current window: agreeing −0.150, against +0.081, −7.6 SE on 6970
+early signals. Three windows, one direction.
+
+The bar set here was 3 SE, and the corrected effect clears it on the pooled
+number. It is still not shipped, because a robustness split this document did
+not require now says the effect reverses sign between the two halves of a
+42-day window. See the correction section in `MEASUREMENTS.md`.
+
+The lesson is not about pre-registration, which worked. It is that a
+pre-registered direction is only as good as the code computing the variable,
+and nothing in this procedure ever checked that.

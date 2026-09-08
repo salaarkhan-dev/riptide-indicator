@@ -170,13 +170,25 @@ def trend_note(trend_dir: int, is_long: bool, btc_dir: int = 0,
     #
     # Most alts follow BTC intraday, so the same setup is a different bet
     # depending on which way BTC is going. It is context, not a verdict.
-    # Measured on early signals: agreeing +0.179, disagreeing -0.055; it
-    # replicated at about 70% of its discovered size on a held-out window but
-    # did not clear the 3 SE bar, so it informs and does not decide.
+    #
+    # THE SIGN HERE WAS RIGHT AND EVERY MEASUREMENT OF IT WAS WRONG. Six
+    # research scripts compared `supertrend() < 0` to is_long under a comment
+    # reading "-1 is up"; supertrend() returns +1 for up, as this line always
+    # had it. So the discovery (+0.174, 3.6 SE) and the held-out replication
+    # (+0.123, 1.8 SE) both described BTC going the OTHER way while labelling
+    # it "agrees". Re-measured on the correct sign, on 6970 early signals:
+    # BTC agreeing -0.150, BTC against +0.081 (-7.6 SE) — the same direction
+    # the earlier work found, under the name it should always have had.
+    #
+    # These are liquidity-sweep reversal setups, so a counter-trend backdrop
+    # being the better one is coherent rather than surprising. It is still not
+    # a filter: inside grade B the split reverses between the two halves of
+    # the window. So the emoji no longer render a verdict, and the words say
+    # which way BTC is pointing and nothing about whether that is good.
     if not btc_dir or symbol == "BTC_USDT":
         return ""
-    return ("🟢 BTC going your way" if (btc_dir > 0) == is_long
-            else "🔻 BTC going the other way")
+    return ("⛓️ BTC trending with you" if (btc_dir > 0) == is_long
+            else "⛓️ BTC trending against you")
 
 
 def bar_label(t: int) -> str:
