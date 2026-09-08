@@ -3001,3 +3001,53 @@ on a higher timeframe**, which is the opposite direction from scalping and is
 consistent with the already-recorded finding that the wider universe is
 materially worse per signal. Needs a clean one-variable test before anything
 moves.
+
+## Does a smaller, more liquid universe pay better? — `research/studies/universe.py`
+
+The clean one-variable test promised after `scalp.py` showed Min30
+confirmed-in-a-POI at 61% / +0.431 on 30 symbols against a comparable 52% on
+60. That comparison changed the symbol count and dropped the trend condition
+at once, so it settled nothing. Here only the symbol count moves: Min30, POI
+required, same window, same scorer.
+
+**Pre-registered before looking:** more liquid pays more per signal, and the
+MARGINAL tiers must be monotone for it to count. Cumulative bands share most
+of their signals, so a gradient there is nearly automatic and proves little.
+
+**Designed around the look-ahead that would have guaranteed a positive.**
+Ranking by today's turnover and scoring the last 42 days puts every coin that
+just pumped in the top band because of the very move being scored.
+`filter_by_turnover` ranks on live `amount24`, and `market.py` has 1.6 days of
+history — not enough to rank on the past. So symbols are ranked by median bar
+turnover (volume × close) over the FIRST half of the window and scored only on
+signals in the SECOND half. The ranking variable is strictly prior to every
+outcome it sorts.
+
+**Honest split, marginal tiers — the pre-registered test:**
+
+| tier | n | win | R/signal |
+|---|---|---|---|
+| symbols 1–10 | 120 | 45% | +0.145 ± 0.120 |
+| symbols 11–20 | 164 | 42% | +0.020 ± 0.092 |
+| symbols 21–30 | 129 | 34% | −0.031 ± 0.108 |
+| **symbols 31–40** | 149 | 50% | **+0.296 ± 0.104** |
+| symbols 41–60 | 264 | 37% | +0.036 ± 0.074 |
+
+**Not monotone, and the best tier is the fourth** — precisely the band that
+"fewer, more liquid symbols" would cut. The cumulative row behaves the same
+way: +0.145, +0.073, +0.041, +0.108, +0.085, dipping and recovering rather
+than falling. **Rejected.**
+
+The naive same-window version is no better behaved (+0.015, +0.154, +0.101,
++0.261, +0.029), which incidentally says the look-ahead bias here is not a
+simple one — the naive top-10 is WORSE than the honest top-10. Either way
+there is no gradient to trade.
+
+**What this settles.** The 61% in `scalp.py` was the confounded comparison it
+was flagged as, not a finding. TOP_N stays at 60. And it is worth naming the
+temptation that was refused: symbols 31–40 at +0.296 on n=149 is a middle tier
+with no mechanism behind it, reachable only by reading a table five ways —
+exactly the shape of the twenty-one entry filters that came before it.
+
+The pre-registration did its job. Reading cumulative rows alone, "top 10 is
+best at +0.145" was available and would have been wrong.

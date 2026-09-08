@@ -170,7 +170,9 @@ a warning rather than an edge.
 ## Per portfolio
 
 This is where the remaining improvement is. Entry filters have failed 21
-times; portfolio rules have not been tried until now.
+times, and a 22nd idea — scanning fewer, more liquid symbols — failed its own
+pre-registered test in `universe.py`. Portfolio rules are the one family that
+has not been exhausted.
 
 **There is no measured limit on how many alerts to take per day.** Nothing in
 this project ever produced one, and a daily quota is not a smaller version of
