@@ -16,12 +16,12 @@ from . import tracker
 from . import trend
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      EARLY_ALERTS, ENTRY_INTERVAL, FRESH_BARS, INTERVAL,
-                     INTERVALS, LOG_MARKET, MTF_GRACE_BARS, POI_REQUIRED,
-                     POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS,
+                     INTERVALS, LOG_MARKET, MIN_GRADE, MTF_GRACE_BARS,
+                     POI_REQUIRED, POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS,
                      SWEEP_FRESH_BARS, SWEEP_INTERVALS, SWEEP_MAX_DIST,
-                     SWEEP_SRC,
-                     TREND_FILTER, TREND_INTERVAL, log)
-from .engine import Early, Sweep, atr_series, run_engine, shift_odds
+                     SWEEP_SRC, TREND_FILTER, TREND_INTERVAL, log)
+from .engine import (Early, Sweep, atr_series, grade_of, run_engine,
+                     shift_odds)
 from .exchange import fetch_candles, list_symbols
 from .storage import (already_sent, early_already_sent, early_sig, first_run,
                       meta_get, meta_set, record, record_early,
@@ -210,6 +210,19 @@ def _arm(db, sid, x, kind):
                     getattr(x, "symbol", "?"), e)
 
 
+def grade_ok(x, early: bool) -> bool:
+    """Is this signal's grade worth a message?
+
+    Gates SENDING only, exactly like poi_ok. The signal is still recorded and
+    still armed, so /stats keeps scoring the muted band forward — which is the
+    whole point: the moment a band is muted is the moment its live numbers
+    become the only evidence that could argue for unmuting it. A filter that
+    also stops measuring itself can never be revisited.
+    """
+    letter = grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[0]
+    return "ABCD".index(letter) <= "ABCD".index(MIN_GRADE)
+
+
 def poi_ok(x) -> bool:
     """Should this signal be SENT under the POI policy?
 
@@ -306,7 +319,7 @@ async def cycle(sess, db, symbols):
     # Why an alert did not arrive. Every signal falls into exactly one of
     # these, so "I got no alerts" stops being a mystery that needs a
     # reproduction — the answer is in the log line at the end of the cycle.
-    gate = {k: dict(seen=0, stale=0, dupe=0, poi=0, paired=0, sent=0)
+    gate = {k: dict(seen=0, stale=0, dupe=0, poi=0, grade=0, paired=0, sent=0)
             for k in ("confirmed", "early", "sweep")}
 
     # Score already-open setups before arming new ones, against the candles
@@ -411,9 +424,12 @@ async def cycle(sess, db, symbols):
                 g["stale"] += 1
             elif not poi_ok(e):
                 g["poi"] += 1
+            elif not grade_ok(e, True):
+                g["grade"] += 1
             if fresh:
                 _arm(db, sid, e, tracker.EARLY)
-            if fresh and not mute and EARLY_ALERTS and poi_ok(e):
+            if (fresh and not mute and EARLY_ALERTS and poi_ok(e)
+                    and grade_ok(e, True)):
                 if await tg.tg_send(sess, tg.early_message(e)):
                     quick += 1
                     g["sent"] += 1
@@ -440,13 +456,15 @@ async def cycle(sess, db, symbols):
                 g["stale"] += 1
             elif not poi_ok(s):
                 g["poi"] += 1
+            elif not grade_ok(s, False):
+                g["grade"] += 1
             # Track what was actionable, sent or not: a pause or a delivery
             # failure must not put a hole in the sample. The freshness gate
             # is also what keeps this forward-only — on a first run the 600
             # bars of recorded history are all stale, so none of them arm.
             if fresh:
                 _arm(db, sid, s, tracker.CONFIRMED)
-            if fresh and not mute and poi_ok(s):
+            if fresh and not mute and poi_ok(s) and grade_ok(s, False):
                 if await tg.tg_send(sess, tg.setup_message(s)):
                     sent += 1
                     g["sent"] += 1
@@ -460,8 +478,9 @@ async def cycle(sess, db, symbols):
         # Logged every cycle, at INFO, because the one question a silent
         # alerting service has to be able to answer is why it was silent.
         log.info("  %-9s %d seen · %d already sent · %d not fresh · "
-                 "%d no POI · %d paired · %d SENT", kind, g["seen"], g["dupe"],
-                 g["stale"], g["poi"], g["paired"], g["sent"])
+                 "%d no POI · %d below grade · %d paired · %d SENT", kind,
+                 g["seen"], g["dupe"], g["stale"], g["poi"], g["grade"],
+                 g["paired"], g["sent"])
     state_gate.clear()
     state_gate.update(gate)
     return sent + quick + swept

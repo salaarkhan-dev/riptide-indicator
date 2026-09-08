@@ -45,6 +45,29 @@ INTERVALS = tuple(dict.fromkeys(
 # the scarce thing. On a large enough account to take every signal, turn this
 # off.
 POI_REQUIRED = os.getenv("RIPTIDE_POI_REQUIRED", "1") == "1"
+
+# Lowest grade worth a message. "C" sends everything the POI filter lets
+# through; "B" mutes grade C; "A" leaves only confirmed setups that are both
+# in a daily POI and with the daily trend.
+#
+# Measured over 2704 alerts in 42 days (research/studies/grades.py):
+#
+#     grade   n     /day   fill   win    RR    R/signal
+#       A     188    4.5    72%   47%   1.82    +0.251
+#       B    1043   25.1    81%   44%   1.72    +0.173
+#       C    1473   35.4    78%   38%   1.70    +0.026
+#
+# C is 54% of the traffic for 4% of the return, and its largest single cell —
+# 15m early C, about 15 alerts a day on its own — measures NEGATIVE at -0.007.
+# Muting it takes 65 alerts a day down to 30 and keeps 86% of the total R.
+#
+# Grade D cannot be reached while POI_REQUIRED is on: D is early, no POI,
+# against the trend, and the no-POI half is exactly what the filter removes.
+MIN_GRADE = os.getenv("RIPTIDE_MIN_GRADE", "C").strip().upper()[:1] or "C"
+if MIN_GRADE not in "ABCD":
+    log.warning("RIPTIDE_MIN_GRADE=%r is not one of A B C D, using C",
+                MIN_GRADE)
+    MIN_GRADE = "C"
 BAR_SECONDS = {"Min1": 60, "Min5": 300, "Min15": 900, "Min30": 1800,
                "Min60": 3600, "Hour4": 14400, "Hour8": 28800, "Day1": 86400}
 LOOKBACK = int(os.getenv("RIPTIDE_LOOKBACK", "600"))   # bars fetched per symbol

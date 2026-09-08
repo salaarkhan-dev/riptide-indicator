@@ -16,7 +16,7 @@ from . import telegram as tg
 from . import market
 from . import tracker
 from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
-                     INTERVAL, INTERVALS, LOG_MARKET, POI_REQUIRED,
+                     INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE, POI_REQUIRED,
                      POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS, SWEEP_INTERVALS,
                      TG_CHAT, TG_TOKEN, TRACK, TRACK_FILL_BARS,
                      TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_FACTOR,
@@ -113,8 +113,11 @@ def status_text(db, state) -> str:
                 continue
             gate_line += (f"{kind:<11}{d['seen']} seen · {d['dupe']} dup · "
                           f"{d['stale']} stale · {d['poi']} no POI · "
+                          f"{d.get('grade', 0)} low grade · "
                           f"{d['sent']} sent\n")
     poi_line = ("POI required" if POI_REQUIRED else "POI not required")
+    poi_line += (f" · grade {MIN_GRADE} and better"
+                 if MIN_GRADE != "C" else " · all grades")
     if SWEEP_ALERTS:
         poi_line += (f" · sweeps {'+'.join(SWEEP_INTERVALS)}"
                      + (" in POI" if POI_SWEEPS and POI_REQUIRED else ""))
