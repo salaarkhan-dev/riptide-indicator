@@ -23,6 +23,12 @@ from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
                      TREND_FILTER, TREND_INTERVAL, TREND_LEN, build_id, log)
 from .engine import band_stats
 from .scanner import cycle, seconds_to_next_close, trend_on
+from .scanner import state_gate as _gate
+
+
+def scanner_gate():
+    return _gate
+
 from .storage import meta_get, meta_set
 
 HELP = (
@@ -96,6 +102,18 @@ def status_text(db, state) -> str:
     trend_line = ((f"ON · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})"
                    if live else "off") + src
                   + f" · grade POI+trend on {TREND_INTERVAL}/{DI_INTERVAL}")
+    # Why the last cycle was quiet, if it was. Costs nothing when everything
+    # is flowing and answers the only question that matters when it is not.
+    gate_line = ""
+    g = scanner_gate()
+    if g:
+        for kind in ("confirmed", "early", "sweep"):
+            d = g.get(kind)
+            if not d or not d["seen"]:
+                continue
+            gate_line += (f"{kind:<11}{d['seen']} seen · {d['dupe']} dup · "
+                          f"{d['stale']} stale · {d['poi']} no POI · "
+                          f"{d['sent']} sent\n")
     poi_line = ("POI required" if POI_REQUIRED else "POI not required")
     if SWEEP_ALERTS:
         poi_line += (f" · sweeps {'+'.join(SWEEP_INTERVALS)}"
@@ -114,6 +132,7 @@ def status_text(db, state) -> str:
         f"last scan  {scan_line}\n"
         f"next scan  in {int(seconds_to_next_close(step) // 60)}m\n"
         f"recorded   {seen_n} setups · {swp_n} sweeps\n"
+        + gate_line +
         f"clock      {tg.local_clock() or 'UTC only'}"
     )
 

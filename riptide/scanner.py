@@ -258,6 +258,11 @@ def trend_on(db) -> bool:
     return v == "1" if v in ("0", "1") else TREND_FILTER
 
 
+# Last cycle's gate counts, for /status. Module level so the command handler
+# can read it without cycle() needing to know the shared state dict exists.
+state_gate: dict = {}
+
+
 async def cycle(sess, db, symbols):
     sem = asyncio.Semaphore(CONCURRENCY)
     # Read once per cycle so every symbol in it sees the same setting.
@@ -279,6 +284,11 @@ async def cycle(sess, db, symbols):
     step_of = lambda x: BAR_SECONDS[getattr(x, "tf", "") or INTERVAL]
     now = int(time.time())
     sent = 0
+    # Why an alert did not arrive. Every signal falls into exactly one of
+    # these, so "I got no alerts" stops being a mystery that needs a
+    # reproduction — the answer is in the log line at the end of the cycle.
+    gate = {k: dict(seen=0, stale=0, dupe=0, poi=0, paired=0, sent=0)
+            for k in ("confirmed", "early", "sweep")}
 
     # Score already-open setups before arming new ones, against the candles
     # this cycle just fetched. Ordering matters only in that a setup armed
@@ -319,14 +329,22 @@ async def cycle(sess, db, symbols):
                 odds = shift_odds(w.sweep_extreme, w.struct_level)
                 if odds and odds[0] > SWEEP_MAX_DIST:
                     continue
+            g = gate["sweep"]
+            g["seen"] += 1
             fresh = (now - w.sweep_time) <= SWEEP_FRESH_BARS * step_of(w)
             sid = sweep_sig(w)
             if sweep_already_sent(db, sid):
+                g["dupe"] += 1
                 continue
             record_sweep(db, sid, w)
+            if not fresh:
+                g["stale"] += 1
+            elif not poi_ok(w):
+                g["poi"] += 1
             if fresh and not mute and poi_ok(w):
                 if await tg.tg_send(sess, tg.sweep_message(w)):
                     swept += 1
+                    g["sent"] += 1
 
     # The no-shift strategy. Fires on the gap bar with no confirmation, so it
     # lands before the confirmed setup on the same sweep — often bars before,
@@ -335,9 +353,12 @@ async def cycle(sess, db, symbols):
     paired = pair_early(results)
     for _, _, early, _ in results:
         for e in early:
+            g = gate["early"]
+            g["seen"] += 1
             fresh = (now - e.detected_time) <= FRESH_BARS * step_of(e)
             sid = early_sig(e)
             if early_already_sent(db, sid):
+                g["dupe"] += 1
                 continue
             record_early(db, sid, e)
             # Same trade as a confirmed setup in this cycle. Record it so it
@@ -346,12 +367,18 @@ async def cycle(sess, db, symbols):
             # rows for one trade would double-count it in /stats and correlate
             # the sample, which is worse than the duplicate message.
             if (e.symbol, e.tf, e.fvg_time, e.is_long) in paired:
+                g["paired"] += 1
                 continue
+            if not fresh:
+                g["stale"] += 1
+            elif not poi_ok(e):
+                g["poi"] += 1
             if fresh:
                 tracker.arm(db, sid, e, kind=tracker.EARLY)
             if fresh and not mute and EARLY_ALERTS and poi_ok(e):
                 if await tg.tg_send(sess, tg.early_message(e)):
                     quick += 1
+                    g["sent"] += 1
 
     for setups, _, _, _ in results:
         for s in setups:
@@ -363,11 +390,18 @@ async def cycle(sess, db, symbols):
             # based window silently binned every setup slower than FRESH_BARS
             # — 3% of them — while still recording each one, so dedupe made the
             # loss permanent. The setup is not late; it did not exist yet.
+            g = gate["confirmed"]
+            g["seen"] += 1
             fresh = (now - s.detected_time) <= FRESH_BARS * step_of(s)
             sid = sig_id(s)
             if already_sent(db, sid):
+                g["dupe"] += 1
                 continue
             record(db, sid, s)
+            if not fresh:
+                g["stale"] += 1
+            elif not poi_ok(s):
+                g["poi"] += 1
             # Track what was actionable, sent or not: a pause or a delivery
             # failure must not put a hole in the sample. The freshness gate
             # is also what keeps this forward-only — on a first run the 600
@@ -377,12 +411,21 @@ async def cycle(sess, db, symbols):
             if fresh and not mute and poi_ok(s):
                 if await tg.tg_send(sess, tg.setup_message(s)):
                     sent += 1
+                    g["sent"] += 1
     if bootstrap:
         log.info("first run: history recorded, nothing sent")
     elif paused:
         log.info("alerts paused; recorded but not sent")
     log.info("scanned %d symbols, sent %d confirmed, %d early, "
              "%d sweep heads-ups", len(symbols), sent, quick, swept)
+    for kind, g in gate.items():
+        # Logged every cycle, at INFO, because the one question a silent
+        # alerting service has to be able to answer is why it was silent.
+        log.info("  %-9s %d seen · %d already sent · %d not fresh · "
+                 "%d no POI · %d paired · %d SENT", kind, g["seen"], g["dupe"],
+                 g["stale"], g["poi"], g["paired"], g["sent"])
+    state_gate.clear()
+    state_gate.update(gate)
     return sent + quick + swept
 
 
