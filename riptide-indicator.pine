@@ -60,7 +60,7 @@ gSess  = "2. Trading sessions"
 gSens  = "3. Sensitivity"
 gTrade = "4. Entry, stop and targets"
 gLook  = "5. Appearance"
-gTrend = "6. Trend line (display only)"
+gTrend = "6. Higher-timeframe context"
 gAlert = "7. Alerts"
 gStats = "8. Performance stats"
 gAdv   = "9. Advanced tuning"
@@ -160,7 +160,7 @@ setupLevelKeep = input.int(3,     "Keep levels for the last N setups", minval = 
      maxval = 50, group = gLook,
      tooltip = "Entry, stop and target lines are drawn per setup and used to stay forever, so a long chart ended up striped with levels from trades that closed days ago. Only the most recent this-many setups keep theirs.")
 showRaidDot    = input.bool(true,  "Mark raids in progress",         group = gLook,
-     tooltip = "A hollow dot on a raid that has taken liquidity but has NOT produced a structure shift yet — the state the bot's ⚡ EARLY alerts fire in. It follows the raid to each new extreme, becomes the solid X if the shift confirms, and disappears if the raid dies. Most raids die, which is why they get a provisional mark rather than an X.")
+     tooltip = "A hollow dot on a raid that has taken liquidity but has NOT produced a structure shift yet — the state the bot's ⚡ EARLY alerts fire in. It follows the raid to each new extreme, becomes the solid X if the shift confirms, and disappears if the raid dies.\n\nMOST RAIDS DIE, and the numbers are worth carrying. Measured over 8984 daily-POI raids on 30m, by how far price still had to travel back for the shift to confirm:\n\n  under 1% away   24% become a setup\n  1-2%            13%\n  2-4%             6%\n  4-8%             2%\n  over 8%          1%\n\nSo the distance to the shift level is the whole story on whether a raid is worth watching, and 40% of all raids sit beyond 4%. The bot's sweep alert prints both the distance and the rate for exactly this reason, and sends only raids under 3% away.\n\nWHAT THE DISTANCE DOES NOT TELL YOU is whether the setup will be any good. That is the daily POI, and the two are independent: conversion tracks the distance and ignores the zone, while R tracks the zone and ignores the distance. Raids inside a daily zone produce setups worth +0.141 R; those outside produce -0.055. A near raid outside a zone converts often into something that loses money, and a far raid inside one almost never converts at all.")
 raidDotKeep    = input.int(2,     "  how many in progress",  minval = 1, maxval = 20,
      group = gLook,
      tooltip = "Only the most recent this-many unresolved raids keep a dot. Older ones are dropped even if still technically alive, so the chart shows what is live rather than every raid of the session.")
@@ -190,7 +190,7 @@ blockWidth     = input.int(3, "  block bar thickness", minval = 1, maxval = 8, g
 obCol          = input.color(#ffd54f, "  order block", inline = "blk", group = gLook)
 bbCol          = input.color(#ff8f00, "  breaker",     inline = "blk", group = gLook)
 showEarly      = input.bool(true,  "Early entry zone (before the shift)", group = gLook,
-     tooltip = "The bot's ⚡ EARLY signal, drawn. Until now the chart marked the raid with a dot and then showed nothing until the shift confirmed, so an early alert arrived with no zone on screen to put an entry against — you got a price in Telegram and a blank chart.\n\nThis draws the first imbalance inside the window below, at low opacity: the zone, the stop beyond the raid extreme, and the order block behind it. No entry line and no price tag — under Proximal and Distal the entry is an edge of the zone itself, and the exact price is on the alert. Faint on purpose — nothing has confirmed a reversal, and it must not read like a completed setup.\n\nNo breaker block is drawn here and none can be: a breaker is an opposing candle that a structure break traded through, so before the shift there is nothing for it to have broken. That is also why an early alert scores at most 1 on confluence where a confirmed setup can score 2.")
+     tooltip = "The bot's ⚡ EARLY signal, drawn. Until now the chart marked the raid with a dot and then showed nothing until the shift confirmed, so an early alert arrived with no zone on screen to put an entry against — you got a price in Telegram and a blank chart.\n\nThis draws the first imbalance inside the window below, at low opacity: the zone, the stop beyond the raid extreme, and the order block behind it. No entry line and no price tag — under Proximal and Distal the entry is an edge of the zone itself, and the exact price is on the alert. Faint on purpose — nothing has confirmed a reversal, and it must not read like a completed setup.\n\nNo breaker block is drawn here and none can be: a breaker is an opposing candle that a structure break traded through, so before the shift there is nothing for it to have broken. That is also why an early alert scores at most 1 on confluence where a confirmed setup can score 2.\n\nHOW IT ACTUALLY SCORES, over 42 days: an early signal inside a daily POI and with the daily trend is grade B — 25 a day, 81% of them fill, 44% of the fills reach 2R, and it returns +0.173 R per signal. Inside a POI but against the trend it is grade C, +0.012, which the bot no longer sends. Outside a POI it is not sent at all.\n\nAn early is a DIFFERENT BET from a confirmed setup, not an earlier version of the same one. Nothing has confirmed the reversal, so the raid may simply be a trend continuing. What it buys is the stop sitting a few candles away at the raid extreme instead of a whole leg back — and every B you get is an early signal, because the confirmed half of band B needs the trend without the POI, which the POI filter removes.")
 earlyMaxBars   = input.int(10, "  gap must form within (bars of the raid)",
      minval = 1, maxval = 100, group = gLook,
      tooltip = "Matches RIPTIDE_EARLY_MAX_BARS on the bot, so the zone the chart draws is the one the alert fired on. Raise it and the chart will draw zones no alert was sent for.")
@@ -205,7 +205,8 @@ earlyKeep      = input.int(2, "  how many zones to keep", minval = 1, maxval = 2
 showEntryLine  = input.bool(true,  "Entry line",                     group = gLook)
 showStopLoss   = input.bool(true,  "Stop loss line",                 group = gLook,
      tooltip = "Drawn from the raid candle itself and extended right, so you can see which bar the stop comes from.")
-showSetupLabels= input.bool(false, "LONG / SHORT labels",            group = gLook)
+showSetupLabels= input.bool(false, "LONG / SHORT labels",            group = gLook,
+     tooltip = "The direction beside each entry zone, and — with grading on in section 6 — the letter with it.\n\nA CONFIRMED setup is the full sequence: pool, raid, structure shift, then the first imbalance after the shift. The shift is what separates it from an early signal, and it is the single largest effect measured in this project: +0.250 R per confirmed setup against +0.020 for the no-shift version on the same raids.\n\nOver 42 days, confirmed setups that also sit in a daily POI and agree with the daily trend are grade A: about 4.5 a day, 72% fill, 47% of fills reach 2R, +0.251 R per signal. In a POI but against the trend, or with neither, they grade C at +0.100 and are not sent.\n\nWHY A 47% WIN RATE IS ENOUGH: the realised reward-to-risk is 1.82, so break-even is a 35.5% win rate. Winners average +1.89 R and losers -1.03 R. You lose more often than you win and still make money, which is the whole point of a 2R target against a 1R stop. Do not read the win rate on its own — it flatters anything that fills rarely.")
 showPrevDayHL  = input.bool(false, "Draw yesterday's high / low",    group = gLook)
 showPrevWeekHL = input.bool(false, "Draw last week's high / low",    group = gLook)
 showSessionBox = input.bool(false, "Draw session ranges",            group = gLook)
@@ -277,6 +278,19 @@ trendFilterTf  = input.timeframe("D", "Higher timeframe", group = gTrend,
 trendFilterFac = input.float(5.0, "SuperTrend factor", minval = 0.5, step = 0.1,
      group = gTrend)
 trendFilterLen = input.int(14, "SuperTrend length", minval = 1, group = gTrend)
+
+// The daily point of interest, and the grade built on it. See the block above
+// dailyCtx() for what these mean and what they measured.
+poiOn        = input.bool(true, "Grade signals on the daily point of interest",
+     group = gTrend,
+     tooltip = "Adds a letter to every entry label — A, B, C or D — from two daily readings the bot also uses.\n\nPOI: did the RAID land inside a daily order block or fair value gap less than 30 days old. This is the largest single separation measured in the project and the only filter to survive a pre-registered held-out test on symbols it was not found on. Setups born from a raid inside a daily zone score +0.141 R, those outside -0.055. It does NOT change how often a raid becomes a setup — 7.0% against 7.5% — only whether the setup that follows is worth taking.\n\nTREND: the daily SuperTrend and the daily DI both agreeing with the trade.\n\nThe two MULTIPLY rather than add. A confirmed setup with neither is +0.082 R, with the trend alone +0.206, with the POI alone +0.105, and with both +0.822 at a 76% win rate. That is why there is a table of cells rather than a points system.\n\nTurn this off and the chart goes back to marking every setup, which is what it did before and is now roughly twice what the bot alerts on.")
+chartMinGrade = input.string("Show all", "Signals to draw",
+     options = ["Show all", "B and better (matches the bot)", "A only"],
+     group = gTrend,
+     tooltip = "The bot sends B and better — RIPTIDE_MIN_GRADE=B — so 'Show all' draws roughly twice what actually alerts. Matching it makes the chart and the phone agree.\n\nMeasured over 2704 alerts in 42 days:\n  A   4.5/day   72% fill   47% win   RR 1.82   +0.251 R per signal\n  B  25.1/day   81% fill   44% win   RR 1.72   +0.173\n  C  35.4/day   78% fill   38% win   RR 1.70   +0.026\n\nGrade C is 54% of the traffic for 4% of the return, and its largest cell — 15m early C — measures NEGATIVE. Break-even at RR 1.7 is a 37% win rate, so C at 38% was working for free.\n\nLeave it on 'Show all' to study what the filter removes; set it to match the bot when you want the chart to be the alert feed.")
+poiMaxAgeDays = input.int(30, "  a daily zone stays live for (days)", minval = 1,
+     group = gTrend,
+     tooltip = "Older than this and a zone is not what anyone means by 'the level price is reacting to'.\n\nThis number is not cosmetic. With no age limit at all the test flags 90% of raids and measures NOTHING — a year of daily bars accumulates enough blocks and gaps to cover most of the price range, and its one nominal result pointed the WRONG way. Thirty days is what was measured and what riptide/engine.py uses.")
 
 // ── 7. Alerts ───────────────────────────────────────────────────────────────
 alertOnGrab  = input.bool(true, "Liquidity raided", group = gAlert,
@@ -639,6 +653,125 @@ htfTrend() =>
 // keeps a setup when its daily lookup comes back empty.
 trendOk(bool isLong) =>
     not trendFilter or na(htfDir) or (isLong ? htfDir < 0 : htfDir > 0)
+
+// ── The daily point of interest, and the grade ──────────────────────────────
+//
+// The raid has to land inside a daily order block or fair value gap. This is
+// the largest single separation measured in this project and the only filter
+// to pass a pre-registered held-out test on symbols it was not found on.
+// riptide/engine.py builds the same zones in daily_zones() and tests them in
+// in_zone(); the bot REQUIRES this, so a chart drawing every setup shows about
+// twice what the alerts do.
+//
+// A SECOND request.security — the note above about this file having only one
+// is now out of date. Same rules, and they are what make it safe: a HIGHER
+// timeframe, lookahead_off, and [1] everywhere so nothing but the last CLOSED
+// daily bar is ever read. The structure timeframe is untouched and still the
+// chart's own; nothing here introduces a timeframe setting for signals.
+dailyCtx() =>
+    [_dp, _dm, _adx] = ta.dmi(14, 14)
+    [_sl, _sd]       = ta.supertrend(trendFilterFac, trendFilterLen)
+    [open[1], high[1], low[1], close[1], ta.atr(atrLength)[1], time[1],
+     _dp[1], _dm[1], _sd[1]]
+
+[dOp, dHi, dLo, dCl, dAtr, dTm, dDiP, dDiM, dStD] =
+     request.security(syminfo.tickerid, "D", dailyCtx(),
+                      lookahead = barmerge.lookahead_off)
+
+// The last three CLOSED daily bars, kept by hand. request.security hands over
+// one bar at a time, and a zone needs three, so the history is accumulated
+// here rather than asked for again.
+var array<float> d3o = array.new<float>()
+var array<float> d3h = array.new<float>()
+var array<float> d3l = array.new<float>()
+var array<float> d3c = array.new<float>()
+var array<int>   d3t = array.new<int>()
+
+// Zones, oldest first. Pushed in time order, so expiry can shift from the
+// front and the array stays bounded however long the chart runs.
+var array<int>   zTm = array.new<int>()
+var array<bool>  zBl = array.new<bool>()
+var array<float> zLo = array.new<float>()
+var array<float> zHi = array.new<float>()
+
+pushZone(int t, bool bull, float lo, float hi) =>
+    zTm.push(t)
+    zBl.push(bull)
+    zLo.push(lo)
+    zHi.push(hi)
+
+// One pass per completed daily bar. The index arithmetic mirrors
+// engine.daily_zones exactly: bar 2 is the newest, and a zone is dated by the
+// bar it COMPLETED on, never the bar it started from — a three-candle gap is
+// not knowable until the third candle closes.
+if poiOn and not na(dTm) and (d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm)
+    d3o.push(dOp)
+    d3h.push(dHi)
+    d3l.push(dLo)
+    d3c.push(dCl)
+    d3t.push(dTm)
+    if d3t.size() > 3
+        d3o.shift()
+        d3h.shift()
+        d3l.shift()
+        d3c.shift()
+        d3t.shift()
+    if d3t.size() == 3 and not na(dAtr) and dAtr > 0
+        if d3l.get(2) > d3h.get(0)
+            pushZone(dTm, true, d3h.get(0), d3l.get(2))
+        else if d3h.get(2) < d3l.get(0)
+            pushZone(dTm, false, d3h.get(2), d3l.get(0))
+        // Order block: the last opposite-closing candle before a displacement
+        // of more than one ATR.
+        if d3c.get(2) - d3o.get(2) > dAtr and d3c.get(1) < d3o.get(1)
+            pushZone(dTm, true, d3l.get(1), d3h.get(1))
+        else if d3o.get(2) - d3c.get(2) > dAtr and d3c.get(1) > d3o.get(1)
+            pushZone(dTm, false, d3l.get(1), d3h.get(1))
+    while zTm.size() > 0 and (dTm - zTm.get(0)) > poiMaxAgeDays * 86400000
+        zTm.shift()
+        zBl.shift()
+        zLo.shift()
+        zHi.shift()
+
+// `price` is the raid extreme — the stop's own level, since the buffer is 0 —
+// because it is the RAID that has to be in the zone, not the entry, which is a
+// retracement away from it.
+inDailyPoi(float price, bool isLong) =>
+    bool hit = false
+    int  n   = poiOn and not na(price) ? zTm.size() : 0
+    if n > 0
+        // Each condition on its own line, as a plain assignment. A multi-line
+        // boolean inside a loop body is where Pine's indentation rules and a
+        // reader's intuition come apart.
+        for i = 0 to n - 1
+            bool aligned = zBl.get(i) == isLong
+            bool inside  = price >= zLo.get(i) and price <= zHi.get(i)
+            bool live    = (time - zTm.get(i)) <= poiMaxAgeDays * 86400000
+            if aligned and inside and live
+                hit := true
+    hit
+
+// Both daily readings agreeing, which is what the bot's grade means by "the
+// trend". Stricter than trendOk above, which is the SuperTrend alone and is a
+// FILTER rather than part of the letter.
+dailyTrendOk(bool isLong) =>
+    bool known = not na(dStD) and not na(dDiP) and not na(dDiM)
+    // ta.supertrend direction is -1 up, +1 down.
+    bool stOk  = known and ((dStD < 0) == isLong)
+    bool diOk  = known and ((dDiP > dDiM) == isLong)
+    known and stOk and diOk
+
+// Mirrors GRADES in riptide/engine.py, cell for cell.
+gradeOf(bool isEarly, bool poi, bool isLong) =>
+    bool tr = dailyTrendOk(isLong)
+    isEarly ? (poi and tr ? "B" : (poi or tr) ? "C" : "D")
+            : (poi and tr ? "A" : tr ? "B" : "C")
+
+// Is this letter good enough to draw? "ABCD".indexOf is the same ordering the
+// bot uses for RIPTIDE_MIN_GRADE.
+gradeDrawn(string g) =>
+    string flr = chartMinGrade == "A only" ? "A" : chartMinGrade == "B and better (matches the bot)" ? "B" : "D"
+    not poiOn or str.pos("ABCD", g) <= str.pos("ABCD", flr)
 
 // Period boundaries and session membership, global scope for series consistency.
 newDay   = timeframe.change("D")
@@ -1112,8 +1245,11 @@ drawBlock(LevelGroup g, int off, bool isBull, color col, string name) =>
 // through, and before the shift there is nothing for it to have broken.
 drawEarly(Cluster c, float top, float bot, float sl) =>
     bool isLong = not c.isHigh
+    // The raid extreme, which is what the zone test wants — see inDailyPoi.
+    bool poi    = inDailyPoi(c.isHigh ? c.grabHigh : c.grabLow, isLong)
+    string gr   = gradeOf(true, poi, isLong)
     bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
-                  and trendOk(isLong)
+                  and trendOk(isLong) and gradeDrawn(gr)
     if dirOk
         color col   = color.new(isLong ? bullCol : bearCol, earlyFade)
         int   x2    = bar_index + setupExtendBars
@@ -1146,8 +1282,10 @@ drawEarly(Cluster c, float top, float bot, float sl) =>
 
 drawSetup(Cluster c) =>
     bool isLong = not c.isHigh
+    bool poi    = inDailyPoi(c.isHigh ? c.grabHigh : c.grabLow, isLong)
+    string gr   = gradeOf(false, poi, isLong)
     bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
-                  and trendOk(isLong)
+                  and trendOk(isLong) and gradeDrawn(gr)
     if dirOk and c.fvgCount > 0
         color col   = isLong ? bullCol : bearCol
         float entry = entryFrom(c)
@@ -1183,7 +1321,8 @@ drawSetup(Cluster c) =>
                              "\nbuffer " + str.tostring(slBufferATR) + " x ATR" +
                              "\nrisk " + f2s(math.abs(entry - sl))))
     if showSetupLabels and dirOk and c.fvgCount > 0
-        label.new(bar_index + 2, isLong ? c.lastFvgTop : c.lastFvgBot, isLong ? "LONG" : "SHORT",
+        label.new(bar_index + 2, isLong ? c.lastFvgTop : c.lastFvgBot,
+             (isLong ? "LONG" : "SHORT") + (poiOn ? "  " + gr : ""),
              xloc      = xloc.bar_index,
              yloc      = yloc.price,
              style     = label.style_label_left,

@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from riptide.config import Cfg, TREND_INTERVAL             # noqa: E402
+from riptide.engine import POI_MAX_AGE_BARS                # noqa: E402
 
 PINE = Path(__file__).resolve().parent.parent / "riptide-indicator.pine"
 
@@ -38,6 +39,12 @@ NUMERIC = {
     "pivotLeft": "pivot_left",
     "pivotRight": "pivot_right",
     "atrLength": "atr_len",
+    # The daily point of interest. This pair is the reason the file also grew
+    # the FEATURES check below: for most of a day the bot required a POI and
+    # the Pine had no notion of one, and every one of the 23 shared settings
+    # still agreed. Parity over shared settings cannot see a feature that
+    # exists on one side only, which is the drift that matters most.
+    "poiMaxAgeDays": "_poi_max_age_bars",
     "liquidityToleranceATR": "tol_atr",
     "minPivotsForLiquidity": "min_pivots",
     "minFvgSizeATR": "min_fvg_atr",
@@ -165,10 +172,50 @@ def pine_default(src: str, name: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
+# A feature the bot has and the Pine does not is invisible to the settings
+# comparison above — every shared setting can agree while the two draw
+# completely different things. That is exactly what happened with the daily
+# POI: the bot required it, the Pine had never heard of it, and parity passed
+# all day while the chart marked about twice what the alerts sent.
+#
+# So: each entry is a capability, a token that must appear in the Pine, and
+# the bot-side switch it corresponds to. This cannot prove the two
+# implementations AGREE — only that neither has silently lost the concept.
+FEATURES = (
+    ("daily point of interest", "inDailyPoi", "riptide.engine.in_zone"),
+    ("daily POI zone builder", "pushZone", "riptide.engine.daily_zones"),
+    ("grade letter", "gradeOf", "riptide.engine.grade_of"),
+    ("grade floor on what is drawn", "gradeDrawn", "RIPTIDE_MIN_GRADE"),
+    ("early entry zone", "drawEarly", "riptide.engine Early"),
+)
+
+
 def main() -> int:
     src = PINE.read_text()
+    code_only = "\n".join(strip_code(ln) for ln in src.splitlines())
     cfg = Cfg()
+    # Not a Cfg field: the POI lives in the engine, where the zone rules are.
+    cfg._poi_max_age_bars = POI_MAX_AGE_BARS
     problems = []
+
+    for label, token, counterpart in FEATURES:
+        # A plain substring test is not enough and this was caught by trying
+        # it: renaming inDailyPoi to inDailyPoiXX still "contained" the token,
+        # so the check passed on a Pine that no longer had the function. It
+        # now needs the DEFINITION — Pine declares functions at column 0 — and
+        # at least one call site as well, so a defined-but-unused leftover
+        # cannot satisfy it either.
+        # Comments stripped first. Counting them let a call site be deleted
+        # while a comment that merely NAMED the function kept the check happy —
+        # the file already has strip_code for this and it should have been
+        # used from the start.
+        defined = re.search(rf"^{token}\(", src, re.M)
+        uses = len(re.findall(rf"\b{token}\b", code_only))
+        if not defined or uses < 2:
+            problems.append(
+                f"the Pine has no {label}: {token}() is "
+                + ("not defined" if not defined else "defined but never called")
+                + f", and the bot has {counterpart}")
 
     for pine, field in NUMERIC.items():
         raw = pine_default(src, pine)
