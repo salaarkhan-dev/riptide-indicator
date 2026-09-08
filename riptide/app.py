@@ -77,9 +77,25 @@ async def main() -> None:
         # Safe to repeat work: dedupe skips anything the previous process
         # already recorded, the freshness gate still applies, and an empty
         # database still bootstraps silently.
+        #
+        # Wrapped, and this is not defensive padding. main() runs this BEFORE
+        # the command listener starts, so an exception here kills the process
+        # before Telegram can answer anything — systemd restarts it, the
+        # startup scan throws again, and the result is a crash loop whose only
+        # symptom is that /status has gone quiet. The one moment you most need
+        # to ask the bot what is wrong is the one moment it cannot reply.
+        #
+        # A failed startup scan costs one cycle. The scheduled loop retries in
+        # minutes, and the freshness gate means nothing is lost that would not
+        # have been lost anyway.
         if SCAN_ON_START:
-            n = await cycle(sess, db, symbols)
-            state["last_cycle"], state["last_sent"] = time.time(), n
+            try:
+                n = await cycle(sess, db, symbols)
+                state["last_cycle"], state["last_sent"] = time.time(), n
+            except Exception as e:
+                log.exception("startup scan failed (%s) — continuing so the "
+                              "command listener comes up; the scheduled loop "
+                              "will retry", e)
 
         tasks = [asyncio.create_task(scan_loop(sess, db, state), name="scan")]
         if TG_COMMANDS:
