@@ -191,6 +191,25 @@ def _same_trade(e: Early, s) -> bool:
             and abs(e.stop - s.stop) / scale < 1e-9)
 
 
+def _arm(db, sid, x, kind):
+    """Arm outcome tracking, and never let it cost an alert.
+
+    tracker.arm() writes a row and is called immediately BEFORE the send, so
+    an exception in it used to abort the whole cycle — and it did: a database
+    missing the tf column raised on every arm, which meant no confirmed or
+    early alert was ever sent while sweeps, which are sent earlier in the
+    cycle and are not armed, kept arriving normally.
+
+    Measuring the strategy is worth a great deal. It is not worth an alert.
+    The same reasoning already wraps the open-interest logger.
+    """
+    try:
+        tracker.arm(db, sid, x, kind=kind)
+    except Exception as e:
+        log.warning("outcome arming failed on %s (%s) — alert still sent",
+                    getattr(x, "symbol", "?"), e)
+
+
 def poi_ok(x) -> bool:
     """Should this signal be SENT under the POI policy?
 
@@ -393,7 +412,7 @@ async def cycle(sess, db, symbols):
             elif not poi_ok(e):
                 g["poi"] += 1
             if fresh:
-                tracker.arm(db, sid, e, kind=tracker.EARLY)
+                _arm(db, sid, e, tracker.EARLY)
             if fresh and not mute and EARLY_ALERTS and poi_ok(e):
                 if await tg.tg_send(sess, tg.early_message(e)):
                     quick += 1
@@ -426,7 +445,7 @@ async def cycle(sess, db, symbols):
             # is also what keeps this forward-only — on a first run the 600
             # bars of recorded history are all stale, so none of them arm.
             if fresh:
-                tracker.arm(db, sid, s, kind=tracker.CONFIRMED)
+                _arm(db, sid, s, tracker.CONFIRMED)
             if fresh and not mute and poi_ok(s):
                 if await tg.tg_send(sess, tg.setup_message(s)):
                     sent += 1

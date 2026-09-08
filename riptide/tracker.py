@@ -68,45 +68,49 @@ def init(db) -> None:
         last_bar INT, updated_at INT,
         kind TEXT DEFAULT 'setup', confluence INT DEFAULT 0,
         di_dir INT DEFAULT 0, rsi_ext REAL DEFAULT 0.0)""")
-    # Databases created before the no-shift strategy existed have no `kind`.
-    # Everything already in them came from the confirmed path, which is what
-    # the default backfills.
     have = {r[1] for r in db.execute("PRAGMA table_info(outcomes)")}
-    if "kind" not in have:
-        db.execute("ALTER TABLE outcomes ADD COLUMN kind TEXT DEFAULT 'setup'")
-        log.info("outcomes: added the kind column, existing rows are 'setup'")
-    if "confluence" not in have:
-        db.execute("ALTER TABLE outcomes ADD COLUMN confluence INT DEFAULT 0")
-        log.info("outcomes: added the confluence column, existing rows are 0")
-    # Rows armed before the grade moved to DI have no di_dir. They backfill to
-    # 0, which grade_of reads as "direction unknown" and grades "?" — correct,
-    # because it genuinely was not recorded, and far better than back-dating a
-    # letter onto rows that never carried one.
-    if "di_dir" not in have:
-        db.execute("ALTER TABLE outcomes ADD COLUMN di_dir INT DEFAULT 0")
-        db.execute("ALTER TABLE outcomes ADD COLUMN rsi_ext REAL DEFAULT 0.0")
-        log.info("outcomes: added di_dir and rsi_ext; rows armed before the "
-                 "grade moved to DI stay ungraded rather than being back-dated")
-    # The grade moved to (POI, daily trend) on the cell table. Rows armed
-    # before that have poi = 0, which is indistinguishable from a genuine "not
-    # in a zone" — so live_band skips any row whose trend_dir is 0 rather than
-    # back-dating a letter. Old rows all carry a trend_dir, but a row armed
-    # before this column existed cannot be regraded honestly either way, and
-    # the number worth having is the forward one.
-    if "poi" not in have:
-        db.execute("ALTER TABLE outcomes ADD COLUMN poi INT DEFAULT 0")
-        db.execute("ALTER TABLE outcomes ADD COLUMN regraded INT DEFAULT 0")
-        # Rows predating multi-timeframe scanning were all on RIPTIDE_INTERVAL,
-        # so that is the honest backfill here — unlike poi, this one is known.
-        #
-        # Interpolated rather than bound: SQLite requires a literal in ALTER
-        # TABLE ... DEFAULT and rejects a placeholder. INTERVAL is checked
-        # against BAR_SECONDS first so nothing from the environment reaches
-        # the statement unvalidated.
-        base = INTERVAL if INTERVAL in BAR_SECONDS else "Min30"
-        db.execute(f"ALTER TABLE outcomes ADD COLUMN tf TEXT DEFAULT '{base}'")
-        log.info("outcomes: added poi; rows armed before the grade moved to "
-                 "the cell table stay out of the live band figures")
+    # ONE ENTRY PER COLUMN, EACH CHECKED INDEPENDENTLY.
+    #
+    # This was a list of hand-written `if col not in have` blocks, and two of
+    # them shared a guard: `tf` was added inside `if "poi" not in have`. Any
+    # database that had already taken the poi migration therefore skipped the
+    # tf one forever. The result was not a missing column in the abstract —
+    # tracker.arm INSERTs tf, so on those databases arming ANY signal raised
+    # "no such column: tf", and because arm() is called just before the send,
+    # the exception aborted the whole cycle. Sweeps are sent earlier in the
+    # cycle than setups and early signals, so sweeps kept arriving and no
+    # trade alert ever did. That cost most of a day and never reproduced
+    # locally, because a fresh database is created with the full schema and
+    # never runs a migration at all.
+    #
+    # Grouping migrations is what made it possible. A table cannot: every
+    # column carries its own condition, so adding one can never depend on
+    # whether some earlier one had already been applied.
+    base = INTERVAL if INTERVAL in BAR_SECONDS else "Min30"
+    for col, decl, note in (
+        ("kind", "TEXT DEFAULT 'setup'",
+         "existing rows came from the confirmed path, which the default gives"),
+        ("confluence", "INT DEFAULT 0", "existing rows are 0"),
+        # Rows armed before the grade moved to DI have no di_dir. They backfill
+        # to 0, which is honest: it genuinely was not recorded, and that beats
+        # back-dating a letter onto rows that never carried one.
+        ("di_dir", "INT DEFAULT 0", "rows armed earlier stay ungraded"),
+        ("rsi_ext", "REAL DEFAULT 0.0", "rows armed earlier stay ungraded"),
+        # poi = 0 on an old row is indistinguishable from a genuine "not in a
+        # zone", so `regraded` marks which rows can be regraded at all and
+        # live_band skips the rest rather than inventing a letter for them.
+        ("poi", "INT DEFAULT 0", "old rows are excluded via regraded"),
+        ("regraded", "INT DEFAULT 0", "0 means this row predates the cell table"),
+        # Interpolated rather than bound: SQLite requires a literal in
+        # ALTER TABLE ... DEFAULT. INTERVAL is checked against BAR_SECONDS
+        # first, so nothing from the environment reaches the statement
+        # unvalidated. Rows predating multi-timeframe scanning were all on
+        # RIPTIDE_INTERVAL, so unlike poi this backfill is simply correct.
+        ("tf", f"TEXT DEFAULT '{base}'", f"existing rows are {base}"),
+    ):
+        if col not in have:
+            db.execute(f"ALTER TABLE outcomes ADD COLUMN {col} {decl}")
+            log.info("outcomes: added %s — %s", col, note)
     db.execute("CREATE INDEX IF NOT EXISTS outcomes_live "
                "ON outcomes(symbol, status)")
     db.commit()
