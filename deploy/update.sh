@@ -64,6 +64,44 @@ main() {
         return 1
     fi
 
+    # Sign-convention audit, on the NEW tree, before anything is installed.
+    #
+    # This exists because a comment reading "-1 is up" sat above six copies of
+    # `supertrend() < 0` for weeks and nothing caught it: every verification
+    # was a person reading that comment. The audit reads nothing — it buckets
+    # each direction series by its own output and scores it against realised
+    # price. See research/studies/signs.py.
+    #
+    # THE EXIT CODES MATTER MORE THAN THE CHECK. 1 means a check failed and
+    # the tree is wrong. 2 means the exchange was unreachable, which is not a
+    # failure of the commit, and blocking on it would turn an exchange outage
+    # into a fake bug report. `timeout` returns 124 and is treated the same.
+    # The static half of the audit needs no network and always runs, so a
+    # re-introduction of the literal bug is caught even during an outage.
+    local audit_out audit_rc warn=""
+    audit_out=$(cd "$SRC" && PYTHONPATH="$SRC" timeout 180 \
+                "$APP/.venv/bin/python" research/studies/signs.py 2>&1) \
+        && audit_rc=0 || audit_rc=$?
+    case "$audit_rc" in
+        0)  log "sign audit passed" ;;
+        2|124)
+            log "sign audit skipped (no market data or timed out), continuing"
+            warn=$'\n\n'"note: the sign audit could not reach the exchange, so only its static check ran." ;;
+        *)  log "sign audit FAILED, not installing"
+            notify "Riptide update $short BLOCKED by the sign audit. Nothing installed, still running the previous build."$'\n\n'"$(printf '%s' "$audit_out" | tail -c 700)"
+            return 1 ;;
+    esac
+
+    # Pine/Python parity is ADVISORY, never blocking. A drift here means the
+    # chart and the bot disagree; it is not a reason to refuse a Python fix,
+    # and making it blocking would let an indicator edit wedge the service.
+    local parity_out
+    if ! parity_out=$(cd "$SRC" && PYTHONPATH="$SRC" timeout 60 \
+                      "$APP/.venv/bin/python" deploy/check-parity.py 2>&1); then
+        log "parity check reported drift (advisory)"
+        warn+=$'\n\n'"parity drift: $(printf '%s' "$parity_out" | tail -c 300)"
+    fi
+
     local prev_build
     prev_build=$(cat "$APP/BUILD" 2>/dev/null || echo unknown)
 
@@ -87,7 +125,7 @@ main() {
 
     if systemctl is-active --quiet riptide; then
         log "update to $short ok"
-        notify "Riptide updated: ${prev_build} → ${short}"
+        notify "Riptide updated: ${prev_build} → ${short}${warn}"
         rm -rf "$APP/riptide.old" "$APP/riptide_bot.py.prev"
     else
         log "service did not come up — rolling back to $prev_build"

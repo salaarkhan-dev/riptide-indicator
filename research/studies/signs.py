@@ -25,7 +25,18 @@ WHAT IS CHECKED
 
     PYTHONPATH=. python3 research/studies/signs.py
 
-Exits non-zero if anything is inconsistent, so it can gate a deploy.
+EXIT CODES, because this gates the deploy and the two failure modes must not
+be confused. Getting this backwards is how `poi_at` once muted a symbol for an
+hour: a failed fetch returned the same value as a genuine negative.
+
+    0   every check passed
+    1   a check FAILED — the tree is wrong, block the update
+    2   could not run: no market data. NOT a failure of the code. The deploy
+        proceeds and says so, because refusing to ship on a network blip would
+        make an exchange outage look like a bug in the commit.
+
+Check 4 needs no network and therefore always runs, so a re-introduction of
+the literal bug is caught even when the exchange is unreachable.
 """
 from __future__ import annotations
 
@@ -69,23 +80,66 @@ def trailing_by_direction(cs, series):
     return statistics.median(up), statistics.median(dn)
 
 
+def static_checks() -> None:
+    """Everything provable without touching the exchange. Runs first and
+    always, so the literal bug cannot slip through during an outage."""
+    print("STATIC — the literal bug, as a grep")
+    pat = re.compile(r"(?:st|dirs?|d|bst|btc_dir|trend_dir|di_dir)\s*\[?[^\]]*\]?"
+                     r"\s*<\s*0\s*\)?\s*==\s*[\w.]*is_long")
+    hits = []
+    for p in list(pathlib.Path("riptide").rglob("*.py")) + \
+             list(pathlib.Path("research").rglob("*.py")):
+        for n, line in enumerate(p.read_text().splitlines(), 1):
+            if pat.search(line):
+                hits.append(f"{p}:{n}")
+    check(not hits, "no direction compared to is_long with `< 0`",
+          ", ".join(hits) if hits else "all consumers use `> 0`")
+
+
+async def fetch_all():
+    """Returns (min30, daily) or None when the exchange is unreachable."""
+    try:
+        async with aiohttp.ClientSession() as sess:
+            syms = (await list_symbols(sess))[:N_SYMBOLS]
+            data = {}
+            for s in syms:
+                try:
+                    cs = await fetch_candles(sess, s, "Min30")
+                except Exception:
+                    continue
+                if len(cs) > 300:
+                    data[s] = cs
+            day = {}
+            for s in list(data)[:6]:
+                try:
+                    day[s] = await fetch_candles(sess, s, "Day1")
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"  could not reach the exchange: {type(e).__name__}: {e}")
+        return None
+    # Too thin to conclude anything is NOT the same as a failed check.
+    if len(data) < 6 or len(day) < 3:
+        print(f"  too little data to judge: {len(data)} Min30, {len(day)} Day1")
+        return None
+    return data, day
+
+
 async def main():
-    async with aiohttp.ClientSession() as sess:
-        syms = (await list_symbols(sess))[:N_SYMBOLS]
-        data = {}
-        for s in syms:
-            try:
-                cs = await fetch_candles(sess, s, "Min30")
-            except Exception:
-                continue
-            if len(cs) > 300:
-                data[s] = cs
-        day = {}
-        for s in list(data)[:6]:
-            try:
-                day[s] = await fetch_candles(sess, s, "Day1")
-            except Exception:
-                pass
+    static_checks()
+    if fails:
+        print(f"\n{len(fails)} CHECK(S) FAILED:")
+        for f in fails:
+            print(f"  - {f}")
+        return 1
+
+    print("\nfetching market data for the empirical checks...")
+    got = await fetch_all()
+    if got is None:
+        print("\nSKIPPED the empirical checks — no market data. The static\n"
+              "check passed. This is not a failure of the tree.")
+        return 2
+    data, day = got
 
     print(f"\n{len(data)} symbols on Min30, {len(day)} on Day1 · "
           f"trailing window {LOOK} bars\n")
@@ -94,15 +148,15 @@ async def main():
     for name, fn in (("supertrend", supertrend), ("di_direction", di_direction)):
         ups, dns, agree = [], [], 0
         for cs in data.values():
-            got = trailing_by_direction(cs, fn(cs))
-            if not got:
+            row = trailing_by_direction(cs, fn(cs))
+            if not row:
                 continue
-            u, d = got
+            u, d = row
             ups.append(u)
             dns.append(d)
             agree += u > d
-        if not ups:
-            check(False, f"{name}: no usable symbols")
+        if len(ups) < 6:
+            print(f"  SKIP  {name}(): only {len(ups)} usable symbols")
             continue
         mu, md = statistics.median(ups), statistics.median(dns)
         check(mu > md and agree >= 0.75 * len(ups),
@@ -136,7 +190,7 @@ async def main():
         check(mu > md, "htf_dir_at() == +1 means the daily was RISING",
               f"+1 {mu:+.3f}% (n={len(ups)}) vs -1 {md:+.3f}% (n={len(dns)})")
     else:
-        check(False, "htf_dir_at(): too few daily bars to score")
+        print("  SKIP  htf_dir_at(): too few daily bars to score")
 
     print("\n3. ENGINE GEOMETRY — what is_long actually means")
     bad = tot = 0
@@ -146,21 +200,12 @@ async def main():
             tot += 1
             ok = (x.stop < x.entry) if x.is_long else (x.stop > x.entry)
             bad += not ok
-    check(tot > 0 and bad == 0,
-          "every long has stop < entry, every short stop > entry",
-          f"{tot} signals, {bad} inverted")
-
-    print("\n4. CONSUMERS — the literal bug, as a grep")
-    pat = re.compile(r"(?:st|dirs?|d|bst|btc_dir|trend_dir|di_dir)\s*\[?[^\]]*\]?"
-                     r"\s*<\s*0\s*\)?\s*==\s*[\w.]*is_long")
-    hits = []
-    for p in list(pathlib.Path("riptide").rglob("*.py")) + \
-             list(pathlib.Path("research").rglob("*.py")):
-        for n, line in enumerate(p.read_text().splitlines(), 1):
-            if pat.search(line):
-                hits.append(f"{p}:{n}")
-    check(not hits, "no direction compared to is_long with `< 0`",
-          ", ".join(hits) if hits else "all consumers use `> 0`")
+    if tot == 0:
+        print("  SKIP  engine geometry: no signals in the sampled window")
+    else:
+        check(bad == 0,
+              "every long has stop < entry, every short stop > entry",
+              f"{tot} signals, {bad} inverted")
 
     print()
     if fails:

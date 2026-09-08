@@ -2729,6 +2729,15 @@ anything:
   4. The literal bug as a grep: no direction may be compared to `is_long`
      with `< 0`.
 
+**It gates every deploy.** `deploy/update.sh` runs it on the new tree before
+anything is installed, beside the byte-compile step. Exit 1 blocks the update
+and notifies; exit 2 — the exchange unreachable — lets it proceed with a note,
+because refusing to ship on a network blip would make an exchange outage look
+like a bug in the commit, and the static half of the audit runs regardless. A
+`timeout 180` is treated the same as exit 2; the audit takes about 5 seconds.
+Pine/Python parity now runs there too but is ADVISORY only: chart drift is not
+a reason to refuse a Python fix.
+
 It exits non-zero on failure. **Negative-tested three ways** — inverting
 `supertrend`'s return fails check 1 (0/12 symbols agree), inverting
 `htf_dir_at` fails both arms of check 2, and reintroducing `< 0` in
