@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import time
 
+from . import journal
 from . import market
 from . import mtf
 from . import telegram as tg
@@ -189,6 +190,23 @@ def _same_trade(e: Early, s) -> bool:
     scale = max(abs(s.entry), 1e-12)
     return (abs(e.entry - s.entry) / scale < 1e-9
             and abs(e.stop - s.stop) / scale < 1e-9)
+
+
+def _log_button(db, sid, x, grade: str, tf: str):
+    """The "Log it" button on a trade alert, or nothing at all.
+
+    Wrapped whole because this is decoration on a message that matters: a
+    button that fails to appear costs a tap, a scan that dies here costs every
+    remaining alert in the cycle. The same reasoning as _arm above.
+    """
+    try:
+        row = journal.offer(db, sid, x, grade, tf)
+        if not row:
+            return None
+        return tg.keyboard([("\U0001F4D3 Log it", f"jl:{row}")])
+    except Exception as e:
+        log.warning("log button failed for %s: %s", sid, e)
+        return None
 
 
 def _arm(db, sid, x, kind):
@@ -431,7 +449,10 @@ async def cycle(sess, db, symbols):
                 _arm(db, sid, e, tracker.EARLY)
             if (fresh and not mute and EARLY_ALERTS and poi_ok(e)
                     and grade_ok(e, True)):
-                if await tg.tg_send(sess, tg.early_message(e)):
+                if await tg.tg_send(
+                        sess, tg.early_message(e),
+                        _log_button(db, sid, e, tg.grade_letter(e, True),
+                                    tg.tf_label(e.tf or INTERVAL))):
                     quick += 1
                     g["sent"] += 1
 
@@ -466,7 +487,10 @@ async def cycle(sess, db, symbols):
             if fresh:
                 _arm(db, sid, s, tracker.CONFIRMED)
             if fresh and not mute and poi_ok(s) and grade_ok(s, False):
-                if await tg.tg_send(sess, tg.setup_message(s)):
+                if await tg.tg_send(
+                        sess, tg.setup_message(s),
+                        _log_button(db, sid, s, tg.grade_letter(s, False),
+                                    tg.tf_label(s.tf or INTERVAL))):
                     sent += 1
                     g["sent"] += 1
     if bootstrap:

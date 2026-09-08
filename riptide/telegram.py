@@ -10,19 +10,69 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from urllib.parse import urlencode
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import aiohttp
 
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
-                     LOG_URL, TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
+                     TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
                      TREND_INTERVAL, log)
 from .engine import (Early, Setup, Sweep, grade_of, shift_odds,
                      sweep_worth)
 
-async def tg_send(sess, text: str) -> bool:
+def keyboard(*rows) -> dict:
+    """An inline keyboard from rows of (label, callback_data) or (label, url).
+
+    Telegram caps callback_data at 64 BYTES, which is why every button here
+    carries a database row id rather than the trade it refers to.
+    """
+    out = []
+    for row in rows:
+        line = []
+        for label, data in row:
+            key = "url" if str(data).startswith("http") else "callback_data"
+            line.append({"text": label, key: str(data)})
+        if line:
+            out.append(line)
+    return {"inline_keyboard": out}
+
+
+async def _api(sess, method: str, payload: dict) -> dict | None:
+    """One non-critical Telegram call. Never retried and never raised: these
+    are button housekeeping, and a failed edit must not disturb a scan."""
+    if not TG_TOKEN:
+        return None
+    try:
+        async with sess.post(
+                f"https://api.telegram.org/bot{TG_TOKEN}/{method}",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=15, sock_connect=8)) as r:
+            body = await r.json()
+            if not body.get("ok"):
+                log.warning("telegram %s: %s", method, str(body)[:200])
+            return body
+    except Exception as e:
+        log.warning("telegram %s failed: %s", method, e)
+        return None
+
+
+async def answer_callback(sess, cb_id: str, text: str = "",
+                          alert: bool = False) -> None:
+    """Clear the spinner on a tapped button. Telegram shows the loading state
+    for a few seconds if this never arrives, so it is sent even when empty."""
+    await _api(sess, "answerCallbackQuery",
+               {"callback_query_id": cb_id, "text": text[:200],
+                "show_alert": alert})
+
+
+async def edit_markup(sess, chat_id, message_id, markup: dict | None) -> None:
+    await _api(sess, "editMessageReplyMarkup",
+               {"chat_id": chat_id, "message_id": message_id,
+                "reply_markup": markup or {"inline_keyboard": []}})
+
+
+async def tg_send(sess, text: str, buttons: dict | None = None) -> bool:
     """
     Send one alert. Returns True only if Telegram acknowledged it.
 
@@ -46,6 +96,8 @@ async def tg_send(sess, text: str) -> bool:
     url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
     payload = {"chat_id": TG_CHAT, "text": text, "parse_mode": "HTML",
                "disable_web_page_preview": True}
+    if buttons:
+        payload["reply_markup"] = buttons
 
     for attempt in range(1, TG_RETRIES + 1):
         try:
@@ -226,30 +278,8 @@ TV_INTERVAL = {"Min1": "1", "Min5": "5", "Min15": "15", "Min30": "30",
                "Min60": "60", "Hour4": "240", "Hour8": "480", "Day1": "D"}
 
 
-def _log_link(sym: str, grade: str, tf: str, entry: float, stop: float,
-              when: int) -> str:
-    """"log it" — opens the trade desk with this alert's numbers filled in.
-
-    Empty unless RIPTIDE_LOG_URL is set, so an unconfigured bot sends exactly
-    the message it sent before.
-
-    The `id` is what stops a double tap becoming two positions. It is the
-    alert's own identity — symbol, timeframe and the bar that produced it —
-    so re-opening the same link an hour later still resolves to the same
-    trade, and the page refuses it. Prices go through %.12g rather than fmt():
-    the alert rounds for a human, the link has to carry the number the limit
-    order is actually placed at.
-    """
-    if not LOG_URL or not entry or not stop:
-        return ""
-    q = urlencode({"s": sym, "g": grade, "tf": tf,
-                   "e": f"{entry:.12g}", "x": f"{stop:.12g}",
-                   "id": f"{sym}-{tf}-{when}"})
-    return f" · <a href='{LOG_URL}{'&' if '?' in LOG_URL else '?'}{q}'>log it</a>"
-
-
 def _footer(when: int, price: float, tv_symbol: str,
-            interval: str = "", trade: tuple = ()) -> str:
+            interval: str = "") -> str:
     """Time, age and the price as of the scan, so a stale alert is obvious.
 
     The link carries the TIMEFRAME as well as the symbol. Without it
@@ -262,8 +292,7 @@ def _footer(when: int, price: float, tv_symbol: str,
     tv = (f"https://www.tradingview.com/chart/?symbol=MEXC%3A"
           f"{tv_symbol.replace('_', '')}.P" + (f"&interval={tf}" if tf else ""))
     px = f" · {fmt(price)}" if price else ""
-    log_it = _log_link(*trade) if trade else ""
-    return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>{log_it}"
+    return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
 
 
 def _grade(x, early: bool = False) -> str:
@@ -355,9 +384,7 @@ def setup_message(s: Setup) -> str:
         f"<i>sweep → shift → FVG{also} · "
         f"{_pool(s.src, s.level, s.pivots)}</i>",
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
-        _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf,
-                trade=(s.symbol, grade_chip(s), tf_label(s.tf or INTERVAL),
-                       s.entry, s.stop, s.detected_time)),
+        _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf),
     ) if x is not None)
 
 
@@ -383,10 +410,7 @@ def early_message(s: Early) -> str:
         f"{_pool(s.src, s.level, s.pivots, s.pools)}</i>",
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _footer(s.fvg_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
-                s.symbol, s.tf,
-                trade=(s.symbol, grade_chip(s, True),
-                       tf_label(s.tf or INTERVAL),
-                       s.entry, s.stop, s.fvg_time)),
+                s.symbol, s.tf),
     ) if x is not None)
 
 

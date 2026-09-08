@@ -12,6 +12,7 @@ import time
 
 import aiohttp
 
+from . import journal
 from . import telegram as tg
 from . import market
 from . import tracker
@@ -36,6 +37,9 @@ HELP = (
     "<b>Riptide</b>\n\n"
     "/status — build, symbols, last and next scan\n"
     "/stats — how the alerts have actually scored\n"
+    "/open — your open positions, with buttons to settle them\n"
+    "/today — what you logged today, and the free slots\n"
+    "/book — your own record, per grade\n"
     "/scan — run a scan now\n"
     "/trend on|off — filter setups by the daily trend\n"
     "/pause — record setups but stop sending\n"
@@ -249,6 +253,15 @@ async def handle_command(sess, db, state, text: str) -> None:
     elif cmd == "stats":
         await tg.tg_send(sess, stats_text(db))
 
+    elif cmd == "open":
+        await send_open(sess, db)
+
+    elif cmd == "today":
+        await tg.tg_send(sess, today_text(db))
+
+    elif cmd == "book":
+        await tg.tg_send(sess, book_text(db))
+
     elif cmd == "scan":
         await tg.tg_send(sess, "Scanning…")
         n = await cycle(sess, db, state.get("symbols", []))
@@ -355,6 +368,29 @@ async def command_loop(sess, db, state) -> None:
             offset = max(offset, int(u["update_id"]))
             meta_set(db, "tg_offset", offset)      # commit before acting
 
+            # A tapped inline button arrives as a callback_query rather than
+            # a message. Same identity check: the chat it sits in AND the
+            # account that pressed it must both be the configured one.
+            cb = u.get("callback_query")
+            if cb:
+                cb_chat = str(((cb.get("message") or {}).get("chat") or {})
+                              .get("id", ""))
+                cb_who = str((cb.get("from") or {}).get("id", ""))
+                if cb_chat != str(TG_CHAT) or cb_who != str(TG_CHAT):
+                    log.warning("ignoring button from chat=%s user=%s",
+                                cb_chat, cb_who)
+                    continue
+                log.info("telegram button: %s", cb.get("data"))
+                try:
+                    await handle_callback(sess, db, cb)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    log.exception("button %s failed: %s", cb.get("data"), e)
+                    await tg.answer_callback(sess, cb.get("id", ""),
+                                             "That did not work — see the log")
+                continue
+
             msg = u.get("message") or u.get("edited_message") or {}
             text = (msg.get("text") or "").strip()
             chat = str((msg.get("chat") or {}).get("id", ""))
@@ -377,3 +413,160 @@ async def command_loop(sess, db, state) -> None:
             except Exception as e:
                 log.exception("command failed: %s", e)
                 await tg.tg_send(sess, f"Command failed: {e}")
+
+
+# --------------------------------------------------------------------------
+# The journal: your positions, as opposed to tracker.py's record of every
+# alert. See riptide/journal.py for why this lives in the bot rather than on
+# a web page the box would have to open a port for.
+# --------------------------------------------------------------------------
+
+def _pos_line(r: dict) -> str:
+    arrow = "🟢" if r["side"] == "long" else "🔴"
+    return (f"{arrow} <b>{r['grade']}</b> {r['symbol']} {r['tf']} · "
+            f"{tg.fmt(r['entry'])} → {tg.fmt(r['stop'])} · "
+            f"{r['risk_pct']:.2f}% · 2R {tg.fmt(r['target'])}")
+
+
+def slot_line(db) -> str:
+    used, free, free_b = journal.slots(db)
+    a, b = journal.counts(db)
+    bar = "▰" * used + "▱" * free
+    return (f"<code>{bar}</code>  {used} of {journal.MAX_OPEN} open "
+            f"({a}A {b}B)\n<i>{free} free · {free_b} of them open to an early "
+            f"signal · {journal.RESERVE} held for confirmed</i>")
+
+
+def open_text(db) -> str:
+    rows = journal.open_rows(db)
+    if not rows:
+        return "No open positions.\n\n" + slot_line(db)
+    return (f"<b>{len(rows)} open</b>\n\n"
+            + "\n\n".join(_pos_line(r) for r in rows)
+            + "\n\n" + slot_line(db)
+            + "\n\n<i>Settle each one with the buttons below it.</i>")
+
+
+def today_text(db) -> str:
+    midnight = int(time.time()) - (int(time.time()) % 86400)
+    rows = journal.since(db, midnight)
+    a = sum(1 for r in rows if r["grade"] == "A")
+    head = (f"<b>{len(rows)} logged today</b> · {a}A {len(rows) - a}B"
+            if rows else "<b>Nothing logged today.</b>")
+    body = "\n".join(
+        f"{'🟢' if r['side'] == 'long' else '🔴'} {r['grade']} {r['symbol']} "
+        f"{r['tf']} · " + ("open" if r["status"] == "open"
+                           else f"{r['r']:+.2f}R") for r in rows)
+    return "\n\n".join(x for x in (
+        head, body or None, slot_line(db),
+        "<i>No measurement caps how many you take per day — the slot rule "
+        "above is the one that was measured. This is here so you can see "
+        "your own pattern.</i>") if x)
+
+
+MEASURED_R = {"A": 0.271, "B": 0.180}
+
+
+def book_text(db) -> str:
+    rec = journal.record(db)
+    if not rec["n"]:
+        return ("Nothing settled yet.\n\n<i>Log a trade with the button on an "
+                "alert, then settle it from /open.</i>")
+    win = f"{100 * rec['wins'] / rec['fills']:.0f}%" if rec["fills"] else "—"
+    lines = [f"<b>Your book</b> · {rec['n']} settled",
+             f"total <b>{rec['total_r']:+.1f}R</b> · win {win} · "
+             f"{rec['total_r'] / rec['n']:+.3f} R per trade", ""]
+    for g in ("A", "B"):
+        v = rec["by"].get(g)
+        if not v:
+            continue
+        w = f"{100 * v['wins'] / v['fills']:.0f}%" if v["fills"] else "—"
+        lines.append(f"<b>{g}</b> {v['n']} · win {w} · "
+                     f"{v['r'] / v['n']:+.3f} R  <i>(measured "
+                     f"{MEASURED_R[g]:+.3f})</i>")
+    lines.append("\n<i>About 30 trades in a grade before yours means anything. "
+                 "/stats is the bot's record of every alert; this is only the "
+                 "ones you took.</i>")
+    return "\n".join(lines)
+
+
+def _settle_buttons(row_id: int) -> dict:
+    return tg.keyboard([("🎯 Target", f"jw:{row_id}"),
+                        ("🛑 Stopped", f"jx:{row_id}"),
+                        ("⚪ Never filled", f"jz:{row_id}")])
+
+
+async def send_open(sess, db) -> None:
+    """/open — one message, then one small message per position so each can
+    carry its own settle buttons. Telegram attaches a keyboard to a message,
+    not to a line, so three positions need three messages."""
+    rows = journal.open_rows(db)
+    await tg.tg_send(sess, open_text(db))
+    for r in rows:
+        await tg.tg_send(sess, _pos_line(r), _settle_buttons(r["id"]))
+
+
+async def handle_callback(sess, db, cb: dict) -> None:
+    """A tapped inline button.
+
+    Every path answers the callback, including the failures — an unanswered
+    one leaves a spinner on the user's screen for several seconds and looks
+    like the bot died.
+    """
+    cb_id = cb.get("id", "")
+    data = cb.get("data") or ""
+    msg = cb.get("message") or {}
+    chat_id = (msg.get("chat") or {}).get("id")
+    msg_id = msg.get("message_id")
+
+    kind, _, raw = data.partition(":")
+    if not raw.isdigit():
+        await tg.answer_callback(sess, cb_id, "Unrecognised button")
+        return
+    row_id = int(raw)
+
+    if kind == "jl":
+        outcome, row = journal.take(db, row_id)
+        if outcome == "missing":
+            await tg.answer_callback(sess, cb_id, "That alert is no longer on file")
+            return
+        if outcome == "already":
+            await tg.answer_callback(sess, cb_id, "Already logged")
+            await tg.edit_markup(sess, chat_id, msg_id, None)
+            return
+        used, free, _ = journal.slots(db)
+        if outcome == "over":
+            _, why = journal.may_take(db, row["grade"])
+            await tg.answer_callback(
+                sess, cb_id,
+                f"Logged, but you are over the slot rule — {why}. "
+                "Recorded anyway so your book stays true.", alert=True)
+        else:
+            await tg.answer_callback(
+                sess, cb_id, f"Logged · {used} of {journal.MAX_OPEN} open, {free} free")
+        await tg.edit_markup(sess, chat_id, msg_id, None)
+        await tg.tg_send(sess,
+                         ("📓 <b>Logged</b> " if outcome == "taken"
+                          else "⚠️ <b>Logged, over the slot rule</b> ")
+                         + f"· {row['symbol']} {row['grade']} {row['tf']}\n\n"
+                         + slot_line(db),
+                         _settle_buttons(row_id))
+        return
+
+    if kind in ("jw", "jx", "jz"):
+        row = journal.close(db, row_id,
+                            {"jw": "win", "jx": "loss", "jz": "zero"}[kind])
+        if not row:
+            await tg.answer_callback(sess, cb_id, "Already settled")
+            await tg.edit_markup(sess, chat_id, msg_id, None)
+            return
+        await tg.answer_callback(sess, cb_id, f"{row['r']:+.2f}R recorded")
+        await tg.edit_markup(sess, chat_id, msg_id, None)
+        used, free, _ = journal.slots(db)
+        await tg.tg_send(sess,
+                         f"{'✅' if row['r'] > 0 else '❌' if row['r'] < 0 else '⚪'} "
+                         f"<b>{row['symbol']} {row['grade']}</b> "
+                         f"{row['r']:+.2f}R\n\n{slot_line(db)}")
+        return
+
+    await tg.answer_callback(sess, cb_id, "Unrecognised button")
