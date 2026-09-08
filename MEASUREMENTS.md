@@ -2877,3 +2877,55 @@ entry, so the target stops mattering — the flat ladder is an artifact of that
 setting, not a fact about the market. The panel also states
 `excl. fees/funding/slippage`, so its +0.33/trade is GROSS and not comparable
 with the net figures in this file.
+
+## "Trade with the trend" — which trend? — `research/studies/which_trend.py`
+
+The phrase names two different things and this strategy does not treat them
+alike. 8218 signals, 4813 with both trends readable, 42 days, fees in.
+
+  **Daily** = `TREND_INTERVAL` / `DI_INTERVAL`, both Day1. What the grade reads.
+  **Chart** = the same SuperTrend and DI on the timeframe being traded.
+
+| | n | win | R/signal |
+|---|---|---|---|
+| **daily agrees** | 3408 | 39% | **+0.056 ± 0.022** |
+| **daily against** | 3468 | 34% | **−0.083 ± 0.021** |
+| | | | **+0.139, +4.5 SE** |
+| chart agrees | 1895 | 35% | −0.046 ± 0.029 |
+| chart against | 3897 | 36% | −0.044 ± 0.020 |
+| | | | **−0.002, −0.0 SE** |
+
+**The daily trend is the strongest single axis measured after the POI. The
+chart's own trend sorts nothing at all** — not weakly, not negatively: a
+difference of 0.002 R on 5792 signals, which is as close to a pure null as
+this project has produced.
+
+The direction was stated before measuring, in the script's docstring: this is
+a reversal strategy, price raids a pool and turns, so the move immediately
+before the setup is by construction going the wrong way on the chart being
+traded. "With the chart trend" asks a reversal pattern for continuation. The
+prediction was that it would not help. It measured exactly zero.
+
+So the answer to the question is unambiguous: **the higher timeframe supplies
+the direction, the chart supplies the entry.** They are different jobs and the
+advice is only correct about the first.
+
+### The 2x2 is NOT to be traded, and it is worth saying why
+
+| R/signal | chart agrees | chart against |
+|---|---|---|
+| all signals · daily agrees | −0.010 (711) | **+0.033** (1651) |
+| in a POI · daily agrees | **+0.359** (207) | +0.139 (654) |
+| confirmed · daily agrees | **+0.037** (186) | −0.168 (134) |
+
+Three panels, and they disagree about the sign of the chart's contribution
+inside the same daily-agrees row: it hurts on all signals, helps inside a POI,
+helps on confirmed. That is the self-contradicting 2x2 that got the
+BTC × own-trend interaction rejected, in the same shape.
+
+An earlier version of this script printed "best cell inside a POI: daily
+agrees, chart agrees +0.359". That line was removed. It is the maximum of four
+post-hoc subgroups with no correction — precisely the move this file has
+rejected twice before — and quoting it would have manufactured a filter out of
+n=207. The script now prints whether the panels agree instead of which cell
+won.
