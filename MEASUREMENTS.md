@@ -2929,3 +2929,75 @@ post-hoc subgroups with no correction — precisely the move this file has
 rejected twice before — and quoting it would have manufactured a filter out of
 n=207. The script now prints whether the panels agree instead of which cell
 won.
+
+## Does the daily POI rescue a scalping timeframe? — `research/studies/scalp.py`
+
+Asked after three trades in a row stopped out: tune it down to a scalping
+timeframe. Worth re-testing rather than quoting the old Min5 result, because
+that run predates the POI — and the POI is the one thing that ever changed a
+timeframe's verdict, turning Min15 from −0.078 on its own to positive inside a
+zone. If it rescued 15m it might rescue 5m.
+
+44845 signals, 30 symbols, **every timeframe given the same ~42 calendar days**
+by paging (2000 bars is 41.6d of Min30 but 6.9d of Min5), fees in, unfilled
+counted as zero.
+
+**Inside a daily POI:**
+
+| tf | n | /day | stop% | fee/R | fill | win | R/signal |
+|---|---|---|---|---|---|---|---|
+| **Min30** | 666 | 16.0 | 1.09 | 7.3% | 77% | 45% | **+0.146 ± 0.049** |
+| **Min15** | 1198 | 28.8 | 0.77 | 10.4% | 81% | 39% | **+0.033 ± 0.039** |
+| Min5 | 2967 | 71.2 | 0.41 | 19.7% | 90% | 35% | **−0.150 ± 0.026** |
+| Min1 | 7080 | 230.1 | 0.18 | 44.4% | 95% | 32% | **−0.525 ± 0.020** |
+
+**Inside a POI, with the daily trend** — the best condition available:
+
+| tf | fill | win | R/signal |
+|---|---|---|---|
+| Min30 | 79% | 50% | **+0.281 ± 0.072** |
+| Min15 | 80% | 43% | +0.142 ± 0.056 |
+| Min5 | 89% | 37% | **−0.083 ± 0.041** |
+| Min1 | 95% | 34% | **−0.401 ± 0.030** |
+
+**The POI does not rescue Min5 or Min1. Every arm is monotone in timeframe and
+the sign flips below 15m.** The filter that saved 15m cannot save 5m, and the
+reason is not subtle.
+
+### The fee column is the whole story
+
+| tf | median stop | round trip costs | as a share of a 1R loss |
+|---|---|---|---|
+| Min30 | 1.09% | 0.073 R | **7%** |
+| Min15 | 0.77% | 0.104 R | **10%** |
+| Min5 | 0.41% | 0.197 R | **20%** |
+| Min1 | 0.18% | 0.444 R | **44%** |
+
+Cost in R is `FEE / risk_pct`, so halving the stop doubles the fee in R terms.
+At Min1 the exchange takes 44% of the risk on every round trip before the trade
+has done anything. No edge in this family survives that.
+
+### And it makes the complaint worse, not better
+
+The win rate FALLS monotonically as the timeframe drops — 45% → 39% → 35% → 32%
+inside a POI. Tighter stops sit closer to the noise they are meant to be
+outside of, so a scalping timeframe produces MORE stop-outs, not fewer. The
+symptom that prompted the request is the thing the change would amplify.
+
+Three stop-outs in a row on grade A/B is a 13–16% event. It arrives about one
+week in seven and carries no information.
+
+### One thing here IS worth a proper test, and it is not scalping
+
+`Min30 confirmed inside a POI` on these 30 symbols: 101 signals, 63% fill,
+**61% win**, +0.431 ± 0.121. That is the 60% win rate asked for two sessions
+ago, on the HIGHER timeframe, at 3.6 SE.
+
+It must not be read as a finding yet. `grades.py` put the comparable cell at
+52% on 60 symbols, and this run differs in TWO ways at once — 30 symbols
+instead of 60, and no daily-trend condition — so the causes are confounded.
+What it suggests is that the improvement lies in **fewer, more liquid symbols
+on a higher timeframe**, which is the opposite direction from scalping and is
+consistent with the already-recorded finding that the wider universe is
+materially worse per signal. Needs a clean one-variable test before anything
+moves.
