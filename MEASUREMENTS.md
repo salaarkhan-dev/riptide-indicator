@@ -2809,3 +2809,71 @@ largest target tested. Four reasons not to act on it:
 
 2R stays shipped. What this table settles is the direction of the question,
 not a new target.
+
+## Entering at the MSS close instead of the gap — `research/studies/mss_entry.py`
+
+Asked after an XPL long missed its limit by 0.12R and then ran 3%. Not covered
+by `fills.py`, which tested a market entry at the SIGNAL bar (the gap). This is
+earlier: the moment structure shifts, before the retracement that may never
+come. 1244 confirmed setups, 42 days, live universe, fees in, unfilled shipped
+entries counted as zero.
+
+Two ways to score it, because they answer different questions. **2R of the new
+risk** keeps the trade's shape. **Same target price** keeps the destination —
+this is the version that asks "would I have caught the move", which is what
+the missed chart shows.
+
+| inside a daily POI | fill | win | RR | R/signal | total |
+|---|---|---|---|---|---|
+| **shipped: limit at the gap** | 70% | 44% | 1.79 | **+0.162 ± 0.061** | **+68.2** |
+| MSS close, 2R of new risk | 100% | 43% | 1.59 | +0.102 ± 0.066 | +43.0 |
+| MSS close, same target px | 100% | **55%** | 0.93 | +0.057 ± 0.051 | +24.0 |
+
+| grade A | fill | win | RR | R/signal | total |
+|---|---|---|---|---|---|
+| **shipped** | 71% | 50% | 1.81 | **+0.294 ± 0.094** | **+54.0** |
+| MSS close, 2R of new risk | 100% | 47% | 1.66 | +0.245 ± 0.103 | +45.0 |
+| MSS close, same target px | 100% | **59%** | 0.96 | +0.157 ± 0.077 | +28.9 |
+
+**It loses on every arm — all setups, inside a POI, outside one, grade A and
+grade C.** Six comparisons, six the same direction. The fill rate does go to
+100% exactly as advertised; it is simply not worth what it costs.
+
+**The mechanism is arithmetic, not luck.** The stop does not move — it is the
+raid extreme, the price at which the setup is wrong — so a worse entry inflates
+the risk rather than tightening the stop. Measured inflation: **1.46x**. The
+same market move is therefore worth 1/1.46 = 0.68 as many R, and the 2R target
+sits 46% further away in price. The win rate barely moves (35% → 37%) because
+the target retreated in step with the entry. And the entry pays TAKER instead
+of maker.
+
+This is the sixth independent confirmation of the same thing: the limit order
+is not a formality, it is doing the selecting. Market at the gap (−0.064 /
+−0.048), chasing by ATR (−0.066 / −0.230), constant-risk chasing, dropping to
+5m for a tighter stop, cancelling early — and now this.
+
+### It also prices the 60% win rate exactly
+
+`grade A, MSS close, same target price` **wins 59%** — within a point of the
+60% that was asked for. It also earns **+0.157 against +0.294**, so reaching
+that win rate costs **47% of the edge on the best signal the bot produces**.
+
+The reason is visible in the RR column: 1.81 → 0.96. A 59% win rate at 0.96:1
+is worth about half of a 50% win rate at 1.81:1. This is the `winrate.py`
+result arriving from a completely different direction, and it is the clearest
+statement of it in the file — **the win rate went up, the money went down, in
+the same table, on the same signals.**
+
+### Note on the chart's own statistics panel
+
+The Pine panel shows Net @1R +52.0R, @1.5R +54.5R, @2R +54.3R, @3R +54.5R on
+XPL — a target ladder that is completely flat, which contradicts the
+strongly monotone ladder in `winrate.py` (+254 at 2R, +340 at 3R, +413 at 4R).
+
+The panel had **BE arms 1.5R, locks 0.1R** switched on. `beArmR` ships at 0.0
+and its tooltip records why: break-even lost at every arm level on both signal
+types. With it armed, most trades that would have run are scratched near
+entry, so the target stops mattering — the flat ladder is an artifact of that
+setting, not a fact about the market. The panel also states
+`excl. fees/funding/slippage`, so its +0.33/trade is GROSS and not comparable
+with the net figures in this file.
