@@ -10,13 +10,14 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from urllib.parse import urlencode
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import aiohttp
 
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
-                     TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
+                     LOG_URL, TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
                      TREND_INTERVAL, log)
 from .engine import (Early, Setup, Sweep, grade_of, shift_odds,
                      sweep_worth)
@@ -225,8 +226,30 @@ TV_INTERVAL = {"Min1": "1", "Min5": "5", "Min15": "15", "Min30": "30",
                "Min60": "60", "Hour4": "240", "Hour8": "480", "Day1": "D"}
 
 
+def _log_link(sym: str, grade: str, tf: str, entry: float, stop: float,
+              when: int) -> str:
+    """"log it" — opens the trade desk with this alert's numbers filled in.
+
+    Empty unless RIPTIDE_LOG_URL is set, so an unconfigured bot sends exactly
+    the message it sent before.
+
+    The `id` is what stops a double tap becoming two positions. It is the
+    alert's own identity — symbol, timeframe and the bar that produced it —
+    so re-opening the same link an hour later still resolves to the same
+    trade, and the page refuses it. Prices go through %.12g rather than fmt():
+    the alert rounds for a human, the link has to carry the number the limit
+    order is actually placed at.
+    """
+    if not LOG_URL or not entry or not stop:
+        return ""
+    q = urlencode({"s": sym, "g": grade, "tf": tf,
+                   "e": f"{entry:.12g}", "x": f"{stop:.12g}",
+                   "id": f"{sym}-{tf}-{when}"})
+    return f" · <a href='{LOG_URL}{'&' if '?' in LOG_URL else '?'}{q}'>log it</a>"
+
+
 def _footer(when: int, price: float, tv_symbol: str,
-            interval: str = "") -> str:
+            interval: str = "", trade: tuple = ()) -> str:
     """Time, age and the price as of the scan, so a stale alert is obvious.
 
     The link carries the TIMEFRAME as well as the symbol. Without it
@@ -239,7 +262,8 @@ def _footer(when: int, price: float, tv_symbol: str,
     tv = (f"https://www.tradingview.com/chart/?symbol=MEXC%3A"
           f"{tv_symbol.replace('_', '')}.P" + (f"&interval={tf}" if tf else ""))
     px = f" · {fmt(price)}" if price else ""
-    return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>"
+    log_it = _log_link(*trade) if trade else ""
+    return f"<i>{signal_age(when)}{px}</i>\n<a href='{tv}'>chart</a>{log_it}"
 
 
 def _grade(x, early: bool = False) -> str:
@@ -331,7 +355,9 @@ def setup_message(s: Setup) -> str:
         f"<i>sweep → shift → FVG{also} · "
         f"{_pool(s.src, s.level, s.pivots)}</i>",
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
-        _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf),
+        _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf,
+                trade=(s.symbol, grade_chip(s), tf_label(s.tf or INTERVAL),
+                       s.entry, s.stop, s.detected_time)),
     ) if x is not None)
 
 
@@ -357,7 +383,10 @@ def early_message(s: Early) -> str:
         f"{_pool(s.src, s.level, s.pivots, s.pools)}</i>",
         trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _footer(s.fvg_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
-                s.symbol, s.tf),
+                s.symbol, s.tf,
+                trade=(s.symbol, grade_chip(s, True),
+                       tf_label(s.tf or INTERVAL),
+                       s.entry, s.stop, s.fvg_time)),
     ) if x is not None)
 
 

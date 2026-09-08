@@ -125,6 +125,13 @@ ALERT_ON_FIRST_RUN = os.getenv("RIPTIDE_ALERT_FIRST_RUN", "0") == "1"
 # Scan immediately on startup instead of waiting for the next bar close.
 SCAN_ON_START = os.getenv("RIPTIDE_SCAN_ON_START", "1") == "1"
 TG_RETRIES = int(os.getenv("RIPTIDE_TG_RETRIES", "4"))
+
+# Where the "log it" link on a trade alert points. Set in .env, NOT here and
+# NOT in riptide.conf: this file is public on GitHub, and while the page it
+# addresses still requires the owner to be signed in, an unlisted URL belongs
+# with the secrets rather than in a committed config. Empty = no link, which
+# is the default and costs the alert nothing.
+LOG_URL = os.getenv("RIPTIDE_LOG_URL", "").strip()
 # Listen for commands from TELEGRAM_CHAT_ID. Read-only status plus service
 # control; there is still no exchange key and no order path anywhere.
 TG_COMMANDS = os.getenv("RIPTIDE_TG_COMMANDS", "1") == "1"
