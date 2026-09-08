@@ -11,10 +11,27 @@ import time
 
 import aiohttp
 
-from .config import (BASE, EXCLUDE_TRADFI, INTERVAL, LOOKBACK, MIN_VOL_USDT,
-                     TOP_N,
-                     QUOTE, SYMBOLS_ENV, BAR_SECONDS, log)
+from .config import (BASE, BAR_SECONDS, EXCLUDE_TRADFI, INTERVAL, LOOKBACK,
+                     MIN_REQUEST_GAP, MIN_VOL_USDT, QUOTE, SYMBOLS_ENV, TOP_N,
+                     log)
 from .engine import Candle
+
+# One pacer for the whole process. The lock is held across the sleep on
+# purpose: that is what turns a burst into a queue.
+_pace_lock = asyncio.Lock()
+_last_request = 0.0
+
+
+async def _pace() -> None:
+    global _last_request
+    if MIN_REQUEST_GAP <= 0:
+        return
+    async with _pace_lock:
+        wait = _last_request + MIN_REQUEST_GAP - time.monotonic()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _last_request = time.monotonic()
+
 
 async def get_json(sess, url, params=None, tries=3):
     """One GET with retries. Returns None when it gives up.
@@ -29,6 +46,7 @@ async def get_json(sess, url, params=None, tries=3):
     throttled = False
     for k in range(tries):
         try:
+            await _pace()
             async with sess.get(url, params=params, timeout=aiohttp.ClientTimeout(total=20)) as r:
                 if r.status == 429:
                     throttled = True
@@ -131,6 +149,12 @@ async def fetch_candles(sess, symbol: str, interval: str = "") -> list[Candle]:
     params = {"interval": interval, "start": now - LOOKBACK * step, "end": now}
     d = await get_json(sess, f"{BASE}/api/v1/contract/kline/{symbol}", params)
     if not d or not d.get("data"):
+        # Empty here used to be silent, and it is the single most consequential
+        # silence in the bot: no candles means no signals for this symbol this
+        # cycle, which is indistinguishable from a symbol that simply had none.
+        # Whatever the exchange said instead of candles is worth seeing.
+        log.warning("%s %s: no candles returned — %s", symbol, interval,
+                    "empty response" if not d else str(d)[:160])
         return []
     k = d["data"]
     try:

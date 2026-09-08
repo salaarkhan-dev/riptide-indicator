@@ -58,6 +58,19 @@ LOOKBACK = int(os.getenv("RIPTIDE_LOOKBACK", "600"))   # bars fetched per symbol
 FRESH_BARS = int(os.getenv("RIPTIDE_FRESH_BARS", "2"))
 DB_PATH = os.getenv("RIPTIDE_DB", "riptide.db")
 CONCURRENCY = int(os.getenv("RIPTIDE_CONCURRENCY", "8"))
+
+# Minimum gap between MEXC requests, in seconds, across the whole process.
+#
+# CONCURRENCY caps how many requests are in flight; it does not cap the RATE.
+# Eight slots against a fast endpoint emptied 120 kline requests in about two
+# seconds — roughly 60 a second — and the exchange answered most of them with
+# a body carrying no candles at all. From one IP that burst is fine; from
+# another it is not, and the difference is invisible from the code.
+#
+# 0.07s is about 14 requests a second, so a 120-request cycle spreads over
+# ~9 seconds. That is nothing against a 15-minute scan and it removes the
+# burst entirely. 0 disables the pacing.
+MIN_REQUEST_GAP = float(os.getenv("RIPTIDE_MIN_REQUEST_GAP", "0.07"))
 QUOTE = os.getenv("RIPTIDE_QUOTE", "USDT")
 SYMBOLS_ENV = os.getenv("RIPTIDE_SYMBOLS", "")          # comma list, or blank
 MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
