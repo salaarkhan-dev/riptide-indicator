@@ -196,6 +196,11 @@ no volume field, so every earlier "volume" test was measuring something else.
 | BTC DAILY trend agrees | -0.094 (-0.9) | **-0.122 (-2.6)** |
 | **BTC 30m trend agrees** | +0.192 (+1.8) | **+0.174 (+3.6) CANDIDATE** |
 
+> **LABELS SWAPPED — see the BTC sign correction at the end of this file.**
+> Both BTC rows read backwards: they measure BTC going the OTHER way.
+> Every other row in this table is unaffected — the bug was only in the
+> two BTC helpers in `context.py`.
+
 **The canonical volume premise is false here.** A liquidity grab is supposed
 to print a volume spike; relative volume on the raid bar sorts nothing
 (+0.7 SE on both). Nor does volume on the gap bar. That closes the whole
@@ -204,6 +209,10 @@ volume family, now that it can actually be measured.
 **RSI, chart DI and volatility regime: nothing.**
 
 ### BTC 30m regime — the only thing that has cleared the bar since the fix
+
+> **LABELS SWAPPED — see the BTC sign correction at the end of this file.**
+> DISAGREES and AGREES are the wrong way round throughout this section.
+> The +0.174 at 3.6 SE is real and belongs to BTC going AGAINST the trade.
 
     early, n=1384
       BTC 30m trend DISAGREES   -0.129  (n=626)
@@ -337,6 +346,10 @@ room in that for anything.
 
 ### Early signals, split by BTC
 
+> **LABELS SWAPPED — see the BTC sign correction at the end of this file.**
+> The two rows below are labelled backwards. `standing.py` carried the
+> same bug: +0.179 belongs to BTC AGAINST, -0.055 to BTC agreeing.
+
 | | n | fill | win | GROSS R | total | net R | total |
 |---|---|---|---|---|---|---|---|
 | BTC 30m agrees | 800 | 77% | 44% | **+0.179** | +143.1 | +0.125 | +99.8 |
@@ -375,6 +388,12 @@ no funding, no liquidation, no downtime.
 | early only | 199 | 41% | 375.96 | +25% | 14% | 908 |
 | early, BTC agrees only | 152 | 40% | 347.81 | +16% | 18% | 467 |
 | **confirmed + early(BTC agrees)** | 343 | 44% | **546.18** | **+82%** | 23% | 450 |
+
+> **LABELS SWAPPED — see the BTC sign correction at the end of this file.**
+> The two `BTC agrees` rows are really `BTC against`, so the +82%
+> headline selected the half the corrected measurement calls better — the
+> number stands, the name on it does not. Rows without BTC in the label
+> are unaffected.
 | everything | 329 | 39% | 349.38 | +16% | 21% | 952 |
 | — max 5 open | 126 | 51% | 488.08 | +63% | **7%** | 667 |
 | — max 10 open | 317 | 46% | 623.41 | +108% | 16% | 476 |
@@ -491,6 +510,12 @@ through a 50% drawdown is not tradeable by a person.
 | max 8, cap 3 same direction | 136 | 38% | +9% | 19% | 0.47 |
 | **max 8, 3 slots for confirmed** | 182 | **46%** | **+46%** | **13%** | **3.67** |
 | max 8, early needs BTC | 233 | 44% | +49% | 18% | 2.67 |
+
+> **LABELS SWAPPED — see the BTC sign correction at the end of this file.**
+> This row and every `ALL RULES` row below filter on `early_needs_btc`,
+> which selected BTC AGAINST. `max 8, 3 slots for confirmed` — the rule
+> `TRADING.md` actually recommends — uses no BTC condition and is clean,
+> as are the plain caps, the direction caps and the daily loss stops.
 | max 8, stop day at -4% | 148 | 43% | +34% | 13% | 2.67 |
 | max 8, stop day at -6% | 195 | 41% | +24% | 15% | 1.54 |
 | ALL RULES together | 116 | 46% | +31% | 15% | 2.11 |
@@ -980,9 +1005,18 @@ better, not worse), not monotonic, and +0.7 SE on early. Density at the gap
 (+1.4 SE) and density at the swept pool (−1.5 SE) point opposite ways. Noise.
 Likely partly a proxy for risk size, which is itself null.
 
-**BTC regime**, conditional on the symbol's own daily trend. One cell cleared
-the pre-registered bar, and it should still not ship, because the 2×2 pattern
-contradicts itself:
+**BTC regime**, conditional on the symbol's own daily trend.
+
+> **LABELS SWAPPED — see the BTC sign correction at the end of this file.**
+> Every "BTC against" below is really "BTC agrees" and vice versa. The
+> self-contradiction it reports is unaffected by relabelling — swapping both
+> columns leaves the two strategies still disagreeing about which cell is bad
+> — so the REJECTION stands and only the cell names are wrong. This is also
+> the section I cited on 8 Sep to dismiss the grade-A BTC result as a known
+> unstable interaction. That reasoning was built on inverted labels.
+
+One cell cleared the pre-registered bar, and it should still not ship, because
+the 2×2 pattern contradicts itself:
 
 | | confirmed worst cell | early worst cell |
 |---|---|---|
@@ -2652,3 +2686,56 @@ it tested; its BTC paragraph is wrong and is superseded here.
 never supported in that direction and does not support strongly in the other,
 so both now read "⛓️ BTC trending with/against you", uncoloured. No filter,
 no grade change, no suppression.
+
+### Blast radius of the sign bug, and what is NOT affected
+
+Six results are relabelled, marked in place above with **LABELS SWAPPED**:
+
+| result | script | status |
+|---|---|---|
+| feature table, the two BTC rows | `context.py` | columns swapped |
+| "BTC 30m regime — the only thing that cleared the bar" | `context.py` | columns swapped |
+| held-out BTC replication + `PREREG_btc.md` | `btc_regime.py` | columns swapped |
+| early signals split by BTC | `standing.py` | columns swapped |
+| equity variants naming BTC (incl. the +82%) | `equity.py` | selection was the other half |
+| `max 8, early needs BTC` and every `ALL RULES` row | `portfolio.py` | filtered the other half |
+
+**Unaffected, and worth stating explicitly because the temptation after a bug
+like this is to distrust everything:** the daily POI and its held-out test,
+the grade system, the 2R target, the stop-placement work, the fill-rate and
+wait-bar studies, the sweep conversion table, the entry-gap gradient, the risk
+cap, DI, the symbol's own daily trend, the concurrency caps, and
+`max 8, 3 slots for confirmed` — the one portfolio rule `TRADING.md` actually
+recommends. None of them read BTC. The bug lived in two helper functions that
+only the BTC studies called.
+
+### The check that should have existed — `research/studies/signs.py`
+
+The bug survived a discovery run, a pre-registered held-out replication that
+appeared to confirm it, and weeks in `TRADING.md`, because every verification
+was a person reading a comment that was wrong. So the audit does not read
+anything:
+
+  1. `supertrend()` and `di_direction()` are bucketed by their own output and
+     scored against realised trailing price. `+1` must land on bars that had
+     been rising. Currently +0.574% vs −0.291% and +0.996% vs −0.860%, 12/12
+     symbols agreeing on both.
+  2. `htf_dir_at()` — the function the GRADE is built on, and the one whose
+     inversion would silently flip every letter — is checked twice: that it
+     passes its series' sign through unchanged (10587 bars, 0 disagreements),
+     and against daily price directly (+18.3% vs −10.5%).
+  3. Engine geometry: every long has stop < entry, every short the reverse.
+     420 signals, 0 inverted. This pins what `is_long` means.
+  4. The literal bug as a grep: no direction may be compared to `is_long`
+     with `< 0`.
+
+It exits non-zero on failure. **Negative-tested three ways** — inverting
+`supertrend`'s return fails check 1 (0/12 symbols agree), inverting
+`htf_dir_at` fails both arms of check 2, and reintroducing `< 0` in
+`scanner.py` fails check 4 naming the file and line. Two checks shipped
+earlier in this project could not fail; these can.
+
+The lesson is not that pre-registration failed. It worked exactly as designed
+and still certified a backwards claim, because a pre-registered direction is
+only as good as the code computing the variable, and nothing in that procedure
+ever looked at the variable.
