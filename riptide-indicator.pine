@@ -674,9 +674,8 @@ dailyCtx() =>
     [open[1], high[1], low[1], close[1], ta.atr(atrLength)[1], time[1],
      _dp[1], _dm[1], _sd[1]]
 
-[dOp, dHi, dLo, dCl, dAtr, dTm, dDiP, dDiM, dStD] =
-     request.security(syminfo.tickerid, "D", dailyCtx(),
-                      lookahead = barmerge.lookahead_off)
+[dOp, dHi, dLo, dCl, dAtr, dTm, dDiP, dDiM, dStD] = request.security(
+     syminfo.tickerid, "D", dailyCtx(), lookahead = barmerge.lookahead_off)
 
 // The last three CLOSED daily bars, kept by hand. request.security hands over
 // one bar at a time, and a zone needs three, so the history is accumulated
@@ -764,8 +763,23 @@ dailyTrendOk(bool isLong) =>
 // Mirrors GRADES in riptide/engine.py, cell for cell.
 gradeOf(bool isEarly, bool poi, bool isLong) =>
     bool tr = dailyTrendOk(isLong)
-    isEarly ? (poi and tr ? "B" : (poi or tr) ? "C" : "D")
-            : (poi and tr ? "A" : tr ? "B" : "C")
+    // if/else, not one ternary split over two lines. This shipped as
+    //
+    //     isEarly ? (...)
+    //             : (...)
+    //
+    // and TradingView answered CE10013. Elsewhere in this file a ternary IS
+    // split before its ":" and compiles — line 1589 and a dozen others — so
+    // the break is not the problem: those are all ASSIGNMENTS, where the
+    // continuation belongs to a statement. This one was the function's bare
+    // trailing return expression, and there Pine wants it on one line.
+    // Stacked branches read better than a long single line anyway.
+    string g = "C"
+    if isEarly
+        g := poi and tr ? "B" : (poi or tr) ? "C" : "D"
+    else
+        g := poi and tr ? "A" : tr ? "B" : "C"
+    g
 
 // Is this letter good enough to draw? "ABCD".indexOf is the same ordering the
 // bot uses for RIPTIDE_MIN_GRADE.
