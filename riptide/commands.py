@@ -18,6 +18,7 @@ from . import tracker
 from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
                      INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE, POI_REQUIRED,
                      POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS, SWEEP_INTERVALS,
+                     SWEEP_WATCH_ONLY,
                      TG_CHAT, TG_TOKEN, TRACK, TRACK_FILL_BARS,
                      TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_FACTOR,
                      TREND_FILTER, TREND_INTERVAL, TREND_LEN, build_id, log)
@@ -120,7 +121,8 @@ def status_text(db, state) -> str:
                  if MIN_GRADE != "C" else " · all grades")
     if SWEEP_ALERTS:
         poi_line += (f" · sweeps {'+'.join(SWEEP_INTERVALS)}"
-                     + (" in POI" if POI_SWEEPS and POI_REQUIRED else ""))
+                     + (" in POI" if POI_SWEEPS and POI_REQUIRED else "")
+                     + (" · WATCH only" if SWEEP_WATCH_ONLY else ""))
     return (
         f"<b>Riptide status</b>\n\n"
         f"build      <code>{build_id()}</code>\n"

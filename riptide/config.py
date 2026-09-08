@@ -270,16 +270,26 @@ SWEEP_INTERVALS = tuple(dict.fromkeys(
     if i.strip())) or (INTERVAL,)
 POI_SWEEPS = os.getenv("RIPTIDE_POI_SWEEPS", "1") == "1"
 
-# Drop sweeps whose shift level is further than this many percent away. 0 is
-# off, which is the default because it is a volume decision, not a correctness
-# one, and it should be made on lived experience rather than on a backtest.
+# Send only the sweeps the alert would label WATCH — in a daily POI AND with
+# the shift level closer than WATCH_MAX_DIST. The gate calls the same
+# sweep_worth() that writes the label, so what the message says and what the
+# filter does cannot drift apart.
 #
-# The number to make it with: raids further than 3% from their shift level are
-# 52% of all of them and carry 13% of the value (see engine.WATCH_MAX_DIST).
-# Those are exactly the ones the alert now labels SKIP, so setting this to 3
-# stops sending them rather than sending them labelled — about 34 of the 65
-# daily sweeps.
-SWEEP_MAX_DIST = float(os.getenv("RIPTIDE_SWEEP_MAX_DIST", "0"))
+# Measured over 5098 raids inside a daily POI, by how far the shift still was:
+#
+#     under 2%   30% of raids   65% of the R that followed
+#     under 3%   48% of raids   87%          <- the threshold
+#     under 4%   61% of raids   88%
+#
+# The band past 3% adds 13% more raids for 1% more value. Muting SKIP takes
+# sweeps from about 65 a day to about 31.
+SWEEP_WATCH_ONLY = os.getenv("RIPTIDE_SWEEP_WATCH_ONLY", "1") == "1"
+
+# The distance threshold behind that verdict, in percent. One number, read by
+# both the label and the filter — see engine.sweep_worth. This replaced a
+# separate RIPTIDE_SWEEP_MAX_DIST, which was a second knob for the same
+# decision and could have been set to disagree with the label the reader saw.
+WATCH_MAX_DIST = float(os.getenv("RIPTIDE_WATCH_MAX_DIST", "3.0"))
 # Which pool types raise a heads-up. Unset means all of them — the right
 # default while the output is being checked against the chart, since
 # filtering would hide part of what is being verified.

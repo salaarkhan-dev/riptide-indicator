@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .config import CFG, Cfg, DI_INTERVAL
+from .config import CFG, Cfg, DI_INTERVAL, WATCH_MAX_DIST
 
 @dataclass
 class Candle:
@@ -620,7 +620,9 @@ def shift_odds(extreme: float, struct_level: float):
     return None
 
 
-# WATCH_MAX_DIST — the one number behind the sweep verdict.
+# WATCH_MAX_DIST (config, default 3.0) is the one number behind the verdict,
+# and the one number behind the filter — riptide.scanner sends only sweeps
+# this returns True for, so the label and the gate cannot drift apart.
 #
 # A sweep answers exactly one question: is this chart worth looking at. So it
 # gets one answer, yes or no, rather than a tier the reader has to interpret.
@@ -642,9 +644,6 @@ def shift_odds(extreme: float, struct_level: float):
 # Three per cent is where the curve flattens: the next band adds 13% more
 # raids and 1% more value. Half the raids carry seven eighths of everything
 # that follows from any of them.
-WATCH_MAX_DIST = 3.0
-
-
 def sweep_worth(extreme: float, struct_level: float, poi: bool = True) -> bool:
     """Is this raid worth opening the chart for? Yes or no, nothing else.
 
