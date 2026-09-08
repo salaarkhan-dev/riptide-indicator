@@ -15,24 +15,47 @@ all three measurable arms. Assume shrinkage on everything else.
 Every alert opens with a letter. It is the whole triage, and it is the only
 thing in the message that has been measured end to end.
 
-    A   confirmed setup, in a daily POI, with the daily trend     +0.822 R
-    B   confirmed with the trend but no POI                       +0.206 R
-        early in a POI with the trend                             +0.188 R
-    C   everything else that is not D                             +0.089 R
-    D   early, no POI, against the trend                          -0.050 R
+Measured on the live universe — 60 symbols, 30m and 15m, POI required, 42
+days, fees in, an unfilled signal counted as a zero:
 
-Two axes make the letter, and they MULTIPLY rather than add. A confirmed setup
-with neither is +0.082; the trend alone takes it to +0.206, the POI alone to
-+0.105, and both together to +0.822 at a 76% win rate. That is why there is a
+| grade | what it is | /day | fill | **win** | RR | R/signal |
+|---|---|---|---|---|---|---|
+| **A** | confirmed, in a POI, trend agrees | 4.4 | 72% | **48%** | 1.81 | **+0.271** |
+| **B** | early, in a POI, trend agrees | 24.4 | 82% | 45% | 1.71 | +0.180 |
+| C | everything else *(muted)* | 37.5 | 79% | 38% | 1.70 | +0.016 |
+| D | cannot occur while the POI is required | — | — | — | — | — |
+
+**A wins 48% of the trades it fills. More than half of them lose.** It is
+profitable because it pays 1.81:1, not because it is often right. Four A's a
+day means a run of three losers happens most weeks and means nothing; you need
+about 30 before the sample says anything at all. If you are reading each A as
+a high-probability trade you will stop taking them at the worst moment.
+
+*(An earlier version of this file put A at +0.822 and a 76% win rate. That was
+43 signals, 30m only, on 23 hand-picked symbols. On the 60 symbols the bot now
+scans the same cell is +0.271 at 48%. The ORDER of the letters survived the
+change; the levels did not, which is what this file has always said about
+levels. Corrected 8 Sep.)*
+
+Two axes make the letter, and they multiply rather than add: neither is
++0.082, the trend alone +0.206, the POI alone +0.105. That is why there is a
 table rather than a points system.
+
+A 30m A is worth more than a 15m A — +0.317 against +0.216, 52% win against
+45% — but the gap is well inside one standard error, so it is a tiebreaker,
+not a rule.
 
 **Priority when several alerts land at once and you have one slot free:**
 
-  1. A, always. It is 76% at 2R and about one a day across 60 symbols.
-  2. B confirmed before B early. Same band, but a confirmed setup has had its
-     structure shift; the early has not.
+  1. A, always. 4.4 a day across 60 symbols, and it is the only band paying
+     more than +0.2 R per signal.
+  2. Between two A's, prefer the 30m one and the one with the wider stop. Both
+     are sub-1 SE tiebreakers, so use them only to break an actual tie.
   3. Between two of the same letter, take the one whose BTC line agrees.
-     Measured on early signals: agreeing +0.179, disagreeing -0.055.
+     Measured on EARLY signals: agreeing +0.179, disagreeing -0.055, and held
+     out at +0.123 (1.8 SE). It has never been established on confirmed
+     setups, and inside grade A it measures backwards — so on an A, ignore the
+     BTC line entirely rather than reading it either way.
   4. Never fill the last slot with a C when the day is young. Slots are the
      scarce resource, not signals — the account simulation had to skip
      hundreds of signals for want of one.
@@ -45,9 +68,14 @@ table rather than a points system.
     price is a missed trade, not a better one. See the fill-rate rules below.
   - **Do not size up on an A.** The letter changes which trades you take, never
     how much you risk. 1% stays 1%.
-  - **Do not read the band percentage as a forecast.** "76% of 43 backtest" is
-    a base rate from one window on 43 signals. The ORDERING of the bands is
-    what replicated; the levels are the least stable thing measured.
+  - **Do not read the band percentage as a forecast.** It is a base rate from
+    one window. The ORDERING of the bands is what replicated; the levels are
+    the least stable thing measured, and they have already moved once.
+  - **Do not draw a conclusion from one trade, in either direction.** At a 48%
+    win rate a losing A is the more likely outcome, and a winning one is not
+    evidence either. Every rule in this file was changed only by a measurement
+    across hundreds of signals, and the two that survived a held-out test are
+    named as such. One chart cannot move any of them.
   - **Do not act on a sweep heads-up.** It has no entry and no stop because
     neither exists yet. It means go and look, nothing more.
 

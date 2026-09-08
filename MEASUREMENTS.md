@@ -2484,3 +2484,97 @@ identical and the gradient is steeper; only the level moved, because the wider
 universe is thinner — the same finding the POI work produced from the other
 direction. The table is not shown on any alert (only the distance is), so
 nothing user-facing was ever wrong; the comment beside it was.
+
+## Inside grade A — anatomy of the alerts that pay and the ones that do not
+
+`research/studies/grade_a.py`, prompted by a live grade-A alert on XRP_USDT
+15m that lost. One loss carries no information — the live-universe table below
+puts A at a **48% win rate**, so a losing A is the modal outcome — but it is a
+fair prompt for asking whether anything already measured sorts A's.
+
+**The live grade table, 60 symbols, both scanned timeframes, POI required,
+42 days.** This supersedes the 23-symbol Min30-only cell table earlier in this
+file, which is what `TRADING.md` had been quoting.
+
+| grade | n | /day | fill | win | RR | R/signal |
+|---|---|---|---|---|---|---|
+| **A** confirmed + POI + trend | 184 | 4.4 | 72% | **48%** | 1.81 | **+0.271 ± 0.094** |
+| **B** early + POI + trend | 1017 | 24.4 | 82% | 45% | 1.71 | +0.180 ± 0.041 |
+| C everything else *(muted)* | 1561 | 37.5 | 79% | 38% | 1.70 | +0.016 ± 0.032 |
+| D | 0 | — | — | — | — | unreachable with POI_REQUIRED |
+
+| cell | n | fill | win | R/signal |
+|---|---|---|---|---|
+| Min30 confirmed A | 100 | 67% | 52% | +0.317 ± 0.121 |
+| Min15 confirmed A | 84 | 77% | 45% | +0.216 ± 0.147 |
+| Min15 confirmed C | 114 | 79% | 42% | +0.147 ± 0.125 |
+| Min30 confirmed C | 121 | 60% | 36% | −0.013 ± 0.098 |
+
+The old table's +0.822 at a 76% win rate came from 43 Min30 signals on 23
+hand-picked symbols. On the 60 the bot now scans, the same cell is +0.271 at
+48%. The ordering survived the universe change; **the level did not**, exactly
+as this file has said about every level it reports. A 15m A is a coin flip
+with a 1.8:1 payoff, and it should be read that way.
+
+### Three axes inside A, and none of them earns a rule
+
+| gap at alert | n | fill | win | R/signal |
+|---|---|---|---|---|
+| 0 – 0.25R past entry | 54 | 96% | 50% | +0.371 ± 0.197 |
+| 0.25 – 0.5R | 48 | 77% | 49% | +0.326 ± 0.191 |
+| 0.5 – 1R | 54 | 59% | 47% | +0.200 ± 0.162 |
+| over 1R past | 28 | 39% | 45% | +0.118 ± 0.186 |
+
+**The gap gradient reverses inside A.** On the whole book it is this project's
+most replicated effect and it runs the counter-intuitive way — stranded alerts
+pay more, same sign on all ten splits. Inside A it runs the ordinary way, and
+the spread is 0.9 SE, which is nothing. The honest reading is that the axis is
+dead once the POI and the daily trend are already conditioned on, not that it
+inverted. Recorded because it was the first hypothesis and it was wrong.
+
+| stop width | n | fill | win | R/signal |
+|---|---|---|---|---|
+| under 1.00% risk | 61 | 66% | 45% | +0.167 ± 0.159 |
+| 1.00% or wider | 123 | 75% | 50% | +0.322 ± 0.116 |
+
+**Tight stops on an A are mildly worse, at 0.8 SE.** Weak on its own, but it
+is the third independent reading pointing the same way: the feature regression
+on the corrected scorer put stop size at +0.352 (2.4 SE) on confirmed, and
+`losers.py` puts the median stop of a confirmed winner at 1.44% against 1.17%
+for a loser. Mechanism is at least partly arithmetic — the round trip costs
+`0.08 / risk_pct` R, so 0.107 R at a 0.75% stop against 0.055 R at 1.45%, and
+a tight stop sits nearer the noise it is meant to be outside of. Not a filter:
+0.8 SE inside A, and cutting sub-1% A's would drop a third of them to save
+0.155 R apiece on a number that could be zero.
+
+| BTC 30m | n | fill | win | R/signal |
+|---|---|---|---|---|
+| agrees | 58 | 71% | **29%** | −0.113 ± 0.152 |
+| against | 126 | 72% | **57%** | +0.447 ± 0.115 |
+
+**This one is 2.9 SE and points the WRONG WAY, and it is still noise.** The
+pre-registered, held-out BTC result is +0.123 for *agreeing* — measured on
+early signals, which is where all the power was. This is a post-hoc subgroup
+of 184 confirmed signals that already condition on the symbol's own daily
+trend and DI, which is precisely the interaction tested at line "BTC regime,
+conditional on the symbol's own daily trend" and **rejected there for
+contradicting itself across the 2×2**. Finding the same interaction flipping
+sign again in a corner of that 2×2 is confirmation that it is unstable, not a
+discovery. Nothing changes on the alert, and nothing is filtered. If it is
+real, `/stats` will show it forward, out of sample, which is the only place
+this could now be settled.
+
+### The XRP trade itself
+
+Entry 1.393, stop 1.383 (0.75%), 2R at 1.413. Filled on the alert bar,
+08 Sep 04:00 UTC. Best price reached in the next nine bars: 1.3967, a maximum
+favourable excursion of **+0.37R** — it never got half way to 1R. Stopped
+06:15 UTC on a single 15m bar that took the low out by 0.23R and kept going.
+Price did not subsequently reach the target either, so this is not the
+"stopped out then it went" case.
+
+`losers.py` on confirmed setups: 34% of losers peak under 0.5R, the median
+loser is held 8 bars against 23 for a winner, and 27% of losers see the target
+after the stop. This trade is the median loser almost exactly. There is no
+diagnosis to make beyond that — it is what a 52%-probability outcome looks
+like from the inside.
