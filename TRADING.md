@@ -164,6 +164,12 @@ a warning rather than an edge.
 This is where the remaining improvement is. Entry filters have failed 21
 times; portfolio rules have not been tried until now.
 
+**There is no measured limit on how many alerts to take per day.** Nothing in
+this project ever produced one, and a daily quota is not a smaller version of
+the rule below — it is a different rule with no evidence behind it. What is
+measured is a cap on how many positions are OPEN AT ONCE, which is the thing
+that actually competes for capital. Take as many as the slots allow.
+
 **Cap concurrent positions at about 8.** Drawdown falls monotonically as the
 cap tightens — no cap 21%, 12 open 16%, 8 open 15%, 5 open 12%, 3 open 9% —
 but return falls too, and below 8 it falls faster. Return per unit of drawdown:
