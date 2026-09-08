@@ -321,7 +321,12 @@ async def cycle(sess, db, symbols):
     # Open interest and funding for this bar. Neither has a history endpoint,
     # so recording forward is the only way they ever become testable — see
     # market.py. Wrapped because a logger must never be able to cost an alert.
-    if LOG_MARKET:
+    # Once per structure bar, not once per scan. Not for load — snapshot is a
+    # single bulk request — but for correctness: every row is keyed on
+    # last_closed_bar(), which steps on INTERVAL, so running it twice inside
+    # one 30m bar just rewrites the same primary keys with a later reading of
+    # the same bar.
+    if LOG_MARKET and now % BAR_SECONDS[INTERVAL] < BAR_SECONDS[SCAN_INTERVAL]:
         try:
             n = await market.snapshot(sess, db, symbols)
             log.debug("market: logged %d snapshots", n)

@@ -17,10 +17,21 @@ from .config import (BASE, EXCLUDE_TRADFI, INTERVAL, LOOKBACK, MIN_VOL_USDT,
 from .engine import Candle
 
 async def get_json(sess, url, params=None, tries=3):
+    """One GET with retries. Returns None when it gives up.
+
+    A 429 that survives every retry used to fall out of this loop and return
+    None with NOTHING logged — only exceptions were. Being rate limited was
+    therefore indistinguishable from a quiet market anywhere downstream:
+    fetch_candles turns None into an empty list, scan_symbol returns no
+    signals at all for a symbol under 100 bars, and the scan reports success.
+    A throttled scanner looked exactly like a calm one.
+    """
+    throttled = False
     for k in range(tries):
         try:
             async with sess.get(url, params=params, timeout=aiohttp.ClientTimeout(total=20)) as r:
                 if r.status == 429:
+                    throttled = True
                     await asyncio.sleep(2 * (k + 1))
                     continue
                 r.raise_for_status()
@@ -30,6 +41,9 @@ async def get_json(sess, url, params=None, tries=3):
                 log.warning("GET %s failed: %s", url, e)
                 return None
             await asyncio.sleep(1.5 * (k + 1))
+    if throttled:
+        log.warning("RATE LIMITED after %d tries: %s — this symbol contributes "
+                    "no signals this cycle", tries, url.rsplit("/", 1)[-1])
     return None
 
 

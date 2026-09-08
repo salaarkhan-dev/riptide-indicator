@@ -71,7 +71,11 @@ async def snapshot(sess, db, symbols) -> int:
     within the same bar overwrites rather than duplicating — the primary key
     does that, and INSERT OR REPLACE keeps the freshest reading of the bar.
 
-    One request for every symbol. Returns how many rows were written.
+    ONE request for all of them — contract/ticker returns every symbol in a
+    single response, and the rows are filtered from it locally. The previous
+    sentence here said "one request for every symbol", which was wrong and
+    cost an hour of chasing a rate-limit theory that could not have been true.
+    Returns how many rows were written.
     """
     if not LOG_MARKET or not symbols:
         return 0
