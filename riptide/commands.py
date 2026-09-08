@@ -40,6 +40,7 @@ HELP = (
     "/open — your open positions, with buttons to settle them\n"
     "/today — what you logged today, and the free slots\n"
     "/book — your own record, per grade\n"
+    "/oi — export the open-interest table as a file\n"
     "/scan — run a scan now\n"
     "/trend on|off — filter setups by the daily trend\n"
     "/pause — record setups but stop sending\n"
@@ -261,6 +262,9 @@ async def handle_command(sess, db, state, text: str) -> None:
 
     elif cmd == "book":
         await tg.tg_send(sess, book_text(db))
+
+    elif cmd == "oi":
+        await send_oi(sess, db)
 
     elif cmd == "scan":
         await tg.tg_send(sess, "Scanning…")
@@ -570,3 +574,59 @@ async def handle_callback(sess, db, cb: dict) -> None:
         return
 
     await tg.answer_callback(sess, cb_id, "Unrecognised button")
+
+
+async def send_oi(sess, db) -> None:
+    """/oi — the open-interest table as a CSV file in the chat.
+
+    Gzipped and sent as a document rather than pasted: 92 symbols at a row per
+    30m bar is already thousands of lines and grows forever, and a Telegram
+    message caps at 4096 characters.
+
+    This exists so the OI data can be analysed OFF the box without opening a
+    port or copying a database by hand. It reads only the market table, which
+    holds no keys and nothing about the account.
+    """
+    import csv
+    import gzip
+    import io
+
+    cur = db.execute("""SELECT symbol, t, hold_vol, funding, price, amount24
+                        FROM market ORDER BY t, symbol""")
+    rows = cur.fetchall()
+    if not rows:
+        await tg.tg_send(sess, "No open-interest rows yet. market.py records "
+                            "one per symbol per closed bar.")
+        return
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([c[0] for c in cur.description])
+    w.writerows(rows)
+    blob = gzip.compress(buf.getvalue().encode())
+
+    syms = len({r[0] for r in rows})
+    span = (rows[-1][1] - rows[0][1]) / 86400 if len(rows) > 1 else 0.0
+    caption = (f"open interest · {len(rows):,} rows · {syms} symbols · "
+               f"{span:.1f} days\n\n"
+               f"<i>Needs roughly six weeks before a split on it can say "
+               f"anything. See MEASUREMENTS.md.</i>")
+
+    form = aiohttp.FormData()
+    form.add_field("chat_id", str(TG_CHAT))
+    form.add_field("caption", caption)
+    form.add_field("parse_mode", "HTML")
+    form.add_field("document", blob, filename="riptide-oi.csv.gz",
+                   content_type="application/gzip")
+    try:
+        async with sess.post(
+                f"https://api.telegram.org/bot{TG_TOKEN}/sendDocument",
+                data=form,
+                timeout=aiohttp.ClientTimeout(total=120)) as r:
+            body = await r.json()
+        if not body.get("ok"):
+            await tg.tg_send(sess, f"Could not send the file: "
+                                f"<code>{str(body)[:200]}</code>")
+    except Exception as e:
+        log.warning("/oi send failed: %s", e)
+        await tg.tg_send(sess, f"Could not send the file: {e}")

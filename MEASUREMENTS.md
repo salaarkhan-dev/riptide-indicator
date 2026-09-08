@@ -2748,3 +2748,64 @@ The lesson is not that pre-registration failed. It worked exactly as designed
 and still certified a backwards claim, because a pre-registered direction is
 only as good as the code computing the variable, and nothing in that procedure
 ever looked at the variable.
+
+## What a 60% win rate costs — `research/studies/winrate.py`
+
+Asked for directly: raise the win rate to at least 60%. It is reachable, it is
+easy, and it is the most expensive thing this project has priced.
+
+The win rate is not a property of the signals. It is a property of the TARGET:
+move the target down and more trades reach it. So the only honest way to
+answer is to price the dial. 2748 alerts, 42 days, live universe, POI
+required, unfilled counted as zero, fees in.
+
+| target | fill | **win** | R/signal | total R |
+|---|---|---|---|---|
+| 0.50R | 79% | **69%** | −0.020 ± 0.012 | **−54.3** |
+| 0.75R | 79% | **60%** | +0.003 ± 0.015 | +7.1 |
+| 1.00R | 79% | 55% | +0.027 ± 0.017 | +74.2 |
+| 1.50R | 79% | 46% | +0.057 ± 0.021 | +157.3 |
+| **2.00R (shipped)** | 79% | **41%** | **+0.093 ± 0.025** | **+254.6** |
+| 3.00R | 79% | 35% | +0.124 ± 0.030 | +339.9 |
+| 4.00R | 79% | 32% | +0.150 ± 0.034 | +413.3 |
+
+**Perfectly monotone in both directions across ten targets.** Every step that
+raises the win rate lowers the money, and the two columns never cross.
+
+To reach 60% overall you take a 0.75R target and keep **+7.1 R instead of
++254.6** — 97% of the profit, paid for a number that is not the profit. At
+0.5R the win rate is 69% and the strategy LOSES.
+
+Per grade, where the signal is better and the trade less brutal:
+
+| | 60% reached at | R/signal there | R/signal at 2R | cost |
+|---|---|---|---|---|
+| grade A | 1.25R | +0.214 | +0.286 | −25% |
+| grade B | 0.75R | +0.051 | +0.186 | −73% |
+
+So 60% on grade A alone is the only version of this that is merely expensive
+rather than ruinous, and it still throws away a quarter of the edge.
+
+**The break-even win rate at 2R is 1/(1+2) ≈ 33%, and 36% after fees.** Grade
+A wins 49% and grade B 45%. The distance from break-even is the edge; the
+distance from 60% is not a deficit, it is what a 1.8:1 payoff looks like.
+
+### The 4R result is NOT a recommendation
+
+The ladder never turns over — R/signal is still climbing at 4R, which is the
+largest target tested. Four reasons not to act on it:
+
+  1. The standard error widens with the target (±0.034 at 4R against ±0.025 at
+     2R), because the same signals produce fewer, larger outcomes.
+  2. The horizon is fixed. A longer target inside an unchanged 60-bar window
+     converts wins into timeouts, and the timeout is scored where it exits,
+     which flatters nothing but hides the cost in trade DURATION.
+  3. Slots. `portfolio.py` measures the concurrency cap as the binding
+     constraint; a 4R target holds each slot far longer, and none of that is
+     in this table. Total R per signal is not total R per slot-day.
+  4. `decisions.py` put 2R→3R at about 1.5 SE on an earlier window. Monotone
+     on one window is suggestive; it is not the held-out test that the daily
+     POI passed and that this has not been given.
+
+2R stays shipped. What this table settles is the direction of the question,
+not a new target.

@@ -141,6 +141,14 @@ holds even though 80% of the setups that never fill go on to reach 2R without
 you. Those are not the ones that got away; they are the price of the ones that
 did fill working at all.
 
+**Do not chase a higher win rate.** It is a dial, not an achievement: the win
+rate is set by the target, and every turn toward a higher one costs money.
+Measured across ten targets on 2748 alerts, perfectly monotone — 0.5R wins
+69% and LOSES 54 R; 2R wins 41% and makes 255 R; 4R wins 32% and makes 413 R.
+Reaching 60% overall means a 0.75R target and keeping +7 R instead of +255.
+Break-even at 2R is about 36% after fees, so 41-49% is the edge, not a
+shortfall. The number to improve is **R per signal**.
+
 **Exit at 2R.** The ladder is monotone — 1R +20.4 total R, 1.5R +39.5, 2R
 +52.8, 3R +61.9 — though each step is only about 1.5 SE, so 2R is a floor
 rather than a proven optimum. Longer is not worse.
