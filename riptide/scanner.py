@@ -294,6 +294,20 @@ async def cycle(sess, db, symbols):
     # this cycle just fetched. Ordering matters only in that a setup armed
     # below cannot resolve on the bar that created it — its fill window starts
     # after the gap bar, and update() walks each bar once per row.
+    # How much history each timeframe actually came back with. A truncated or
+    # failed fetch is silent otherwise: scan_symbol returns nothing at all for
+    # a symbol under 100 bars, so a rate-limited exchange looks exactly like a
+    # quiet market. This is the one thing the gate counters cannot show,
+    # because a signal that was never found is never counted anywhere.
+    for tf in INTERVALS:
+        got = [len(cs) for (sym, t), (_, _, _, cs) in zip(jobs, results)
+               if t == tf]
+        if got:
+            short = sum(1 for n in got if n < 100)
+            log.info("  %-9s %d symbols · %d-%d bars · median %d%s", tf,
+                     len(got), min(got), max(got), sorted(got)[len(got) // 2],
+                     f" · {short} TOO SHORT TO SCAN" if short else "")
+
     for (symbol, tf), (_, _, _, cs) in zip(jobs, results):
         try:
             tracker.update(db, symbol, cs, tf)
