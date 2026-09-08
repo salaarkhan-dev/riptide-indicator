@@ -154,10 +154,25 @@ async def tg_send(sess, text: str, buttons: dict | None = None) -> bool:
 
 
 def fmt(v: float) -> str:
+    """A price, printed at enough precision to place the order with.
+
+    THIS WAS 4 SIGNIFICANT FIGURES AND THAT WAS TOO FEW. A LINK alert showed
+    "Entry 12.71 · Stop 12.57 · 1.15% risk", but 12.71 − 12.57 is 1.10% — the
+    percentage was computed from the real values and the prices were rounded
+    to two decimals under them. Reading the entry off the message put the
+    limit order about 0.005 from where the engine meant it, which is 3% of the
+    risk on that trade, and the same rounding on a 127-dollar symbol costs
+    0.049 — nearly 4%.
+
+    Six significant figures covers every tick size in the 1–1000 range where
+    the loss occurred, and changes nothing below 1, which was always printed
+    at eight. Above 1000 a tenth of a unit is already far finer than any
+    plausible stop, so that branch stays as it was.
+    """
     if v >= 1000:
         return f"{v:,.1f}"
     if v >= 1:
-        return f"{v:.4g}"
+        return f"{v:.6g}"
     return f"{v:.8g}"
 
 
