@@ -4321,8 +4321,14 @@ question stays open rather than answered.
 
 ### Where this leaves the change
 
-`RIPTIDE_TREND_INTERVAL` from `Day1` to `Hour8` is a one-line, reversible
-environment change that `/stats` scores forward.
+**CORRECTION — it is TWO settings, not one.** `grade_of` requires the
+SuperTrend *and* the DI to agree, and they read different config keys:
+`TREND_INTERVAL` (the SuperTrend) and `DI_INTERVAL` (the DI), both defaulting
+to `Day1`. Setting only `RIPTIDE_TREND_INTERVAL=Hour8` therefore produces
+SuperTrend on 8h ANDed with DI on the daily — **a mixed combination that was
+never measured.** The tested `Hour8 st+di` arm needs BOTH
+`RIPTIDE_TREND_INTERVAL=Hour8` and `RIPTIDE_DI_INTERVAL=Hour8`. Reversible
+either way, and `/stats` scores it forward.
 
 For it: discovered on eight arms and confirmed on a window it was not found on,
 positive in 8 of 8 cells across discovery and hold-out, under both conventions,
