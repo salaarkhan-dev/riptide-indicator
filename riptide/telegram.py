@@ -221,42 +221,29 @@ def tf_label(interval: str) -> str:
     return TF_LABEL.get(interval, interval)
 
 
-def trend_note(trend_dir: int, is_long: bool, btc_dir: int = 0,
-               symbol: str = "") -> str:
-    """
-    Which side of the higher-timeframe trend the signal sits on.
-
-    Shown on every alert whether or not the filter is suppressing anything —
-    the point is to judge a counter-trend setup, not to be spared it.
-    Measured: with the trend +0.119 R per setup, against it -0.016.
-    Empty when the trend is unknown, which is honest about not knowing.
-    """
-    # The daily trend used to get a line here. It is now half of the grade —
-    # every letter's reason names it explicitly — so printing it again was the
-    # same fact twice, in an alert that has to be read in about two seconds.
-    # What is left is BTC, which the grade does NOT carry.
-    #
-    # Most alts follow BTC intraday, so the same setup is a different bet
-    # depending on which way BTC is going. It is context, not a verdict.
-    #
-    # THE SIGN HERE WAS RIGHT AND EVERY MEASUREMENT OF IT WAS WRONG. Six
-    # research scripts compared `supertrend() < 0` to is_long under a comment
-    # reading "-1 is up"; supertrend() returns +1 for up, as this line always
-    # had it. So the discovery (+0.174, 3.6 SE) and the held-out replication
-    # (+0.123, 1.8 SE) both described BTC going the OTHER way while labelling
-    # it "agrees". Re-measured on the correct sign, on 6970 early signals:
-    # BTC agreeing -0.150, BTC against +0.081 (-7.6 SE) — the same direction
-    # the earlier work found, under the name it should always have had.
-    #
-    # These are liquidity-sweep reversal setups, so a counter-trend backdrop
-    # being the better one is coherent rather than surprising. It is still not
-    # a filter: inside grade B the split reverses between the two halves of
-    # the window. So the emoji no longer render a verdict, and the words say
-    # which way BTC is pointing and nothing about whether that is good.
-    if not btc_dir or symbol == "BTC_USDT":
-        return ""
-    return ("⛓️ BTC trending with you" if (btc_dir > 0) == is_long
-            else "⛓️ BTC trending against you")
+# THE BTC LINE IS GONE, AND THE FINDING BEHIND IT IS RETIRED.
+#
+# Every alert used to carry "BTC trending with/against you". It was there
+# because context.py measured BTC's 30m trend AGAINST the trade at +0.174,
+# 3.6 SE, monotone, surviving all four splits — flagged CANDIDATE and never
+# acted on.
+#
+# Re-measured in research/studies/three_ideas.py on the full 60-symbol corpus:
+# +0.202 at +5.1 SE on the pooled data, and -0.036 at -0.6 SE on the held-out
+# half. The sign REVERSES. The pooled number was carried entirely by the
+# discovery half, which is the same failure the trendline slope study showed at
+# a smaller magnitude.
+#
+# A line reading "BTC trending against you" is a warning, and a warning whose
+# basis has been withdrawn is worse than no line: it costs a second of reading
+# on every alert and pushes the eye toward a factor now measured at nothing.
+# Removed rather than reworded, because a neutral "BTC 30m: down" would still
+# be occupying a line in a message that has to be read in two seconds.
+#
+# `btc_dir` is still computed, still stored on every outcome row, and still
+# available to /stats. Retiring a display is not the same as stopping the
+# measurement — the day there is a fresh window to test it on, the data is
+# there.
 
 
 def bar_label(t: int) -> str:
@@ -477,7 +464,6 @@ def setup_message(s: Setup) -> str:
         "",
         f"<i>sweep → shift → FVG{also} · "
         f"{_pool(s.src, s.level, s.pivots)}</i>",
-        trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf),
     ) if x is not None)
 
@@ -504,7 +490,6 @@ def early_message(s: Early) -> str:
         f"<i>sweep → FVG · no shift · gap {bars} bar"
         f"{'' if bars == 1 else 's'} after the raid · "
         f"{_pool(s.src, s.level, s.pivots, s.pools)}</i>",
-        trend_note(s.trend_dir, s.is_long, s.btc_dir, s.symbol) or None,
         _footer(s.fvg_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
                 s.symbol, s.tf),
     ) if x is not None)
@@ -537,7 +522,6 @@ def sweep_message(s: Sweep) -> str:
     is_long = not s.is_high
     took = "high" if s.is_high else "low"
     direction = "below" if s.is_high else "above"
-    note = trend_note(s.trend_dir, is_long, s.btc_dir, s.symbol)
     # The POI goes on the line that already exists rather than getting one of
     # its own. On a sweep it is not a verdict — there is nothing to grade yet
     # — it is the reason THIS raid was sent when dozens of others were not,
@@ -566,7 +550,6 @@ def sweep_message(s: Sweep) -> str:
         + (f"   <i>{s.rvol:.1f}x volume</i>" if s.rvol > 0 else ""),
         f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>"
         f"{_shift_distance(s.sweep_extreme, s.struct_level)}",
-        note or None,
         _pool(s.src, s.level, s.pivots, s.pools),
         _footer(s.sweep_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
                 s.symbol, s.tf),

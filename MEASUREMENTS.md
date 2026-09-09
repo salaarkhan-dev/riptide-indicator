@@ -5102,8 +5102,13 @@ trendline slope study, at a larger magnitude, and it is the most emphatic
 demonstration in this file that a large SE on pooled data is worth nothing on
 its own.
 
-**The candidate is retired.** It should not be re-proposed without a fresh
-window, and the earlier +3.6 SE is best read as having been measured on what is
+**The candidate is retired, and the alert line that carried it is removed.**
+Every alert used to read "BTC trending with/against you"; a warning whose basis
+has been withdrawn is worse than no line, because it costs a second of reading
+on every message and points the eye at a factor now measured at nothing.
+`btc_dir` is still computed and still stored on every outcome row — retiring a
+display is not the same as stopping the measurement. It should not be
+re-proposed without a fresh window, and the earlier +3.6 SE is best read as having been measured on what is
 now the discovery half.
 
 ### 4. Internal MTF agreement — fails, and the first run was an impossible test
