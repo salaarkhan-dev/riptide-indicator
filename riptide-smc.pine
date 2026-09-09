@@ -896,10 +896,15 @@ dpaHtf     = input.timeframe('240', 'Step 1 · HTF structure', group = DPA_G,
      tooltip = 'The article uses Daily/4h for context. Our own data makes the DAILY the strongest single axis measured — agreeing +0.056 against -0.083, +4.5 SE on 8218 signals — so "D" is worth testing against the article\'s 240.')
 dpaMid     = input.timeframe('60',  'Steps 2-5 · structure timeframe', group = DPA_G,
      tooltip = 'The article\'s 1-hour leg: external highs and lows, the change of character that sets direction, the premium/discount split, and the fair value gap that becomes the area of interest.')
-dpaRangeLen = input.int(40, 'Dealing range (bars of that timeframe)', minval = 10, maxval = 200, group = DPA_G,
-     tooltip = 'How far back the 1h external high and low are measured for the premium/discount split. The article says "external structure" without a number.')
-dpaPremPct = input.float(50.0, 'Step 4 · premium above (%)', minval = 0, maxval = 100, step = 1, group = DPA_G,
-     tooltip = 'Verbatim: "the 50 percent level acting as the dividing line... I only look for short trades in premium. Anything below the 50 percent level is discount."\n\nOur own test of this exact split measured -0.176 / -0.242 and its edge vanished once stop size was held constant, because entering deep in discount means entering near the raid extreme, which means a tight stop, and tight stops already score better. It ships ON because it is the article\'s rule; the panel will tell you what it is worth here.')
+dpaLegLen  = input.int(10, 'Swing length for the Fibonacci leg', minval = 2, maxval = 50, group = DPA_G,
+     tooltip = 'Bars either side of a confirmed pivot on the structure timeframe. The retracement is measured across the last CONFIRMED swing leg — the most recent 1h swing high and swing low — not an arbitrary N-bar window, because a Fibonacci retracement is only meaningful against the leg it retraces.')
+dpaUseOte  = input(true, 'Step 4 · require the OTE band', group = DPA_G,
+     tooltip = 'Verbatim: "OTE, or optimal trade entry, is the area between the 62% and 79% retracement. This zone consistently lines up with where smart money, institutional traders, and large market participants look to enter."\n\nMeasured direction-aware off the last 1h swing leg. For a SHORT the retracement runs UP from the swing low, so the band sits at 62-79% of the way back toward the high. For a LONG it runs DOWN from the swing high. Drawn on the chart so you can check it against LuxAlgo\'s own Premium/Discount zones.')
+dpaOteLo   = input.float(62.0, 'OTE from %', minval = 0, maxval = 100, step = 0.5, group = DPA_G, inline = 'ote')
+dpaOteHi   = input.float(79.0, 'to %', minval = 0, maxval = 100, step = 0.5, group = DPA_G, inline = 'ote')
+dpaUsePrem = input(true, 'Step 4b · also require premium / discount', group = DPA_G,
+     tooltip = 'A SEPARATE, COARSER RULE from the OTE band, and the strategy article states it separately: "the 50 percent level acting as the dividing line... I only look for short trades in premium. Anything below the 50 percent level is discount."\n\nThe 62-79% OTE band already sits inside premium for a short, so with the OTE on this is mostly redundant — it matters when the OTE band is switched off.\n\nOur own test of the 50% split measured -0.176 / -0.242 and its edge vanished once stop size was held constant: entering deep in discount means entering near the raid extreme, which means a tight stop, and tight stops already score better. It ships ON because it is the article\'s rule.')
+dpaPremPct = input.float(50.0, 'premium above (%)', minval = 0, maxval = 100, step = 1, group = DPA_G)
 dpaNeedAoi = input(true,  'Step 5 · price must be inside a 1h FVG', group = DPA_G,
      tooltip = 'Verbatim: "There is a clear one-hour fair value gap sitting inside the OTE zone. That gives me an area of interest, not an entry."\n\nThis is the gate that makes setups rare. With it off you will get far more signals and they will not be this model.')
 dpaChochOnly = input(true, 'Step 7 · require a CHoCH, not a BOS', group = DPA_G,
@@ -954,8 +959,13 @@ dpaHtfBias = na(dpaHtfRaw) ? 0 : (dpaHtfRaw < 0 ? BULLISH : BEARISH)
 
 // ── Steps 2-5 · the 1h leg, all from the last CLOSED 1h bar ──────────────────
 dpaMidData() =>
-    float rh  = ta.highest(high, dpaRangeLen)[1]
-    float rl  = ta.lowest(low,   dpaRangeLen)[1]
+    // The last CONFIRMED swing on the structure timeframe. ta.pivothigh only
+    // returns a value once `dpaLegLen` bars have closed beyond the pivot, so
+    // this cannot repaint; valuewhen then carries the most recent one forward.
+    float ph = ta.pivothigh(high, dpaLegLen, dpaLegLen)
+    float pl = ta.pivotlow(low,  dpaLegLen, dpaLegLen)
+    float rh = ta.valuewhen(not na(ph), ph, 0)
+    float rl = ta.valuewhen(not na(pl), pl, 0)
     // A 1h fair value gap on the last closed bar: the classic three-bar
     // imbalance, bar[1] against bar[3].
     bool  bull = low[1] > high[3]
@@ -968,6 +978,24 @@ dpaMidData() =>
 
 dpaSpan  = dpaRh - dpaRl
 dpaMid50 = dpaRl + dpaSpan * dpaPremPct / 100.0
+
+// The OTE band, direction-aware. A retracement is measured from the end the
+// impulse came FROM, so the two directions are not mirror images of one label:
+//   SHORT  price rallies back UP from the swing low  -> 62-79% above the low
+//   LONG   price drops back DOWN from the swing high -> 62-79% below the high
+dpaOteSellLo = dpaRl + dpaSpan * dpaOteLo / 100.0
+dpaOteSellHi = dpaRl + dpaSpan * dpaOteHi / 100.0
+dpaOteBuyHi  = dpaRh - dpaSpan * dpaOteLo / 100.0
+dpaOteBuyLo  = dpaRh - dpaSpan * dpaOteHi / 100.0
+
+dpaInOte(bool isLong) =>
+    bool ok = true
+    if dpaUseOte and dpaSpan > 0
+        if isLong
+            ok := close >= dpaOteBuyLo and close <= dpaOteBuyHi
+        else
+            ok := close >= dpaOteSellLo and close <= dpaOteSellHi
+    ok
 
 // The most recent 1h FVG is held until price trades fully through it, which is
 // the article's "area of interest" persisting until it is consumed.
@@ -1002,9 +1030,10 @@ if dpaOn and barstate.isconfirmed and (dpaShortTrig or dpaLongTrig)
     // Step 1: the HTF must agree. Step 4: shorts only in premium, longs only
     // in discount. Step 5: price must be in the area of interest.
     bool step1 = dpaHtfBias == 0 or dpaHtfBias == (isLong ? BULLISH : BEARISH)
-    bool step4 = dpaSpan <= 0 or (isLong ? close <= dpaMid50 : close >= dpaMid50)
+    bool step4 = dpaInOte(isLong)
+    bool step4b = not dpaUsePrem or dpaSpan <= 0 or (isLong ? close <= dpaMid50 : close >= dpaMid50)
     bool step5 = not dpaNeedAoi or (dpaInAoi and dpaAoiBias == (isLong ? BULLISH : BEARISH))
-    if step1 and step4 and step5
+    if step1 and step4 and step4b and step5
         dpaTrig += 1
         // Step 8a: the stop goes at invalidation — the internal high/low that
         // formed before the break, which LuxAlgo is already tracking.
@@ -1057,6 +1086,24 @@ if dpaOn and barstate.isconfirmed and dpaTrades.size() > 0
                     dpaNetR  += rMul - (dpaMaker + dpaMaker) / rPct
 
 // ── Drawing ──────────────────────────────────────────────────────────────────
+var box dpaOteS = na
+var box dpaOteB = na
+var line dpaEq  = na
+if dpaOn and dpaUseOte and barstate.islast and dpaSpan > 0
+    box.delete(dpaOteS)
+    box.delete(dpaOteB)
+    line.delete(dpaEq)
+    dpaOteS := box.new(bar_index - 80, dpaOteSellHi, bar_index + 10, dpaOteSellLo,
+         border_color = color.new(RED, 60), bgcolor = color.new(RED, 90),
+         text = 'OTE ' + str.tostring(dpaOteLo, '#') + '-' + str.tostring(dpaOteHi, '#') + '% · shorts',
+         text_color = color.new(RED, 30), text_size = size.tiny, text_halign = text.align_left)
+    dpaOteB := box.new(bar_index - 80, dpaOteBuyHi, bar_index + 10, dpaOteBuyLo,
+         border_color = color.new(GREEN, 60), bgcolor = color.new(GREEN, 90),
+         text = 'OTE ' + str.tostring(dpaOteLo, '#') + '-' + str.tostring(dpaOteHi, '#') + '% · longs',
+         text_color = color.new(GREEN, 30), text_size = size.tiny, text_halign = text.align_left)
+    dpaEq := line.new(bar_index - 80, dpaMid50, bar_index + 10, dpaMid50,
+         color = color.new(GRAY, 40), style = line.style_dotted)
+
 var box dpaAoiBox = na
 if dpaOn and barstate.islast and not na(dpaAoiTop)
     box.delete(dpaAoiBox)
@@ -1081,15 +1128,16 @@ if dpaOn and dpaNew and dpaTrades.size() > 0
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 if dpaOn and dpaPanel and barstate.islast
-    var table dpaT = table.new(position.top_right, 2, 11, border_width = 1)
+    var table dpaT = table.new(position.top_right, 2, 12, border_width = 1)
     int dpaSettled  = dpaWonN + dpaLostN + dpaExpiredN
     int dpaResolved = dpaWonN + dpaLostN
     dpaT.cell(0, 0, 'Riptide DPA', text_color = color.white, bgcolor = #0e7c86, text_size = size.small)
     dpaT.cell(1, 0, dpaHtf + '>' + dpaMid + '>' + timeframe.period, text_color = color.white, bgcolor = #0e7c86, text_size = size.small)
-    dpaLbl = array.from('HTF bias', '1h areas seen', 'All steps aligned', 'Rejected under ' + str.tostring(dpaMinR, '#.#') + 'R',
+    dpaLbl = array.from('HTF bias', 'Fib leg (span)', '1h areas seen', 'All steps aligned', 'Rejected under ' + str.tostring(dpaMinR, '#.#') + 'R',
          'Setups taken', 'Filled', 'Never filled', 'Target', 'Stopped', 'Net R')
     dpaVal = array.from(
          dpaHtfBias == BULLISH ? 'bullish' : dpaHtfBias == BEARISH ? 'bearish' : 'flat',
+         dpaSpan > 0 ? str.tostring(dpaSpan, format.mintick) : '—',
          str.tostring(dpaAoi),
          str.tostring(dpaTrig),
          str.tostring(dpaReject),
@@ -1102,7 +1150,7 @@ if dpaOn and dpaPanel and barstate.islast
     for i = 0 to dpaLbl.size() - 1
         dpaT.cell(0, i + 1, dpaLbl.get(i), text_color = GRAY, text_size = size.tiny, text_halign = text.align_left)
         dpaT.cell(1, i + 1, dpaVal.get(i), text_size = size.tiny, text_halign = text.align_right,
-             text_color = i == 9 ? (dpaNetR > 0 ? GREEN : RED) : chart.fg_color)
+             text_color = i == 10 ? (dpaNetR > 0 ? GREEN : RED) : chart.fg_color)
 
 alertcondition(dpaNew, 'DPA setup', 'Riptide DPA: all eight steps aligned')
 //---------------------------------------------------------------------------------------------------------------------}
