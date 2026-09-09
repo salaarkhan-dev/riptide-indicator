@@ -194,6 +194,39 @@ Nothing goes to Telegram until Phase 2 clears.
 
 ---
 
+### 1.11 Crypto correctness — audited, and four things fixed
+
+Asked directly: is anything in here assuming pips or an FX-shaped instrument?
+
+**The trigger is already scale-free and needed nothing.** Every threshold —
+`minSweepDistanceAtr`, `minWickPercent`, `maxBodyPercent`, `minCandleRangeAtr`,
+`stopLossAtrMultiplier` — is an ATR multiple or a ratio of the candle to
+itself. There is no pip, no point value, no fixed price constant anywhere in
+the signal path. It behaves identically on BTC at $100,000 and on a coin at
+$0.0000012. That is good design and it is why the Python port and every
+measurement in `MEASUREMENTS.md` still describe this file exactly: the
+signal-path blocks are **byte-identical** to the original after these changes.
+
+What was not crypto-proper was everything around it.
+
+| | before | now |
+|---|---|---|
+| **No fee model at all** | a 2R win drawn as 2R | taker/maker inputs, net R on every label, and a **"Win Rate Needed"** row |
+| **No funding** | absent, and it exists only on perps | `fundingPct8h` input, cost per 8h in R |
+| **Volatility bands** | hardcoded 0.80% / 0.35% of price — a *timeframe*, not a market state: nearly every 30m crypto bar reads LOW, every daily bar reads HIGH, an FX pair never leaves LOW | ratio to this symbol's own 200-bar average |
+| **Session clock** | `hour(time, "GMT+3")` with ASIA 00:00–08:00, which is wrong for that offset | timezone input, UTC default, correct windows, labelled as reference — crypto is 24/7 |
+| **Levels shown as words** | `ENTRY`, `ATR STOP`, `TARGET 2R` — you cannot read your own prices off the chart | actual prices via `format.mintick`, so precision comes from the instrument and is right from BTC to PEPE |
+| **`showStoppedTrades`** | `false` — every winner drawn in full, every loser's projection deleted | `true` |
+
+**The most useful of these is the break-even row.** On ETH 30m with the shipped
+`SL 1.5 ATR / TP 2R`, 1.5 ATR is roughly 0.5% of price, so a losing round trip
+costs about 0.23 R and the panel will read **≈40% to break even**. The measured
+win rate of this configuration is 33%. The chart now states its own problem.
+
+**None of this changes the strategy's expectancy.** Rounding is display-only —
+the simulation keeps unrounded levels, so no trade resolves differently. What
+changed is that the panel stops flattering the model.
+
 ## Part 2 — Multi-strategy architecture
 
 ### 2.1 The rule this is built on, which already exists

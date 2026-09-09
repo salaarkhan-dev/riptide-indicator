@@ -234,11 +234,40 @@ blockSignalsInTrade = input.bool(
 )
 
 showStoppedTrades = input.bool(
-     false,
+     true,
      "👁️ Show Stopped Trades",
      group=groupSim,
-     tooltip="When disabled, stopped-out trade projection objects are removed from the chart for a cleaner view.",
+     tooltip="When disabled, stopped-out trade projection objects are removed from the chart — which means the chart draws every winner in full and erases every loser. Default is ON so what you see is the whole record.",
      display=display.none
+)
+
+feeTakerPct = input.float(
+     0.06,
+     "💸 Taker Fee %",
+     minval=0.0,
+     step=0.01,
+     group=groupSim,
+     tooltip="Per side. A market order pays this. MEXC futures is 0.06%. The entry here is a market order at the confirmation close, and a stop is a market order too.",
+     display=display.none
+)
+
+feeMakerPct = input.float(
+     0.02,
+     "💸 Maker Fee %",
+     minval=0.0,
+     step=0.01,
+     group=groupSim,
+     tooltip="Per side. A resting limit order pays this — the take profit. MEXC futures is 0.02%.",
+     display=display.none
+)
+
+fundingPct8h = input.float(
+     0.01,
+     "🔁 Funding % per 8h",
+     minval=0.0,
+     step=0.001,
+     group=groupSim,
+     tooltip="PERPETUAL FUTURES ONLY, and it does not exist on spot or on any other asset class. A perp charges or pays funding every 8 hours; the typical magnitude on a major pair is about 0.01% but it can run several times that on a crowded side. Shown per 8h because the script cannot know how long a trade will be held — multiply by the hours you expect to hold. Set to 0 for spot."
 )
 
 showSignalLabels = input.bool(
@@ -321,6 +350,27 @@ f_table_position(_pos) =>
 f_fmt(_value) =>
     str.tostring(_value, "#.##")
 
+// A PRICE, at the instrument's own precision. Two decimals is right for ETH
+// and destroys a meme coin: 0.00000123 prints as "0". format.mintick takes the
+// precision from syminfo.mintick, so the same call is correct from BTC to
+// PEPE, which is the whole point on a crypto universe where prices span eight
+// orders of magnitude.
+//
+// Rounding is for DISPLAY ONLY. The simulation keeps the unrounded level, so
+// nothing about which trades resolve, or when, changes — this makes the
+// numbers readable and placeable without altering a single outcome.
+f_price(_value) =>
+    str.tostring(math.round_to_mintick(_value), format.mintick)
+
+// Crypto trades 24/7 and has no exchange session. These windows are the
+// reference hours of the traditional markets whose participants also trade it,
+// in UTC — not a market open, and nothing here filters on them.
+f_session_name(_hour) =>
+    _hour >= 0 and _hour < 7 ? "ASIA" :
+     _hour >= 7 and _hour < 13 ? "LONDON" :
+     _hour >= 13 and _hour < 21 ? "NEW YORK" :
+     "OFF HOURS"
+
 f_label_size(_size) =>
     _size == "Tiny" ? size.tiny :
      _size == "Small" ? size.small :
@@ -361,7 +411,7 @@ f_push_box_prune(_arr, _box, _max) =>
 
 f_panel_clear(_t) =>
     for col = 0 to 1
-        for row = 0 to 9
+        for row = 0 to 11
             table.cell(_t, col, row, "", bgcolor=CLR_BG, text_color=CLR_BG)
 
 f_quality_score(_wickPct, _bodyPct, _rangeAtr, _minWick, _maxBody, _minRangeAtr, _emaOk, _reclaimOk, _midBreakOk) =>
@@ -413,12 +463,6 @@ f_add_sweep_trace(_price, _bull, _extendBars, _lineArr, _ghostArr, _labelArr) =>
     f_push_line_prune(_ghostArr, ghostLine, 20)
     f_push_label_prune(_labelArr, traceLab, 40)
 
-f_session_name(_hour) =>
-    _hour >= 0 and _hour < 8 ? "ASIA" :
-     _hour >= 8 and _hour < 16 ? "LONDON" :
-     _hour >= 16 and _hour < 24 ? "NEW YORK" :
-     "UNKNOWN"
-
 // ============================================================================
 // CORE SERIES
 // ============================================================================
@@ -443,6 +487,35 @@ stopLossDistance   = not na(atrValue) ? atrValue * stopLossAtrMultiplier : na
 takeProfitDistance = not na(stopLossDistance) ? stopLossDistance * takeProfitRR : na
 riskModelReady     = not na(stopLossDistance) and stopLossDistance > 0 and not na(takeProfitDistance) and takeProfitDistance > 0
 
+// ============================================================================
+// FEES, IN R — the cost this panel used to leave out entirely
+//
+// Cost in R is fee / risk_pct, so a TIGHT stop is expensive per unit of risk
+// and a wide one is cheap. That is backwards from intuition and it is the
+// single largest cost in this model: on a 15m alt where 1.5 ATR is 0.4% of
+// price, a losing round trip costs about 0.3 R before the market does
+// anything. Measured across ~8,000 signals, it is what separates a fair coin
+// from a losing strategy.
+//
+// The entry here is a MARKET order at the confirmation close, so it pays
+// taker. A take profit is a resting limit, so it pays maker. A stop is a
+// market order, so it pays taker again.
+// ============================================================================
+float riskPctOfPrice = riskModelReady and close != 0 ? stopLossDistance / close * 100.0 : na
+float feeWinR  = not na(riskPctOfPrice) and riskPctOfPrice > 0 ? (feeTakerPct + feeMakerPct) / riskPctOfPrice : na
+float feeLoseR = not na(riskPctOfPrice) and riskPctOfPrice > 0 ? (feeTakerPct + feeTakerPct) / riskPctOfPrice : na
+float netWinR  = not na(feeWinR) ? takeProfitRR - feeWinR : na
+float netLoseR = not na(feeLoseR) ? 1.0 + feeLoseR : na
+// The win rate this configuration has to beat just to break even. Printed
+// because "improve the win rate" has no meaning without it.
+float breakevenWinPct = not na(netWinR) and not na(netLoseR) and (netWinR + netLoseR) > 0 ? netLoseR / (netWinR + netLoseR) * 100.0 : na
+// Funding is charged on a perpetual every 8 hours whether the trade is winning
+// or losing, and it is the only cost in this script that scales with TIME
+// rather than with the trade. Left out of the break-even figure above on
+// purpose: the script cannot know the holding period, and a guess folded into
+// a headline number is worse than an honest separate one.
+float fundingR8h = not na(riskPctOfPrice) and riskPctOfPrice > 0 ? fundingPct8h / riskPctOfPrice : na
+
 float visualBuffer    = math.max(syminfo.mintick * 8.0, candleRange * 0.08)
 float entryZoneHalf   = math.max(syminfo.mintick * 6.0, nz(atrValue, candleRange) * 0.04)
 float entryLineOffset = math.max(syminfo.mintick * 2.0, nz(atrValue, candleRange) * 0.02)
@@ -451,11 +524,36 @@ float entryLineOffset = math.max(syminfo.mintick * 2.0, nz(atrValue, candleRange
 // VOLATILITY / SESSION STATE
 // ============================================================================
 float atrPct = not na(atrValue) and close != 0 ? (atrValue / close) * 100.0 : 0.0
-string volatilityState = atrPct >= 0.80 ? "HIGH" : atrPct >= 0.35 ? "NORMAL" : "LOW"
-color volatilityColor = atrPct >= 0.80 ? CLR_RED : atrPct >= 0.35 ? CLR_CYAN : CLR_GREEN
 
-int gmt3Hour = hour(time, "GMT+3")
-string sessionState = f_session_name(gmt3Hour)
+// VOLATILITY, RELATIVE TO THIS SYMBOL ON THIS TIMEFRAME — not to a constant.
+//
+// The thresholds here used to be a flat 0.80% and 0.35% of price. That is not
+// a market state, it is a timeframe: a 30m crypto bar runs an ATR of roughly
+// 0.2-0.5% of price, so nearly every bar read LOW or NORMAL and HIGH almost
+// never fired; on a daily chart of the same coin every bar reads HIGH; on an
+// FX pair nothing ever leaves LOW. Comparing the bar against this symbol's own
+// recent average makes the reading mean the same thing everywhere.
+float atrPctAvg = ta.sma(atrPct, 200)
+bool volReady = not na(atrPctAvg) and atrPctAvg > 0
+float volRatio = volReady ? atrPct / atrPctAvg : 1.0
+string volatilityState = not volReady ? "WARMING UP" :
+     volRatio >= 1.50 ? "HIGH" : volRatio >= 0.75 ? "NORMAL" : "LOW"
+color volatilityColor = not volReady ? CLR_MUTED :
+     volRatio >= 1.50 ? CLR_RED : volRatio >= 0.75 ? CLR_CYAN : CLR_GREEN
+
+// Crypto has no session. The clock is a reference for when the humans who also
+// trade equities and FX are at their desks, so it is shown in UTC by default
+// rather than in one arbitrary broker offset.
+sessionTz = input.string(
+     "UTC",
+     "🕓 Session Clock Timezone",
+     options=["UTC", "GMT+1", "GMT+2", "GMT+3", "GMT+4", "GMT+5:30", "GMT+8", "GMT-5"],
+     group=groupVisual,
+     tooltip="Crypto trades 24/7 — these are reference hours, not market opens, and nothing filters on them. UTC is the exchange's own clock.",
+     display=display.none
+)
+int sessionHour = hour(time, sessionTz)
+string sessionState = f_session_name(sessionHour)
 color sessionColor = sessionState == "LONDON" ? CLR_CYAN : sessionState == "NEW YORK" ? CLR_GOLD : CLR_SILVER
 
 // ============================================================================
@@ -676,6 +774,11 @@ var float simulatedTP          = na
 var float simulatedSL          = na
 var float simulatedEntryOffset = na
 var int   simulatedEntryBar    = na
+// Captured when the trade opens. The R cost of a trade is fixed by the stop it
+// was opened with; ATR drifts, so reading the live value on the exit bar would
+// label the result with a risk the position never carried.
+var float simulatedNetWinR     = na
+var float simulatedNetLoseR    = na
 
 tradeIsActive = positionDirection != 0
 
@@ -743,6 +846,8 @@ if enableSimulation and plotLongSignal
     simulatedTP          := simulatedEntry + takeProfitDistance
     simulatedEntryOffset := entryLineOffset
     simulatedEntryBar    := bar_index
+    simulatedNetWinR     := netWinR
+    simulatedNetLoseR    := netLoseR
 
     activeTpBox := box.new(left=bar_index, top=simulatedTP, right=bar_index, bottom=simulatedEntry, xloc=xloc.bar_index, border_color=color.new(CLR_CYAN, 0), bgcolor=color.new(CLR_CYAN, BOX_TRANSPARENCY), border_width=1)
     activeSlBox := box.new(left=bar_index, top=simulatedEntry, right=bar_index, bottom=simulatedSL, xloc=xloc.bar_index, border_color=color.new(CLR_RED, 0), bgcolor=color.new(CLR_RED, BOX_TRANSPARENCY), border_width=1)
@@ -756,10 +861,10 @@ if enableSimulation and plotLongSignal
     activeProjectionLine   := line.new(x1=bar_index, y1=simulatedEntry, x2=bar_index + 6, y2=simulatedEntry + ((simulatedTP - simulatedEntry) * 0.22), xloc=xloc.bar_index, extend=extend.none, color=color.new(CLR_GREEN, 15), width=1, style=line.style_dotted)
     f_push_line_prune(pathLines, activeProjectionLine, 60)
 
-    activeEntryTag        := label.new(bar_index, simulatedEntry, "ENTRY", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_CYAN_SOFT, textcolor=CLR_TEXT, size=size.tiny)
-    activeTpTag           := label.new(bar_index, simulatedTP, "TARGET " + f_fmt(takeProfitRR) + "R", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_GREEN_SOFT, textcolor=CLR_TEXT, size=size.tiny)
-    activeSlTag           := label.new(bar_index, simulatedSL, "ATR STOP", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_RED_SOFT, textcolor=CLR_TEXT, size=size.tiny)
-    activeInvalidationTag := label.new(bar_index, simulatedSL, "INVALIDATION", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_RED_SOFT, textcolor=CLR_TEXT, size=size.tiny)
+    activeEntryTag        := label.new(bar_index, simulatedEntry, "ENTRY " + f_price(simulatedEntry), xloc=xloc.bar_index, style=label.style_label_left, color=CLR_CYAN_SOFT, textcolor=CLR_TEXT, size=size.tiny)
+    activeTpTag           := label.new(bar_index, simulatedTP, "TP " + f_price(simulatedTP) + "  " + f_fmt(takeProfitRR) + "R gross / " + f_fmt(nz(netWinR, takeProfitRR)) + "R net", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_GREEN_SOFT, textcolor=CLR_TEXT, size=size.tiny)
+    activeSlTag           := label.new(bar_index, simulatedSL, "STOP " + f_price(simulatedSL), xloc=xloc.bar_index, style=label.style_label_left, color=CLR_RED_SOFT, textcolor=CLR_TEXT, size=size.tiny)
+    activeInvalidationTag := label.new(bar_index, simulatedSL, "INVALIDATION " + f_price(simulatedSL), xloc=xloc.bar_index, style=label.style_label_left, color=CLR_RED_SOFT, textcolor=CLR_TEXT, size=size.tiny)
 
 if enableSimulation and plotShortSignal
     positionDirection    := -1
@@ -768,6 +873,8 @@ if enableSimulation and plotShortSignal
     simulatedTP          := simulatedEntry - takeProfitDistance
     simulatedEntryOffset := entryLineOffset
     simulatedEntryBar    := bar_index
+    simulatedNetWinR     := netWinR
+    simulatedNetLoseR    := netLoseR
 
     activeTpBox := box.new(left=bar_index, top=simulatedEntry, right=bar_index, bottom=simulatedTP, xloc=xloc.bar_index, border_color=color.new(CLR_CYAN, 0), bgcolor=color.new(CLR_CYAN, BOX_TRANSPARENCY), border_width=1)
     activeSlBox := box.new(left=bar_index, top=simulatedSL, right=bar_index, bottom=simulatedEntry, xloc=xloc.bar_index, border_color=color.new(CLR_RED, 0), bgcolor=color.new(CLR_RED, BOX_TRANSPARENCY), border_width=1)
@@ -781,10 +888,10 @@ if enableSimulation and plotShortSignal
     activeProjectionLine   := line.new(x1=bar_index, y1=simulatedEntry, x2=bar_index + 6, y2=simulatedEntry - ((simulatedEntry - simulatedTP) * 0.22), xloc=xloc.bar_index, extend=extend.none, color=color.new(CLR_RED, 15), width=1, style=line.style_dotted)
     f_push_line_prune(pathLines, activeProjectionLine, 60)
 
-    activeEntryTag        := label.new(bar_index, simulatedEntry, "ENTRY", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_CYAN_SOFT, textcolor=CLR_TEXT, size=size.tiny)
-    activeTpTag           := label.new(bar_index, simulatedTP, "TARGET " + f_fmt(takeProfitRR) + "R", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_GREEN_SOFT, textcolor=CLR_TEXT, size=size.tiny)
-    activeSlTag           := label.new(bar_index, simulatedSL, "ATR STOP", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_RED_SOFT, textcolor=CLR_TEXT, size=size.tiny)
-    activeInvalidationTag := label.new(bar_index, simulatedSL, "INVALIDATION", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_RED_SOFT, textcolor=CLR_TEXT, size=size.tiny)
+    activeEntryTag        := label.new(bar_index, simulatedEntry, "ENTRY " + f_price(simulatedEntry), xloc=xloc.bar_index, style=label.style_label_left, color=CLR_CYAN_SOFT, textcolor=CLR_TEXT, size=size.tiny)
+    activeTpTag           := label.new(bar_index, simulatedTP, "TP " + f_price(simulatedTP) + "  " + f_fmt(takeProfitRR) + "R gross / " + f_fmt(nz(netWinR, takeProfitRR)) + "R net", xloc=xloc.bar_index, style=label.style_label_left, color=CLR_GREEN_SOFT, textcolor=CLR_TEXT, size=size.tiny)
+    activeSlTag           := label.new(bar_index, simulatedSL, "STOP " + f_price(simulatedSL), xloc=xloc.bar_index, style=label.style_label_left, color=CLR_RED_SOFT, textcolor=CLR_TEXT, size=size.tiny)
+    activeInvalidationTag := label.new(bar_index, simulatedSL, "INVALIDATION " + f_price(simulatedSL), xloc=xloc.bar_index, style=label.style_label_left, color=CLR_RED_SOFT, textcolor=CLR_TEXT, size=size.tiny)
 
 // ============================================================================
 // ACTIVE TRADE VISUAL UPDATE
@@ -857,7 +964,7 @@ if enableSimulation and tradeIsActive and bar_index > simulatedEntryBar
             exitWin := true
 
 if exitWin
-    label.new(bar_index, exitDirection == 1 ? high : low, "TP " + f_fmt(takeProfitRR) + "R HIT", xloc=xloc.bar_index, style=exitDirection == 1 ? label.style_label_down : label.style_label_up, color=CLR_GREEN, textcolor=CLR_TEXT, size=f_label_size(signalLabelSize))
+    label.new(bar_index, exitDirection == 1 ? high : low, "TP HIT  +" + f_fmt(nz(simulatedNetWinR, takeProfitRR)) + "R net", xloc=xloc.bar_index, style=exitDirection == 1 ? label.style_label_down : label.style_label_up, color=CLR_GREEN, textcolor=CLR_TEXT, size=f_label_size(signalLabelSize))
 
     positionDirection      := 0
     simulatedEntry         := na
@@ -865,6 +972,8 @@ if exitWin
     simulatedSL            := na
     simulatedEntryOffset   := na
     simulatedEntryBar      := na
+    simulatedNetWinR       := na
+    simulatedNetLoseR      := na
     activeTpBox            := na
     activeSlBox            := na
     activeEntryZone        := na
@@ -879,7 +988,7 @@ if exitWin
 
 if exitLoss
     if showStoppedTrades
-        label.new(bar_index, exitDirection == 1 ? low : high, "ATR SL HIT", xloc=xloc.bar_index, style=exitDirection == 1 ? label.style_label_up : label.style_label_down, color=CLR_RED, textcolor=CLR_TEXT, size=f_label_size(signalLabelSize))
+        label.new(bar_index, exitDirection == 1 ? low : high, "SL HIT  -" + f_fmt(nz(simulatedNetLoseR, 1.0)) + "R net", xloc=xloc.bar_index, style=exitDirection == 1 ? label.style_label_up : label.style_label_down, color=CLR_RED, textcolor=CLR_TEXT, size=f_label_size(signalLabelSize))
     else
         if not na(activeTpBox)
             box.delete(activeTpBox)
@@ -910,6 +1019,8 @@ if exitLoss
     simulatedSL            := na
     simulatedEntryOffset   := na
     simulatedEntryBar      := na
+    simulatedNetWinR       := na
+    simulatedNetLoseR      := na
     activeTpBox            := na
     activeSlBox            := na
     activeEntryZone        := na
@@ -927,6 +1038,17 @@ if exitLoss
 // ============================================================================
 string simulationState = enableSimulation ? "ON" : "OFF"
 string riskModelText = "SL " + f_fmt(stopLossAtrMultiplier) + " ATR / TP " + f_fmt(takeProfitRR) + "R"
+
+// The two rows the panel never had, and the reason every backtest of this
+// model came out worse than the chart looked.
+string feeText = na(feeLoseR) ? "—" :
+     f_fmt(feeLoseR) + " R per loss + " + f_fmt(nz(fundingR8h, 0.0)) +
+     " R per 8h funding  (risk " + f_fmt(riskPctOfPrice) + "% of price)"
+color feeColor = na(feeLoseR) ? CLR_MUTED :
+     feeLoseR >= 0.20 ? CLR_RED : feeLoseR >= 0.10 ? CLR_GOLD : CLR_GREEN
+string breakevenText = na(breakevenWinPct) ? "—" :
+     f_fmt(breakevenWinPct) + "% to break even"
+color breakevenColor = na(breakevenWinPct) ? CLR_MUTED : CLR_GOLD
 
 string biasText =
      useLocalEmaFilter ?
@@ -1015,7 +1137,7 @@ barcolor(
 // ============================================================================
 // STATUS PANEL
 // ============================================================================
-var table panel = table.new(f_table_position(panelPosition), 2, 10, border_width=1, border_color=CLR_BORDER)
+var table panel = table.new(f_table_position(panelPosition), 2, 12, border_width=1, border_color=CLR_BORDER)
 
 if barstate.islast
     if showStatusPanel
@@ -1048,6 +1170,12 @@ if barstate.islast
 
         table.cell(panel, 0, 9, "Risk State", bgcolor=CLR_BG, text_color=CLR_TEXT)
         table.cell(panel, 1, 9, riskStateText, bgcolor=CLR_BG, text_color=riskStateColor)
+
+        table.cell(panel, 0, 10, "Fee Cost", bgcolor=CLR_PANEL, text_color=CLR_TEXT)
+        table.cell(panel, 1, 10, feeText, bgcolor=CLR_PANEL, text_color=feeColor)
+
+        table.cell(panel, 0, 11, "Win Rate Needed", bgcolor=CLR_PANEL_ALT, text_color=CLR_TEXT)
+        table.cell(panel, 1, 11, breakevenText, bgcolor=CLR_PANEL_ALT, text_color=breakevenColor)
     else
         f_panel_clear(panel)
 
