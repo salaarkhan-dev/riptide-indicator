@@ -10,7 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .config import CFG, Cfg, DI_INTERVAL, WATCH_MAX_DIST
+from .config import (CFG, Cfg, DI_INTERVAL, TREND_INTERVAL,
+                     WATCH_MAX_DIST)
 
 @dataclass
 class Candle:
@@ -519,17 +520,23 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
 # windows while the separation between bands held. The ordering is the finding.
 # Band A rests on 43 signals and has never been held out on its own.
 _POI = "daily POI"
+# The grade's trend half is whatever TREND_INTERVAL says it is. It used to be
+# the literal word "daily" in eight places, which was correct only for as long
+# as the default never moved -- and the moment it did, every alert would have
+# named a timeframe the bot was not reading.
+_TL = {"Day1": "daily", "Hour8": "8h", "Hour4": "4h", "Min60": "1h"}.get(
+    TREND_INTERVAL, TREND_INTERVAL)
 
 # (letter, why) keyed by (early?, in a POI?, trend agrees?)
 GRADES = {
-    (False, True,  True):  ("A", f"{_POI} · daily trend agrees"),
-    (False, False, True):  ("B", "daily trend agrees · no POI"),
-    (True,  True,  True):  ("B", f"{_POI} · daily trend agrees"),
-    (False, True,  False): ("C", f"{_POI} · against the daily trend"),
-    (False, False, False): ("C", "no POI · against the daily trend"),
-    (True,  False, True):  ("C", "daily trend agrees · no POI"),
-    (True,  True,  False): ("C", f"{_POI} · against the daily trend"),
-    (True,  False, False): ("D", "no POI · against the daily trend"),
+    (False, True,  True):  ("A", f"{_POI} · {_TL} trend agrees"),
+    (False, False, True):  ("B", f"{_TL} trend agrees · no POI"),
+    (True,  True,  True):  ("B", f"{_POI} · {_TL} trend agrees"),
+    (False, True,  False): ("C", f"{_POI} · against the {_TL} trend"),
+    (False, False, False): ("C", f"no POI · against the {_TL} trend"),
+    (True,  False, True):  ("C", f"{_TL} trend agrees · no POI"),
+    (True,  True,  False): ("C", f"{_POI} · against the {_TL} trend"),
+    (True,  False, False): ("D", f"no POI · against the {_TL} trend"),
 }
 
 # Historical rate for each band: (signals, fill %, win % of fills, R, SE).
@@ -562,7 +569,9 @@ def grade_of(is_early: bool, poi: bool, trend_dir: int, is_long: bool,
     (letter, why) for one signal. Presentation only — nothing decides on it,
     and no signal is suppressed by it.
 
-    "Trend agrees" means the daily SuperTrend AND the daily DI both agree,
+    "Trend agrees" means the SuperTrend AND the DI both agree, each read on
+    its configured interval (TREND_INTERVAL and DI_INTERVAL, both Hour8 since
+    9 Sep -- they are separate keys and must move together),
     which is how the cells were measured. When either reading is missing the
     trend cannot agree, so the signal grades as though it did not — that is
     the conservative direction, and unlike the old "?" it still gives the POI

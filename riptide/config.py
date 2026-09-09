@@ -167,7 +167,18 @@ TREND_FILTER = os.getenv("RIPTIDE_TREND_FILTER", "0") == "1"
 # Daily is now ahead on both signal types, which is what it was before the
 # switch. Neither clears 3 SE, so this is the better of two weak readings
 # rather than a finding — /stats settles it.
-TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Day1")
+# Hour8, not Day1, since 9 Sep. See MEASUREMENTS.md, "HELD-OUT: does Hour8
+# replicate?". Discovered across eight arms on the recent 83 days and confirmed
+# on days 83-166 back, which nothing had looked at: agree-minus-against positive
+# in 8 of 8 cells across discovery and hold-out, under both conventions,
+# beating Day1 in 4/4 out of sample. On that held-out window the DAILY reading
+# went NEGATIVE on Min30 (-0.117) -- setups agreeing with the daily trend scored
+# worse than those against it -- while Hour8 stayed positive on the same setups.
+#
+# THIS AND DI_INTERVAL MOVE TOGETHER. grade_of ANDs the SuperTrend with the DI,
+# so changing one alone produces a mixed 8h/daily combination that no study
+# measured. Set both or neither.
+TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Hour8")
 
 # DI's timeframe, and it must stay DAILY. DI is the axis the grade letter is
 # built on, and it is the one thing here that does not survive being moved:
@@ -180,7 +191,9 @@ TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Day1")
 # +0.011 on the fixed one. They are two settings rather than one because the
 # question is separable, which the 4h experiment proved even though the 4h
 # answer was wrong; both now sit on Day1.
-DI_INTERVAL = os.getenv("RIPTIDE_DI_INTERVAL", "Day1")
+# Moved from Day1 to Hour8 with TREND_INTERVAL above, and for the same
+# measurement — the tested arm was the SuperTrend AND the DI both on 8h.
+DI_INTERVAL = os.getenv("RIPTIDE_DI_INTERVAL", "Hour8")
 
 # The timeframe BTC's own trend is read on, for the market-context line on each
 # alert. 30m — the effect is in the SHORT timeframes and vanishes by 4h. Early

@@ -42,7 +42,7 @@ HELP = (
     "/book — your own record, per grade\n"
     "/oi — export the open-interest table as a file\n"
     "/scan — run a scan now\n"
-    "/trend on|off — filter setups by the daily trend\n"
+    "/trend on|off — filter setups by the higher-timeframe trend\n"
     "/pause — record setups but stop sending\n"
     "/resume — start sending again\n"
     "/update — check GitHub for a new build now\n"
@@ -103,7 +103,7 @@ def status_text(db, state) -> str:
     sweeps = "on" if SWEEP_ALERTS else "off"
     live = trend_on(db)
     src = "" if (meta_get(db, "trend_filter", "") not in ("0", "1")) else " (/trend)"
-    # The grade now reads the daily POI and the daily trend (SuperTrend AND
+    # The grade now reads the daily POI and the HTF trend (SuperTrend AND
     # DI agreeing), so both intervals are shown next to the filter's.
     trend_line = ((f"ON · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})"
                    if live else "off") + src
@@ -206,7 +206,7 @@ def stats_text(db) -> str:
 
     g = s.get("grades") or {}
     if any(b["setups"] for b in g.values()):
-        body += ("\n<b>by grade</b>  <i>(daily POI × daily trend; "
+        body += ("\n<b>by grade</b>  <i>(daily POI × HTF trend; "
                  "D is the cell that measured negative)</i>\n")
         for k in ("A", "B", "C", "D"):
             b = g.get(k)
@@ -281,7 +281,7 @@ async def handle_command(sess, db, state, text: str) -> None:
             await tg.tg_send(sess,
                              f"Trend filter is <b>{now}</b>"
                              f" · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})\n\n"
-                             "<code>/trend on</code> — only setups facing the daily trend\n"
+                             "<code>/trend on</code> — only setups facing the HTF trend\n"
                              "<code>/trend off</code> — every setup\n\n"
                              "<i>Measured: with the trend +0.119 R per setup, against "
                              "it -0.016, over 1188 setups. Roughly halves the alerts. "
