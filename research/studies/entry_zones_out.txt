@@ -1,88 +1,88 @@
 WHERE TO ENTER — same raids, same stop, eleven entries
-3765 early · 690 confirmed · target 2R
+3759 early · 692 confirmed · target 2R
 R PER SIGNAL counts an unfilled signal as ZERO. That is the honest column;
 R/fill flatters any entry price never reached by the trades that ran away.
 
-EARLY — all   n=3765
+EARLY — all   n=3759
   entry                           n   fill    risk   fee R   win   R/fill   R/SIGNAL     SE
-  market at the FVG close      3764   100%   2.31%   0.035   38%   -0.069     -0.069  0.021
-  retest + rejection           3765    41%   2.08%   0.039   37%   -0.078     -0.031  0.014
-  FVG near edge (deployed)     3765    80%   1.72%   0.047   37%   -0.028     -0.022  0.020
-  FVG mid                      3765    72%   1.52%   0.053   37%   -0.033     -0.024  0.019
-  FVG far edge                 3765    66%   1.32%   0.060   37%   -0.029     -0.019  0.019
-  Fib 0.5 of the leg           3765    66%   1.37%   0.058   36%   -0.043     -0.028  0.019
-  Fib 0.618 of the leg         3765    54%   1.01%   0.079   35%   -0.088     -0.047  0.017
-  Fib 0.786 of the leg         3736    39%   0.53%   0.150   33%   -0.252     -0.100  0.015
-  order block extreme          3110    78%   2.07%   0.039   34%   -0.142     -0.110  0.021
-  order block mid              3075    66%   1.68%   0.048   35%   -0.118     -0.077  0.020
-  volumetric OB extreme        2361    76%   2.09%   0.038   34%   -0.110     -0.084  0.024
-  volumetric OB mid            2349    58%   1.56%   0.051   34%   -0.159     -0.092  0.021
-  the swept level              2894    57%   1.57%   0.051   34%   -0.134     -0.076  0.019
+  market at the FVG close      3758   100%   2.30%   0.035   38%   -0.019     -0.019  0.021
+  retest + rejection           3759    41%   2.06%   0.039   38%   -0.018     -0.007  0.014
+  FVG near edge (deployed)     3759    80%   1.71%   0.047   38%   +0.031     +0.024  0.020
+  FVG mid                      3759    72%   1.51%   0.053   37%   +0.030     +0.021  0.019
+  FVG far edge                 3759    66%   1.32%   0.061   37%   +0.043     +0.028  0.019
+  Fib 0.5 of the leg           3759    66%   1.36%   0.059   36%   +0.026     +0.018  0.019
+  Fib 0.618 of the leg         3759    54%   1.01%   0.079   35%   +0.003     +0.002  0.017
+  Fib 0.786 of the leg         3730    39%   0.53%   0.150   33%   -0.089     -0.035  0.015
+  order block extreme          3102    78%   2.06%   0.039   34%   -0.091     -0.071  0.021
+  order block mid              3068    66%   1.68%   0.048   35%   -0.044     -0.029  0.020
+  volumetric OB extreme        2355    76%   2.08%   0.038   35%   -0.056     -0.043  0.024
+  volumetric OB mid            2343    58%   1.56%   0.051   34%   -0.076     -0.044  0.021
+  the swept level              2881    57%   1.57%   0.051   35%   -0.050     -0.029  0.019
 
   vs the deployed entry, on R PER SIGNAL:
     FVG far edge                 +0.004  0.027   +0.1 SE
-    FVG mid                      -0.002  0.028   -0.1 SE
-    Fib 0.5 of the leg           -0.006  0.027   -0.2 SE
-    Fib 0.618 of the leg         -0.025  0.026   -0.9 SE
-    the swept level              -0.054  0.028   -2.0 SE
-    order block mid              -0.055  0.028   -2.0 SE
-    volumetric OB extreme        -0.061  0.031   -2.0 SE
-    volumetric OB mid            -0.070  0.029   -2.4 SE
-    Fib 0.786 of the leg         -0.077  0.025   -3.1 SE
-    order block extreme          -0.088  0.029   -3.1 SE
+    FVG mid                      -0.003  0.028   -0.1 SE
+    Fib 0.5 of the leg           -0.007  0.028   -0.3 SE
+    Fib 0.618 of the leg         -0.023  0.026   -0.9 SE
+    the swept level              -0.053  0.028   -1.9 SE
+    order block mid              -0.054  0.028   -1.9 SE
+    Fib 0.786 of the leg         -0.059  0.025   -2.4 SE
+    volumetric OB extreme        -0.067  0.031   -2.2 SE
+    volumetric OB mid            -0.068  0.029   -2.3 SE
+    order block extreme          -0.095  0.029   -3.3 SE
 
-EARLY — HELD OUT (older half), the pre-registered one   n=1766
+EARLY — HELD OUT (older half), the pre-registered one   n=1773
   entry                           n   fill    risk   fee R   win   R/fill   R/SIGNAL     SE
-  market at the FVG close      1766   100%   1.71%   0.047   38%   -0.092     -0.092  0.031
-  retest + rejection           1766    39%   1.54%   0.052   37%   -0.110     -0.042  0.020
-  FVG near edge (deployed)     1766    78%   1.28%   0.063   38%   -0.037     -0.029  0.029
-  FVG mid                      1766    70%   1.12%   0.071   36%   -0.057     -0.040  0.028
-  FVG far edge                 1766    64%   0.96%   0.083   37%   -0.054     -0.034  0.027
-  Fib 0.5 of the leg           1766    63%   1.02%   0.079   37%   -0.047     -0.030  0.027
-  Fib 0.618 of the leg         1766    52%   0.77%   0.104   35%   -0.123     -0.063  0.024
-  Fib 0.786 of the leg         1758    38%   0.41%   0.194   30%   -0.403     -0.152  0.021
-  order block extreme          1453    75%   1.52%   0.053   34%   -0.151     -0.113  0.030
-  order block mid              1442    62%   1.22%   0.065   34%   -0.174     -0.108  0.028
-  volumetric OB extreme        1116    74%   1.55%   0.052   36%   -0.094     -0.069  0.034
-  volumetric OB mid            1113    55%   1.14%   0.070   32%   -0.223     -0.123  0.030
-  the swept level              1352    55%   1.15%   0.070   34%   -0.161     -0.089  0.028
+  market at the FVG close      1773   100%   1.71%   0.047   39%   -0.024     -0.024  0.031
+  retest + rejection           1773    39%   1.54%   0.052   37%   -0.033     -0.013  0.019
+  FVG near edge (deployed)     1773    78%   1.27%   0.063   38%   +0.038     +0.029  0.029
+  FVG mid                      1773    70%   1.12%   0.071   37%   +0.021     +0.014  0.028
+  FVG far edge                 1773    63%   0.96%   0.083   37%   +0.035     +0.022  0.027
+  Fib 0.5 of the leg           1773    63%   1.02%   0.079   37%   +0.037     +0.024  0.027
+  Fib 0.618 of the leg         1773    51%   0.77%   0.104   35%   -0.007     -0.003  0.024
+  Fib 0.786 of the leg         1765    38%   0.41%   0.195   31%   -0.194     -0.073  0.021
+  order block extreme          1456    75%   1.52%   0.053   34%   -0.088     -0.065  0.030
+  order block mid              1445    62%   1.23%   0.065   34%   -0.086     -0.054  0.028
+  volumetric OB extreme        1117    73%   1.55%   0.052   36%   -0.024     -0.018  0.035
+  volumetric OB mid            1114    55%   1.14%   0.070   32%   -0.125     -0.068  0.030
+  the swept level              1355    55%   1.15%   0.070   34%   -0.061     -0.034  0.027
 
   vs the deployed entry, on R PER SIGNAL:
-    Fib 0.5 of the leg           -0.001  0.039   -0.0 SE
-    FVG far edge                 -0.006  0.039   -0.1 SE
-    FVG mid                      -0.011  0.040   -0.3 SE
-    Fib 0.618 of the leg         -0.035  0.038   -0.9 SE
-    volumetric OB extreme        -0.040  0.045   -0.9 SE
-    the swept level              -0.060  0.040   -1.5 SE
-    order block mid              -0.080  0.040   -2.0 SE
-    order block extreme          -0.084  0.042   -2.0 SE
-    volumetric OB mid            -0.094  0.042   -2.3 SE
-    Fib 0.786 of the leg         -0.123  0.036   -3.5 SE
+    Fib 0.5 of the leg           -0.006  0.040   -0.1 SE
+    FVG far edge                 -0.007  0.040   -0.2 SE
+    FVG mid                      -0.015  0.040   -0.4 SE
+    Fib 0.618 of the leg         -0.033  0.038   -0.9 SE
+    volumetric OB extreme        -0.047  0.045   -1.0 SE
+    the swept level              -0.063  0.040   -1.6 SE
+    order block mid              -0.083  0.040   -2.1 SE
+    order block extreme          -0.095  0.042   -2.3 SE
+    volumetric OB mid            -0.098  0.042   -2.3 SE
+    Fib 0.786 of the leg         -0.102  0.036   -2.9 SE
 
-CONFIRMED — all   n=690
+CONFIRMED — all   n=692
   entry                           n   fill    risk   fee R   win   R/fill   R/SIGNAL     SE
-  market at the FVG close       690   100%   2.81%   0.029   40%   -0.016     -0.016  0.048
-  retest + rejection            690    33%   2.15%   0.037   41%   +0.058     +0.019  0.030
-  FVG near edge (deployed)      690    68%   1.80%   0.044   39%   +0.026     +0.017  0.044
-  FVG mid                       690    60%   1.58%   0.051   35%   -0.052     -0.031  0.041
-  FVG far edge                  690    54%   1.39%   0.058   36%   -0.038     -0.020  0.040
-  Fib 0.5 of the leg            690    59%   1.60%   0.050   35%   -0.066     -0.039  0.041
-  Fib 0.618 of the leg          690    47%   1.26%   0.064   33%   -0.135     -0.064  0.036
-  Fib 0.786 of the leg          690    34%   0.67%   0.119   41%   +0.044     +0.015  0.033
-  order block extreme           597    62%   2.09%   0.038   35%   -0.107     -0.067  0.043
-  order block mid               589    53%   1.75%   0.046   37%   -0.032     -0.017  0.041
-  volumetric OB extreme         465    64%   2.12%   0.038   34%   -0.117     -0.074  0.049
-  volumetric OB mid             460    52%   1.70%   0.047   36%   -0.070     -0.037  0.047
-  the swept level               441    34%   0.95%   0.084   42%   +0.082     +0.028  0.041
+  market at the FVG close       692   100%   2.76%   0.029   41%   +0.028     +0.028  0.048
+  retest + rejection            692    33%   2.15%   0.037   42%   +0.099     +0.033  0.030
+  FVG near edge (deployed)      692    68%   1.78%   0.045   39%   +0.074     +0.050  0.044
+  FVG mid                       692    60%   1.57%   0.051   35%   -0.004     -0.002  0.041
+  FVG far edge                  692    54%   1.38%   0.058   35%   +0.021     +0.011  0.040
+  Fib 0.5 of the leg            692    59%   1.59%   0.050   35%   -0.018     -0.011  0.041
+  Fib 0.618 of the leg          692    47%   1.24%   0.064   33%   -0.060     -0.028  0.037
+  Fib 0.786 of the leg          692    34%   0.66%   0.121   41%   +0.183     +0.062  0.033
+  order block extreme           598    62%   2.08%   0.038   35%   -0.063     -0.040  0.043
+  order block mid               590    53%   1.74%   0.046   38%   +0.037     +0.020  0.041
+  volumetric OB extreme         465    64%   2.11%   0.038   34%   -0.074     -0.047  0.049
+  volumetric OB mid             460    53%   1.69%   0.047   36%   +0.006     +0.003  0.047
+  the swept level               439    34%   0.93%   0.086   42%   +0.172     +0.058  0.041
 
   vs the deployed entry, on R PER SIGNAL:
-    the swept level              +0.010  0.060   +0.2 SE
-    Fib 0.786 of the leg         -0.003  0.055   -0.0 SE
-    order block mid              -0.034  0.060   -0.6 SE
-    FVG far edge                 -0.038  0.059   -0.6 SE
-    FVG mid                      -0.048  0.060   -0.8 SE
-    volumetric OB mid            -0.054  0.064   -0.8 SE
-    Fib 0.5 of the leg           -0.056  0.060   -0.9 SE
-    Fib 0.618 of the leg         -0.081  0.057   -1.4 SE
-    order block extreme          -0.084  0.061   -1.4 SE
-    volumetric OB extreme        -0.092  0.066   -1.4 SE
+    Fib 0.786 of the leg         +0.011  0.055   +0.2 SE
+    the swept level              +0.008  0.060   +0.1 SE
+    order block mid              -0.031  0.060   -0.5 SE
+    FVG far edge                 -0.039  0.059   -0.7 SE
+    volumetric OB mid            -0.047  0.064   -0.7 SE
+    FVG mid                      -0.053  0.060   -0.9 SE
+    Fib 0.5 of the leg           -0.061  0.060   -1.0 SE
+    Fib 0.618 of the leg         -0.079  0.057   -1.4 SE
+    order block extreme          -0.090  0.061   -1.5 SE
+    volumetric OB extreme        -0.098  0.066   -1.5 SE

@@ -5375,3 +5375,79 @@ price together. The current design is right.
 **No change.** The deployed FVG-edge entry is the best of twelve, and the two
 mechanisms behind that are now explicit: deeper entries lose exactly their extra
 fee, and order blocks lose on location at equal fee.
+
+
+---
+
+## CORRECTION — the fee rate was wrong for the whole project, and it reverses a finding
+
+Every study before 10 Sep charged **0.02% maker / 0.06% taker**, or a flat 0.08%
+round trip. Those are MEXC's list rates. They are not what this account pays,
+and nobody had checked them against a settlement.
+
+### Derived from a real fill, not a fee table
+
+An ARBUSDT long: 323.9062 USDT notional, entry 0.17237, close 0.16923, realised
+**−6.0747**. Gross on the price move is **−5.9005**, so fees and funding
+together cost **0.1742 over 641.9 USDT of two-sided volume = 0.0271% per side.**
+A second settlement (XMR) splits them — trading 0.0864, funding 0.0216 — so
+stripping funding at that 25% ratio leaves **~0.0217% per side of trading fee.**
+
+MEXC's schedule shows **0.000–0.040% maker and 0.000–0.100% taker** with a 20%
+MX deduction active, which brackets it. The model was **twice** the true cost
+overall and **three times** on the taker side.
+
+### What it changes
+
+| fee model | early R/trade | early total | confirmed R/trade |
+|---|---|---|---|
+| **old assumption** mk .020 / tk .060 | **−0.008** | −23.5 R | +0.040 |
+| measured taker, mk .020 / tk .022 | **+0.017** | +51.9 R | +0.063 |
+| **likely real** mk .010 / tk .022 | **+0.031** | +91.9 R | +0.074 |
+| zero-fee pairs, mk .000 / tk .022 | **+0.043** | +127.9 R | +0.084 |
+| no fees at all | +0.059 | +175.5 R | +0.098 |
+
+**"Early signals are net negative after fees" is WITHDRAWN.** It was one of this
+project's load-bearing findings and it was an artefact of a fee rate that was
+never checked against a settlement. At the rate actually paid, early signals are
+**positive**.
+
+The deployed FVG entry moves the same way: **−0.029 → +0.029 R per signal** on
+the held-out half. The entry study's *ordering* is unchanged — it is still best
+of twelve — but its level was negative only because of the fee.
+
+### And it softens a second conclusion
+
+`win_rate_price.py` concluded that a partial "destroys the equity curve". At the
+corrected fee, on return per unit of drawdown:
+
+| exit | win | return | max DD | ret/DD |
+|---|---|---|---|---|
+| plain 2R | 39% | +11% | 9% | **1.21** |
+| half at 0.5R | **65%** | +8% | 8% | **1.00** |
+| half at 1R, rest 3R | 48% | −4% | 10% | −0.34 |
+| break-even at 1R | 31% | +11% | 11% | 0.96 |
+
+**The partial is no longer disastrous — 65% win rate for 17% of the ret/DD.**
+The earlier "it destroys the return" was substantially the overstated fee, since
+a partial books half the position at 1R and therefore pays the fee twice.
+Plain still leads, but the gap is now inside what the account simulation's own
+path-dependence can produce.
+
+### A caveat on the account simulation itself
+
+The concurrency cap makes it chaotic: which trades get one of the eight slots
+depends on which earlier trades filled, so a small change cascades. Two runs of
+the *same* rule across this correction gave +20% and +11%. **The per-trade R
+numbers are stable and should carry any argument; the account percentages are
+directional only.**
+
+### What is still not modelled
+
+**Funding** — the XMR settlement puts it at a further 25% on top of the trading
+fee, and nothing here charges it. **Slippage** on the stop. And the maker rate
+assumes the entry limit actually rests; a marketable limit pays taker.
+
+`RIPTIDE_FEE_MAKER` and `RIPTIDE_FEE_TAKER` now override the defaults, because
+MEXC's rate is a distribution across pairs and time — zero-fee promotions run on
+many pairs at once — rather than a constant.

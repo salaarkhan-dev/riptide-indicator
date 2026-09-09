@@ -37,13 +37,78 @@ CONVENTIONS, FIXED
 from __future__ import annotations
 
 import statistics
+import os
 from dataclasses import dataclass
 
 from riptide.config import TRACK_FILL_BARS, TRACK_HORIZON_BARS, TRACK_TARGET_R
 
-# MEXC 0.02% maker + 0.06% taker. Cost in R is FEE_PCT / risk_pct, so a WIDE
-# stop is cheaper per unit of risk, not dearer — the opposite of intuition.
-FEE_PCT = 0.08
+# THE FEE RATES WERE WRONG FOR THE WHOLE PROJECT AND THE CORRECTION REVERSES A
+# CONCLUSION. Every study before 10 Sep charged 0.02% maker and 0.06% taker, or
+# a flat 0.08% round trip. Those are MEXC's list rates. They are not what this
+# account pays.
+#
+# Derived from a real filled position rather than from a fee table — an ARBUSDT
+# long, 323.9062 USDT notional, entry 0.17237, close 0.16923, realised -6.0747.
+# Gross on the price move is -5.9005, so fees AND funding together cost 0.1742
+# over 641.9 USDT of two-sided volume: 0.0271% per side. A second screenshot
+# splits the two on an XMR trade (trading 0.0864, funding 0.0216), and stripping
+# funding at that 25% ratio leaves ~0.0217% per side of trading fee.
+#
+# MEXC's futures schedule shows 0.000-0.040% maker and 0.000-0.100% taker with a
+# 20% MX deduction active, which brackets that number. So:
+#
+#     TAKER  0.022%   measured, not quoted
+#     MAKER  0.010%   inside the same bracket; 0 during maker promotions
+#
+# The old defaults were roughly TWICE the true cost, and three times on the
+# taker side. What that changed:
+#
+#     early signals, R per trade    -0.008 at the old rates
+#                                   +0.017 at the measured taker
+#                                   +0.031 at the likely real pair
+#     account return, same rules      -2%  ->  +13%  ->  +14%
+#
+# "Early signals are net negative after fees" was one of this project's
+# load-bearing findings and it was an artefact of a fee rate nobody checked
+# against a settlement. It is withdrawn.
+#
+# WHAT IS STILL NOT MODELLED, so these remain optimistic: FUNDING, which the XMR
+# settlement shows is a further 25% on top of the trading fee, and SLIPPAGE on
+# the stop. And the maker rate only applies if the entry limit actually rests —
+# a marketable limit pays taker.
+#
+# The structure is unchanged and still matters: a limit entry and a limit target
+# are maker, a stop is taker, and the cost in R is fee / risk_pct — so a TIGHT
+# stop is expensive and the mean is set by the quietest symbols, because 1/risk
+# is convex. Halving the fee halves that penalty; it does not remove it.
+# Overridable, because MEXC's rate is not one number. The schedule is a RANGE
+# (0.000-0.040% maker, 0.000-0.100% taker), it moves with VIP tier and the MX
+# deduction, and the exchange runs ZERO-FEE promotions on many pairs at once —
+# so the true cost is a distribution across the universe and across time, not a
+# constant. RIPTIDE_FEE_MAKER / RIPTIDE_FEE_TAKER let a study be re-run at
+# whatever is actually being paid, and every conclusion that turns on the fee
+# should be read as a range rather than a point.
+FEE_MAKER = float(os.getenv("RIPTIDE_FEE_MAKER", "0.010"))
+FEE_TAKER = float(os.getenv("RIPTIDE_FEE_TAKER", "0.022"))
+# Flat round-trip default, for the callers that pass neither.
+FEE_PCT = FEE_MAKER + FEE_TAKER
+
+
+def _fees(fee_pct, fee_maker, fee_taker):
+    """(round trip on a win, round trip on a loss), in percent.
+
+    `fee_pct` is a SENTINEL-DEFAULTED OVERRIDE and that is deliberate. It used
+    to default to a number while `fee_maker` defaulted to 0, so the maker rate
+    doubled as an on/off switch: a caller passing `fee_pct=0.0` got no fee only
+    because maker happened to be falsy. Giving maker a real default broke every
+    such caller silently — the harness tests caught it, four of them at once.
+    None now means "no override", so a caller that passes fee_pct gets exactly
+    the flat rate it asked for and a caller that passes nothing gets the
+    maker/taker split, which is what a limit entry and a stop exit actually pay.
+    """
+    if fee_pct is not None:
+        return fee_pct, fee_pct
+    return fee_maker * 2, fee_maker + fee_taker
 
 
 @dataclass
@@ -72,9 +137,9 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
              be_arm_r: float = 0.0, be_lock_r: float = 0.0,
              part_at_r: float = 0.0, part_to_r: float = 0.0,
              trail: list | None = None,
-             fee_pct: float = FEE_PCT,
-             fee_maker: float = 0.0,
-             fee_taker: float = 0.06) -> Outcome:
+             fee_pct: float | None = None,
+             fee_maker: float = FEE_MAKER,
+             fee_taker: float = FEE_TAKER) -> Outcome:
     """One trade, scored from the bar the entry was actually touched on.
 
     `trail`, when given, is a per-bar list of candidate stop levels — a
@@ -113,8 +178,7 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
     # of every trade — which the flat fee_pct does — overstates the cost of
     # every winner. fee_maker/fee_taker model it properly; fee_pct alone keeps
     # the old flat behaviour so earlier numbers stay reproducible.
-    fee_win = fee_maker * 2 if fee_maker else fee_pct
-    fee_lose = (fee_maker + fee_taker) if fee_maker else fee_pct
+    fee_win, fee_lose = _fees(fee_pct, fee_maker, fee_taker)
     to_r = 1.0 / (100 * risk / entry)
     cur_stop, armed, part_done, banked, size = stop, False, False, 0.0, 1.0
     tgt = part_at_r or target_r
@@ -173,8 +237,9 @@ def simulate_market(cs, signal_bar: int, entry: float, stop: float,
                     horizon_bars: int = TRACK_HORIZON_BARS,
                     be_arm_r: float = 0.0, be_lock_r: float = 0.0,
                     part_at_r: float = 0.0, part_to_r: float = 0.0,
-                    fee_maker: float = 0.02,
-                    fee_taker: float = 0.06) -> Outcome | None:
+                    fee_pct: float | None = None,
+                    fee_maker: float = FEE_MAKER,
+                    fee_taker: float = FEE_TAKER) -> Outcome | None:
     """A MARKET entry taken at `entry` on the CLOSE of `signal_bar`.
 
     simulate() cannot express this. It fills a limit by waiting for price to
@@ -212,8 +277,15 @@ def simulate_market(cs, signal_bar: int, entry: float, stop: float,
     # One fee per trade, charged by how it ENDS — including for a partial,
     # which simulate() also approximates this way. Keeping the two scorers
     # identical matters more here than a second decimal place on the fee.
-    fee_win = (fee_taker + fee_maker) * to_r
-    fee_lose = (fee_taker + fee_taker) * to_r
+    # A MARKET entry pays taker on the way in, whatever the exit does — which
+    # is why this is not _fees(). A win leaves on a limit target (maker), a
+    # loss leaves on a stop (taker). fee_pct still overrides both, so a caller
+    # asking for a flat rate or for none gets exactly that.
+    if fee_pct is not None:
+        fee_win = fee_lose = fee_pct * to_r
+    else:
+        fee_win = (fee_taker + fee_maker) * to_r
+        fee_lose = (fee_taker + fee_taker) * to_r
     # Break-even and partial management, mirroring simulate() exactly: the
     # stop can move, a partial banks half at part_at_r and runs the rest to
     # part_to_r, and a break-even stop arms on the CLOSE rather than intrabar
