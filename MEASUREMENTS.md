@@ -4091,3 +4091,89 @@ are testing."* **The source in this repo contains no occurrence of the string
 different script. Every LEZ measurement in this document describes
 `liquidity-entry-zones.pine` as committed here, and until the version question
 is settled the possibility that they describe the wrong source stays open.
+
+---
+
+## Liquidity Trendline With Signals, full universe — `research/studies/trendline_measure.py`
+
+An exact port (`trendline.py`, tested by `research/test_trendline.py`) scored on
+the universe Riptide actually scans: **60 symbols**, Min30 / Min15 / Min5, ~83
+days each split in half. Market entry at the breakout close, 1.5 × ATR(14)
+stop, MEXC fees. Answering the four questions an alerting service has to ask.
+
+### The verdict, on the held-out half
+
+| | signals | /symbol/day | win | **need** | R/signal | vs random |
+|---|---|---|---|---|---|---|
+| Min30 | 2012 | 0.81 | 33% | **36%** | **−0.120 ± 0.032** (−3.8 SE) | −0.001 (0.0 SE) |
+| Min15 | 4331 | 1.73 | 31% | **37%** | **−0.216 ± 0.022** (−10.0 SE) | −0.047 (−1.9 SE) |
+| Min5 | 12698 | 5.08 | 34% | **40%** | **−0.271 ± 0.013** (−20.5 SE) | +0.006 (+0.4 SE) |
+
+**Fails the pre-registered bar at all three timeframes.** The bar was positive
+at 2 SE; the result is negative at 4, 10 and 20 SE.
+
+### WIN RATE — it is the coin flip's win rate, and it is below break-even
+
+The `need` column is the win rate this configuration must beat to break even
+after fees at that bucket's own risk. **The strategy sits 3 to 6 points under
+it at every timeframe**, which is the whole loss.
+
+And the random control's win rate is **33–34%** against the strategy's
+**31–34%**. A trendline break produces the same win rate as entering at a
+random bar in a random direction. That is what `EDGE ≈ 0` means in the last
+column, and it is the single most compact statement of the result.
+
+### RR — the ladder is flat, so the win rate is purely the target
+
+Min15 held-out:
+
+| target | win | R/signal |
+|---|---|---|
+| 1.5R | 40% | −0.210 |
+| 2R | 31% | −0.216 |
+| 3R | 24% | −0.216 |
+| 4R | 19% | −0.225 |
+
+The win rate moves 40% → 19% and R moves 0.015. Same shape at Min30 and Min5.
+`winrate.py` again: the win rate is a dial the target sets, not a property of
+the model, and no target rescues a signal with no edge.
+
+### SIGNALS — far too many, before anything else is wrong
+
+Per symbol per day, across 60 symbols:
+
+| | /symbol/day | alerts per day, whole universe |
+|---|---|---|
+| Min30 | 0.81–0.88 | **~50** |
+| Min15 | 1.73–1.80 | **~105** |
+| Min5 | 4.95–5.08 | **~300** |
+
+### QUALITY — nothing sorts, so no grade is possible
+
+Five variables, all fixed before the run. High-minus-low, or agrees-minus-
+against, across all six panels:
+
+| variable | M30 disc | M30 held | M15 disc | M15 held | M5 disc | M5 held | |
+|---|---|---|---|---|---|---|---|
+| break distance | +0.060 | +0.104 | −0.012 | −0.055 | — | — | flips |
+| channel age | +0.034 | +0.050 | −0.116 | +0.014 | — | — | flips, non-monotone |
+| slope | +0.030 | −0.118 | +0.095 | −0.060 | — | — | flips |
+| 4h agrees | +0.117 | **−0.066** | +0.092 | **−0.050** | +0.038 | +0.072 | flips on both held halves |
+| daily agrees | **+0.276** | **−0.032** | +0.159 | +0.045 | +0.015 | −0.004 | collapses out of sample |
+
+**Every one flips sign on at least one panel.** The daily-trend split is the
+sharpest warning: **+0.276 on the Min30 discovery half and −0.032 on the
+held-out half** — a variable that looks like the answer on the newer 42 days
+and is nothing on the older ones.
+
+This is the decision-relevant finding. **With no variable that sorts, there is
+no grade**, and without a grade every alert must be sent or none of them can
+be. Fifty to three hundred ungraded alerts a day is not an alerting service.
+
+### Verdict
+
+**Not a candidate.** It is not merely unprofitable — it is statistically
+indistinguishable from random entry at two timeframes and significantly worse
+at the third, while producing 50–300 alerts a day with nothing to rank them by.
+The port is exact, tested, and the signal list is diffable against the chart,
+so this is a measurement of the indicator rather than of a translation of it.
