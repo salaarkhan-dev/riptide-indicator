@@ -3440,3 +3440,114 @@ Zones trigger itself contributes about +0.05 R with a standard error of 0.11.
 
 If a strategy is to be built out of this, the honest reading is that the
 filters are doing the work and the trigger is decoration.
+
+---
+
+## The momentum mirror: break and retest — `research/studies/momentum.py`
+
+Built because the LEZ sweep left exactly one thing pointing somewhere: the
+daily-trend filter helped RANDOM entries more than it helped LEZ. That is
+`which_trend.py`'s +4.5 SE effect reproducing inside the control while the
+strategy fails to collect it, and the reason is shape — LEZ buys after a low is
+swept, which is mean reversion, while the daily trend is a momentum filter.
+
+So: the same machinery, inverted. Same stored pivots, same ATR margin, same
+cooldown, same scorer. Instead of *takes a level and closes back inside it*
+(rejection), it is *takes a level and closes beyond it* (acceptance), and the
+broken level becomes the retest.
+
+Fixed by evidence rather than swept: direction is a **requirement** from the
+daily trend, not a filter (longs only in a daily uptrend, flat days sit out);
+no chart EMA, because it is the measured null; body ≥ 50% of range for a
+decisive close; and the level must be freshly broken — the previous bar closed
+on the other side — which fixes the stale-level flaw found in the Pine.
+
+**Pre-registered primary, named before the run:** market entry at the breakout
+close, 1.5 × ATR(14) stop, 3R target, no POI. The exact mirror of LEZ's shipped
+settings, so LEZ vs this differs in one variable. The other 23 cells are
+descriptive; naming the cell in advance is what stops best-of-N, and the
+previous study's bar failed precisely because it was applied to the best of 360.
+
+### The held-out result, on the pre-declared cell
+
+| | Min30 | Min15 |
+|---|---|---|
+| n | 1773 | 3508 |
+| win | 23% | 24% |
+| R/signal | **−0.201 ± 0.040** | **−0.212 ± 0.029** |
+| matched control | −0.140 | −0.199 |
+| EDGE | **−0.062 ± 0.047** | **−0.013 ± 0.034** |
+| | **FAILS** | **FAILS** |
+
+Discovery said +0.005 (Min30) and −0.083 (Min15). It was never positive.
+
+### Every matched-risk cell, and the noise floor
+
+| | best matched cell | worst | noise floor |
+|---|---|---|---|
+| Min30 | +0.079 (0.8 SE) | −0.107 | **+0.250** |
+| Min15 | −0.036 | −0.117 | **+0.183** |
+
+At Min15 **every** matched cell is negative. At Min30 the best is a third of
+the floor. Nothing here is a candidate.
+
+### THE TRAP THIS RUN WALKED INTO, TWICE
+
+**First: a stop that is not a trade.** The structural stop sits at the breakout
+bar's extreme and the retest limit sits at the broken level; nothing keeps them
+apart. When they land a hair apart, `risk_pct` goes to nearly zero while fee in
+R is `fee / risk_pct` — so one row books a loss of tens of R. The first run had
+all eight `struct` cells at the TOP of the table with control means near
+**−4.7 R**, entirely from a handful of those. A floor of `risk ≥ 0.25 × ATR`
+fixes it: below a quarter of a bar's typical range the stop is inside the noise
+of the candle that triggered the trade.
+
+**Second, and this one is subtler: EDGE only cancels the fee when the two sides
+take the SAME RISK.** With the floor in place the `struct` cells still topped
+the table — Min30 `market struct 3R POI` at **+0.304, 2.9 SE**; Min15
+`market struct 2R ---` at **+0.142, 4.8 SE**. Four to five sigma, consistent
+across timeframes and POI settings. It looks like a finding.
+
+It is not. A breakout bar has a big body by definition, so its close-to-extreme
+distance is wider than a random bar's, and a wider stop pays less fee per unit
+of risk *and* aims at a target that is further away in price. It is a different
+trade, not a better-timed one. Printing the control's risk beside the signal's
+settles it in one line:
+
+| cell | signal risk | control risk | EDGE | SE |
+|---|---|---|---|---|
+| Min15 market struct 2R POI | 0.58% | **0.36%** | +0.211 | +3.2 |
+| Min15 market struct 2R --- | 0.67% | **0.45%** | +0.142 | +4.8 |
+| Min15 **retest struct 2R ---** | 0.47% | **0.43%** | **+0.046** | +1.3 |
+| Min15 **retest struct 3R ---** | 0.47% | **0.43%** | **+0.002** | +0.1 |
+
+Within one family, the six cells whose risk is mismatched score +0.09 to +0.30,
+and the two whose risk nearly matches score **+0.046 and +0.002**. The edge is
+the risk gap. Every ATR-stop cell matches to within 5% by construction and is
+readable; every `struct` cell is now printed with a RISK MISMATCH marker rather
+than deleted, so the artefact stays visible instead of being quietly dropped.
+
+### What both studies agree on, which is the useful part
+
+The two triggers are opposites — rejection and acceptance of the same pivot
+levels — and they land in the same place:
+
+| | best R/signal seen | its matched control | trigger's contribution |
+|---|---|---|---|
+| LEZ (rejection), Min15 held-out | +0.121 | +0.069 | +0.052 ± 0.110 |
+| Momentum (acceptance), Min30 disc | +0.176 | +0.113 | +0.063 ± 0.090 |
+
+**Roughly +0.05 R, with a standard error twice that, from either polarity.**
+Meanwhile the conditions those cells share — daily trend agreeing, raid inside
+a daily POI — take the CONTROL from about −0.15 to about +0.11. The location
+filters are worth two to three times what the trigger is worth, and they are
+worth it to a coin flip.
+
+**The practical reading: the entry trigger is not where the money is on this
+data.** Riptide already gates on both filters. A third pivot-level trigger,
+in either direction, is not the missing piece.
+
+Stated as an open question rather than a finding, because it has not been held
+out here: a control that is positive at trend + POI (+0.113 on the Min30
+discovery half) is consistent with `which_trend.py` and `hybrid.py`, and would
+be worth a study of its own with a pre-registered bar.
