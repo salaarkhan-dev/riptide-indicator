@@ -319,6 +319,39 @@ SWEEP_WATCH_ONLY = os.getenv("RIPTIDE_SWEEP_WATCH_ONLY", "1") == "1"
 # separate RIPTIDE_SWEEP_MAX_DIST, which was a second knob for the same
 # decision and could have been set to disagree with the label the reader saw.
 WATCH_MAX_DIST = float(os.getenv("RIPTIDE_WATCH_MAX_DIST", "3.0"))
+
+# The third term in sweep_worth: the raid bar's turnover against the MEDIAN of
+# the 50 bars before it. Below this the raid was QUIET, which is the one that
+# converts. 0 disables the test.
+#
+# THIS IS THE STRONGEST RESULT IN THE PROJECT AND IT WENT UNUSED FOR MONTHS.
+# research/studies/sweep_vol_gate.py, 9419 sweeps over 60 symbols, conversion
+# to a setup by raid-bar volume quintile:
+#
+#     Q1  rvol < 0.98    14.3%      Q4  2.37-4.12   4.6%
+#     Q2  0.98-1.55       9.7%      Q5  rvol > 4.12  2.4%
+#     Q3  1.55-2.37       6.1%      Q1-Q5 +11.9pp, +13.5 SE, monotone
+#
+# reproducing context.py's +15.6 SE on an independent pass. It inverts the folk
+# premise: the raids that reverse are the QUIET ones. A volume spike through a
+# level is a breakout with participation; the classic grab that snaps back
+# drifts through on thin trade.
+#
+# Against the distance rule it had to earn its place beside:
+#
+#     every sweep                         7.4% convert   3.8 per symbol-day
+#     distance only (the old live rule)  13.3%           1.7
+#     VOLUME only                        14.3%           0.8
+#     both                               18.0%           0.5
+#
+# Volume alone beats distance on BOTH axes — more conversion at half the
+# messages. Together they reach 18%, more than double the ungated rate, at an
+# eighth of the traffic.
+#
+# 0.98 is the measured Q1 boundary, used as measured rather than rounded to
+# 1.0, because a threshold nudged after seeing the result is a fitted
+# threshold. It means "the raid bar traded less than the median recent bar".
+MAX_SWEEP_RVOL = float(os.getenv("RIPTIDE_MAX_SWEEP_RVOL", "0.98"))
 # Which pool types raise a heads-up. Unset means all of them — the right
 # default while the output is being checked against the chart, since
 # filtering would hide part of what is being verified.

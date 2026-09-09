@@ -52,7 +52,7 @@ RESOLVED = (WON, LOST, TIMEOUT)
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
             "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence, "
-            "di_dir, rsi_ext, poi, regraded, tf, trend_tf, tl_break")
+            "di_dir, rsi_ext, poi, regraded, tf, trend_tf, tl_break, breadth")
 
 CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
@@ -133,6 +133,10 @@ def init(db) -> None:
         # -1 rather than NULL so old rows and "no break" stay distinguishable:
         # old rows carry the default and are excluded from the breakdown.
         ("tl_break", "INT DEFAULT -2", "trendline confluence, measured forward"),
+        # How many same-direction signals shared this one's bar close. 0 marks
+        # rows armed before the column existed; a real value is always >= 1
+        # because a signal counts itself. Measured forward, gates nothing.
+        ("breadth", "INT DEFAULT 0", "cycle breadth, measured forward"),
     ):
         if col not in have:
             db.execute(f"ALTER TABLE outcomes ADD COLUMN {col} {decl}")
@@ -183,7 +187,7 @@ def arm(db, sid: str, s, from_bar: int | None = None,
     start = from_bar if from_bar is not None \
         else max(detected, last_closed_bar(now, getattr(s, "tf", "")))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
                 # Early has no shift; its sweep bar is the comparable anchor.
@@ -193,7 +197,8 @@ def arm(db, sid: str, s, from_bar: int | None = None,
                 getattr(s, "di_dir", 0), getattr(s, "rsi_ext", 0.0),
                 int(getattr(s, "poi", False)), 1,
                 getattr(s, "tf", "") or INTERVAL, TREND_INTERVAL,
-                int(getattr(s, "tl_break", -1))))
+                int(getattr(s, "tl_break", -1)),
+                int(getattr(s, "breadth", 0))))
     db.commit()
 
 
@@ -381,8 +386,8 @@ def live_band(db, letter: str, kind: str, min_n: int = 30):
 def summary(db, kind: str | None = None) -> dict:
     """Pass a kind to describe one strategy alone; omit it for both together."""
     sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind, "
-           "confluence, di_dir, rsi_ext, poi, regraded, trend_tf, tl_break "
-           "FROM outcomes")
+           "confluence, di_dir, rsi_ext, poi, regraded, trend_tf, tl_break, "
+           "breadth FROM outcomes")
     rows = (db.execute(sql + " WHERE kind=?", (kind,)).fetchall() if kind
             else db.execute(sql).fetchall())
     if not rows:
@@ -431,6 +436,14 @@ def summary(db, kind: str | None = None) -> dict:
         "tl_no": _bucket([(r[0], r[1]) for r in rows if r[14] is not None
                           and (r[14] == -1
                                or r[14] > TRENDLINE_CONFLUENCE_BARS)]),
+        # Breadth, on the threshold the study found rather than as a gradient:
+        # the effect is a step at 8, not a slope, and it failed its
+        # pre-registration for exactly that reason. r[15] == 0 means the row
+        # predates the column and is excluded from both sides.
+        "wide": _bucket([(r[0], r[1]) for r in rows
+                         if r[15] is not None and r[15] >= 8]),
+        "narrow": _bucket([(r[0], r[1]) for r in rows
+                           if r[15] is not None and 1 <= r[15] < 8]),
         # By grade. Computed from the stored poi and trend_dir columns rather
         # than a saved letter, so a change to the ladder re-grades history
         # instead of stranding it. Rows armed before the POI column existed

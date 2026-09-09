@@ -384,6 +384,26 @@ def grade_letter(x, early: bool = False) -> str:
     return grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[0]
 
 
+def breadth_note(x) -> str | None:
+    """"8 longs on this close" — a fact about the market, not a verdict.
+
+    Deliberately a plain count and not a glyph or a grade. Breadth is a SIZING
+    input: eight symbols printing the same direction at once are one bet, not
+    eight, and that is the fact the portfolio study found was behind 27% of
+    confirmed losses. It is worth saying whether or not the mean R differs.
+
+    It does appear to differ — +0.187 R over a lone signal at +2.1 SE held out
+    — but that failed its pre-registration on monotonicity, so the message
+    reports the count and claims nothing about it.
+    """
+    n = getattr(x, "breadth", 0)
+    if not isinstance(n, int) or n < 2:
+        return None
+    side = "longs" if x.is_long else "shorts"
+    return (f"<i>🔗 {n} {side} on this close — size them as one bet</i>"
+            if n >= 8 else f"<i>🔗 {n} {side} on this close</i>")
+
+
 def tl_mark(x) -> str:
     """📐 in the headline when a trendline break agrees with this signal.
 
@@ -451,6 +471,7 @@ def setup_message(s: Setup) -> str:
                   grade=grade_chip(s)),
         why,
         tl_note(s),
+        breadth_note(s),
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         "",
@@ -476,6 +497,7 @@ def early_message(s: Early) -> str:
                   tf_label(s.tf or INTERVAL), grade=grade_chip(s, True)),
         why,
         tl_note(s),
+        breadth_note(s),
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         "",
@@ -533,14 +555,15 @@ def sweep_message(s: Sweep) -> str:
     # marking for the case where the filter is OFF: a skipped raid gets a
     # different icon and a lowercase tag, because eyes on a raid the bot is
     # telling you to ignore is a contradiction the reader has to look past.
-    watch = sweep_worth(s.sweep_extreme, s.struct_level, s.poi)
+    watch = sweep_worth(s.sweep_extreme, s.struct_level, s.poi, s.rvol)
     return "\n".join(x for x in (
         _headline("👀 <b>SWEEP</b>" if watch else "💤 <b>sweep</b>",
                   is_long, s.symbol, tf_label(s.tf or INTERVAL),
                   suffix="bias", grade="" if watch else "skip"),
         f"<i>liquidity taken{where} · no entry yet</i>",
         "",
-        f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>",
+        f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>"
+        + (f"   <i>{s.rvol:.1f}x volume</i>" if s.rvol > 0 else ""),
         f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>"
         f"{_shift_distance(s.sweep_extreme, s.struct_level)}",
         note or None,

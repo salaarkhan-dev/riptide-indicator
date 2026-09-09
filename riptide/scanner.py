@@ -246,6 +246,47 @@ def _tag_trendline(cs, signals) -> None:
             x.tl_break = b - max(prior)
 
 
+def tag_breadth(results) -> None:
+    """Stamp every signal with how many SAME-DIRECTION signals share its close.
+
+    THE ONE THING A PER-SYMBOL VIEW CANNOT SEE, and the scanner gets it free:
+    when it sends the seventh long of a cycle it already knows about the other
+    six, because they are sitting in the same results list.
+
+    This project's own portfolio work pointed straight at it — "27% of
+    confirmed losers fall on five days out of forty-two ... one market move
+    taking out everything at once, and nothing about a single alert can see it
+    coming". A single alert cannot. A cycle can.
+
+    Measured (research/studies/breadth.py, 3756 early signals, held out):
+
+        alone          -0.065        4-7 together   -0.102
+        2-3 together   -0.033        8+ together    +0.122
+
+    +0.187 over "alone" at +2.1 SE, above a 25-seed placebo floor, and the win
+    rate steps 28% -> 34% in both halves. It FAILED its pre-registration, which
+    required the gradient to be monotone and it is not — the effect is a
+    THRESHOLD at 8, not a slope. So it is printed and recorded, and it gates
+    nothing.
+
+    Keyed on the signal's own timeframe as well as its bar, so a 30m bundle and
+    a 15m bundle are not blended: a 30m close is also a 15m close, and counting
+    them together would inflate every 30m signal's breadth by whatever the
+    faster scan happened to find.
+    """
+    from collections import Counter
+    def key(x):
+        step = BAR_SECONDS[getattr(x, "tf", "") or INTERVAL]
+        t = (getattr(x, "fvg_time", 0) or getattr(x, "mss_time", 0)
+             or getattr(x, "sweep_time", 0))
+        return (getattr(x, "tf", ""), t - (t % step), x.is_long)
+    everything = [x for setups, _, early, _ in results
+                  for x in list(setups) + list(early)]
+    c = Counter(key(x) for x in everything)
+    for x in everything:
+        x.breadth = c[key(x)]
+
+
 def _same_trade(e: Early, s) -> bool:
     """Whether an Early and a Setup are the identical trade, not merely the
     same idea. Both are computed by the same formulas from the same candles,
@@ -388,6 +429,14 @@ async def cycle(sess, db, symbols):
     results = await asyncio.gather(
         *(scan_symbol(sess, sem, s, tf_on, tf) for s, tf in jobs))
 
+    # Cross-symbol, so it cannot live in scan_symbol: breadth is a property of
+    # the cycle, not of a chart. Wrapped for the same reason as everything else
+    # decorative here — it must never be able to cost an alert.
+    try:
+        tag_breadth(results)
+    except Exception as e:
+        log.warning("breadth tagging failed: %s", e)
+
     bootstrap = first_run(db) and not ALERT_ON_FIRST_RUN
     # /pause records everything as usual but sends nothing, so resuming does
     # not replay the backlog.
@@ -471,11 +520,11 @@ async def cycle(sess, db, symbols):
             elif not poi_ok(w):
                 g["poi"] += 1
             elif SWEEP_WATCH_ONLY and not sweep_worth(
-                    w.sweep_extreme, w.struct_level, w.poi):
+                    w.sweep_extreme, w.struct_level, w.poi, w.rvol):
                 g["grade"] += 1
             if (fresh and not mute and poi_ok(w)
                     and (not SWEEP_WATCH_ONLY or sweep_worth(
-                        w.sweep_extreme, w.struct_level, w.poi))):
+                        w.sweep_extreme, w.struct_level, w.poi, w.rvol))):
                 if await tg.tg_send(sess, tg.sweep_message(w)):
                     swept += 1
                     g["sent"] += 1

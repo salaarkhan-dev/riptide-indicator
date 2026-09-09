@@ -209,6 +209,21 @@ def _tl_block(s) -> str:
                    f"   {d / dse if dse else 0:+.1f} SE")
     out.append("<i>offline: +0.206 R over 3773 signals but only +0.7 SE held "
                "out, so it is on trial. It changes nothing that is sent.</i>")
+    wide, narrow = s.get("wide") or {}, s.get("narrow") or {}
+    if wide.get("setups") or narrow.get("setups"):
+        out += ["", "<b>🔗 cycle breadth</b>  <i>measured, not filtered</i>"]
+        out.append(_bucket_line("8+ together", wide) if wide.get("setups")
+                   else "8+ together —")
+        out.append(_bucket_line("under 8", narrow) if narrow.get("setups")
+                   else "under 8    —")
+        if wide.get("setups", 0) >= 10 and narrow.get("setups", 0) >= 10:
+            d = wide["r_setup"] - narrow["r_setup"]
+            dse = (wide["se_setup"] ** 2 + narrow["se_setup"] ** 2) ** 0.5
+            out.append(f"{'difference':<12}{d:+.3f} ± {dse:.3f}"
+                       f"   {d / dse if dse else 0:+.1f} SE")
+        out.append("<i>offline: +0.187 R at +2.1 SE held out, but the gradient "
+                   "is a STEP at 8 rather than a slope, which failed its "
+                   "pre-registration. On trial.</i>")
     return "\n".join(out)
 
 

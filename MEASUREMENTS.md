@@ -4992,3 +4992,89 @@ opposite way to the concept. A contradicting divergence came out mildly positive
 
 Not adopted in any role. RSI is the most-tested oscillator in existence and this
 population has now rejected both its level form and its divergence form.
+
+
+---
+
+## Sweep volume as the heads-up gate — `research/studies/sweep_vol_gate.py`
+
+**The largest result in this file went unused for months.** `context.py` found
+sweep→setup conversion falling 26.4% → 6.5% with raid volume, +15.6 SE. It
+survived only as a paragraph in `market.py`.
+
+Reproduced independently on 9,419 sweeps, 60 symbols, 42 days:
+
+| quintile | rvol | converts |
+|---|---|---|
+| Q1 | < 0.98 | **14.3%** |
+| Q2 | 0.98–1.55 | 9.7% |
+| Q3 | 1.55–2.37 | 6.1% |
+| Q4 | 2.37–4.12 | 4.6% |
+| Q5 | > 4.12 | **2.4%** |
+
+**Q1 − Q5 = +11.9pp, +13.5 SE, monotone.** It inverts the folk premise: the
+raids that reverse are the **quiet** ones. A volume spike through a level is a
+breakout with participation; the grab that snaps back drifts through on thin
+trade.
+
+### Head to head against the gate it replaces
+
+| gate | converts | per symbol-day | share kept |
+|---|---|---|---|
+| every sweep | 7.4% | 3.8 | 100% |
+| distance <3% (the old live rule) | 13.3% | 1.7 | 46% |
+| **volume only** | **14.3%** | **0.8** | 20% |
+| **both** | **18.0%** | **0.5** | 13% |
+
+**Volume alone beats distance on both axes — higher conversion at half the
+messages.** Together they more than double the ungated conversion rate at an
+eighth of the traffic. Shipped: `sweep_worth` is now an AND of three, and live
+it takes sweeps through the gate from 48% to 18%.
+
+Not an edge claim. `context.py` measured raid volume against R on the setups
+that follow and found nothing (+0.7 SE). Conversion and expectancy are
+different questions; a heads-up is asked only the first.
+
+---
+
+## Breadth — `research/studies/breadth.py`
+
+The one axis a per-symbol study structurally cannot contain. This project had
+already pointed at it: *"27% of confirmed losers fall on five days out of
+forty-two ... nothing about a single alert can see it coming."* A single alert
+cannot. **A cycle can** — when the scanner sends the seventh long it already
+holds the other six.
+
+It gets wide often: **33% of signals arrive with 8+ same-direction signals on
+the same close**, widest 32.
+
+### Early signals, held out — the pre-registered panel
+
+| | n | win | R/signal |
+|---|---|---|---|
+| alone | 343 | 28% | −0.065 |
+| 2–3 together | 568 | 29% | −0.033 |
+| 4–7 together | 426 | 28% | −0.102 |
+| **8+ together** | 429 | **34%** | **+0.122** |
+
+**+0.187 over "alone", +2.1 SE**, above a 25-seed placebo floor, and +2.1 SE
+again on the full panel in the same direction. The win-rate step 28% → 34%
+repeats in both halves.
+
+**It still FAILS**, and on the term that was fixed in advance: the
+pre-registration required the gradient to be **monotone** and it is not — 4–7
+is the *worst* bucket and 8+ the best. This is a threshold at 8, not a slope,
+and a threshold that appears at one of four pre-chosen edges is exactly what a
+single lucky bucket looks like. Confirmed setups show nothing (+0.2 SE held
+out).
+
+**Shipped as a printed fact, not a filter.** The alert now says "9 longs on this
+close — size them as one bet", because that is true regardless of the R, and it
+is the fact behind 27% of the losses. `/stats` scores it forward.
+
+**Direction, for the record:** of the two outcomes written down in advance,
+high breadth came out **better**, not worse — a genuine market-wide move rather
+than a correlated bundle about to snap. That is the opposite of what the
+drawdown work would have suggested, and it is why the position cap stays exactly
+as it is: fewer, larger losses on wide days is a drawdown problem, and this says
+nothing about drawdown.

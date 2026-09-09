@@ -7,10 +7,11 @@ arguments, which is what makes it testable against recorded data.
 
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .config import (CFG, Cfg, DI_INTERVAL, TREND_INTERVAL,
+from .config import (CFG, Cfg, DI_INTERVAL, MAX_SWEEP_RVOL, TREND_INTERVAL,
                      WATCH_MAX_DIST)
 
 @dataclass
@@ -203,6 +204,10 @@ class Sweep:
     pivots: int
     pools: int = 0         # how many pools this one bar took out. Set when
                            # duplicates are collapsed, not by detection.
+    rvol: float = 0.0      # raid-bar turnover against the median of the 50
+                           # bars before it. 0 means it could not be computed
+                           # (too early in the series), which is NOT the same
+                           # as a quiet raid and must not gate like one.
     trend_dir: int = 0     # as above
     tf: str = ""           # as above
     poi: bool = False      # as above
@@ -660,7 +665,29 @@ def shift_odds(extreme: float, struct_level: float):
 # Three per cent is where the curve flattens: the next band adds 13% more
 # raids and 1% more value. Half the raids carry seven eighths of everything
 # that follows from any of them.
-def sweep_worth(extreme: float, struct_level: float, poi: bool = True) -> bool:
+def rvol_at(cs, bar: int, lookback: int = 50) -> float:
+    """Raid-bar turnover against the MEDIAN of the `lookback` bars before it.
+
+    Median rather than mean, because volume is heavy-tailed: one spike in the
+    window drags a mean up and makes every later bar look quiet by comparison.
+    This is `context.py`'s definition, kept identical so the live gate and the
+    measurement that justifies it are the same quantity.
+
+    Returns 0.0 when there is not enough history — a value that means UNKNOWN,
+    and which sweep_worth is careful not to treat as quiet.
+    """
+    lo = bar - lookback
+    if lo < 0 or bar >= len(cs):
+        return 0.0
+    prev = [cs[k].v for k in range(lo, bar) if cs[k].v > 0]
+    if len(prev) < lookback // 2:
+        return 0.0
+    med = statistics.median(prev)
+    return (cs[bar].v / med) if med > 0 else 0.0
+
+
+def sweep_worth(extreme: float, struct_level: float, poi: bool = True,
+                rvol: float = 0.0) -> bool:
     """Is this raid worth opening the chart for? Yes or no, nothing else.
 
     BOTH measured axes have to agree, and they are independent — see
@@ -671,13 +698,56 @@ def sweep_worth(extreme: float, struct_level: float, poi: bool = True) -> bool:
       POI       whether that setup is worth taking when it comes. Raids inside
                 a daily zone produce setups worth +0.141 R; those outside
                 produce -0.055.
+      VOLUME    how likely a setup is to appear at all, again — and far more
+                strongly than distance does.
 
     A near raid outside a zone converts often into something that loses money,
     and a far raid inside one almost never converts at all. Neither is worth a
     look, which is why this is an AND rather than a score.
+
+    THE VOLUME TEST IS THE STRONGEST OF THE THREE AND WAS THE LAST TO ARRIVE.
+    `research/studies/sweep_vol_gate.py`, 9419 sweeps over 60 symbols,
+    conversion by raid-bar volume quintile:
+
+        Q1  rvol < 0.98    14.3% converted
+        Q2  0.98 - 1.55     9.7%
+        Q3  1.55 - 2.37     6.1%
+        Q4  2.37 - 4.12     4.6%
+        Q5  rvol > 4.12     2.4%
+        Q1 minus Q5  +11.9pp, +13.5 SE, monotone
+
+    which reproduces `context.py`'s +15.6 SE on an independent pass. It
+    INVERTS the folk premise: a liquidity grab is supposed to print a volume
+    spike, and the raids that actually reverse are the QUIET ones. Volume
+    surging through a level is a breakout, and the classic grab that snaps
+    back drifts through on thin participation.
+
+    Head to head with the distance rule it had to earn its place against:
+
+        every sweep                        7.4% convert   3.8 per symbol-day
+        distance only (the old live rule) 13.3%           1.7
+        VOLUME only                       14.3%           0.8
+        both                              18.0%           0.5
+
+    Volume alone beats distance on BOTH axes — more conversion at half the
+    messages — and the two together are better than either. So this is an AND
+    of three now.
+
+    NOTHING HERE CLAIMS THE SURVIVORS ARE BETTER TRADES. `context.py` measured
+    raid volume against R on the setups that do follow and found nothing
+    (+0.7 SE). Conversion and expectancy are different questions; volume is
+    enormous on one and silent on the other, and a heads-up is asked only the
+    first. The POI term is what speaks to the second.
+
+    rvol == 0.0 means UNKNOWN — too early in the series to compute — and is
+    deliberately allowed through rather than treated as quiet. Muting a symbol
+    because its history is short is the wrong failure for an alerting service,
+    and it is the same choice poi_known already makes.
     """
     odds = shift_odds(extreme, struct_level)
-    return bool(poi) and odds is not None and odds[0] < WATCH_MAX_DIST
+    quiet = (rvol <= 0.0) or (rvol < MAX_SWEEP_RVOL)
+    return (bool(poi) and quiet
+            and odds is not None and odds[0] < WATCH_MAX_DIST)
 
 
 def collapse(items: list, key, better) -> list:
@@ -900,6 +970,7 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                             level=c.level, sweep_bar=i, sweep_time=cs[i].t,
                             struct_level=c.struct_level,
                             sweep_extreme=cs[i].h if c.is_high else cs[i].l,
+                            rvol=rvol_at(cs, i),
                             anchor_time=cs[c.oldest_bar].t,
                             pivots=len(c.prices) or 1,
                             rsi_ext=rsi_extension(rsi[i], not c.is_high)))
