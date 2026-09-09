@@ -5298,3 +5298,80 @@ filter in disguise, but neither half is strong.
 slightly positive, which the grade already encodes through the Hour8 SuperTrend
 and DI, and that every oscillator asked — ADX, MACD, RSI, VWAP — says nothing
 at any timeframe.
+
+
+---
+
+## WHERE to enter — twelve entries on the same raids — `research/studies/entry_zones.py`
+
+Every earlier test was a **filter** — 21 in this file, 31 more in
+`feature_batch.py`, one survivor. This asks something structurally different:
+given the raid, where should the entry sit? The loser anatomy is why it is worth
+asking — not one loser failed to go green first, so a better price is a lever a
+filter does not have.
+
+Same signals, same stop at the raid extreme, target 2R. **Scored on R PER
+SIGNAL**, counting an unfilled signal as zero, because a deeper entry fills only
+on the trades that came back to it and per-fill scoring hides everything that
+ran away.
+
+### Early, held out — the pre-registered panel
+
+| entry | fill | risk | **fee R** | win | R/fill | **R/SIGNAL** |
+|---|---|---|---|---|---|---|
+| market at the FVG close | 100% | 1.71% | 0.047 | 38% | −0.092 | −0.092 |
+| retest + rejection | 39% | 1.54% | 0.052 | 37% | −0.110 | −0.042 |
+| **FVG near edge (deployed)** | **78%** | 1.28% | 0.063 | **38%** | **−0.037** | **−0.029** |
+| FVG mid | 70% | 1.12% | 0.071 | 36% | −0.057 | −0.040 |
+| FVG far edge | 64% | 0.96% | 0.083 | 37% | −0.054 | −0.034 |
+| Fib 0.5 of the leg | 63% | 1.02% | 0.079 | 37% | −0.047 | −0.030 |
+| Fib 0.618 | 52% | 0.77% | 0.104 | 35% | −0.123 | −0.063 |
+| **Fib 0.786** | 38% | **0.41%** | **0.194** | 30% | −0.403 | **−0.152** |
+| order block extreme | 75% | 1.52% | 0.053 | 34% | −0.151 | −0.113 |
+| order block mid | 62% | 1.22% | 0.065 | 34% | −0.174 | −0.108 |
+| volumetric OB extreme | 74% | 1.55% | 0.052 | 36% | −0.094 | −0.069 |
+| volumetric OB mid | 55% | 1.14% | 0.070 | 32% | −0.223 | −0.123 |
+| the swept level | 55% | 1.15% | 0.070 | 34% | −0.161 | −0.089 |
+
+**Nothing beats the deployed entry.** Best of twelve, on both populations.
+
+### For the deeper entries, the loss IS the fee — almost exactly
+
+Fib 0.786 pays **0.194 R** in fees against the deployed entry's **0.063 R**, a
+difference of **+0.131 R**. Its R per signal is **−0.123 R** worse. The two
+numbers are the same number.
+
+That is the whole mechanism, and it generalises: a better price means a tighter
+stop, a tighter stop means a bigger fee as a fraction of risk, and on this
+strategy the fee is what the better price buys. **The golden pocket is the
+worst entry tested (−3.5 SE)** for precisely this reason.
+
+### But order blocks fail for a DIFFERENT reason, and that is the real finding
+
+Order block mid pays **0.065 R** in fees — the deployed entry pays **0.063 R**.
+Essentially identical, at essentially identical risk. Yet it loses **−0.080 R
+per signal (−2.0 SE)** and its win rate is **34% against 38%**.
+
+**The fee explains nothing here. The order block is simply a worse place to
+enter than the fair value gap**, at the same price distance and the same cost.
+Volumetric OB does not rescue it (−0.094, −2.3 SE); requiring the block to have
+traded above its median makes it worse, not better.
+
+### Retest + rejection: fewer trades, no better
+
+Operationalised as drawn — price returns into the gap, closes back out of it,
+and the testing wick is longer than the body. It fires on **39%** of signals and
+scores **−0.042 per signal against −0.029**. The confirmation costs 61% of the
+trades and buys nothing; per fill it is worse than not waiting.
+
+### Market versus limit
+
+Market at the FVG close is **−0.092** against the limit's **−0.029**. Waiting
+for the limit is worth 0.06 R a signal, which is the taker fee and the better
+price together. The current design is right.
+
+### Verdict
+
+**No change.** The deployed FVG-edge entry is the best of twelve, and the two
+mechanisms behind that are now explicit: deeper entries lose exactly their extra
+fee, and order blocks lose on location at equal fee.
