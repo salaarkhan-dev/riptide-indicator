@@ -3551,3 +3551,107 @@ Stated as an open question rather than a finding, because it has not been held
 out here: a control that is positive at trend + POI (+0.113 on the Min30
 discovery half) is consistent with `which_trend.py` and `hybrid.py`, and would
 be worth a study of its own with a pre-registered bar.
+
+---
+
+## Location or trigger? A nested ladder — `research/studies/location.py`
+
+`lez.py` and `momentum.py` are opposite triggers on the same pivot levels and
+both landed in the same place: the trigger worth about +0.05 R with twice that
+in standard error, while the control went from about −0.15 to about +0.11 once
+the daily trend agreed and the raid sat in a daily POI. That was an accident of
+two studies, seen after the fact, on discovery halves. So it got its own
+pre-registration and its own held-out shot.
+
+**One trade shape on every rung** — market entry at the close, 1.5 × ATR(14)
+stop, 3R target — so `risk_pct` cannot drift between rungs and the fee cannot
+masquerade as an edge, which is exactly how `momentum.py` produced a 4.8 SE
+mirage.
+
+| rung | Min30 disc | Min30 **held** | Min15 disc | Min15 **held** |
+|---|---|---|---|---|
+| L0 random, nothing | −0.147 | −0.130 | −0.175 | −0.170 |
+| L1 + daily trend agrees | +0.042 | **−0.131** | −0.063 | **−0.153** |
+| L2 + raid in a daily POI | −0.121 | −0.074 | −0.202 | −0.089 |
+| **L3 + BOTH (location alone)** | **+0.107** | **−0.001** | −0.002 | **−0.082** |
+| L4 L3 + LEZ trigger | +0.112 | +0.025 | −0.013 | −0.052 |
+| L5 L3 + Riptide cluster sweep | +0.033 | −0.079 | +0.005 | −0.053 |
+| L6 L5 + valid, shift < 3% | +0.149 | +0.091 | +0.051 | −0.062 |
+
+### The primary FAILS, and it was told in advance what that would mean
+
+L3 on the held-out half is **−0.001 ± 0.054** (Min30) and **−0.082 ± 0.040,
+−2.0 SE** (Min15). The bar was positive at 2 SE. This document said before the
+run: *"if L3 is flat, then the +0.11 seen in two control groups was the
+discovery halves talking."* It was. **Location alone is not tradeable.**
+
+### THE BIGGEST RESULT HERE IS ABOUT THE DAILY TREND, AND IT IS A WARNING
+
+L1 is "trade in the daily trend's direction, at a random bar". Against L0:
+
+| | discovery | held out |
+|---|---|---|
+| Min30 | −0.147 → **+0.042** (+0.189) | −0.130 → **−0.131** (−0.001) |
+| Min15 | −0.175 → **−0.063** (+0.112) | −0.170 → **−0.153** (+0.017) |
+
+**On the older half the daily trend adds nothing at all.** It is worth +0.19 R
+in one 42-day window and 0.00 in the one before it.
+
+This does not refute `which_trend.py`, and the difference matters: that study
+measured *agreeing versus against* on Riptide's own limit-entry signals, a
+relative split. This measures the *absolute lift* of trading with the trend at
+a random bar. But it does say the absolute lift is regime-dependent, and every
+control group in the last three studies was standing on it. Any future result
+resting on "the daily trend adds R" needs both halves, not one.
+
+### The user's question: is Riptide's sweep logic a better filter than a pivot?
+
+Two separate things were tested, and they answer differently.
+
+**The cluster definition alone does nothing.** L5 is a Riptide `Cluster` being
+taken — several pivots within `tol_atr` of each other, a genuine pool of equal
+highs or lows, rather than LEZ's single 5-bar `ta.pivothigh`. Against L3 it
+scores −0.073, −0.078, +0.007, +0.029 across the four panels. Two negative, two
+positive, none above 0.8 SE. **A better definition of "a level" is not worth
+anything on its own.**
+
+**The validity test is the only thing in this session positive in all four
+panels.** L6 adds `sweep_worth`'s rule — the structure level the shift must
+break is within 3% — and against L3 it scores **+0.042, +0.092, +0.053,
++0.020**. Four for four.
+
+And it earns them **against a fee handicap**, which is the opposite of the trap
+that has caught two studies here. L6 selects lower-volatility bars (a 3%
+distance is easier to satisfy on a quiet symbol), so its `risk_pct` is 0.64–0.92%
+against L3's 0.78–1.26%, and fee in R is `fee / risk_pct` — it pays **0.032 to
+0.038 R more per losing trade than L3 does**. The script prints that line on
+every panel rather than leaving it to be assumed.
+
+**It is still not a finding.** Each increment is under 1 SE; pooled across the
+four panels it is roughly +0.05 with a standard error near 0.05. It is the
+first thing in six studies that has not been killed, which is not the same as
+being alive.
+
+### On filtering, which was the practical question
+
+Signals per symbol per day, on the same universe:
+
+| | Min30 | Min15 |
+|---|---|---|
+| L4 LEZ trigger | 0.10–0.11 | 0.19–0.20 |
+| L5 Riptide cluster sweep | 0.42–0.48 | 0.65–0.71 |
+| L6 + the 3% validity rule | 0.18–0.22 | 0.37–0.41 |
+
+The validity rule cuts the sweep count by **roughly half** — and it is the half
+that carries whatever is there. That is the same shape `sweep_worth`'s own
+docstring reports from a different measurement: under 3% is 48% of raids and
+87% of the R.
+
+### What this run says overall
+
+The trigger is not where the money is, and neither is the location. What
+survives is narrower than either: **not "was a level taken" but "was the level
+taken close enough to structure that a shift can follow"** — a property of the
+raid's geometry, not of the candle that made it. Riptide already gates its
+sweep alerts on exactly that rule. This is weak, out-of-sample support for a
+filter that is already shipped, and it is the correct place to look next.
