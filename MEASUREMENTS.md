@@ -4541,7 +4541,8 @@ it.
 `RIPTIDE_TRENDLINE_MIN_SLOPE=0.15` — about 32 a day. Live-settable with
 `/trendline 15m,30m` and `/trendline slope 0.2`. A 30m close is also a 15m
 close, so both land in one digest and a chart that broke on both is listed
-once, on the slower one. No entry, no stop, no grade, and deliberately **not armed
+once, on the slower one — with its timeframe on the line, always, since that is
+the tag that answers "which chart am I opening". No entry, no stop, no grade, and deliberately **not armed
 for outcome tracking** — /stats exists to judge trades, and a heads-up has no
 outcome to judge. The measurement above is why the message says, in the
 message, that it is not a trade.

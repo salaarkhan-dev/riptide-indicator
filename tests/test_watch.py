@@ -266,6 +266,16 @@ def main():
        "and the link it kept is the SLOWER timeframe's")
     ok("15m+30m" in body, "the header names both timeframes")
 
+    print("\n10b. EVERY line carries its own timeframe, including in a "
+          "single-timeframe\n     digest — the tag answers 'which chart am I "
+          "opening', and a tag that\n     comes and goes moves the columns "
+          "between messages")
+    PLAN.clear()
+    PLAN["SOLO_USDT"] = [sig(0, True)]
+    n, msgs = run(db, list(PLAN), ("Min30",))
+    ok("<code>30m</code>" in msgs[0],
+       "the timeframe is on the line even when the digest has only one")
+
     print("\n11. The digest is ordered steepest first, because that is the "
           "only\n    recommendation it makes")
     PLAN.clear()

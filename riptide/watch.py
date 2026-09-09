@@ -190,19 +190,29 @@ async def scan_symbol(sess, sem, symbol: str, tf: str,
     return out
 
 
-def _line(b: Break, show_tf: bool) -> str:
-    """One symbol in the digest: where it is, how steep the line was, clickable.
+def _line(b: Break) -> str:
+    """One symbol in the digest: where it broke, how steep the line was,
+    clickable.
 
-    The two numbers are the two reasons to open one chart before another. The
-    slope is how steep the broken line was in the symbol's own volatility —
-    a flat line is a horizontal level and breaking one is the most ordinary
-    thing a chart does. The gap is how far past the line the candle closed.
+    THE TIMEFRAME IS ON EVERY LINE, always, even when the whole digest is one
+    timeframe. It used to appear only when a digest mixed two, on the reasoning
+    that a header saying "15m+30m" plus a single tag was the same fact twice —
+    which was wrong in the way that matters. The tag answers "which chart am I
+    opening", and the reader is looking at one line, not auditing the header
+    against it. A conditional tag is also worse than either choice on its own:
+    the lines change shape between messages, so the eye has to re-find the
+    price column each time.
+
+    The two numbers after it are the two reasons to open one chart before
+    another. The slope is how steep the broken line was in the symbol's own
+    volatility — a flat line is a horizontal level and breaking one is the most
+    ordinary thing a chart does. The gap is how far past the line it closed.
     """
     gap = 100 * abs(b.price - b.line_y) / b.line_y if b.line_y else 0.0
-    tf = f" <code>{tg.tf_label(b.tf)}</code>" if show_tf else ""
     return (f"{'🟢' if b.is_long else '🔴'} <a href='"
             f"{tg.tv_link(b.symbol, b.tf)}'><b>{b.symbol.replace('_USDT', '')}"
-            f"</b></a>{tf}  <code>{tg.fmt(b.price)}</code>  "
+            f"</b></a> <code>{tg.tf_label(b.tf)}</code>  "
+            f"<code>{tg.fmt(b.price)}</code>  "
             f"<i>slope {b.slope_atr:.2f} · {gap:.2f}% past</i>")
 
 
@@ -254,7 +264,6 @@ def digest(breaks: list[Break], tfs, when: int) -> str:
                     key=lambda b: (not b.is_long, -b.slope_atr))
     ups = [b for b in breaks if b.is_long]
     dns = [b for b in breaks if not b.is_long]
-    show_tf = len(set(b.tf for b in breaks)) > 1
     clock = tg.local_clock()
     label_tf = "+".join(tg.tf_label(t) for t in tfs)
     head = (f"📐 <b>TRENDLINE BREAKS</b>  {label_tf}  ·  "
@@ -273,7 +282,7 @@ def digest(breaks: list[Break], tfs, when: int) -> str:
         parts += ["", header]
         used += len(header) + 2
         for b in group:
-            row = _line(b, show_tf)
+            row = _line(b)
             if shown >= TRENDLINE_MAX_LINES or used + len(row) > MAX_CHARS:
                 break
             parts.append(row)
