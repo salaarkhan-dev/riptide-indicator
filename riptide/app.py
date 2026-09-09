@@ -10,6 +10,7 @@ import time
 import aiohttp
 
 from . import telegram as tg
+from . import watch
 from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
                      INTERVALS, POI_REQUIRED, SCAN_ON_START, TG_COMMANDS,
                      build_id, log)
@@ -98,6 +99,13 @@ async def main() -> None:
                               "will retry", e)
 
         tasks = [asyncio.create_task(scan_loop(sess, db, state), name="scan")]
+        # The trendline watch, on its own timer. Always started, because it
+        # reads its on/off switch every wake — so /trendline on works without a
+        # restart, and an idle loop costs one sleep per bar close.
+        tasks.append(asyncio.create_task(
+            watch.watch_loop(sess, db, state), name="trendline"))
+        if watch.enabled(db):
+            log.info("trendline watch on, %s bars", watch.interval(db))
         if TG_COMMANDS:
             tasks.append(asyncio.create_task(
                 command_loop(sess, db, state), name="commands"))

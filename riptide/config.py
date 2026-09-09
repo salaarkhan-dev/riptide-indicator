@@ -318,6 +318,56 @@ SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
              if _sweep_src else None)
 
 
+# ---------------------------------------------------------------- trendline
+# The Liquidity Trendline watch: a heads-up when price closes clear of a
+# descending resistance or an ascending support built from confirmed pivots.
+# riptide/trendline.py is an exact port of the published indicator.
+#
+# THIS IS NOT A TRADE AND MUST NOT BE READ AS ONE. The same breakout went
+# through the same scorer as everything else in this project
+# (research/studies/trendline_measure.py): net R per signal is NEGATIVE on both
+# halves of the window and indistinguishable from a random entry of the same
+# shape. It carries no entry, no stop and no grade, and it never arms outcome
+# tracking — there is no trade to track. What it is for is the thing
+# TradingView cannot do: watch sixty charts at once and say which one just
+# did something.
+#
+# THE TIMEFRAME IS THE WHOLE DESIGN, because a heads-up fails by arriving too
+# often to read rather than by losing money. Measured over 60 symbols
+# (research/studies/trendline_rate.py):
+#
+#     timeframe   per symbol/day   ACROSS THE UNIVERSE   worst single close
+#     15m               1.82              109 a day            29 at once
+#     30m               0.87               52                  21
+#     1h                0.42               25                  16
+#     4h                0.11                7  <- the default  20
+#
+# 109 a day is not an alert service, it is a feed, and the 15m chart is the
+# one it is most tempting to set this to. 4h is roughly seven a day.
+#
+# Those bursts are why the watch sends ONE DIGEST per bar close rather than one
+# message per break: twenty separate messages arriving in the same second is
+# both unreadable and past Telegram's per-chat rate limit, and a market-wide
+# move is exactly when it would happen.
+TRENDLINE_ALERTS = os.getenv("RIPTIDE_TRENDLINE_ALERTS", "1") == "1"
+TRENDLINE_INTERVAL = os.getenv("RIPTIDE_TRENDLINE_INTERVAL", "Hour4")
+# Pivot length and channel padding, matching the indicator's own defaults. Left
+# configurable because they are the indicator's inputs and someone comparing
+# against a chart set differently needs to be able to match it — not because
+# any value here has been measured as better. None has.
+TRENDLINE_PIVOT = int(os.getenv("RIPTIDE_TRENDLINE_PIVOT", "5"))
+TRENDLINE_SPACE = float(os.getenv("RIPTIDE_TRENDLINE_SPACE", "2.0"))
+# Same rule as every other freshness window here: minimum 2, because a bar
+# that has just closed is already one full step old. See _min_fresh.
+TRENDLINE_FRESH_BARS = int(os.getenv("RIPTIDE_TRENDLINE_FRESH_BARS", "2"))
+# Lines in one digest before it says "+N more". 20 is the worst single 4h
+# close in the measured window, so in practice this trims nothing — it is there
+# so a market-wide move on a faster timeframe cannot turn the digest into a
+# wall. Telegram's own 4096-character cap is enforced separately and is the
+# guarantee that the message sends at all; see watch.MAX_CHARS.
+TRENDLINE_MAX_LINES = int(os.getenv("RIPTIDE_TRENDLINE_MAX_LINES", "20"))
+
+
 def _min_fresh(name: str, value: int) -> int:
     """
     Freshness windows below 2 bars send nothing at all, ever.
@@ -342,6 +392,8 @@ def _min_fresh(name: str, value: int) -> int:
 
 FRESH_BARS = _min_fresh("RIPTIDE_FRESH_BARS", FRESH_BARS)
 SWEEP_FRESH_BARS = _min_fresh("RIPTIDE_SWEEP_FRESH_BARS", SWEEP_FRESH_BARS)
+TRENDLINE_FRESH_BARS = _min_fresh("RIPTIDE_TRENDLINE_FRESH_BARS",
+                                  TRENDLINE_FRESH_BARS)
 
 
 @dataclass

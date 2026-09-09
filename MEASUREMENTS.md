@@ -4420,3 +4420,52 @@ strategy's. This is the second indicator in this sequence whose on-chart
 scoreboard could not show a loss — Liquidity Entry Zones deleted stopped
 trades' drawings, this one deletes them from the arithmetic. Neither was
 dishonest by intent and both were wrong by the same margin.
+
+---
+
+## The same trendline break as a HEADS-UP — `research/studies/trendline_rate.py`
+
+The measurement above killed the trendline break as a *trade*. It says nothing
+about the break as a *watch list*, which is a different product that fails for
+a different reason: **a heads-up fails by arriving too often to read**, not by
+losing money. An alert you scroll past is worse than no alert, because it also
+buries the ones you would have opened.
+
+So this counts, and nothing else — no outcomes, no R, no win rate. Those exist
+already and they say do not trade it.
+
+60 symbols, the same universe Riptide scans.
+
+| timeframe | days | breaks | per symbol/day | **across the universe** | worst single close |
+|---|---|---|---|---|---|
+| Min15 | 83 | 9101 | 1.82 | **109 a day** | 29 at once |
+| Min30 | 83 | 4333 | 0.87 | **52** | 21 |
+| Min60 | 83 | 2087 | 0.42 | **25** | 16 |
+| Hour4 | 333 | 2194 | 0.11 | **7** | 20 |
+
+**Hour4 is the only readable rate**, and 15m — the timeframe the indicator
+looks best on, and the one it is most tempting to set this to — is a feed at
+109 a day rather than an alert.
+
+### Alerts arrive in BURSTS, and that changed the design
+
+The first version of this script reported a *median gap between alerts* and got
+**0 minutes**, which is not a measurement of anything. Of course it is zero:
+bar closes are synchronised across the universe, so breaks do not arrive spread
+out, they arrive **together**. The number a reader actually feels is how many
+land at once, so that is what the table reports — and the worst single 4h close
+in the window had **20 symbols break simultaneously**.
+
+Twenty separate Telegram messages in one second is unreadable and is past
+Telegram's per-chat rate limit, and it would happen precisely during a
+market-wide move, which is the one time the alert was worth having. So
+`riptide/watch.py` sends **one digest per bar close** rather than one message
+per break, and a quiet close sends nothing at all.
+
+### What shipped
+
+`RIPTIDE_TRENDLINE_ALERTS=1`, `RIPTIDE_TRENDLINE_INTERVAL=Hour4`, live-settable
+with `/trendline 1h`. No entry, no stop, no grade, and deliberately **not armed
+for outcome tracking** — /stats exists to judge trades, and a heads-up has no
+outcome to judge. The measurement above is why the message says, in the
+message, that it is not a trade.

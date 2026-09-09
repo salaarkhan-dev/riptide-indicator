@@ -16,6 +16,7 @@ from . import journal
 from . import telegram as tg
 from . import market
 from . import tracker
+from . import watch
 from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
                      INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE, POI_REQUIRED,
                      POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS, SWEEP_INTERVALS,
@@ -43,6 +44,7 @@ HELP = (
     "/oi — export the open-interest table as a file\n"
     "/scan — run a scan now\n"
     "/trend on|off — filter setups by the higher-timeframe trend\n"
+    "/trendline on|off|4h — trendline-break heads-ups (not trades)\n"
     "/pause — record setups but stop sending\n"
     "/resume — start sending again\n"
     "/update — check GitHub for a new build now\n"
@@ -121,6 +123,18 @@ def status_text(db, state) -> str:
                           f"{d['stale']} stale · {d['poi']} no POI · "
                           f"{d.get('grade', 0)} low grade · "
                           f"{d['sent']} sent\n")
+    # The watch is a separate product on a separate timer, so it gets its own
+    # line rather than being folded into the alert line — "alerts on" saying
+    # nothing about whether the heads-ups are running would be the same kind of
+    # silence the gate counters exist to remove.
+    if watch.enabled(db):
+        tl_tf = watch.interval(db)
+        tl_n = db.execute("SELECT COUNT(*) FROM seen_trendline").fetchone()[0]
+        tl_line = (f"{tg.tf_label(tl_tf)} bars · ~"
+                   f"{TRENDLINE_RATE.get(tl_tf, '?')}/day · {tl_n} recorded "
+                   f"· heads-up only, not in /stats")
+    else:
+        tl_line = "off · /trendline on"
     poi_line = ("POI required" if POI_REQUIRED else "POI not required")
     poi_line += (f" · grade {MIN_GRADE} and better"
                  if MIN_GRADE != "C" else " · all grades")
@@ -137,6 +151,7 @@ def status_text(db, state) -> str:
         f"filter     {poi_line}\n"
         f"trend      {trend_line}\n"
         f"outcomes   {track_line}\n"
+        f"trendline  {tl_line}\n"
         f"oi log     {oi_line}\n"
         f"uptime     {_fmt_ago(time.time() - state.get('started', time.time()))}\n"
         f"last scan  {scan_line}\n"
@@ -242,6 +257,75 @@ def stats_text(db) -> str:
     return body
 
 
+# The measured alert rate per timeframe, across 60 symbols
+# (research/studies/trendline_rate.py). Printed by /trendline because the
+# timeframe IS the product decision here: a heads-up fails by arriving too
+# often to read, and this is the only number that says whether it will.
+TRENDLINE_RATE = {"Min15": 109, "Min30": 52, "Min60": 25, "Hour4": 7}
+# What a human types, and what the exchange calls it.
+_TF_WORD = {v: k for k, v in tg.TF_LABEL.items()}
+
+
+def trendline_cmd(db, text: str) -> str:
+    """/trendline — read the state, or set the switch or the timeframe."""
+    parts = text.strip().split()
+    arg = parts[1].lower() if len(parts) > 1 else ""
+
+    if arg in ("on", "off"):
+        watch.set_enabled(db, arg == "on")
+        tf = watch.interval(db)
+        rate = TRENDLINE_RATE.get(tf)
+        return (f"Trendline heads-ups <b>{arg.upper()}</b> · "
+                f"{tg.tf_label(tf)} bars"
+                + (f"\n<i>about {rate} a day across the universe, in one "
+                   f"digest per bar close.</i>" if arg == "on" and rate else "")
+                + "\n\n<i>This overrides RIPTIDE_TRENDLINE_ALERTS in "
+                  "riptide.conf and survives updates, so a change on GitHub "
+                  "will not take effect until you set it back the other "
+                  "way.</i>")
+
+    if arg:
+        tf = _TF_WORD.get(arg, arg if arg in BAR_SECONDS else "")
+        if tf not in TRENDLINE_RATE:
+            return ("Timeframe must be one of "
+                    + ", ".join(f"<code>{tg.tf_label(t)}</code>"
+                                for t in TRENDLINE_RATE)
+                    + ".\n\n<i>Not because the others would break anything — "
+                      "because those are the four whose alert rate has "
+                      "actually been counted, and the rate is the only thing "
+                      "that decides whether this is readable.</i>")
+        watch.set_interval(db, tf)
+        rate = TRENDLINE_RATE[tf]
+        warn = ("\n\n⚠️ <i>That is a feed, not an alert. Anything you scroll "
+                "past also buries the ones you would have opened.</i>"
+                if rate > 30 else "")
+        return (f"Trendline heads-ups now on <b>{tg.tf_label(tf)}</b> bars · "
+                f"about <b>{rate} a day</b> across the universe.\n"
+                f"Takes effect at the next {tg.tf_label(tf)} close — no "
+                f"restart." + warn)
+
+    on = watch.enabled(db)
+    tf = watch.interval(db)
+    rows = "\n".join(
+        f"  <code>/trendline {tg.tf_label(t):<4}</code> ~{n:>3} a day"
+        + ("   <b>← now</b>" if t == tf else "")
+        for t, n in TRENDLINE_RATE.items())
+    return (f"<b>Trendline breakout heads-ups</b> — "
+            f"{'ON' if on else 'off'} · {tg.tf_label(tf)} bars\n\n"
+            f"<i>A break of a trendline drawn from confirmed pivots, on every "
+            f"symbol at once, in one digest per bar close. It is the thing "
+            f"TradingView will not do: which chart is worth opening.</i>\n\n"
+            f"<b>It is not a trade.</b> <i>The same break was scored through "
+            f"the same harness as everything else here and came out NEGATIVE "
+            f"per signal and indistinguishable from a random entry. There is "
+            f"no entry, no stop and no grade on it, and it is not in /stats — "
+            f"there is no outcome to score. Open the chart and decide "
+            f"yourself.</i>\n\n"
+            f"<b>Alert rate</b>, measured over 60 symbols:\n{rows}\n\n"
+            f"<code>/trendline off</code> — stop them\n"
+            f"<code>/trendline on</code> — start again")
+
+
 async def handle_command(sess, db, state, text: str) -> None:
     cmd = text.strip().split()[0].lower().lstrip("/").split("@")[0]
 
@@ -295,6 +379,9 @@ async def handle_command(sess, db, state, text: str) -> None:
                          "<i>This overrides RIPTIDE_TREND_FILTER in riptide.conf and "
                          "survives updates, so a change on GitHub will not take "
                          "effect until you /trend the other way.</i>")
+
+    elif cmd == "trendline":
+        await tg.tg_send(sess, trendline_cmd(db, text))
 
     elif cmd == "pause":
         meta_set(db, "alerts_paused", "1")
