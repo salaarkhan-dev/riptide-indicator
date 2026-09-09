@@ -37,7 +37,7 @@ import statistics
 import time
 
 from .config import (BAR_SECONDS, INTERVAL, INTERVALS, TRACK, TRACK_FILL_BARS,
-                     TRACK_HORIZON_BARS, TRACK_TARGET_R, log)
+                     TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_INTERVAL, log)
 from .engine import Candle, Setup, grade_of
 
 PENDING, OPEN = "pending", "open"          # still live
@@ -51,7 +51,7 @@ RESOLVED = (WON, LOST, TIMEOUT)
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
             "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence, "
-            "di_dir, rsi_ext, poi, regraded, tf")
+            "di_dir, rsi_ext, poi, regraded, tf, trend_tf")
 
 CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
@@ -107,6 +107,23 @@ def init(db) -> None:
         # unvalidated. Rows predating multi-timeframe scanning were all on
         # RIPTIDE_INTERVAL, so unlike poi this backfill is simply correct.
         ("tf", f"TEXT DEFAULT '{base}'", f"existing rows are {base}"),
+        # WHICH TIMEFRAME THE STORED trend_dir WAS READ FROM.
+        #
+        # /stats recomputes the grade from the stored poi and trend_dir rather
+        # than from a saved letter, which is the right design — a change to the
+        # ladder re-grades history instead of stranding it. But it silently
+        # assumes trend_dir means the same thing on every row, and on 9 Sep it
+        # stopped: TREND_INTERVAL moved from Day1 to Hour8, so rows armed
+        # before that carry a daily reading and rows after carry an 8h one.
+        # Mixing them would put two different definitions of "trend agrees"
+        # into one grade band and call the result a comparison.
+        #
+        # Empty on every existing row, which is honest — those rows were armed
+        # before the column existed and cannot be back-dated, since the daily
+        # direction at their arming time is not recoverable from what was
+        # stored. The grade breakdown skips them, exactly as `regraded` already
+        # does for rows predating the POI column.
+        ("trend_tf", "TEXT DEFAULT ''", "old rows are excluded from the grades"),
     ):
         if col not in have:
             db.execute(f"ALTER TABLE outcomes ADD COLUMN {col} {decl}")
@@ -157,7 +174,7 @@ def arm(db, sid: str, s, from_bar: int | None = None,
     start = from_bar if from_bar is not None \
         else max(detected, last_closed_bar(now, getattr(s, "tf", "")))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
                 # Early has no shift; its sweep bar is the comparable anchor.
@@ -166,7 +183,7 @@ def arm(db, sid: str, s, from_bar: int | None = None,
                 getattr(s, "confluence", 0),
                 getattr(s, "di_dir", 0), getattr(s, "rsi_ext", 0.0),
                 int(getattr(s, "poi", False)), 1,
-                getattr(s, "tf", "") or INTERVAL))
+                getattr(s, "tf", "") or INTERVAL, TREND_INTERVAL))
     db.commit()
 
 
@@ -354,7 +371,7 @@ def live_band(db, letter: str, kind: str, min_n: int = 30):
 def summary(db, kind: str | None = None) -> dict:
     """Pass a kind to describe one strategy alone; omit it for both together."""
     sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind, "
-           "confluence, di_dir, rsi_ext, poi, regraded FROM outcomes")
+           "confluence, di_dir, rsi_ext, poi, regraded, trend_tf FROM outcomes")
     rows = (db.execute(sql + " WHERE kind=?", (kind,)).fetchall() if kind
             else db.execute(sql).fetchall())
     if not rows:
@@ -389,7 +406,13 @@ def summary(db, kind: str | None = None) -> dict:
         # carry regraded = 0 and are left out: they would all land in the
         # no-POI bands and manufacture a difference that is really just an
         # ordering by arming date.
-        "grades": {g: _bucket([(r[0], r[1]) for r in rows if r[12]
+        # r[13] is trend_tf: a row is only comparable to today's grades if its
+        # trend_dir was read from the interval the ladder now means. Rows from
+        # before the column, or from a different interval, are left out rather
+        # than blended — a grade band holding two definitions of "trend agrees"
+        # is not a measurement of either.
+        "grades": {g: _bucket([(r[0], r[1]) for r in rows
+                               if r[12] and r[13] == TREND_INTERVAL
                                and grade_of(r[7] == EARLY, bool(r[11]), r[2],
                                             r[3] == "long", r[9])[0] == g])
                    for g in ("A", "B", "C", "D")},
