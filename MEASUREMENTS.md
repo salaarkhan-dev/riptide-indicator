@@ -3210,3 +3210,115 @@ not the hidden finding.
 any wick kills the block — cannot be implemented usefully on daily zones: it
 would reject 2368 of 2371. A close-based mitigation test is implementable and
 is the only version with evidence behind it.
+
+---
+
+## Liquidity Entry Zones, Phase 1 — `research/studies/lez.py`
+
+A new indicator (`liquidity-entry-zones.pine`), ported to Python and scored on
+Min5 / Min15 / Min30, 30 symbols, ~42 days each, entry at the confirmation
+close as a taker, stop `1.5 × ATR(14)`, target 3R, fees 0.02/0.06%. Full
+review of the Pine source in `STRATEGIES.md`.
+
+The gate was written in `STRATEGIES.md` before the first run: **positive R per
+signal after fees, with the same sign on both window halves and both symbol
+halves.**
+
+| timeframe | n | win | stops | risk | R/signal | gate |
+|---|---|---|---|---|---|---|
+| Min30 | 1383 | 26% | 1024 | 1.20% | **−0.122 ± 0.047** | FAIL |
+| Min15 | 2906 | 24% | 2196 | 0.84% | **−0.226 ± 0.032** | FAIL |
+| Min5 | 8299 | 23% | 6382 | 0.46% | **−0.435 ± 0.019** | FAIL |
+
+The chart's own default view — `blockSignalsInTrade`, one position at a time —
+is negative too: −0.145, −0.248, −0.293. There is no arm of this that is
+positive.
+
+### THE CONTROL IS THE RESULT
+
+Random entries, same symbols, same timeframe, same market-at-the-close, same
+1.5 ATR stop, same 3R target, same fees, entry bar and direction chosen by a
+coin toss:
+
+| timeframe | LEZ | random entries | what the signal adds |
+|---|---|---|---|
+| Min30 | −0.122 | **−0.094** | −0.027 ± 0.066 (−0.4 SE) |
+| Min15 | −0.226 | **−0.149** | −0.077 ± 0.046 (−1.7 SE) |
+| Min5 | −0.435 | **−0.340** | −0.095 ± 0.028 (−3.4 SE) |
+
+**Almost the entire loss is the trade shape, and the trade shape's entire loss
+is fees.** The control's gross is zero to three decimal places — at Min30 it
+takes 340 targets at 3R against 1007 stops, which is 1020 − 1007 = +13 R over
+1383 trades, or +0.009 before costs. A market entry with a symmetric volatility
+stop and a distant target is a fair coin, exactly as it should be, and every
+cent of its loss is the fee.
+
+That is worth stating on its own, because it also validates the scorer: an
+unbiased simulator is supposed to return zero on random entries, and it does.
+
+What the signal itself contributes is between nothing and mildly negative, and
+it gets worse as the timeframe falls. It never once helps.
+
+### The fee law again, from a third direction
+
+`scalp.py` found it by timeframe, `winrate.py` by target, and this by control.
+Cost in R is `fee / risk_pct`, so as the stop tightens the fee grows:
+
+| timeframe | mean risk | fee on a losing round trip |
+|---|---|---|
+| Min30 | 1.20% | 0.10 R |
+| Min15 | 0.84% | 0.14 R |
+| Min5 | 0.46% | 0.26 R |
+
+And it is **convex** — the mean of `1/risk` is far above `1/mean(risk)` — so
+the average is set by the quietest symbols, not the typical one. At Min5 the
+random control loses 0.340 R per trade to fees alone, which is a third of a
+stop, per trade, before anything is decided.
+
+### The one arm where the indicator's own choice wins
+
+The ATR stop beats a stop just beyond the raid extreme on every timeframe:
+−0.122 vs −0.229 (Min30), −0.226 vs −0.367 (Min15), −0.435 vs −0.603 (Min5).
+Both lose, so this is not a recommendation — but the structural stop is
+*tighter* here (0.98% vs 1.20% at Min30) and pays more fee per unit of risk for
+it, which is the same law a third time. `stop_buffer.py`'s buffer-of-0 finding
+was measured on limit entries at a retracement; it does not transfer to a
+market entry at a candle close.
+
+### Evidence the port is sound, which a negative result needs as much as a positive one
+
+- The random control returns zero gross. A scorer with a sign or fill error
+  would not.
+- The daily trend separates at Min30 exactly as `which_trend.py` says it
+  should: agreeing +0.007, against −0.290, a 3.0 SE gap. A broken port does not
+  reproduce a known effect in the right direction.
+- Signal frequency is plausible: 1.1 per symbol per day at Min30 unblocked,
+  0.15 serialised — about one a week per symbol, which is what a chart looks
+  like.
+
+### Other pre-registered arms, none of which rescue it
+
+- **Target ladder** is flat: 1.5R −0.139, 2R −0.128, 3R −0.122, 4R −0.119,
+  5R −0.134 at Min30. No target saves a signal with no edge, which is the
+  correct behaviour and the mirror image of `winrate.py`.
+- **The sweep bar is its own confirmation bar** for 52% of Min30 signals, 53%
+  of Min15 and 54% of Min5 — so this is mostly a single-candle model, not a
+  sweep-then-confirm one. At Min30 that arm is the worst: −0.225 same-bar
+  against +0.121 at two bars (n=222, 1.0 SE — not evidence, just not a rescue).
+- **25% of signals have their stop inside the sweep candle** that triggered
+  them, across all three timeframes. §1.6 of `STRATEGIES.md` predicted this.
+- **Quality score terciles do not order.** Min30: low −0.047, mid −0.170,
+  high −0.148. As expected once 60 of its 100 points are pinned.
+- **Overlap with Riptide is 7–9%.** It genuinely is a different strategy. It
+  is simply not a profitable one.
+
+### Verdict
+
+**Phase 1 fails on all three timeframes. Phases 2–5 do not start.** No
+parameter sweep, because sweeping a model that cannot clear zero once is how a
+curve gets fitted — that condition was written into the plan before the run.
+
+The finding that survives is not about this indicator at all: **a market entry
+with a volatility stop is a fair coin, and on a 15m or 5m chart the fee alone
+is a quarter to a third of a stop per trade.** Any future strategy taking
+market entries starts from that hole.

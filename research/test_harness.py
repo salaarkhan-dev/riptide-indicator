@@ -9,7 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from riptide.engine import Candle                          # noqa: E402
-from research.harness import Outcome, simulate, mean_se, buckets  # noqa: E402
+from research.harness import (Outcome, simulate, simulate_market,  # noqa: E402
+                              mean_se, buckets)
 
 FAILED = []
 
@@ -107,6 +108,56 @@ check("mean of a symmetric set", m, 0.0)
 bs = buckets([Outcome(1.0, True, 1, 0, 0, 2), Outcome(-1.0, True, 1, 0, 0, 2)],
              lambda x: x.r > 0)
 check("binary feature makes two buckets", len(bs), 2)
+
+print("\n10. Outcome.exit says WHY, so a timeout stops passing as a win")
+cs = bars([(100, 101, 99, 100), (100, 101, 99, 100), (100, 101, 89, 90)])
+check("stop", simulate(cs, 0, 100.0, 90.0, True, target_r=5.0,
+                       fee_pct=0.0).exit, "stop")
+cs = bars([(100, 101, 99, 100), (100, 101, 99, 100), (100, 111, 99, 110)])
+check("target", simulate(cs, 0, 100.0, 90.0, True, target_r=1.0,
+                         fee_pct=0.0).exit, "target")
+cs = bars([(100, 101, 99, 100), (100, 101, 99, 100), (100, 101, 99, 100)])
+check("timeout", simulate(cs, 0, 100.0, 90.0, True, target_r=5.0,
+                          fee_pct=0.0).exit, "timeout")
+check("unfilled says nothing",
+      simulate(bars([(200, 201, 199, 200)] * 3), 0, 100.0, 90.0, True,
+               fee_pct=0.0).exit, "")
+
+print("\n11. simulate_market: the ENTRY BAR resolves nothing")
+# THE POINT OF THIS SCORER. Entry is bar 0's CLOSE of 100. That bar's low of
+# 80 is far below the 90 stop — but it printed BEFORE the position existed,
+# so it is not a stop-out. mss_entry.py's local copy gets this wrong.
+cs = bars([(120, 121, 80, 100),       # 0 entry at the close; low is pre-entry
+           (100, 101, 95, 100),
+           (100, 131, 99, 130)])      # 3R target at 130
+o = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0, fee_maker=0.0,
+                    fee_taker=0.0)
+check("not stopped by its own entry bar", o.exit, "target")
+check("and it pays 3R", round(o.r, 6), 3.0)
+# ...and the target is equally barred from the entry bar.
+cs = bars([(100, 140, 99, 100), (100, 101, 89, 90)])
+o = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0, fee_maker=0.0,
+                    fee_taker=0.0)
+check("nor filled by its own entry bar's high", o.exit, "stop")
+# Stop wins a bar that spans both, exactly as simulate does.
+cs = bars([(100, 101, 99, 100), (100, 131, 89, 120)])
+check("stop wins a bar spanning both",
+      simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0, fee_maker=0.0,
+                      fee_taker=0.0).exit, "stop")
+# No room to score is None, not a zero. A zero would be a real trade that
+# broke even; this is a trade that cannot be measured.
+check("no bar after the entry is None",
+      simulate_market(bars([(100, 101, 99, 100)]), 0, 100.0, 90.0, True), None)
+# Market in pays TAKER, and the cost is fee/risk_pct — 10% risk here.
+o = simulate_market(bars([(100, 101, 99, 100), (100, 101, 89, 90)]), 0,
+                    100.0, 90.0, True, fee_maker=0.02, fee_taker=0.06)
+check("a stopped market trade pays taker both ways",
+      round(o.r, 6), round(-1.0 - 0.12 / 10.0, 6))
+# Shorts mirror.
+cs = bars([(100, 101, 99, 100), (100, 101, 69, 70)])
+check("short reaches its target",
+      round(simulate_market(cs, 0, 100.0, 110.0, False, target_r=3.0,
+                            fee_maker=0.0, fee_taker=0.0).r, 6), 3.0)
 
 print("\n" + ("FAILED: " + ", ".join(FAILED) if FAILED else "ALL PASS"))
 sys.exit(1 if FAILED else 0)

@@ -323,11 +323,42 @@ Measured, all pre-registered here:
 8. Overlap with Riptide's own signals: same symbol, same direction, within
    one bar. A strategy that is 70% the same trades is not a second strategy.
 
+Run on **Min5, Min15 and Min30**, each given the same ~42 calendar days by
+paging, so a timeframe cannot flatter itself with a different window.
+
 **Exit gate, stated in advance:** net R per signal **> 0 after fees on the
 full sample, and the same sign in both window halves and both symbol halves.**
 Riptide's confirmed band is +0.128 ± 0.104 (grade A) and +0.080 ± 0.042
 (grade B) post-look-ahead-fix; a second strategy that cannot clear zero is not
 worth a slot. Below that: back to Phase 1 with one variable changed, or stop.
+
+> ### OUTCOME — 9 Sep 2026: **FAILED, on all three timeframes**
+>
+> | timeframe | n | win | R/signal | random-entry control | what the signal adds |
+> |---|---|---|---|---|---|
+> | Min30 | 1383 | 26% | **−0.122 ± 0.047** | −0.094 | −0.027 ± 0.066 (−0.4 SE) |
+> | Min15 | 2906 | 24% | **−0.226 ± 0.032** | −0.149 | −0.077 ± 0.046 (−1.7 SE) |
+> | Min5 | 8299 | 23% | **−0.435 ± 0.019** | −0.340 | −0.095 ± 0.028 (−3.4 SE) |
+>
+> The chart's own default view (`blockSignalsInTrade`) is negative too:
+> −0.145, −0.248, −0.293.
+>
+> The control was added after the first run and it is the actual result. Random
+> entries — same symbols, same timeframe, same market-at-the-close, same 1.5
+> ATR stop, same 3R target, coin-toss direction — score **zero gross** and lose
+> only the fee. So **the trade shape is a fair coin and the fee is the whole
+> cost**, and what the signal contributes on top is between nothing and mildly
+> negative, worsening as the timeframe falls.
+>
+> Neither the target ladder, nor the daily trend, nor the quality score, nor
+> the confirmation-window split rescues it. The one arm the indicator wins is
+> its own ATR stop against a raid-extreme stop — because the structural stop is
+> tighter and pays more fee per unit of risk. Full numbers and the
+> port-fidelity evidence in `MEASUREMENTS.md`.
+>
+> **Phases 2–5 do not start.** No parameter sweep: that was ruled out in
+> advance, and it is the only honest reading of a model that cannot clear zero
+> once.
 
 ### Phase 2 — the refactor, with Riptide's behaviour frozen
 
@@ -336,6 +367,31 @@ Build §2. Ship `riptide_smc.py` only. `lez` is registered but returns nothing.
 **Exit gate:** the parity test in §2.4 passes — identical signals, identical
 messages — and `python -m pytest` is green. No behaviour change reaches the
 chat in this phase. Deploy is gated on `signs.py` as every deploy already is.
+
+**Also in this phase, and independent of any strategy: the `/stats` table.**
+Today it reports a win rate, and a win rate on its own cannot answer the
+question that actually gets asked. The shape it grows into is already built and
+proven in `research/studies/lez.py`:
+
+```
+                        n   win   wins  stops  t/out   risk   R/sig    ±SE    total
+  target 2R          1383   33%    460    919      4  1.20%  -0.128  0.039   -177.1
+  target 3R          1383   26%    342   1024     17  1.20%  -0.122  0.047   -168.1
+  target 4R          1383   22%    258   1079     46  1.20%  -0.119  0.053   -165.3
+```
+
+Three things it adds. **The ladder** — the same signals scored at 2R, 3R and
+4R, because the win rate is not a property of the strategy, it is a dial the
+target sets (`winrate.py`: 0.5R wins 69% and loses money, 4R wins 32% and makes
+the most). **The exit breakdown** — wins, stops and timeouts as counts, because
+a timeout closing a hair above entry scores as a win under `r > 0` and is
+nothing of the sort. **Standard errors**, so a run of luck stops reading as a
+result.
+
+`research/harness.py` already carries the piece this needs: `Outcome.exit` now
+records *why* a trade ended (`"stop"`, `"target"`, `"timeout"`, `""` for
+unfilled). `riptide/tracker.py` stores a status per row and can be read the
+same way, so `/stats` needs no new data — only the query and the format.
 
 ### Phase 3 — beta, recording only, no Telegram
 

@@ -54,6 +54,15 @@ class Outcome:
     mfe: float                # best excursion in R, from the fill
     mae: float                # worst, from the fill
     exit_bar: int | None
+    # WHY the trade ended: "stop", "target", "timeout", or "" when it never
+    # filled. Trailing with a default so every positional construction in the
+    # existing studies keeps working untouched.
+    #
+    # Added because "win rate" alone cannot answer the question that actually
+    # gets asked — how many were stopped, how many timed out, how many never
+    # happened. A timeout that closes a hair above entry counts as a win under
+    # `r > 0` and is nothing of the sort.
+    exit: str = ""
 
 
 def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
@@ -101,7 +110,8 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
 
         if (c.l <= cur_stop) if is_long else (c.h >= cur_stop):
             r = banked + size * sgn * (cur_stop - entry) / risk
-            return Outcome(r - fee_lose * to_r, True, fill, mfe, mae, k)
+            return Outcome(r - fee_lose * to_r, True, fill, mfe, mae, k,
+                           "stop")
         # On the FILL bar the target cannot resolve, and this is not fussiness.
         # A long entry is approached from ABOVE, so the bar's high may well
         # have printed before price came down to the entry — counting it as a
@@ -119,14 +129,74 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
                 cur_stop, armed = lvl(be_lock_r), True
                 continue
             return Outcome(banked + size * tgt - fee_win * to_r,
-                           True, fill, mfe, mae, k)
+                           True, fill, mfe, mae, k, "target")
         if be_arm_r and not armed:
             if (c.c >= lvl(be_arm_r)) if is_long else (c.c <= lvl(be_arm_r)):
                 cur_stop, armed = lvl(be_lock_r), True
 
     last = min(fill + horizon_bars, len(cs)) - 1
     r = banked + size * sgn * (cs[last].c - entry) / risk
-    return Outcome(r - fee_lose * to_r, True, fill, mfe, mae, last)
+    return Outcome(r - fee_lose * to_r, True, fill, mfe, mae, last, "timeout")
+
+
+def simulate_market(cs, signal_bar: int, entry: float, stop: float,
+                    is_long: bool, *, target_r: float = TRACK_TARGET_R,
+                    target_px: float | None = None,
+                    horizon_bars: int = TRACK_HORIZON_BARS,
+                    fee_maker: float = 0.02,
+                    fee_taker: float = 0.06) -> Outcome | None:
+    """A MARKET entry taken at `entry` on the CLOSE of `signal_bar`.
+
+    simulate() cannot express this. It fills a limit by waiting for price to
+    come back to the level, which for a long means waiting for a move DOWN; a
+    market order is filled at once and pays TAKER on the way in.
+
+    THE ENTRY BAR RESOLVES NOTHING — neither the stop nor the target.
+
+    research/studies/mss_entry.py has a local copy of this helper that lets the
+    STOP resolve on the entry bar, and that is wrong in a way worth spelling
+    out. The entry is the bar's CLOSE, so every tick of that bar printed before
+    the position existed. A long whose bar dipped 1.6 ATR below its own close
+    has not been stopped out; it has been entered at the close of a large
+    candle. Counting it as a loss makes market entries look worse than they
+    are, which matters because that study's finding was that market entries
+    lose. The Pine indicator this was written for gets it right
+    (`bar_index > simulatedEntryBar`), and so does this.
+
+    Everything else mirrors simulate() exactly so the two are comparable: stop
+    wins a bar spanning both, fees are charged in R as fee / risk_pct, and a
+    trade still open at the horizon is marked out at the close.
+
+    Returns None — not an Outcome — when there is no room to score: no risk, or
+    no bar after the entry. A zero would be a trade that happened and broke
+    even, and this is a trade that cannot be measured.
+    """
+    risk = abs(entry - stop)
+    if risk <= 0 or entry <= 0 or signal_bar >= len(cs) - 1:
+        return None
+    sgn = 1 if is_long else -1
+    tgt = target_px if target_px is not None else entry + sgn * risk * target_r
+    to_r = 1.0 / (100 * risk / entry)
+    # Market in, so taker on entry. Out is maker on a target (a resting limit)
+    # and taker on a stop (a market order), the same split simulate() uses.
+    fee_win = (fee_taker + fee_maker) * to_r
+    fee_lose = (fee_taker + fee_taker) * to_r
+    mfe = mae = 0.0
+
+    for k in range(signal_bar + 1, min(signal_bar + 1 + horizon_bars, len(cs))):
+        c = cs[k]
+        fav = (c.h - entry) / risk if is_long else (entry - c.l) / risk
+        adv = (c.l - entry) / risk if is_long else (entry - c.h) / risk
+        mfe, mae = max(mfe, fav), min(mae, adv)
+        if (c.l <= stop) if is_long else (c.h >= stop):
+            return Outcome(-1.0 - fee_lose, True, signal_bar, mfe, mae, k,
+                           "stop")
+        if (c.h >= tgt) if is_long else (c.l <= tgt):
+            return Outcome(sgn * (tgt - entry) / risk - fee_win,
+                           True, signal_bar, mfe, mae, k, "target")
+    last = min(signal_bar + 1 + horizon_bars, len(cs)) - 1
+    return Outcome(sgn * (cs[last].c - entry) / risk - fee_lose,
+                   True, signal_bar, mfe, mae, last, "timeout")
 
 
 def mean_se(v) -> tuple[float, float]:
