@@ -5146,3 +5146,82 @@ so the immediate next step was to check it elsewhere rather than report it:
 
 **Gone.** One half of one population. The cost of checking was two minutes; the
 cost of not checking would have been a filter on the alert path.
+
+
+---
+
+## What a higher win rate costs — `research/studies/win_rate_price.py`
+
+The goal was more wins and fewer stop-outs. There are two ways to chase it and
+only one has ever worked here, so both were priced.
+
+### Filters are exhausted, and the losers say why
+
+`losers.py` on the current corpus: **not one loser failed to go green first.**
+62% of early losers reached 0.5R, 26% reached a full 1R, median peak 0.63R.
+Those are not bad entries a filter could have caught — they are trades that
+worked and then stopped working. **A filter cannot reach them. An exit can.**
+
+(Twenty-one filter attempts are recorded in this file, plus six more in one
+session — trendline slope, SR break, RSI divergence, BTC regime, MTF agreement,
+pool memory. One survivor in twenty-seven: the daily POI.)
+
+### The win rate is buyable, and the price is now exact
+
+Early, held out, same trades, exit varied:
+
+| exit | win | full SL | R/signal | vs plain | R per win point |
+|---|---|---|---|---|---|
+| **plain, 2R** | **38%** | **59%** | −0.031 | — | — |
+| half at 0.5R | **64%** | **34%** | −0.104 | −0.073 | 0.0028 |
+| half at 1R, rest 2R | 52% | 46% | −0.069 | −0.038 | 0.0027 |
+| half at 1R, rest 3R | 52% | 46% | −0.059 | −0.028 | 0.0020 |
+| break-even at 1R | **30%** | 52% | −0.065 | −0.035 | — |
+
+**Break-even is strictly bad and this was predicted in advance:** it *lowers*
+the win rate, because a break-even exit scores 0.0 and `r > 0` does not count
+it. It costs R as well.
+
+The partial does exactly what it is reached for — **38% → 64% win, 59% → 34%
+full stop-outs** — at a cost inside 1 SE of plain for the 1R/3R variant. On the
+pre-registered bar it passes.
+
+### And then it fails the metric that decides
+
+Return per unit of maximum drawdown, 300 USDT, 1% risk, under the deployed
+portfolio rules — exit is the ONLY thing varied:
+
+| exit | win | return | max DD | **ret/DD** |
+|---|---|---|---|---|
+| **plain, 2R** | 42% | **+20%** | **8%** | **2.45** |
+| half at 1R, rest 3R | 52% | −1% | 15% | −0.07 |
+| half at 1R, rest 2R | 51% | −3% | 10% | −0.28 |
+| half at 0.5R, rest 2R | **65%** | −3% | 11% | −0.31 |
+
+**The partial destroys the equity curve, and drawdown gets WORSE, not better.**
+The return lives in a small number of large winners; halving them at 1R while
+the losers still lose in full removes exactly the trades that pay for
+everything. A partial does not prevent a loss — it only shrinks a win.
+
+The target ladder says the same thing from an independent direction:
+
+| target | win | return | max DD | ret/DD |
+|---|---|---|---|---|
+| 1.0R | **54%** | +12% | 13% | 0.98 |
+| 1.5R | 44% | +10% | 10% | 0.92 |
+| **2.0R** | 42% | **+20%** | **8%** | **2.45** |
+| 3.0R | 34% | +3% | 18% | 0.19 |
+| 4.0R | 34% | +15% | 16% | 0.92 |
+
+**2R is the peak on both return and drawdown.** 1R buys 12 points of win rate
+and costs 60% of the return.
+
+### Verdict
+
+**Nothing changes. The deployed exit is already the best one measured**, and
+that is the finding: the win rate is a purchasable property and every way of
+purchasing it measured here costs more than it is worth. 65% wins for −3%
+return, or 42% wins for +20%.
+
+If a smoother curve is wanted for reasons other than money, the price is now
+known to three decimal places and can be paid deliberately.
