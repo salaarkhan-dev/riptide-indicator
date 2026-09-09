@@ -3855,3 +3855,55 @@ quantified, and was not before:
 - `research/harness.py`'s `simulate_market` now supports break-even and
   partial exits, mirroring `simulate` exactly, with tests — so the market-entry
   side of every future study can ask this question without a local copy.
+
+---
+
+## EMA trend-filter length — `research/studies/ema_len.py`
+
+Asked directly: try 21 instead of 50. Run as a **ladder** rather than a
+two-arm comparison, because a two-arm test of a null variable favours whichever
+arm was asked about half the time and gives no way to tell that from an effect.
+
+Everything held at what the chart runs — market entry at the close, 1.5 × ATR
+stop, 2R target, MEXC fees. Only `ema_len` moves.
+
+| arm | Min30 disc | Min30 **held** | Min15 disc | Min15 **held** | signals/day (Min30) |
+|---|---|---|---|---|---|
+| off | −0.171 | −0.122 | −0.227 | −0.182 | 1.79 |
+| EMA 9 | −0.165 | −0.106 | −0.231 | −0.190 | 1.45 |
+| **EMA 21** | −0.167 | **−0.073** | −0.222 | −0.181 | 1.29 |
+| EMA 34 | −0.119 | −0.119 | −0.222 | −0.159 | 1.23 |
+| **EMA 50 (shipped)** | −0.119 | −0.114 | −0.212 | −0.148 | 1.20 |
+| EMA 100 | −0.141 | −0.137 | −0.232 | −0.123 | 1.15 |
+| EMA 200 | −0.105 | −0.142 | −0.242 | −0.136 | 1.11 |
+
+**The pre-registered bar was EMA 21 beating EMA 50 in all four panels. It wins
+1 of 4.** Min30 held-out +0.040, and the other three go the other way.
+
+### The ladder's shape is the actual evidence
+
+The best arm is a **different length in every panel**: EMA 200, EMA 21, EMA 50,
+EMA 100. That is the signature of a null variable — a real one produces the
+same ordering twice.
+
+The whole ladder spans 0.030–0.069 R against standard errors of 0.026–0.039, so
+**no arm is more than about 1.5 SE from any other**, and EMA 21's best panel
+(−0.073 vs off at −0.122) is +0.049 ± 0.044, or 1.1 SE.
+
+**Turning the filter off entirely sits inside the spread in every panel.** It
+is not measurably worse than any length, and it produces the most signals. The
+filter costs 33% of them at EMA 50 and 38% at EMA 200 to buy nothing that can
+be distinguished from zero.
+
+This replicates `which_trend.py` exactly: the daily trend sorts at +4.5 SE, the
+chart's own trend at −0.0 SE. `useLocalEmaFilter` is the chart's own trend, and
+its length is a knob on a filter that does nothing.
+
+### And no length is positive
+
+Every one of the 28 cells is negative. The question "which EMA length" was
+never going to be the one that changed the sign.
+
+**No change recommended.** If the goal is fewer signals, EMA 50 already does
+that and is as good as anything. If the goal is more signals, off is as good as
+EMA 50. Neither choice is worth the time it takes to make.

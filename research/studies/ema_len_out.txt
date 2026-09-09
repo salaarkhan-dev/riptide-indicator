@@ -1,0 +1,48 @@
+EMA trend-filter length — a ladder
+30 symbols · market entry at the close, 1.5 x ATR(14) stop, 2R target · only ema_len moves
+
+========================================================================================
+Min30   83 days across 30 symbols, split in half
+========================================================================================
+  arm                        DISCOVERY (newer)                  HELD OUT (older)
+                   n   /day   win   R/sig     SE       n   /day   win   R/sig     SE
+  off           2241   1.79   32%  -0.171  0.030    2547   2.04   33%  -0.122  0.028
+  EMA 9         1815   1.45   32%  -0.165  0.033    2097   1.68   34%  -0.106  0.031
+  EMA 21        1611   1.29   32%  -0.167  0.035    1849   1.48   35%  -0.073  0.034
+  EMA 34        1534   1.23   34%  -0.119  0.037    1747   1.40   33%  -0.119  0.034
+  EMA 50        1499   1.20   34%  -0.119  0.037    1701   1.36   33%  -0.114  0.035
+  EMA 100       1438   1.15   33%  -0.141  0.038    1632   1.31   33%  -0.137  0.035
+  EMA 200       1390   1.11   34%  -0.105  0.039    1516   1.21   32%  -0.142  0.037
+
+========================================================================================
+Min15   83 days across 30 symbols, split in half
+========================================================================================
+  arm                        DISCOVERY (newer)                  HELD OUT (older)
+                   n   /day   win   R/sig     SE       n   /day   win   R/sig     SE
+  off           4446   3.56   32%  -0.227  0.021    4762   3.81   33%  -0.182  0.021
+  EMA 9         3685   2.95   32%  -0.231  0.024    3893   3.11   32%  -0.190  0.023
+  EMA 21        3252   2.60   32%  -0.222  0.025    3457   2.77   33%  -0.181  0.024
+  EMA 34        3115   2.49   32%  -0.222  0.026    3270   2.62   33%  -0.159  0.025
+  EMA 50        3013   2.41   32%  -0.212  0.026    3207   2.57   34%  -0.148  0.026
+  EMA 100       2920   2.34   32%  -0.232  0.027    3049   2.44   35%  -0.123  0.026
+  EMA 200       2868   2.29   31%  -0.242  0.027    2898   2.32   34%  -0.136  0.027
+
+========================================================================================
+  THE PRE-REGISTERED BAR: EMA 21 beats EMA 50 on net R in all four panels
+========================================================================================
+    Min30   disc  EMA 21 -0.167   EMA 50 -0.119   diff -0.047   worse
+    Min30   held  EMA 21 -0.073   EMA 50 -0.114   diff +0.040   BETTER
+    Min15   disc  EMA 21 -0.222   EMA 50 -0.212   diff -0.010   worse
+    Min15   held  EMA 21 -0.181   EMA 50 -0.148   diff -0.032   worse
+
+  => EMA 21 wins 1 of 4 panels — FAILS
+
+  THE LADDER — spread across all seven arms, per panel:
+    Min30   disc  range -0.171 to -0.105  (spread 0.066)   best: EMA 200
+    Min30   held  range -0.142 to -0.073  (spread 0.069)   best: EMA 21
+    Min15   disc  range -0.242 to -0.212  (spread 0.030)   best: EMA 50
+    Min15   held  range -0.190 to -0.123  (spread 0.068)   best: EMA 100
+
+  If the best arm is a different length in every panel, the ladder is flat
+  and the length is a knob on a filter that does nothing — which is what
+  which_trend.py measured the chart's own trend to be.
