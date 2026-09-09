@@ -131,7 +131,20 @@ def status_text(db, state) -> str:
         tl_n = db.execute("SELECT COUNT(*) FROM seen_trendline").fetchone()[0]
         tl_line = (f"{'+'.join(tg.tf_label(t) for t in watch.intervals(db))}"
                    f" · slope ≥ {watch.min_slope(db):.2f} · ~{_tl_rate(db)}"
-                   f"/day · {tl_n} recorded · heads-up only, not in /stats")
+                   f"/day · {tl_n} recorded · not in /stats")
+        # WHY THE LAST CLOSE WAS QUIET, if it was. A lifetime row count cannot
+        # tell "18 breaks, all too flat" from "the loop never woke", and those
+        # are the two things worth telling apart when nothing has arrived.
+        c = watch.last_cycle
+        if c:
+            tl_line += (f"\n           last close {_fmt_ago(time.time() - c['at'])}"
+                        f" ago · {c['seen'] + c['flat']} break(s) · "
+                        f"{c['flat']} too flat · {c['dupe']} already sent · "
+                        f"{c['stale']} not fresh · {c['sent']} SENT")
+            if c["failed"]:
+                tl_line += f" · {c['failed']} FETCH FAILED"
+        else:
+            tl_line += "\n           no close scanned yet since restart"
     else:
         tl_line = "off · /trendline on"
     poi_line = ("POI required" if POI_REQUIRED else "POI not required")

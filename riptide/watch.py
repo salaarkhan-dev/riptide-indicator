@@ -79,6 +79,10 @@ from .trendline import ATR_LEN, trendline_signals
 # dedupe table with breaks that were never sendable.
 RECENT_BARS = 8
 
+# What the last close actually did, for /status. Empty until the first cycle
+# runs — which is itself the answer when the watch has never woken.
+last_cycle: dict = {}
+
 
 def init(db) -> None:
     """The dedupe table. Its own, so a trendline break and a Riptide signal on
@@ -141,13 +145,18 @@ class Break:
 
 
 async def scan_symbol(sess, sem, symbol: str, tf: str,
-                      floor: float = 0.0) -> list[Break]:
-    """Breaks on this symbol in the last RECENT_BARS bars, newest last.
+                      floor: float = 0.0) -> tuple[list, int]:
+    """(breaks, dropped_as_flat) on this symbol in the last RECENT_BARS bars.
 
     `floor` is the steepness gate, in |slope| / ATR(200). It is applied HERE
     rather than in the digest so a break that never qualified is never recorded
     either — otherwise lowering the gate later would find every one of them
     already marked as sent and stay silent.
+
+    The flat count comes back rather than being discarded because it is the
+    answer to the only question a quiet watch list ever raises: is it broken,
+    or was there nothing to say? "18 breaks seen, 18 too flat" and "0 breaks
+    seen" look identical from the chat and mean completely different things.
     """
     async with sem:
         cs = await fetch_candles(sess, symbol, tf)
@@ -158,13 +167,13 @@ async def scan_symbol(sess, sem, symbol: str, tf: str,
         if cs:
             log.debug("trendline: %s %s only %d bars, skipped", symbol, tf,
                       len(cs))
-        return []
+        return [], 0
     sigs = trendline_signals(cs, pivot_len=TRENDLINE_PIVOT,
                              space=TRENDLINE_SPACE)
     atr = atr_series(cs, ATR_LEN)
     step = BAR_SECONDS[tf]
     cutoff = len(cs) - RECENT_BARS
-    out = []
+    out, flat = [], 0
     for s in sigs:
         if s.bar < cutoff:
             continue
@@ -175,6 +184,7 @@ async def scan_symbol(sess, sem, symbol: str, tf: str,
         a = atr[s.bar] if s.bar < len(atr) else 0.0
         slope_atr = abs(s.slope) / a if a and a > 0 else 0.0
         if slope_atr < floor:
+            flat += 1
             continue
         b = Break()
         b.symbol, b.tf, b.is_long = symbol, tf, s.is_long
@@ -187,7 +197,7 @@ async def scan_symbol(sess, sem, symbol: str, tf: str,
         b.slope_atr = slope_atr
         b.sig = sig_of(symbol, tf, cs[s.bar].t, s.is_long)
         out.append(b)
-    return out
+    return out, flat
 
 
 def _line(b: Break) -> str:
@@ -320,12 +330,14 @@ async def cycle(sess, db, symbols, tfs=None) -> int:
 
     now = int(time.time())
     fresh: list[Break] = []
-    seen = stale = dupe = failed = 0
+    seen = stale = dupe = failed = flat = 0
     for r in results:
         if isinstance(r, Exception):
             failed += 1
             continue
-        for b in r:
+        breaks, n_flat = r
+        flat += n_flat
+        for b in breaks:
             seen += 1
             if already_sent(db, b.sig):
                 dupe += 1
@@ -349,9 +361,17 @@ async def cycle(sess, db, symbols, tfs=None) -> int:
                                          max(b.bar_time for b in fresh))):
             sent = len(fresh)
     log.info("trendline %s: %d symbols · slope >= %.2f · %d break(s) in the "
-             "last %d bars · %d already sent · %d not fresh · %d fetch failed "
-             "· %d SENT", "+".join(tfs), len(symbols), floor, seen,
-             RECENT_BARS, dupe, stale, failed, sent)
+             "last %d bars · %d too flat · %d already sent · %d not fresh · "
+             "%d fetch failed · %d SENT", "+".join(tfs), len(symbols), floor,
+             seen, RECENT_BARS, flat, dupe, stale, failed, sent)
+    # Published for /status. THE ONE QUESTION A QUIET ALERT SERVICE HAS TO BE
+    # ABLE TO ANSWER IS WHY IT WAS QUIET, and a lifetime row count cannot: "18
+    # breaks, all too flat" and "the loop is not running" look the same from
+    # the chat. The scanner already learned this and keeps `state_gate` for the
+    # same reason. Module level so the command handler can read it without the
+    # watch needing to know the shared state dict exists.
+    last_cycle.update(at=now, tfs=tfs, floor=floor, seen=seen, flat=flat,
+                      dupe=dupe, stale=stale, failed=failed, sent=sent)
     return sent
 
 

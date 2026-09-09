@@ -146,8 +146,8 @@ def main():
                             f"{len(msgs)} message(s)")
 
     print("\n3. bar_time is the bar's CLOSE, not its open")
-    breaks = asyncio.run(watch.scan_symbol(None, asyncio.Semaphore(1),
-                                           "AAA_USDT", "Hour4", 0.0))
+    breaks, _flat = asyncio.run(watch.scan_symbol(
+        None, asyncio.Semaphore(1), "AAA_USDT", "Hour4", 0.0))
     ok(len(breaks) == 1, f"one break parsed: got {len(breaks)}")
     ok(breaks[0].bar_time == CS[-1].t + STEP,
        f"close, not open: got {breaks[0].bar_time}, "
@@ -285,6 +285,25 @@ def main():
     body = msgs[0]
     ok(body.index("SHARP") < body.index("MILD"),
        "the steeper break is listed first")
+
+    print("\n11b. A quiet close SAYS WHY it was quiet — 'breaks seen, all too "
+          "flat'\n     and 'nothing broke' are the two things worth telling "
+          "apart when\n     nothing has arrived, and they look identical from "
+          "the chat")
+    PLAN.clear()
+    PLAN["ALLFLAT_USDT"] = [sig(0, True, slope=FLAT), sig(1, False,
+                                                          slope=FLAT)]
+    n, msgs = run(db, list(PLAN))
+    c = watch.last_cycle
+    ok(not msgs and c["sent"] == 0, "a close with only flat breaks is silent")
+    ok(c["flat"] == 2 and c["seen"] == 0,
+       f"and it counted them: {c['flat']} flat, {c['seen']} through the gate")
+    PLAN.clear()
+    PLAN["NOTHING_USDT"] = []
+    n, msgs = run(db, list(PLAN))
+    c = watch.last_cycle
+    ok(c["flat"] == 0 and c["seen"] == 0,
+       "a genuinely quiet close reads zero and zero — a different answer")
 
     print("\n12. An unknown timeframe falls back rather than crashing")
     storage.meta_set(db, "trendline_tf", "Fortnight")
