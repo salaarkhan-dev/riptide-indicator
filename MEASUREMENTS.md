@@ -3655,3 +3655,103 @@ taken close enough to structure that a shift can follow"** — a property of the
 raid's geometry, not of the candle that made it. Riptide already gates its
 sweep alerts on exactly that rule. This is weak, out-of-sample support for a
 filter that is already shipped, and it is the correct place to look next.
+
+---
+
+## Where is the knee in the shift distance? — `research/studies/shift_distance.py`
+
+`location.py` left one thing alive: `sweep_worth`'s rule that the level a shift
+must break sits within `WATCH_MAX_DIST` = 3% of the raid extreme. So: is the
+knee tighter than 3%, and is percent even the right unit?
+
+**Scope first, because it decides how to read the R column.** This study trades
+the RAID BAR directly — market entry at its close, 1.5 × ATR stop, 3R. Riptide
+does not do that; it rests a limit at the FVG with the stop at the raid extreme.
+So the R column here describes *trading the raid*, not Riptide's alerts. The
+**conversion** column is Riptide's own pipeline and does describe it.
+
+### The conversion rate replicates, exactly
+
+`riptide/engine.py`'s docstring justifies the 3% cut with a table measured on a
+window this project no longer has. Re-measured on the current one, `<1%` /
+`1-2%` / `2-3%` / `>3%`:
+
+| | Min30 disc | Min30 held | Min15 disc | Min15 held | shipped docstring |
+|---|---|---|---|---|---|
+| <1% | 17% | 30% | 19% | 23% | 22.7% |
+| 1–2% | 13% | 19% | 8% | 7% | 14.8% |
+| 2–3% | 3% | 9% | 3% | 4% | 6.6% |
+| >3% | 1% | 1% | 1% | 1% | 0.7–3.1% |
+
+**Monotone in all four panels, magnitudes matching.** A shipped constant whose
+evidence could not be re-run is now a shipped constant whose evidence re-runs.
+
+### But R is NOT monotone in distance, and tightening makes it WORSE
+
+The pre-registered primary was a monotone decline across those four bands in
+both halves. **It fails in every panel.** And the secondary is unambiguous:
+
+| | <1.5% | 1.5–3% | difference |
+|---|---|---|---|
+| Min30 discovery | −0.299 | −0.056 | **−0.243 ± 0.130** |
+| Min30 held out | −0.161 | −0.023 | **−0.139 ± 0.149** |
+| Min15 discovery | −0.280 | −0.200 | **−0.080 ± 0.094** |
+| Min15 held out | −0.166 | −0.118 | **−0.048 ± 0.097** |
+
+**Four panels, all negative. Tightening `WATCH_MAX_DIST` below 3% would make it
+worse, not better.** That is the answer to the question asked.
+
+### The two columns disagree, and the fee is why
+
+The `<1%` band converts most often and scores worst. Min15 discovery: 19%
+conversion, `risk_pct` **0.42%**, so the fee is **0.347 R** — gross −0.085
+against net −0.432. Min15 held out: 23% conversion, risk 0.50%, fee 0.254 R,
+gross **+0.120** against net −0.134.
+
+A raid that sits close to structure sits on a quiet symbol with tight
+structure, where 1.5 ATR is a fraction of a percent of price — and fee in R is
+`fee / risk_pct`. **The nearest raids are the best signals and the worst trades,
+and it is entirely the fee.** Gross R shows no gradient either way; this is not
+a claim that near raids are secretly profitable.
+
+### Percent is the wrong unit — ATR is the only ordering that holds
+
+Top band minus bottom band, across the two halves:
+
+| unit | Min30 disc/held | Min15 disc/held | |
+|---|---|---|---|
+| percent | −0.559 / **+0.183** | −0.273 / −0.010 | **sign flips at Min30** |
+| **ATR** | **+0.065 / +0.226** | **+0.180 / +0.205** | **four for four** |
+
+Measuring the distance in ATR removes the volatility confound by construction,
+and the `1–2 ATR` band also carries the highest conversion anywhere in either
+unit — **31%, 37%, 36%, 33%** across the four panels.
+
+This is a **candidate, not a change.** It is a top-versus-bottom consistency,
+not the monotone decline the primary demanded, and it was measured against a
+market entry with an ATR stop rather than Riptide's actual entry model. It
+needs its own pre-registered test against the real pipeline before
+`sweep_worth` is touched.
+
+### The concrete gap this exposes in the shipped code
+
+`Cfg.max_risk_atr = 2.5` caps risk **in ATR units**. There is no floor on risk
+as a **percent of price** anywhere in the codebase — and fee in R lives
+entirely on that axis. An ATR-unit cap cannot see the difference between a
+1.5 ATR stop worth 0.42% and one worth 1.6%, and those two trades pay 0.35 R
+and 0.08 R respectively before anything happens.
+
+Every study in this sequence has ended at the same place from a different
+direction: `scalp.py` by timeframe, `winrate.py` by target, `lez.py` by
+control, `momentum.py` twice by accident, and now this one by distance band.
+**A minimum `risk_pct` is the best-evidenced untested lever in the project**,
+and it applies to Riptide itself, not only to the strategies that failed.
+
+### Verdict
+
+- **Do not tighten `WATCH_MAX_DIST`.** Four panels say tighter is worse.
+- The 3% rule is a **conversion** filter and a good one; it was never an R
+  filter and this confirms it is not one.
+- Distance in **ATR** is a candidate worth a proper test.
+- The next study is a **minimum risk floor in percent**, on Riptide's own
+  signals, with a pre-registered monotonicity bar.
