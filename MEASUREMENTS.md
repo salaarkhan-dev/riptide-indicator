@@ -4775,3 +4775,72 @@ improve returns.
 For the win rate specifically, `stops.py` already found the better instrument:
 a partial at 1R took LEZ from 33% to 50% win and 66% to 50% full stop-outs for
 0.007 R.
+
+
+---
+
+## Sweep + FVG + a trendline BREAKOUT agreeing — `research/studies/early_breakout.py`
+
+The one confluence question nobody had asked. Every filter tried on this
+population — POI, trend, volume, RSI, ADX, reclaim, raid depth, grab close —
+describes the **setup**. This describes something else that happened on the same
+chart at roughly the same time and points the same way: **two independent
+constructions agreeing**.
+
+No lookahead: a break counts only if it fired at or before the early signal's own
+bar. Both series come from closed bars on the same candles.
+
+### It FAILS the pre-registered bar
+
+| panel | n with | WITH | without | difference | |
+|---|---|---|---|---|---|
+| all early | 128 (3%) | +0.183 | −0.022 | **+0.206** | +1.9 SE |
+| discovery | 68 | +0.246 | −0.032 | +0.279 | +1.9 SE |
+| **held out** | **60** | +0.112 | −0.011 | **+0.123** | **+0.7 SE** |
+
+The bar was 2 SE on the held-out half. It got +0.7 SE on 60 trades. **Not
+adopted.**
+
+### But it is the most consistent shape found on this population
+
+- **Positive in every panel it could be computed in** — five of five.
+- **Clears the placebo floor everywhere.** 25 random subsets of the same size
+  give +0.018 (all), +0.003 (discovery), +0.005 (held out); the real filter beats
+  those by +0.165, +0.243 and +0.107. So it is not merely "a small slice of a
+  noisy population".
+- **Replicates on an independent signal type.** Confirmed setups — a different
+  signal, needing the structure shift the early does not — give **+0.154 at
+  +1.0 SE**, same sign, also above its placebo floor. Its held-out half has only
+  18 qualifying trades, too few to score.
+- **The window curve decays the way a real recency effect would:**
+
+| window | kept | difference |
+|---|---|---|
+| 3 | 1% | +0.126 |
+| 5 | 2% | +0.178 |
+| **10** | **3%** | **+0.206** |
+| 20 | 10% | +0.052 |
+| 40 | 26% | −0.002 |
+
+10 was fixed in advance as `CFG.early_max_bars`, not chosen from this table.
+
+### The evidence against it, stated plainly
+
+**The opposite-direction break does nothing.** −0.021 (all), −0.050 (discovery),
++0.016 (held out). If agreement helps, disagreement should hurt. It does not,
+and that is a real argument that the positive side is noise.
+
+**Coverage is 3%.** Even if entirely real, this fires on about one early signal
+in thirty-three — roughly one a day at current alert volume.
+
+### Verdict: do not filter, start measuring
+
+At +0.7 SE held-out on n=60 this is an encouraging shape, not evidence, and
+acting on it would be exactly the mistake the trendline slope study demonstrated
+(+4.4 SE on one half, opposite sign on the other).
+
+But the forward sample is the only thing that can settle it and it accrues at
+about one signal a day, so the clock is worth starting — the same reasoning that
+justifies the open-interest logger. Tagging alerts that have the confluence, and
+letting `/stats` score the tag forward, changes nothing that is sent and costs
+one extra computation per symbol per scan on candles already fetched.
