@@ -907,7 +907,9 @@ dpaUsePrem = input(true, 'Step 4b · also require premium / discount', group = D
 dpaPremPct = input.float(50.0, 'premium above (%)', minval = 0, maxval = 100, step = 1, group = DPA_G)
 dpaNeedAoi = input(true,  'Step 5 · price must be inside a 1h FVG', group = DPA_G,
      tooltip = 'Verbatim: "There is a clear one-hour fair value gap sitting inside the OTE zone. That gives me an area of interest, not an entry."\n\nThis is the gate that makes setups rare. With it off you will get far more signals and they will not be this model.')
-dpaAoiWindow = input.int(24, 'Bars the area stays live after price reaches it', minval = 1, maxval = 60, group = DPA_G,
+dpaAoiInOte = input(false, 'Step 5b · the gap must sit INSIDE the OTE band', group = DPA_G,
+     tooltip = 'The article states one condition, not two: "There is a clear one-hour fair value gap SITTING INSIDE the OTE zone."\n\nOFF (default) is the looser reading this indicator shipped with first: price in the OTE, and separately price recently in some 1h gap. ON is the article as written and is strictly fewer setups.\n\nIt defaults OFF only so the two can be compared on the same chart. I changed this and the panel in one go earlier, which made the versions impossible to tell apart — that was my error, not a finding about the model. Flip it and read the panel.')
+dpaAoiWindow = input.int(12, 'Bars the area stays live after price reaches it', minval = 1, maxval = 60, group = DPA_G,
      tooltip = 'The article: price reaches the area of interest, THEN you wait for the five-minute change of character. The confirmation routinely arrives a few bars later, often after price has stepped back out of the gap.\n\nRequiring both on the SAME bar is what made this gate nearly impossible to pass. 12 bars on a 5m chart is one hour.')
 dpaChochOnly = input(true, 'Step 7 · require a CHoCH, not a BOS', group = DPA_G,
      tooltip = 'A change of character breaks structure AGAINST the prevailing internal trend. A BOS is a continuation break and is a weaker claim. Uses LuxAlgo\'s own labelling, so the label drawn on your chart and the trigger here can never disagree.')
@@ -1066,7 +1068,8 @@ dpaInAoiFor(bool isLong) =>
         for i = 0 to dpaZones.size() - 1
             dpaZone z = dpaZones.get(i)
             if z.bias == (isLong ? BULLISH : BEARISH) and not na(z.touched)
-                if bar_index - z.touched <= dpaAoiWindow and dpaZoneInOte(z, isLong)
+                bool oteOk = not dpaAoiInOte or dpaZoneInOte(z, isLong)
+                if bar_index - z.touched <= dpaAoiWindow and oteOk
                     hit := true
     hit
 
@@ -1201,7 +1204,7 @@ if dpaOn and dpaNew and dpaTrades.size() > 0
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 if dpaOn and dpaPanel and barstate.islast
-    var table dpaT = table.new(position.top_right, 2, 20, border_width = 1)
+    var table dpaT = table.new(position.top_right, 2, 21, border_width = 1)
     int dpaSettled  = dpaWonN + dpaLostN + dpaExpiredN
     int dpaResolved = dpaWonN + dpaLostN
     dpaT.cell(0, 0, 'Riptide DPA', text_color = color.white, bgcolor = #0e7c86, text_size = size.small)
@@ -1212,7 +1215,7 @@ if dpaOn and dpaPanel and barstate.islast
          'Rejected under ' + str.tostring(dpaMinR, '#.#') + 'R',
          'Setups taken', 'Filled', 'Never filled', 'Target', 'Stopped',
          'Median stop %', 'Fee cost / trade', 'Avg target R', 'Biggest win R',
-         'Net R', 'R / setup')
+         'Net R', 'Net R less best win', 'R / setup')
     dpaVal = array.from(
          dpaHtfBias == BULLISH ? 'bullish' : dpaHtfBias == BEARISH ? 'bearish' : 'flat',
          dpaSpan > 0 ? str.tostring(dpaSpan, format.mintick) : 'no leg yet',
@@ -1232,11 +1235,12 @@ if dpaOn and dpaPanel and barstate.islast
          dpaCount > 0 ? str.tostring(dpaSumTgtR / dpaCount, '#.#') + 'R' : '—',
          dpaWonN > 0 ? str.tostring(dpaBestR, '#.#') + 'R' : '—',
          dpaSettled > 0 ? str.tostring(dpaNetR, '+#.#;-#.#') : '—',
+         dpaWonN > 0 ? str.tostring(dpaNetR - dpaBestR, '+#.#;-#.#') : '—',
          dpaSettled > 0 ? str.tostring(dpaNetR / dpaSettled, '+#.##;-#.##') : '—')
     for i = 0 to dpaLbl.size() - 1
         dpaT.cell(0, i + 1, dpaLbl.get(i), text_color = GRAY, text_size = size.tiny, text_halign = text.align_left)
         dpaT.cell(1, i + 1, dpaVal.get(i), text_size = size.tiny, text_halign = text.align_right,
-             text_color = i >= 17 ? (dpaNetR > 0 ? GREEN : RED) : chart.fg_color)
+             text_color = i >= 17 ? ((i == 18 ? dpaNetR - dpaBestR : dpaNetR) > 0 ? GREEN : RED) : chart.fg_color)
 
 alertcondition(dpaNew, 'DPA setup', 'Riptide DPA: all eight steps aligned')
 //---------------------------------------------------------------------------------------------------------------------}
