@@ -5230,3 +5230,71 @@ return, or 42% wins for +20%.
 
 If a smoother curve is wanted for reasons other than money, the price is now
 known to three decimal places and can be paid deliberately.
+
+
+---
+
+## Thirty-one features at once — `research/studies/feature_batch.py`, `feature_batch2.py`
+
+ADX (14/14, threshold 20), EMA 21/51/100/200, SuperTrend (10, 1.8), MACD, VWAP,
+Fibonacci position in the raid leg and momentum exhaustion — each on the signal
+timeframe and, where meaningful, on 4h, 8h and daily. 3766 early signals.
+
+**Thirty-one tests at a 2 SE bar manufacture about one and a half false
+positives from nothing.** So the null was measured rather than assumed.
+
+### The null went through two versions and the first one was mine to fix
+
+**Version 1 — a coin flip per signal.** 300 of them. Result: median |SE| 0.63,
+p95 1.79, and only **2% cleared 2 SE against a textbook 4.6%**. A null tighter
+than theory is not strict, it is broken: a coin flip has no autocorrelation,
+while a real EMA state persists for hundreds of bars so consecutive signals on
+one symbol share a value. That inflates a real feature's spread and not the
+control's.
+
+**Version 2 — a circular shift.** Each symbol's real feature series rotated in
+time by a random offset, scored against unrotated R. Same values, same order,
+same keep-rate, same autocorrelation; only the alignment with the outcome is
+destroyed. p95 rises to **1.8–2.1 and the null's MAX reaches 2.6–3.6**.
+
+**That last number is the whole result: noise on this data routinely produces
++3.5 SE. The best real feature managed +2.7.**
+
+### Decisively dead
+
+| feature | Min30 | 4h | 8h | 1d |
+|---|---|---|---|---|
+| **ADX(14,14) > 20** | +0.1 | −0.1 | +1.0 | +0.9 |
+| **MACD histogram** | +0.2 | +0.4 | +0.2 | +0.1 |
+
+**The ADX filter does nothing at any timeframe.** Neither does MACD. VWAP on the
+signal timeframe is +1.1. Momentum exhaustion (3+ bars into the raid) is −1.5
+and flips to +0.5 held out.
+
+The Fibonacci test was **degenerate and that is a flaw in the test, not evidence
+about Fibonacci**: 97% of entries sit past 50% of the raid leg, because the FVG
+forms on the reclaim by construction, so the split had nothing to divide.
+
+### The one coherent lean, and why it still fails
+
+Every EMA-on-a-higher-timeframe variant leans the same way — price above its
+HTF EMA, agreeing with the trade, scores better. Five clear the strict null's
+p95: EMA200[4h] +2.4, EMA51[8h] +2.0, EMA100[8h] +2.7, EMA21[1d] +2.2,
+EMA51[1d] +2.3.
+
+A family rather than one lucky cell is worth more than a single number. But:
+
+- **Held out they are +0.3 to +1.6.** None approaches 2.
+- **The null's max is 3.5.** The best of them is inside what noise makes.
+- They are five correlated readings of one idea, not five findings.
+
+Conditioned on the deployed Hour8 trend filter, EMA100[8h] gives +2.0 SE where
+the trend agrees and +1.4 where it does not — so it is *not* purely the existing
+filter in disguise, but neither half is strong.
+
+### Verdict
+
+**Nothing adopted.** The honest summary is that HTF trend alignment leans
+slightly positive, which the grade already encodes through the Hour8 SuperTrend
+and DI, and that every oscillator asked — ADX, MACD, RSI, VWAP — says nothing
+at any timeframe.
