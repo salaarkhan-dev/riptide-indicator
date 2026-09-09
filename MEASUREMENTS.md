@@ -3907,3 +3907,99 @@ never going to be the one that changed the sign.
 **No change recommended.** If the goal is fewer signals, EMA 50 already does
 that and is as good as anything. If the goal is more signals, off is as good as
 EMA 50. Neither choice is worth the time it takes to make.
+
+---
+
+## After the signal: an HTF bias, and waiting for an FVG — `research/studies/lez_entry.py`
+
+Seven arms on the identical signal set (every signal kept only if the full
+worst-case window exists, so no arm is scored on a population another had to
+drop). Stop 1.5 × ATR from whatever the entry turns out to be, on every arm, so
+`risk_pct` stays matched and the fee cannot pose as an edge.
+
+### FIRST: MY BAR WAS WRONG AGAIN, AND FIVE ARMS "PASSED" IT
+
+The pre-registered bar was *"beats `base` on R per signal in all four panels"*.
+**`base` is negative, so beating it means losing less.** Five of six arms
+cleared that, and not one of them is positive. This is the third time in this
+sequence a bar has been set too weak, and it is recorded rather than quietly
+restated: the bar should have been "positive in all four panels".
+
+| arm | Min30 disc | Min30 held | Min15 disc | Min15 held | |
+|---|---|---|---|---|---|
+| + 4h bias | +0.134 | +0.019 | +0.059 | +0.037 | 4/4 |
+| + daily bias | +0.084 | +0.049 | +0.079 | **−0.027** | 3/4 |
+| FVG market | +0.036 | +0.026 | +0.093 | +0.030 | 4/4 |
+| FVG retest | +0.063 | +0.071 | +0.158 | +0.098 | 4/4 |
+| FVG retest + 4h | +0.114 | +0.017 | +0.149 | +0.084 | 4/4 |
+| FVG retest + daily | +0.137 | +0.029 | +0.186 | +0.072 | 4/4 |
+
+### THE FVG ARMS' GAIN IS ENTIRELY "NOT TRADING", AND THE ENTRY IS WORSE
+
+The retest fills 54–58% of the time. Multiplying a negative mean by 0.56 makes
+it less negative without anything having improved, so the gain was split into
+**selection** (does waiting pick better signals?) and **entry** (is the limit at
+the gap a better price than the close?), the second measured **paired on the
+same signals**:
+
+| panel | base, all | base, only the ones the retest filled | retest, those same signals | ENTRY, paired |
+|---|---|---|---|---|
+| Min30 disc | −0.122 | −0.084 | −0.108 | **−0.023 ± 0.045** |
+| Min30 held | −0.114 | −0.042 | −0.078 | **−0.037 ± 0.044** |
+| Min15 disc | −0.210 | −0.077 | −0.091 | **−0.014 ± 0.033** |
+| Min15 held | −0.149 | −0.024 | −0.087 | **−0.063 ± 0.032 (−2.0 SE)** |
+
+**The limit at the gap is a WORSE price than the close, in all four panels.**
+The whole improvement is selection: +0.037, +0.072, +0.134, +0.125 — signals
+that displace into a gap and then retrace it are better signals, and the arm
+captures that by declining the other 45%.
+
+That decides the operational question. LEZ produces 1.2–2.6 signals per symbol
+per day across 60 symbols, so **signals are not scarce and R per trade TAKEN is
+the metric that matters.** By that measure the FVG arms are worse: R per filled
+trade is −0.108 vs base's −0.122 at Min30 discovery, and −0.087 vs −0.149 at
+Min15 held-out only because of the same selection. Declining trades is not an
+edge; it is doing less of a losing thing.
+
+`mss_entry.py` found the market entry beat the gap limit on Riptide's signals.
+This finds the same on LEZ's, from the opposite starting point.
+
+### THE 4h BIAS IS THE ONE THING THAT SURVIVES A PROPER TEST
+
+The table above compares each bias's own subset against everything, which
+flatters any filter that removes anything worse than average. The test that
+does not is **agree against AGAINST**, holding the entry constant — the shape
+`which_trend.py` used:
+
+| | Min30 disc | Min30 held | Min15 disc | Min15 held |
+|---|---|---|---|---|
+| **4h agree − against** | **+0.203 (2.5 SE)** | +0.029 (0.4) | +0.091 (1.6) | +0.055 (1.0) |
+| daily agree − against | +0.138 (1.8) | +0.071 (0.9) | +0.129 (2.4) | **−0.039 (−0.7)** |
+
+**4h holds its sign in all four panels. Daily flips at Min15 held-out.**
+
+That daily fails here is not a surprise — `location.py` found the daily trend's
+absolute lift did not survive its older half either, and this reproduces it
+independently. That **4h passes where daily fails is new**: `which_trend.py`
+tested the daily trend, and 4h has never been measured in this project. A
+plausible mechanism, offered as a hypothesis rather than a finding: LEZ is a
+15m/30m trigger, and a 4h bias is two timeframes away where a daily bias is
+five — the daily narrative may simply be too coarse to say anything about the
+next 48 hours on a 30m chart.
+
+### But nothing is positive
+
+The best cell in the entire study is `+ 4h bias` at Min30 discovery: **+0.012**.
+Every other cell of every arm is negative. The 4h bias moves the strategy from
+about −0.12 to about −0.10 and costs **66% of its signals** to do it.
+
+### Verdict
+
+- **The FVG retest is measured and it is worse.** The gap is a decent signal
+  filter; the retest limit is a worse entry than the close. If you want the
+  filter, keep the market entry.
+- **The 4h bias is a candidate** — the only variable in nine studies to hold
+  its sign on a proper agree-vs-against test across four panels. It is 1.0–2.5
+  SE, not 3, and it does not make anything profitable.
+- If it is ever added to the Pine it needs `request.security(..., lookahead_off)`
+  with `[1]`, or it will repaint and every number here becomes meaningless.
