@@ -1,0 +1,130 @@
+Liquidity Entry Zones — parameter sweep
+30 symbols · grid of 360 cells · every cell measured against the SAME cell run on random entries
+
+========================================================================================================
+Min30   83 days total across 30 symbols, split in half
+========================================================================================================
+  discovery (newer half): 1479 signals, 4437 control    held out (older half): 1711 signals, 5133 control
+
+  ONE KNOB AT A TIME, from the shipped defaults
+                                 n   win   risk    R/sig   random     EDGE
+   -- stop, ATR multiple --
+    stop 0.75 ATR             1479   26%  0.59%   -0.228   -0.307   +0.079
+    stop 1 ATR                1479   25%  0.79%   -0.191   -0.225   +0.034
+    stop 1.5 ATR              1479   26%  1.19%   -0.126   -0.152   +0.026
+    stop 2 ATR                1479   28%  1.59%   -0.072   -0.080   +0.008
+    stop 3 ATR                1479   33%  2.38%   -0.077   -0.077   +0.000
+   -- target --
+    target 1.5R               1479   39%  1.19%   -0.143   -0.161   +0.018
+    target 2R                 1479   33%  1.19%   -0.131   -0.165   +0.034
+    target 3R                 1479   26%  1.19%   -0.126   -0.152   +0.026
+    target 4R                 1479   22%  1.19%   -0.118   -0.130   +0.012
+   -- quality score (floor 60) --
+    any                       1479   26%  1.19%   -0.126   -0.152   +0.026
+    Q>=75                     1353   25%  1.19%   -0.157   -0.152   -0.005
+    Q>=85                      834   25%  1.17%   -0.147   -0.152   +0.005
+   -- daily trend --
+    any                       1479   26%  1.19%   -0.126   -0.152   +0.026
+    agrees                     570   28%  1.28%   +0.006   +0.026   -0.020
+    agrees/flat                889   28%  1.18%   -0.023   -0.019   -0.004
+   -- daily POI --
+    POI off                   1479   26%  1.19%   -0.126   -0.152   +0.026
+    POI required               372   27%  1.09%   -0.078   -0.148   +0.070
+
+  THE GRID on the discovery half — 360 cells, best 12 by EDGE
+  cell                                             n   win   risk    R/sig   random     EDGE     SE
+  1ATR 4R Q>=85  any         POI required        212   23%  0.72%   -0.050   -0.246   +0.196  +1.2
+  0.75ATR 2R Q>=85  any         POI required     212   36%  0.54%   -0.172   -0.344   +0.171  +1.5
+  1ATR 4R any    any         POI required        372   23%  0.73%   -0.077   -0.246   +0.169  +1.3
+  1ATR 4R Q>=75  any         POI required        345   22%  0.73%   -0.099   -0.246   +0.147  +1.1
+  0.75ATR 4R any    any         POI required     372   23%  0.55%   -0.141   -0.282   +0.141  +1.1
+  0.75ATR 4R Q>=85  any         POI required     212   23%  0.54%   -0.144   -0.282   +0.138  +0.9
+  1ATR 1.5R Q>=85  any         POI required      212   42%  0.72%   -0.143   -0.269   +0.127  +1.3
+  0.75ATR 2R Q>=85  agrees/flat POI required     136   36%  0.54%   -0.177   -0.297   +0.120  +0.9
+  0.75ATR 4R any    agrees/flat POI required     243   23%  0.55%   -0.138   -0.249   +0.111  +0.7
+  1ATR 4R Q>=85  agrees/flat POI required        136   24%  0.73%   -0.027   -0.138   +0.110  +0.5
+  2ATR 4R Q>=85  any         POI required        212   28%  1.45%   +0.020   -0.090   +0.110  +0.8
+  1ATR 3R Q>=85  any         POI required        212   27%  0.72%   -0.128   -0.233   +0.105  +0.8
+
+  NOISE FLOOR — the same 360 questions asked of coin flips, one half against the other:
+    best of 120 cells       EDGE +0.289   (1ATR 1.5R any    agrees      POI required, n=199)
+    5th best                  EDGE +0.173
+    a LEZ cell at or below +0.289 is this sweep finding nothing.
+
+  WINNER by the pre-declared rule (highest EDGE, n >= 150):
+  cell                                             n   win   risk    R/sig   random     EDGE     SE
+  1ATR 4R Q>=85  any         POI required        212   23%  0.72%   -0.050   -0.246   +0.196  +1.2
+    ^ this does NOT clear the noise floor of +0.289. The held-out test below is run anyway, but a cell that a coin flip matches is not a candidate.
+
+  HELD OUT — the older half, never looked at before now. ONE cell, one shot.
+    n           198
+    win         21%
+    R/signal    -0.106 ± 0.147
+    random      -0.233
+    EDGE        +0.127 ± 0.158   +0.8 SE
+    => FAILS — the bar was EDGE > 0 AND R/signal > 0, fixed before the run
+    discovery said +0.196 edge / -0.050 R; held out says +0.127 / -0.106
+
+========================================================================================================
+Min15   83 days total across 30 symbols, split in half
+========================================================================================================
+  discovery (newer half): 3000 signals, 9000 control    held out (older half): 3228 signals, 9684 control
+
+  ONE KNOB AT A TIME, from the shipped defaults
+                                 n   win   risk    R/sig   random     EDGE
+   -- stop, ATR multiple --
+    stop 0.75 ATR             3000   24%  0.42%   -0.436   -0.374   -0.062
+    stop 1 ATR                3000   24%  0.56%   -0.333   -0.285   -0.048
+    stop 1.5 ATR              3000   24%  0.84%   -0.227   -0.179   -0.048
+    stop 2 ATR                3000   24%  1.12%   -0.197   -0.138   -0.060
+    stop 3 ATR                3000   26%  1.67%   -0.143   -0.112   -0.031
+   -- target --
+    target 1.5R               3000   39%  0.84%   -0.218   -0.163   -0.055
+    target 2R                 3000   32%  0.84%   -0.226   -0.183   -0.043
+    target 3R                 3000   24%  0.84%   -0.227   -0.179   -0.048
+    target 4R                 3000   19%  0.84%   -0.256   -0.185   -0.071
+   -- quality score (floor 60) --
+    any                       3000   24%  0.84%   -0.227   -0.179   -0.048
+    Q>=75                     2760   24%  0.84%   -0.234   -0.179   -0.054
+    Q>=85                     1713   26%  0.85%   -0.172   -0.179   +0.007
+   -- daily trend --
+    any                       3000   24%  0.84%   -0.227   -0.179   -0.048
+    agrees                    1143   26%  0.88%   -0.139   -0.040   -0.099
+    agrees/flat               1767   25%  0.81%   -0.194   -0.091   -0.103
+   -- daily POI --
+    POI off                   3000   24%  0.84%   -0.227   -0.179   -0.048
+    POI required               686   25%  0.72%   -0.217   -0.181   -0.036
+
+  THE GRID on the discovery half — 360 cells, best 12 by EDGE
+  cell                                             n   win   risk    R/sig   random     EDGE     SE
+  1.5ATR 2R Q>=85  agrees      POI required      149   40%  0.78%   +0.034   -0.090   +0.123  +0.9
+  3ATR 3R Q>=85  agrees      POI required        149   35%  1.56%   +0.238   +0.121   +0.117  +0.7
+  3ATR 4R Q>=75  agrees/flat POI required        383   30%  1.43%   +0.106   -0.011   +0.117  +1.0
+  3ATR 4R any    agrees/flat POI required        403   29%  1.41%   +0.104   -0.011   +0.115  +1.0
+  1.5ATR 4R Q>=75  agrees      POI required      231   25%  0.77%   +0.072   -0.039   +0.111  +0.7
+  2ATR 2R Q>=85  agrees      POI required        149   41%  1.04%   +0.098   -0.013   +0.111  +0.8
+  1.5ATR 4R any    agrees      POI required      243   25%  0.76%   +0.070   -0.039   +0.109  +0.7
+  2ATR 1.5R Q>=85  agrees      POI required      149   47%  1.04%   +0.048   -0.056   +0.104  +0.9
+  3ATR 3R Q>=75  agrees/flat POI required        383   32%  1.43%   +0.063   -0.038   +0.101  +1.0
+  3ATR 4R any    agrees      POI required        243   30%  1.52%   +0.283   +0.183   +0.100  +0.6
+  1.5ATR 4R Q>=85  agrees      POI required      149   25%  0.78%   +0.057   -0.039   +0.096  +0.5
+  3ATR 3R any    agrees      POI required        243   34%  1.52%   +0.215   +0.121   +0.094  +0.7
+
+  NOISE FLOOR — the same 360 questions asked of coin flips, one half against the other:
+    best of 120 cells       EDGE +0.191   (1.5ATR 4R any    any         POI required, n=1079)
+    5th best                  EDGE +0.151
+    a LEZ cell at or below +0.191 is this sweep finding nothing.
+
+  WINNER by the pre-declared rule (highest EDGE, n >= 150):
+  cell                                             n   win   risk    R/sig   random     EDGE     SE
+  3ATR 4R Q>=75  agrees/flat POI required        383   30%  1.43%   +0.106   -0.011   +0.117  +1.0
+    ^ this does NOT clear the noise floor of +0.191. The held-out test below is run anyway, but a cell that a coin flip matches is not a candidate.
+
+  HELD OUT — the older half, never looked at before now. ONE cell, one shot.
+    n           411
+    win         29%
+    R/signal    +0.121 ± 0.098
+    random      +0.069
+    EDGE        +0.052 ± 0.110   +0.5 SE
+    => PASSES — the bar was EDGE > 0 AND R/signal > 0, fixed before the run
+    discovery said +0.117 edge / +0.106 R; held out says +0.052 / +0.121

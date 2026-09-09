@@ -3322,3 +3322,121 @@ The finding that survives is not about this indicator at all: **a market entry
 with a volatility stop is a fair coin, and on a 15m or 5m chart the fee alone
 is a quarter to a third of a stop per trade.** Any future strategy taking
 market entries starts from that hole.
+
+---
+
+## The Liquidity Entry Zones sweep — `research/studies/lez_sweep.py`
+
+Run at the user's explicit direction after Phase 1 failed, and after the plan
+had said no sweep. 360 cells per timeframe: stop 0.75/1/1.5/2/3 ATR, target
+1.5/2/3/4 R, quality any/≥75/≥85, daily trend any/agrees/agrees-or-flat, daily
+POI off/required. Min30 and Min15, ~83 days fetched and cut in half — the newer
+half to sweep on, the older half never looked at before, for one shot at the
+winner.
+
+### THE INSTRUMENT THAT DECIDES IT: a control sweep
+
+Best-of-360 on pure noise clears +2.9 SE by construction. So the identical grid
+is asked of **random entries** — same symbols, same bars, same stops, same
+targets, same trend and POI filters, direction by coin toss — and the headline
+number is not R per signal but **EDGE = LEZ − random in the SAME cell**. That
+matters because widening a stop raises `risk_pct` and fee-in-R is
+`fee / risk_pct`, so a wider stop improves *every* strategy including a coin
+flip. A sweep reporting R per signal will "discover" a wide stop and call it an
+edge.
+
+**The noise floor, measured rather than assumed** — the same 360 questions
+asked of coin flips, one half of the control pool playing against the other:
+
+| timeframe | best of 360 noise cells | 5th best | best LEZ cell |
+|---|---|---|---|
+| Min30 | **+0.289** | +0.173 | +0.196 |
+| Min15 | **+0.191** | +0.151 | +0.117 |
+
+**Neither timeframe's best cell reaches its own noise floor.** A grid this size
+manufactures a better-looking result out of coin flips than the strategy
+produced. That is the sweep's answer and everything below is detail.
+
+> The first version of this floor was broken and would have made the control
+> decorative: it compared the random pool **to itself**, which returns an edge
+> of exactly zero in every cell. A floor of +0.000 that any result clears. It
+> was caught because +0.000 across 120 cells is not a number noise produces.
+
+### The held-out shot, reported exactly as the rule was written
+
+| | Min30 winner | Min15 winner |
+|---|---|---|
+| cell | 1 ATR, 4R, Q≥85, POI | 3 ATR, 4R, Q≥75, trend-not-against, POI |
+| discovery | +0.196 edge / −0.050 R | +0.117 edge / +0.106 R |
+| **held out** | +0.127 ± 0.158 edge / **−0.106** R | +0.052 ± 0.110 edge / **+0.121 ± 0.098** R |
+| pre-declared bar | **FAILS** | **PASSES** |
+
+**And the bar it passed was too weak — that is my error, and it was in the
+pre-registration.** "EDGE > 0 and R/signal > 0" has no significance
+requirement, so a coin flip clears it about half the time. The Min15 held-out
+edge is **0.5 SE** and its R per signal **1.2 SE**. Pooling both halves of that
+one cell gives roughly +0.085 ± 0.076 edge, about 1.1 SE. Nothing here is
+distinguishable from zero, and the instrument that was built to say so — the
+floor — says the cell never cleared it on discovery either.
+
+### One knob at a time, which is the readable part
+
+Min30, from the shipped defaults, EDGE in the last column:
+
+| knob | R/signal | random | EDGE |
+|---|---|---|---|
+| stop 0.75 ATR | −0.228 | −0.307 | **+0.079** |
+| stop 1.5 ATR (shipped) | −0.126 | −0.152 | +0.026 |
+| **stop 3 ATR** | **−0.077** | **−0.077** | **+0.000** |
+| target 2R | −0.131 | −0.165 | +0.034 |
+| target 4R | −0.118 | −0.130 | +0.012 |
+| Q ≥ 85 | −0.147 | −0.152 | +0.005 |
+| daily trend agrees | +0.006 | +0.026 | **−0.020** |
+| **POI required** | −0.078 | −0.148 | **+0.070** |
+
+The 3 ATR row is the cleanest statement of the whole exercise: the strategy and
+a coin flip score **identically to three decimal places**, and the only reason
+R per signal improved from −0.228 to −0.077 is that a 2.38% stop pays a third
+of the fee a 0.59% stop pays.
+
+At **Min15 every single knob has a negative edge** except Q≥85 at +0.007 —
+including the two that raise R per signal most. Yet the Min15 grid still
+produced a +0.117 best cell. That gap between "every ingredient hurts" and "the
+best of 360 combinations looks fine" is best-of-N, visible in one table.
+
+### The trend filter helps random entries MORE than it helps this strategy
+
+Min15: the daily-trend filter takes random entries from −0.179 to **−0.040**
+and LEZ from −0.227 to only −0.139. Min30: random −0.152 → **+0.026**, LEZ
+−0.126 → +0.006.
+
+Two things follow. First, `which_trend.py`'s +4.5 SE daily-trend effect
+reproduces cleanly **inside the control**, which is independent evidence that
+the scorer and the context plumbing here are sound. Second, this strategy is
+anti-correlated with it: LEZ buys after a low is swept — a mean-reversion
+trigger — while the trend filter is a momentum filter. A random long in an
+uptrend rides it; a LEZ long in an uptrend has specifically bought a flush.
+
+### Answers to the specific questions asked
+
+- **2R**: no. Min30 edge +0.034 (R −0.131), Min15 edge −0.043 (R −0.226). The
+  target ladder is flat in edge terms at both timeframes; 2R is not special.
+- **ATR multiple**: wider is better for R and worse for edge, monotonically,
+  and both are the fee moving. There is no stop width at which the signal pays.
+- **Quality score**: dead, as predicted from its construction — 60 of its 100
+  points are pinned by the gates it divides by. Min30 +0.005, Min15 +0.007.
+- **Trend**: negative edge on both timeframes. It is a good filter that this
+  signal is the wrong shape for.
+- **POI**: the only knob with any life — Min30 +0.070 on 372 signals — and it
+  flips sign at Min15 (−0.036). One timeframe positive, one negative, is how
+  the BTC × own-trend interaction was rejected, and it was right to be.
+
+### Verdict
+
+**The sweep found nothing that clears its own noise floor.** The components
+that carry the one positive-looking cell — the daily trend and the daily POI —
+are variables Riptide already uses and already gates on. The Liquidity Entry
+Zones trigger itself contributes about +0.05 R with a standard error of 0.11.
+
+If a strategy is to be built out of this, the honest reading is that the
+filters are doing the work and the trigger is decoration.
