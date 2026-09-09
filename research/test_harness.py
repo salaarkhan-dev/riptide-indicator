@@ -159,5 +159,41 @@ check("short reaches its target",
       round(simulate_market(cs, 0, 100.0, 110.0, False, target_r=3.0,
                             fee_maker=0.0, fee_taker=0.0).r, 6), 3.0)
 
+print("\n12. simulate_market manages the stop exactly as simulate does")
+# Long, entry 100, stop 90 (1R = 10). Bar 1 CLOSES at 110 = +1R, arming the
+# break-even stop at +0.1R = 101. Bar 2 collapses to 89 — a full stop without
+# the arm, a +0.1R scratch with it.
+cs = bars([(100, 101,  99, 100),      # 0 entry at the close
+           (100, 111,  99, 110),      # 1 closes at +1R -> arms
+           (110, 111,  89,  90)])     # 2 would have been a full stop
+plain = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0,
+                        fee_maker=0.0, fee_taker=0.0)
+armed = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0, be_arm_r=1.0,
+                        be_lock_r=0.1, fee_maker=0.0, fee_taker=0.0)
+check("without a break-even it is a full loss", round(plain.r, 6), -1.0)
+check("with one it is a +0.1R scratch", round(armed.r, 6), 0.1)
+check("and still reports exit=stop", armed.exit, "stop")
+# The arm is on the CLOSE, not intrabar: a bar that only WICKS to +1R and
+# closes back must not arm, or the scratch would be manufactured.
+cs = bars([(100, 101,  99, 100),
+           (100, 115,  99, 100),      # wicks past +1R, closes at entry
+           (100, 101,  89,  90)])
+check("a wick to +1R does not arm",
+      round(simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0,
+                            be_arm_r=1.0, be_lock_r=0.1, fee_maker=0.0,
+                            fee_taker=0.0).r, 6), -1.0)
+# Partial: half out at 1R, stop to +0.1R, remainder aiming at 3R and stopped.
+cs = bars([(100, 101,  99, 100),
+           (100, 111,  99, 110),      # 1R -> half banked, stop to 101
+           (110, 111, 100, 100)])     # back to the moved stop
+o = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0, part_at_r=1.0,
+                    part_to_r=3.0, be_lock_r=0.1, fee_maker=0.0, fee_taker=0.0)
+check("0.5*1R banked + 0.5*0.1R", round(o.r, 6), round(0.5 + 0.05, 6))
+# Defaults must not change anything: the old behaviour is still the default.
+cs = bars([(100, 101, 99, 100), (100, 101, 89, 90)])
+check("defaults are unchanged",
+      round(simulate_market(cs, 0, 100.0, 90.0, True, fee_maker=0.0,
+                            fee_taker=0.0).r, 6), -1.0)
+
 print("\n" + ("FAILED: " + ", ".join(FAILED) if FAILED else "ALL PASS"))
 sys.exit(1 if FAILED else 0)

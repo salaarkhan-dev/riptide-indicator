@@ -3755,3 +3755,103 @@ and it applies to Riptide itself, not only to the strategies that failed.
 - Distance in **ATR** is a candidate worth a proper test.
 - The next study is a **minimum risk floor in percent**, on Riptide's own
   signals, with a pre-registered monotonicity bar.
+
+---
+
+## The stop: where to put it, and what to do with it — `research/studies/stops.py`
+
+Two pre-registered questions, one collection pass, on Riptide's real signals
+(limit at the gap, stop at the raid extreme) and on LEZ (market at the close,
+1.5 ATR stop), Min30 and Min15, window split in half. Target 2R — what the
+chart is actually running.
+
+**Both primaries fail.** Neither a minimum risk floor nor any stop-management
+rule clears its bar. But the tables answer the question that was asked.
+
+### A. The risk floor — NOT SUPPORTED, and the reason is instructive
+
+Net R is not monotone in `risk_pct` in any of the eight panels. The gradient is
+an **inverted U**: both extremes are bad and the middle is least bad, so a
+floor is the wrong instrument even where the bottom bucket is genuinely awful.
+
+What the gross column does show, and it is the fee in the clear:
+
+| panel | bottom bucket | fee | gross | net |
+|---|---|---|---|---|
+| LEZ Min15 discovery | risk < 0.45% | **0.368 R** | −0.123 | **−0.490** |
+| LEZ Min15 held out | risk < 0.50% | **0.281 R** | **+0.123** | **−0.158** |
+| LEZ Min30 discovery | risk < 0.65% | 0.255 R | −0.077 | −0.332 |
+| Riptide Min15 held | risk < 0.54% | 0.134 R | −0.101 | −0.235 |
+
+The LEZ Min15 held-out row is the whole argument in one line: those trades are
+**profitable gross at +0.123** and the fee alone turns them into −0.158. Three
+quarters of a stop, paid to the exchange, on the tightest fifth of trades.
+
+And the study's own design question is answered cleanly. The bottom bucket is
+the worst bucket in **3 of 4 LEZ panels** but only **1 of 4 Riptide panels** —
+exactly as the pre-registration predicted it might split. LEZ's risk is
+EXOGENOUS (a fixed ATR multiple, so a small `risk_pct` just means a quiet
+symbol and a big fee); Riptide's is ENDOGENOUS (the raid extreme, so a small
+`risk_pct` means a tight raid, and setup quality competes with the fee).
+
+**No floor is recommended.** Monotonicity was the bar and it was not met. Even
+in the best case the arithmetic does not rescue anything: dropping LEZ's worst
+Min15 bucket moves the strategy from −0.212 to about −0.14, which is a smaller
+loss, not a profit.
+
+### B. Stop management — nothing beats a plain fixed stop, but look at the cost
+
+No rule beats the plain stop on net R in both halves, on either strategy. The
+Riptide prior replicates: break-even loses at every arm level, and the earlier
+the arm the worse it is.
+
+**But the question asked was about the win rate and the stop-outs, and the
+partial delivers both, nearly free — on LEZ:**
+
+| LEZ Min30, held out | win | full losses | R net | vs plain |
+|---|---|---|---|---|
+| plain fixed stop | 33% | **1131 (66%)** | −0.114 | — |
+| BE at 1R, lock 0 | 29% | 988 (58%) | −0.126 | −0.012 |
+| **half at 1R, rest to target** | **50%** | **843 (50%)** | −0.121 | **−0.007** |
+
+**33% → 50% win rate, 66% → 50% full stop-outs, for 0.007 R per trade.** The
+Min15 held-out panel is the same shape at a higher price: 34% → 49% win, 66% →
+51% full losses, −0.031 R.
+
+Note the break-even rule does the opposite of what it is reached for: it cuts
+full losses but LOWERS the win rate (33% → 29%), because a break-even exit
+scores 0.0 and `r > 0` does not count it. A partial banks +0.5R, which does.
+**If the goal is the win rate, the partial is the instrument and break-even is
+not.**
+
+### THE PRICE OF A HIGHER WIN RATE IS PROPORTIONAL TO THE EDGE YOU HAVE
+
+The same partial, on the one panel in this study where the strategy is actually
+making money:
+
+| Riptide Min30, discovery | win | full losses | R net | vs plain |
+|---|---|---|---|---|
+| plain fixed stop | 31% | 119 (39%) | **+0.174** | — |
+| half at 1R, rest to target | 40% | 94 (31%) | **+0.071** | **−0.103** |
+
+It costs **59% of the edge**. On LEZ, where there is no edge, the identical
+rule costs 6%.
+
+That is `winrate.py`'s finding arriving from a new direction and it is the
+practical rule to take away: **a partial exit is close to free when the
+strategy has no edge and expensive exactly when it has one.** Buying comfort is
+cheapest where comfort is all you are buying.
+
+### What ships from this
+
+Nothing. Both primaries failed and neither is a change to the bot. What is now
+quantified, and was not before:
+
+- A 0.4% stop pays **0.37 R** per trade in fees. A 1.4% stop pays 0.07 R. That
+  is the single largest cost in every strategy measured in this sequence.
+- `Cfg.max_risk_atr` caps risk in ATR units and still cannot see that axis. A
+  percent-based cap or floor remains untested as a *shipped* change, but the
+  gradient does not support one.
+- `research/harness.py`'s `simulate_market` now supports break-even and
+  partial exits, mirroring `simulate` exactly, with tests — so the market-entry
+  side of every future study can ask this question without a local copy.

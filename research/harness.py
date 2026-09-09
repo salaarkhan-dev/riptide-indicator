@@ -143,6 +143,8 @@ def simulate_market(cs, signal_bar: int, entry: float, stop: float,
                     is_long: bool, *, target_r: float = TRACK_TARGET_R,
                     target_px: float | None = None,
                     horizon_bars: int = TRACK_HORIZON_BARS,
+                    be_arm_r: float = 0.0, be_lock_r: float = 0.0,
+                    part_at_r: float = 0.0, part_to_r: float = 0.0,
                     fee_maker: float = 0.02,
                     fee_taker: float = 0.06) -> Outcome | None:
     """A MARKET entry taken at `entry` on the CLOSE of `signal_bar`.
@@ -175,12 +177,22 @@ def simulate_market(cs, signal_bar: int, entry: float, stop: float,
     if risk <= 0 or entry <= 0 or signal_bar >= len(cs) - 1:
         return None
     sgn = 1 if is_long else -1
-    tgt = target_px if target_px is not None else entry + sgn * risk * target_r
+    lvl = lambda r: entry + sgn * risk * r
     to_r = 1.0 / (100 * risk / entry)
     # Market in, so taker on entry. Out is maker on a target (a resting limit)
     # and taker on a stop (a market order), the same split simulate() uses.
+    # One fee per trade, charged by how it ENDS — including for a partial,
+    # which simulate() also approximates this way. Keeping the two scorers
+    # identical matters more here than a second decimal place on the fee.
     fee_win = (fee_taker + fee_maker) * to_r
     fee_lose = (fee_taker + fee_taker) * to_r
+    # Break-even and partial management, mirroring simulate() exactly: the
+    # stop can move, a partial banks half at part_at_r and runs the rest to
+    # part_to_r, and a break-even stop arms on the CLOSE rather than intrabar
+    # because bar data cannot resolve order within a bar.
+    cur_stop, armed, part_done, banked, size = stop, False, False, 0.0, 1.0
+    tgt_r = part_at_r or target_r
+    fixed_px = target_px if (target_px is not None and not part_at_r) else None
     mfe = mae = 0.0
 
     for k in range(signal_bar + 1, min(signal_bar + 1 + horizon_bars, len(cs))):
@@ -188,15 +200,26 @@ def simulate_market(cs, signal_bar: int, entry: float, stop: float,
         fav = (c.h - entry) / risk if is_long else (entry - c.l) / risk
         adv = (c.l - entry) / risk if is_long else (entry - c.h) / risk
         mfe, mae = max(mfe, fav), min(mae, adv)
-        if (c.l <= stop) if is_long else (c.h >= stop):
-            return Outcome(-1.0 - fee_lose, True, signal_bar, mfe, mae, k,
-                           "stop")
+        if (c.l <= cur_stop) if is_long else (c.h >= cur_stop):
+            r = banked + size * sgn * (cur_stop - entry) / risk
+            return Outcome(r - fee_lose, True, signal_bar, mfe, mae, k, "stop")
+        tgt = fixed_px if fixed_px is not None else lvl(tgt_r)
         if (c.h >= tgt) if is_long else (c.l <= tgt):
-            return Outcome(sgn * (tgt - entry) / risk - fee_win,
+            if part_at_r and not part_done:
+                banked += 0.5 * part_at_r
+                size, part_done, tgt_r = 0.5, True, part_to_r
+                cur_stop, armed = lvl(be_lock_r), True
+                continue
+            hit_r = (sgn * (tgt - entry) / risk if fixed_px is not None
+                     else tgt_r)
+            return Outcome(banked + size * hit_r - fee_win,
                            True, signal_bar, mfe, mae, k, "target")
+        if be_arm_r and not armed:
+            if (c.c >= lvl(be_arm_r)) if is_long else (c.c <= lvl(be_arm_r)):
+                cur_stop, armed = lvl(be_lock_r), True
     last = min(signal_bar + 1 + horizon_bars, len(cs)) - 1
-    return Outcome(sgn * (cs[last].c - entry) / risk - fee_lose,
-                   True, signal_bar, mfe, mae, last, "timeout")
+    r = banked + size * sgn * (cs[last].c - entry) / risk
+    return Outcome(r - fee_lose, True, signal_bar, mfe, mae, last, "timeout")
 
 
 def mean_se(v) -> tuple[float, float]:
