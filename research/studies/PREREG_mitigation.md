@@ -116,3 +116,29 @@ Held-out window ends where the discovery window begins — 2000 Min30 bars
 before now, the same construction `btc_regime.py` used. Nothing in this
 project has looked at it since the BTC work, and the mitigation variable has
 never been computed on it at all.
+
+
+---
+
+## OUTCOME — 9 Sep 2026, before any held-out data was fetched
+
+The discovery numbers this document was written around were **entirely a
+look-ahead**. `poi_state` carried its own copy of `t <= when`, so the fix to
+`in_poi` never reached this study; the giveaway was that a re-run moved
+nothing at all.
+
+Corrected, the wick arm collapses from 408 unmitigated zones to **3**, failing
+the degeneracy rule stated above (5-60%). The close arm survives at **+0.269,
++4.1 SE**, clearing the pre-registered primary — but the "must hold on both
+definitions" clause cannot be satisfied, the fixed-age control is inconsistent
+(positive at ages 1, 2, 4, 5; flat or negative at 3, 6, 8), and the
+non-monotone visit gradient predicted here as a warning sign is still present.
+
+**Held-out test not run.** There is no point spending a held-out window on a
+variable whose discovery-window evidence is this mixed; the window is a
+one-shot resource and burning it here would leave nothing for a cleaner
+candidate. Recorded as a candidate.
+
+The mechanism check in this document was the right instinct and the control
+that mattered was the one added late — "is unmitigated just young?" It was
+not young. It was the leak.

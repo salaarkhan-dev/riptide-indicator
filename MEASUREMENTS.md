@@ -3137,3 +3137,76 @@ The thing that caught this one was a **pre-registered control that I expected
 to fail** — "is unmitigated just young?" — asked of a result I wanted to be
 true. The control is what found the leak. Nothing else in the process would
 have.
+
+## Order block mitigation, measured properly — and a second copy of the same bug
+
+`dailypriceaction.com/blog/order-blocks/` makes unmitigated status its central
+rule: *"An order block is only valid the first time price reaches it... If
+price has already wicked into the order block, even slightly, I consider it
+mitigated, that level is done."* This is the claim `mitigation.py` was written
+to test.
+
+### The bug, again, in a copy
+
+After `in_poi` was fixed, `mitigation.py` was re-run and **the numbers did not
+move at all** — 2706 signals against 2700, the same +11.9 SE. That is what
+exposed it: `poi_state` carried its own copy of `t <= when`, so fixing
+`in_poi` had done nothing to this study. Fixed to `t + step <= when`.
+
+MEASUREMENTS.md already records this exact lesson from the duplicate-signal
+bug: *"A rule enforced in one place needs verifying in one place."* It was
+written about a different bug and applied to none. A grep for the pattern
+found the copy in seconds and should have been the first move after the fix.
+
+### What survives once the look-ahead is gone
+
+**The wick definition — the article's actual rule — becomes untestable.**
+
+| | before (leaked) | after |
+|---|---|---|
+| unmitigated zones | 408 of 2706 (15%) | **3 of 2371 (0%)** |
+| R/signal | +0.730 (74% win, +11.9 SE) | too few to report |
+
+A daily zone that is at least one day old has essentially always been wicked
+into. The entire +11.9 SE was age-0 zones — blocks read from the daily candle
+the raid was sitting inside. **100% of that result was the leak.** By this
+file's own pre-registered degeneracy rule (5–60%), the wick definition fails
+and cannot be measured on daily zones at all.
+
+**The close definition does survive, at a quarter of the size.**
+
+| population | unmitigated | mitigated | difference |
+|---|---|---|---|
+| **all POI (primary)** | +0.209 ± 0.059 (47% win) | −0.061 ± 0.029 (34%) | **+0.269, +4.1 SE** |
+| confirmed only | +0.161 ± 0.175 | +0.008 ± 0.073 | +0.153, +0.8 SE |
+| grade A only | +0.283 ± 0.206 | +0.080 ± 0.120 | +0.203, +0.9 SE |
+
+The pre-registered primary was 3 SE on the close definition, all POI signals.
+**It clears at 4.1 SE, and no secondary panel flips sign.**
+
+### It is a CANDIDATE and it is not shipped. Four reasons
+
+1. **The "both definitions" clause failed.** `PREREG_mitigation.md` required
+   the effect on wick and close alike, and the wick arm is now degenerate. That
+   is not a contradiction — it is an arm that cannot be read — but it is not
+   the support that was asked for in advance either.
+2. **The fixed-age control is inconsistent.** Holding age at one value:
+   age 1 +0.533 (3.6 SE), age 2 +0.700 (3.3), age 3 −0.106, age 4 +0.540 (2.0),
+   age 5 +0.414 (1.6), age 6 −0.013, age 8 −0.142. Four positive, three flat or
+   negative, no pattern in which is which.
+3. **The non-monotone visit gradient predicted in advance is still there.**
+   0 visits +0.209, 1 visit **−0.183**, 2–3 +0.004, 4+ −0.036. One visit is the
+   worst cell and four or more recovers. Doctrine predicts decay; this is a
+   cliff plus noise, and the pre-registration said in advance that this shape
+   would mean the variable is not measuring what the story claims.
+4. **It has not been held out.** Everything found in this window today was
+   found in this window.
+
+**What it is NOT is zone age.** That control came back clean: age 1–2 −0.049,
+3–5 +0.058, 6–10 −0.002, 11+ −0.024. Flat. So a tighter `ZONE_MAX_AGE_BARS` is
+not the hidden finding.
+
+**Practical consequence for any indicator.** The article's rule as written —
+any wick kills the block — cannot be implemented usefully on daily zones: it
+would reject 2368 of 2371. A close-based mitigation test is implementable and
+is the only version with evidence behind it.

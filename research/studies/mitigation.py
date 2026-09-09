@@ -70,9 +70,15 @@ def poi_state(cs_htf, zones, when, price, is_long, step):
     the whole fix: including the raid bar is what made the earlier attempt
     return "mitigated" for 1888 of 1888 signals.
     """
+    # `t + step <= when`, matching the corrected mtf_grid.in_poi. An earlier
+    # version of this function carried its own copy of the old `t <= when` and
+    # so kept the look-ahead alive after in_poi was fixed — the numbers did not
+    # move and that is what exposed it. MEASUREMENTS.md already records the
+    # lesson from the duplicate-signal bug: a rule enforced in one place needs
+    # verifying in one place.
     best = None
     for t, bull, lo, hi in zones:
-        if (t <= when and bull == is_long and lo <= price <= hi
+        if (t + step <= when and bull == is_long and lo <= price <= hi
                 and when - t <= ZONE_MAX_AGE_BARS * step):
             if best is None or t > best[0]:
                 best = (t, lo, hi)          # most recent matching zone
