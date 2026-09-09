@@ -4919,3 +4919,76 @@ with a flat aggregate is not a finding.
 particular formalisation of it does not sort R.** Which `context.py` had already
 warned about from the other side: it found a huge effect on conversion and none
 on expectancy, and those are different questions.
+
+
+---
+
+## RSI divergence — `research/studies/divergence.py`
+
+### The strategy that prompted it is not measurable from its own tester
+
+Reported: **+213.92%, 64.04% wins, profit factor 1.561**, 89 trades, BTC 15m.
+The settings say otherwise, and this is arithmetic rather than opinion:
+
+**Leverage.** `default_qty_value=2, strategy.fixed` on BTC near 78,000 is a
+**$157,000 position on $10,000** — 15.7x, up to 31.4x with `pyramiding=2`. The
+62.54% max drawdown is the leverage, not the edge.
+
+**No fees, no slippage.** The `strategy()` call sets neither. Average profit is
+$240 a trade = **0.153% of notional**, against a MEXC round trip of 0.08–0.12%:
+
+| | net PnL | profit factor |
+|---|---|---|
+| as shown | +214% | 1.561 |
+| at 0.08% | +102% | 1.207 |
+| at 0.12% | **+46%** | **1.084** |
+
+Two thirds to four fifths of the result is the fee it was never charged.
+
+**Long only, and `Buy and hold` is toggled off** in the screenshot — the one
+comparison that would separate the strategy from the rally it ran through.
+
+**No stop.** `sl_type` defaults to `"NONE"`, so a losing long is held until RSI
+crosses 80 or a bear divergence prints. That is what makes the win rate 64%, and
+the tester says so itself: **average win $1,044 against average loss $1,192**, a
+ratio of 0.88. Wins smaller than losses is the signature of a no-stop system.
+
+**The author publishes different tuned parameters per symbol** in the header
+comments — GOOGL 5/3/1, SPY 5/3/3. Curve fitting, stated openly.
+
+### The concept was still worth one measurement
+
+`context.py` had tested RSI *extension* at the raid (+0.025, +0.4 SE, dead).
+Extension is "RSI is far from 50"; **divergence is a relationship between two
+series** and had never been tested here. Author's parameters kept exactly: RSI 9,
+pivots 1/3, previous pivot 5–60 bars back.
+
+**As a trade of its own** — market at the confirming close, 1.5 ATR stop, 2R,
+MEXC fees:
+
+| | n | win | R/signal |
+|---|---|---|---|
+| regular divergence | 1394 | 32% | **−0.144 ± 0.038** (−3.8 SE) |
+| hidden divergence | 2944 | 34% | **−0.097 ± 0.026** (−3.7 SE) |
+
+The sixth indicator here to fail standalone, and the most decisively negative of
+them.
+
+**As a filter** — the pre-registered primary was an agreeing regular divergence
+on early signals, held out, at 2 SE:
+
+| panel | n | vs the rest | |
+|---|---|---|---|
+| early, all | 354 (9%) | −0.055 | −0.8 SE |
+| **early, held out** | 150 | **+0.028** | **+0.3 SE** |
+| confirmed, all | 74 | **−0.235** | **−1.7 SE** |
+
+**Fails.** The sign flips between the halves on early, and the largest number in
+the table — agreement making confirmed setups *worse* at −1.7 SE — points the
+opposite way to the concept. A contradicting divergence came out mildly positive
+(+1.2 SE all, +0.5 SE held out), which is backwards and is how noise looks.
+
+### Verdict
+
+Not adopted in any role. RSI is the most-tested oscillator in existence and this
+population has now rejected both its level form and its divergence form.
