@@ -4616,3 +4616,79 @@ already traded through the entry. The fill always happens first.
 No change. The early trigger stays as it is. The mechanism is real, common, and
 harmless; the version that hurts is rare, near-tautological, and costs more to
 avoid than it takes.
+
+
+---
+
+## Open interest — the data is verified, the sample is not there yet
+
+First export of the `market` table: **6328 rows, 94 symbols, 2.8 days**. Far
+too little to test anything, but exactly enough to check the logger is
+recording something worth accumulating — which is the higher-value question at
+this stage, because a subtly broken logger would waste the next six weeks.
+
+### The logger is sound
+
+| check | result |
+|---|---|
+| distinct bars in the span | 134, every step exactly 1800s — **no missed snapshots** |
+| aligned to the Min30 grid | yes |
+| OI series frozen or stale | **0 of 23** long series |
+| bars moving OI by >0.5% / >2% | 72% / 31% |
+| `hold_vol <= 0` | 0 rows |
+| funding | 336 distinct values, 0.5% exactly zero |
+
+**The number that mattered most: correlation of OI change with PRICE change is
++0.038** (median over 23 symbols, p10 −0.270, p90 +0.231). If OI merely tracked
+price it would be another OHLC rearrangement wearing a disguise, and thirteen
+families of those have already died here. It does not track price. It is
+genuinely separate information.
+
+### One real defect found, and fixed
+
+`market.snapshot` filtered the ticker response down to the currently-scanned
+symbols. The response carries **1196 contracts** and 1136 were being discarded —
+from a request that was already being made.
+
+Worse than waste: the scanned set is the top `TOP_N` by turnover refreshed every
+six hours, so symbols near that line rotate constantly. The export showed 94
+distinct symbols but **only 20 with more than 95% bar coverage**. Short broken
+series are close to worthless here, because the tested quantity is the *change*
+in OI across the raid, which needs the previous bar too.
+
+Now logs every contract above `RIPTIDE_MARKET_MIN_VOL` (1M, a third of the scan
+threshold), plus the scanned set unconditionally. **180 symbols instead of 60**,
+same single request, no rotation holes, and history already in place for a
+symbol on the day it rotates into the scanned set.
+
+### When it becomes testable
+
+128 of 1399 backtest early signals joined to an OI reading on both the raid bar
+and the one before — **97% of those whose raid fell inside the window**, so the
+join itself is clean. 46 usable signals a day.
+
+Per-signal spread is 1.234 R, so at the 3 SE bar:
+
+| detectable difference | signals needed | days from the 2.8-day export |
+|---|---|---|
+| 0.30 R | 305 | 4 |
+| 0.20 R | 685 | 12 |
+| 0.15 R | 1218 | 24 |
+
+Discovery numbers; a held-out half doubles every row. So a properly held-out
+test of a plausible effect is **4 to 8 weeks out**, matching what `market.py`
+predicted when it was written.
+
+### The analysis was pre-registered before the data existed
+
+`research/studies/oi_raid.py` was written and committed while the table held
+2.8 days — direction, buckets, bar and all. Falling OI across the raid must
+score **better** than rising; a result the other way is a failed test, not a
+discovery.
+
+It also **refuses to print a verdict below 610 joined signals** and prints the
+countdown above instead. That refusal is the point: the trendline slope study
+produced +4.4 SE on one half of its data and the opposite sign on the other, and
+the only reason it was caught is that nobody was permitted to act on the first
+half. This removes the temptation mechanically rather than relying on
+discipline.

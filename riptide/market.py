@@ -36,7 +36,8 @@ from __future__ import annotations
 
 import time
 
-from .config import BASE, LOG_MARKET, MARKET_KEEP_DAYS, log
+from .config import (BASE, LOG_MARKET, MARKET_KEEP_DAYS,
+                     MARKET_MIN_VOL, log)
 from .exchange import get_json
 from .tracker import last_closed_bar
 
@@ -76,8 +77,31 @@ async def snapshot(sess, db, symbols) -> int:
     sentence here said "one request for every symbol", which was wrong and
     cost an hour of chasing a rate-limit theory that could not have been true.
     Returns how many rows were written.
+
+    IT NO LONGER FILTERS TO THE SCANNED SYMBOLS, and the reason is the whole
+    point of the module. The first export of this table — 6328 rows, 2.8 days
+    — showed 94 distinct symbols but only 20 with a series covering more than
+    95% of the bars. The scanned set is the top TOP_N by turnover, refreshed
+    every six hours, and symbols near that line rotate in and out constantly.
+    So the file was accumulating a lot of short, broken series rather than
+    fewer long ones, and a broken series is close to worthless here: the
+    quantity being tested is the CHANGE in open interest across the raid, which
+    needs the bar before as well as the bar itself.
+
+    Meanwhile the response already contained 1196 contracts and 1136 of them
+    were being thrown away. Keeping more of it costs nothing — same single
+    request, same cadence — and buys three things: no rotation holes, a sample
+    that fills roughly three times faster, and history already in place for a
+    symbol on the day it rotates INTO the scanned set.
+
+    The floor is turnover, well below the scan threshold rather than at it, so
+    anything that could plausibly become scannable is already being recorded.
+    At the defaults that is about 180 symbols against 106 currently eligible
+    to scan — real headroom, and roughly 1.5M rows over the full 180-day
+    retention, which is tens of megabytes. RIPTIDE_MARKET_MIN_VOL is the lever
+    if that is ever too many; MARKET_KEEP_DAYS is the other one.
     """
-    if not LOG_MARKET or not symbols:
+    if not LOG_MARKET:
         return 0
 
     d = await get_json(sess, f"{BASE}/api/v1/contract/ticker")
@@ -86,20 +110,26 @@ async def snapshot(sess, db, symbols) -> int:
         log.debug("market: ticker unavailable this cycle, nothing logged")
         return 0
 
-    want = set(symbols)
+    # Always keep the scanned symbols, whatever their turnover says — those
+    # are the ones a signal can actually come from, and a symbol dropping
+    # under the floor mid-window must not put a hole in its own series.
+    want = set(symbols or ())
     t = last_closed_bar()
     out = []
     for r in rows:
-        if not isinstance(r, dict) or r.get("symbol") not in want:
+        if not isinstance(r, dict):
             continue
+        sym = r.get("symbol")
         hold = _num(r.get("holdVol"))
-        if hold is None:
+        if not sym or hold is None:
             continue                      # no open interest, nothing to log
-        out.append((r["symbol"], t, hold, _num(r.get("fundingRate")),
+        if sym not in want and (_num(r.get("amount24")) or 0) < MARKET_MIN_VOL:
+            continue
+        out.append((sym, t, hold, _num(r.get("fundingRate")),
                     _num(r.get("lastPrice")), _num(r.get("amount24"))))
 
     if not out:
-        log.debug("market: ticker carried none of the scanned symbols")
+        log.debug("market: ticker carried nothing above the turnover floor")
         return 0
 
     db.executemany("INSERT OR REPLACE INTO market VALUES(?,?,?,?,?,?)", out)

@@ -245,6 +245,20 @@ LOG_MARKET = os.getenv("RIPTIDE_LOG_MARKET", "1") == "1"
 # Days of snapshots to keep. At one row per symbol per bar this is roughly
 # 20 symbols x 48 bars x 180 days = 173k rows, a few MB.
 MARKET_KEEP_DAYS = int(os.getenv("RIPTIDE_MARKET_KEEP_DAYS", "180"))
+# Minimum 24h turnover for a symbol to be SNAPSHOTTED. Deliberately a third of
+# MIN_VOL_USDT rather than equal to it: the scanned set is the top TOP_N by
+# turnover and symbols near that line rotate in and out every few hours, so
+# logging only the scanned ones produced short broken series — 94 symbols in
+# 2.8 days but only 20 covering more than 95% of the bars. A broken series is
+# nearly worthless here, because the quantity being tested is the CHANGE in
+# open interest across the raid, which needs the previous bar too.
+#
+# The ticker response already carries every contract (1196 of them), so a
+# lower floor costs no extra request and no extra latency — only rows. At this
+# default that is roughly 180 symbols and about 1.5M rows over the full
+# retention, tens of megabytes. Raise it if disk ever matters; MARKET_KEEP_DAYS
+# is the other lever. Scanned symbols are always logged regardless of this.
+MARKET_MIN_VOL = float(os.getenv("RIPTIDE_MARKET_MIN_VOL", "1000000"))
 
 # The no-shift entry: sweep -> first imbalance, no structure shift required.
 # A second strategy running beside the confirmed one, not a replacement — both
