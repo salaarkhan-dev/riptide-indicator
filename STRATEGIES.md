@@ -356,9 +356,29 @@ worth a slot. Below that: back to Phase 1 with one variable changed, or stop.
 > tighter and pays more fee per unit of risk. Full numbers and the
 > port-fidelity evidence in `MEASUREMENTS.md`.
 >
-> **Phases 2–5 do not start.** No parameter sweep: that was ruled out in
-> advance, and it is the only honest reading of a model that cannot clear zero
-> once.
+> **Phases 2–5 do not start.**
+>
+> ### The sweep, run afterwards at the user's direction — `lez_sweep.py`
+>
+> 360 cells (stop, target, quality, trend, POI) on Min30 and Min15, window
+> doubled and split so the winner got one shot at unseen data. Scored on
+> **EDGE = LEZ − random entries in the same cell**, because a wider stop
+> lowers fee-in-R and so improves a coin flip too.
+>
+> The same grid asked of coin flips — one half of the control pool against the
+> other — has a best cell at **+0.289** (Min30) and **+0.191** (Min15). The
+> best LEZ cells are **+0.196** and **+0.117**. **Neither reaches its own noise
+> floor.** At a 3 ATR stop on Min30 the strategy and a coin flip score
+> identically to three decimals.
+>
+> The Min30 held-out shot fails. The Min15 one passes a bar that was written
+> too weak — "edge > 0 and R > 0" with no significance requirement, which a
+> coin flip clears about half the time; its held-out edge is 0.5 SE. Full
+> numbers in `MEASUREMENTS.md`.
+>
+> The components carrying the one positive-looking cell are the daily trend and
+> the daily POI, both of which Riptide already gates on. The trigger itself
+> adds +0.05 ± 0.11.
 
 ### Phase 2 — the refactor, with Riptide's behaviour frozen
 
