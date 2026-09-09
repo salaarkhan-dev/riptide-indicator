@@ -3051,3 +3051,89 @@ exactly the shape of the twenty-one entry filters that came before it.
 
 The pre-registration did its job. Reading cumulative rows alone, "top 10 is
 best at +0.145" was available and would have been wrong.
+
+## CORRECTION — the daily POI test looked ahead, and most of its edge was that
+
+Found on 9 Sep while controlling a mitigation result. It is the largest
+correction in this file.
+
+### How it surfaced
+
+`mitigation.py` returned an enormous effect: unmitigated daily zones +0.743 at
+a 74% win rate against −0.030, **+11.9 SE**. The pre-registered control asked
+whether "unmitigated" was really "young", since a zone formed one bar before
+the raid has no intervening bars and cannot be mitigated by construction. It
+was worse than that. Splitting on age alone:
+
+| zone age at the raid | n | win | R/signal |
+|---|---|---|---|
+| **0 daily bars** | 406 | **74%** | **+0.730 ± 0.059** |
+| 1–2 | 460 | 34% | −0.051 |
+| 3–5 | 480 | 38% | +0.044 |
+| 6–10 | 626 | 37% | −0.029 |
+| 11+ | 728 | 35% | −0.063 |
+
+A cliff at zero and noise everywhere else is not an edge, it is a leak.
+
+### The bug
+
+`in_poi` tested `t <= when`. A zone is dated by the bar that COMPLETED it, and
+that bar is not knowable until it CLOSES one step later. So a signal at 10:00
+could match a zone built from the daily candle it was sitting inside — a
+candle whose high, low and close encode where price went for the rest of that
+day, **including after the raid being validated**.
+
+`htf_dir_at`, twelve lines below in the same file, guards this exact hazard
+and documents it: *"a bar whose open is at or before `when` may still be
+forming, and using it would look ahead."* `in_poi` did not.
+
+Fixed to `t + step <= when` in `research/studies/mtf_grid.py` and, for the same
+rule in the live engine, `riptide/engine.py:in_zone`.
+
+**The live bot was never affected.** `fetch_candles` drops the forming bar, so
+the newest daily zone it can see has always been a closed one. The filter has
+been doing the right thing; the MEASUREMENT that justified it was wrong.
+
+### What the grade table actually is
+
+Re-run of `grades.py`, everything else identical:
+
+| grade | before (leaked) | **after (correct)** | win before → after |
+|---|---|---|---|
+| **A** | +0.271 ± 0.094 | **+0.128 ± 0.104** | 48% → **41%** |
+| **B** | +0.180 ± 0.041 | **+0.080 ± 0.042** | 45% → **41%** |
+| C *(muted)* | +0.016 | **−0.083** | 38% → 34% |
+| **ALL** | +0.093 | **−0.007** | 41% → 37% |
+
+**More than half the measured edge was the leak, and grade A is no longer
+significantly positive at 1.2 SE.** B is 1.9 SE. The whole book, C included,
+is flat.
+
+The ORDERING survives — A > B > C, and C is now clearly negative, which is at
+least an argument for having muted it. Min30 still beats Min15 (A +0.215 vs
++0.028; B +0.097 vs +0.062).
+
+### What this invalidates
+
+Every study that called `in_poi`, which is nearly all of them:
+`mtf_grid`, `mtf_holdout` **(including the held-out POI test)**, `grades`,
+`rates`, `missed`, `hybrid`, `sweeps`, `models23`, `grade_a`, `btc_by_grade`,
+`winrate`, `which_trend`, `mss_entry`, `scalp`, `universe`, `mitigation`.
+
+Their INTERNAL comparisons are mostly safe — the leak applies equally to both
+arms of most splits, so a difference between arms is less affected than a
+level. What is not safe is any absolute figure and, critically, the claim that
+**the daily POI is a filter worth having at all**. That has to be re-measured
+from scratch, and so does the held-out test it passed.
+
+### The lesson, which is not a new one
+
+This is the third time a measurement in this project was wrong in a way that
+looked fine: the scorer bug (scoring from the signal bar, not the fill bar),
+the BTC sign inversion, and now this. All three inflated a result. All three
+survived review because the output was plausible.
+
+The thing that caught this one was a **pre-registered control that I expected
+to fail** — "is unmitigated just young?" — asked of a result I wanted to be
+true. The control is what found the leak. Nothing else in the process would
+have.

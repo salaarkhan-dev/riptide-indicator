@@ -79,6 +79,7 @@ def poi_state(cs_htf, zones, when, price, is_long, step):
     if best is None:
         return None
     t0, lo, hi = best
+    age = (when - t0) // step          # in HTF bars
     wick = close_ = 0
     for c in cs_htf:
         if c.t <= t0 or c.t >= when:
@@ -87,7 +88,7 @@ def poi_state(cs_htf, zones, when, price, is_long, step):
             wick += 1
         if lo <= c.c <= hi:
             close_ += 1
-    return True, wick, close_
+    return age, wick, close_
 
 
 async def collect():
@@ -124,7 +125,7 @@ async def collect():
                                        BAR_SECONDS[HTF])
                         if st is None:            # POI_REQUIRED, as shipped
                             continue
-                        _, wick, close_ = st
+                        age, wick, close_ = st
                         d = htf_dir_at(hcs, hst, hdi, cs[i].t)
                         o = simulate(cs, i, x.entry, x.stop, x.is_long,
                                      fill_bars=FILL_HOURS * 3600 // step,
@@ -134,7 +135,7 @@ async def collect():
                             continue
                         out.append(dict(
                             tf=tf, kind=kind, r=o.r, filled=o.filled,
-                            wick=wick, close=close_,
+                            wick=wick, close=close_, age=age,
                             grade=grade_of(kind == "early", True, d,
                                            x.is_long, d)[0]))
     return out, (statistics.median(days) if days else 42.0)
@@ -179,8 +180,21 @@ def axis(title, rows, key):
         show(lab, cell([r for r in rows if lo <= r[key] < hi]))
 
 
+CACHE = "/tmp/riptide-mitigation-rows.json"
+
+
 def main():
-    rows, span = asyncio.run(collect())
+    import json
+    import os
+    if os.path.exists(CACHE):
+        with open(CACHE) as fh:
+            blob = json.load(fh)
+        rows, span = blob["rows"], blob["span"]
+        print(f"(reusing {CACHE} — delete it to refetch)")
+    else:
+        rows, span = asyncio.run(collect())
+        with open(CACHE, "w") as fh:
+            json.dump({"rows": rows, "span": span}, fh)
     print(f"\n{len(rows)} POI signals over {span:.0f} days · fees in · "
           f"unfilled counted as zero")
     print("Pre-registered: an UNMITIGATED zone scores higher. Must hold on")
@@ -196,6 +210,78 @@ def main():
              key)
         axis("grade A only", [r for r in rows if r["grade"] == "A"], key)
         print()
+
+    print("=" * 74)
+    print("THE CONTROL — is 'unmitigated' just 'young'?")
+    print("=" * 74)
+    print("A zone formed one bar before the raid has NO intervening bars and")
+    print("is unmitigated by construction. If the effect is about unfilled")
+    print("orders it must survive inside age buckets. If it does not, the")
+    print("finding is zone AGE and the fix is a tighter age cap.\n")
+    ages = sorted(r["age"] for r in rows)
+    a1, a2 = ages[len(ages) // 3], ages[2 * len(ages) // 3]
+    print(f"  age terciles: young <{a1}, mid {a1}-{a2}, old >{a2} daily bars")
+    for key in ("wick", "close"):
+        print(f"\n  -- {key} definition --")
+        print(f"  {'':<32}{'n':>6}{'win':>7}{'R/signal':>17}")
+        for lo, hi, lab in ((0, a1, "young"), (a1, a2, "mid"),
+                            (a2, 10 ** 9, "old")):
+            band = [r for r in rows if lo <= r["age"] < hi]
+            f = cell([r for r in band if r[key] == 0])
+            m = cell([r for r in band if r[key] > 0])
+            show(f"{lab}: unmitigated", f)
+            show(f"{lab}: mitigated", m)
+            if f and m:
+                d = f[2] - m[2]
+                se = (f[3] ** 2 + m[3] ** 2) ** 0.5
+                print(f"  {'  -> difference':<32}{'':>13}{d:>+11.3f}"
+                      f"   {d / se if se else 0:+.1f} SE")
+    print()
+    print("  Also: how young ARE the unmitigated ones?")
+    for key in ("wick", "close"):
+        f = [r["age"] for r in rows if r[key] == 0]
+        m = [r["age"] for r in rows if r[key] > 0]
+        if f and m:
+            print(f"    {key:<6} median age — unmitigated "
+                  f"{statistics.median(f):.0f} bars, mitigated "
+                  f"{statistics.median(m):.0f} bars")
+
+    print("\n" + "=" * 74)
+    print("THE DECISIVE PANEL — age held at ONE value")
+    print("=" * 74)
+    print("The tercile control cannot settle it: 'young' spans 0-2 bars and at")
+    print("age 0 there are no intervening bars, so mitigation is impossible by")
+    print("construction. Fixing age at a single value removes the confound")
+    print("completely — at age 3 there are exactly three bars that could have")
+    print("been a visit, and unmitigated vs mitigated is then a clean contrast.\n")
+    for key in ("wick", "close"):
+        print(f"  -- {key} definition --")
+        print(f"  {'age':<6}{'unmit n':>9}{'unmit R':>10}"
+              f"{'mit n':>8}{'mit R':>10}{'diff':>9}{'SE':>7}")
+        for a in range(1, 13):
+            band = [r for r in rows if r["age"] == a]
+            f = cell([r for r in band if r[key] == 0])
+            m = cell([r for r in band if r[key] > 0])
+            if not f or not m:
+                continue
+            d = f[2] - m[2]
+            se = (f[3] ** 2 + m[3] ** 2) ** 0.5
+            print(f"  {a:<6}{f[0]:>9}{f[2]:>+10.3f}{m[0]:>8}{m[2]:>+10.3f}"
+                  f"{d:>+9.3f}{d / se if se else 0:>7.1f}")
+        print()
+    print("  If the difference survives at fixed age, mitigation is real.")
+    print("  If it collapses, the whole finding is 'the zone is young'.\n")
+
+    print("=" * 74)
+    print("AGE ALONE — ignoring mitigation entirely")
+    print("=" * 74)
+    print(f"  {'':<32}{'n':>6}{'win':>7}{'R/signal':>17}")
+    for lo, hi, lab in ((0, 1, "age 0"), (1, 3, "age 1-2"), (3, 6, "age 3-5"),
+                        (6, 11, "age 6-10"), (11, 10 ** 9, "age 11+")):
+        show(lab, cell([r for r in rows if lo <= r["age"] < hi]))
+    print("\n  If this gradient alone is as strong as the mitigation split,")
+    print("  the shippable change is a tighter ZONE_MAX_AGE_BARS and nothing")
+    print("  about order blocks at all.\n")
 
     print("=" * 74)
     print("SANITY — the earlier attempt was degenerate; is this one?")

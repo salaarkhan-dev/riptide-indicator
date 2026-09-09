@@ -110,8 +110,22 @@ def zones_of(cs, atr):
 
 
 def in_poi(zones, when, price, is_long, step):
+    """Did the raid land in a daily zone that ALREADY EXISTED at `when`?
+
+    `t + step <= when`, NOT `t <= when`. A zone is dated by the bar that
+    completed it, and that bar is not knowable until it CLOSES one step later.
+    The old test let a signal at 10:00 match a zone built from the daily candle
+    it was sitting inside — a candle whose high, low and close encode where
+    price went for the rest of that day, including after the raid being
+    validated. htf_dir_at, twelve lines below, guards exactly this hazard and
+    says so; this function did not.
+
+    The cost of the bug was not small: same-day zones were 15% of POI signals
+    and scored +0.730 at a 74% win rate, while every older age band sat within
+    noise of zero. Essentially the whole measured POI edge was the leak.
+    """
     for t, bull, lo, hi in zones:
-        if (t <= when and bull == is_long and lo <= price <= hi
+        if (t + step <= when and bull == is_long and lo <= price <= hi
                 and when - t <= ZONE_MAX_AGE_BARS * step):
             return True
     return False

@@ -345,8 +345,15 @@ def in_zone(zones, when: int, price: float, is_long: bool, step: int) -> bool:
     what has to land in the zone, not the entry, and the stop is the closest
     thing to the extreme that every signal type carries.
     """
+    # t + step, NOT t. `daily_zones` dates a zone by the bar that COMPLETED
+    # it, and that bar is not knowable until it closes one step later. Live
+    # this changed nothing — fetch_candles drops the forming bar, so the newest
+    # zone the bot can see already closed — but the research path fed the full
+    # daily history in and the same comparison there let a signal match a zone
+    # built from the candle it was sitting inside. Correct in principle here,
+    # and it keeps the two paths honest about the same rule.
     for t, bull, lo, hi in zones:
-        if (t <= when and bull == is_long and lo <= price <= hi
+        if (t + step <= when and bull == is_long and lo <= price <= hi
                 and when - t <= POI_MAX_AGE_BARS * step):
             return True
     return False
