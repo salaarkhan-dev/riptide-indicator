@@ -4003,3 +4003,91 @@ about −0.12 to about −0.10 and costs **66% of its signals** to do it.
   SE, not 3, and it does not make anything profitable.
 - If it is ever added to the Pine it needs `request.security(..., lookahead_off)`
   with `[1]`, or it will repaint and every number here becomes meaningless.
+
+---
+
+## The author's own three filters — `research/studies/lez_strict.py`
+
+The indicator's author, replying to a user asking how to raise the win rate:
+*"increasing the Minimum Sweep Distance, increasing the Minimum Candle Range,
+keeping the EMA Trend Filter enabled, using Strong Reclaim instead of Close
+Back Inside, and requiring bullish/bearish confirmation bodies."*
+
+The EMA is already measured and is a null (`ema_len.py`) and the confirmation
+bodies are on by default, so this tests the other three. Forty cells, both
+timeframes, window split.
+
+**The bar is different this time and deliberately so.** Three studies in this
+sequence used "beats the baseline", and all three were too weak: the baseline is
+negative, so beating it only means losing less. Here the winning cell had to be
+**POSITIVE on the held-out half**.
+
+### Held out: both fail, and both are worse than shipping the defaults
+
+| | winner | held-out R | shipped defaults, same half |
+|---|---|---|---|
+| Min30 | sweep 0.10 · range 0.50 · close-inside | **−0.140 ± 0.035** | −0.136 |
+| Min15 | sweep 1.00 · range 1.20 · close-inside | **−0.177 ± 0.083** | −0.160 |
+
+### One knob at a time — and the sweep distance is the lesson
+
+Min30, R per signal:
+
+| sweep distance | DISCOVERY (newer) | HELD OUT (older) | kept |
+|---|---|---|---|
+| 0.10 (ships) | −0.129 | −0.136 | 100% |
+| 0.25 | −0.124 | −0.129 | 81% |
+| 0.50 | −0.203 | −0.138 | 46% |
+| 0.75 | −0.338 | −0.055 | 23% |
+| **1.00** | **−0.392** | **+0.160** (42% win) | 11% |
+
+**The ladder points in opposite directions on two adjacent 42-day windows.**
+That `+0.160` at a 42% win rate is the only positive cell in the study, and the
+discovery half scores the identical setting as **the worst of all forty**. On
+the older data alone it looks like the discovery of the project; on the newer
+data it is the single worst configuration available. It is noise with a 42% win
+rate attached, and n = 195.
+
+**Candle range** is flat — 0.50 marginally best on one panel, 1.20 best on
+another, nothing outside the standard errors. **Strong Reclaim** is −0.016 on
+Min30 and +0.006 on Min15: null, and it costs 7% of signals to be one.
+
+### THE PLACEBO FLOOR, AND A CORRECTION TO IT
+
+These filters do not change the entry, only which signals survive — so the
+control is a filter keeping the same FRACTION of signals **at random**, and the
+best of forty placebos is what best-of-forty is worth when the filtering is
+known to carry no information.
+
+| | median best-of-40 placebo | worst case over 25 seeds | best REAL cell |
+|---|---|---|---|
+| Min30 | **+0.050** | +0.123 | −0.109 |
+| Min15 | **−0.094** | +0.012 | −0.142 |
+
+**Neither timeframe's best real cell reaches its own placebo floor.** A filter
+that throws away the same share of signals by coin toss does as well as the
+best of the author's forty combinations.
+
+> **The first version of this floor was one seed and returned +0.112.** That is
+> about 3 SE above the population mean and roughly a 1-in-25 draw — the max
+> across 25 seeds is +0.123, so the single seed had landed near the top of its
+> own distribution. Reporting it as "the floor" would have been quoting one
+> lucky sample as a constant, which is precisely the error the control exists
+> to prevent. It is now the median of 25, with the max printed beside it.
+
+### Verdict
+
+**None of the three ships.** The author is right that they raise the win rate
+(33% → 42% at the extreme) and right that they cut the signal count (1.21/day →
+0.13/day), and right again in his own caveat that *"a higher win rate does not
+always mean a better system"* — `winrate.py` measured exactly that. On this
+data they raise the win rate and lose more money.
+
+### An open question this cannot close
+
+The author's reply also says to *"make sure the Pip Mode matches the market you
+are testing."* **The source in this repo contains no occurrence of the string
+`pip`.** Either the chart runs a different build or that advice concerns a
+different script. Every LEZ measurement in this document describes
+`liquidity-entry-zones.pine` as committed here, and until the version question
+is settled the possibility that they describe the wrong source stays open.
