@@ -4341,3 +4341,82 @@ which they are not; and no symbol hold-out was possible, so this is one
 regime-generality test rather than two.
 
 Still not shipped. The evidence supports it and the decision is the user's.
+
+---
+
+## HalfTrend Long/Short Signal Engine — `research/studies/halftrend_measure.py`
+
+A separate strategy, kept separate: it shares the candle fetcher and
+`research.harness` and nothing else. No cluster, no POI, no grade, no
+`sweep_worth`. 60 symbols, Min30 / Min15 / Min5, ~83 days split in half.
+
+Brought in on a chart reading **">60% win rate with 1:3 RR"**.
+
+### FIRST: repaint and lookahead — the engine is CLEAN
+
+`buySignal` carries `barstate.isconfirmed`, so a signal exists only on a closed
+bar. `ta.highestbars`, `ta.lowestbars`, `ta.sma` and `ta.atr` all read backwards
+only. The single `request.security` feeds the multi-asset dashboard, not the
+signal, on `timeframe.period` with v6's default `lookahead_off`. The trend state
+machine is path-dependent but never forward-looking.
+
+**The 60% is not a repaint. It is the scoreboard's arithmetic.**
+
+### THE SCOREBOARD, reproduced and then decomposed
+
+The port reproduces the chart exactly — 64.00% on ETH 30m — which is how the
+counter port was verified. Over the whole universe:
+
+| | dashboard says | never hit TP1, stopped | **hit TP1 then stopped** | hit TP3 |
+|---|---|---|---|---|
+| Min30 | 1803W / 1182L = **60.4%** | 1173 (52%) | **514 (23%)** | 513 (23%) |
+| Min15 | 3467W / 2533L = **57.8%** | 2503 (53%) | **1160 (25%)** | 1028 (22%) |
+| Min5 | 12087W / 7932L = **60.4%** | 7748 (52%) | **3631 (24%)** | 3543 (24%) |
+
+Read the Min30 row as arithmetic: 513 runners counted three times each is 1539
+of the 1803 "wins". The 1182 "losses" is almost exactly the 1173 that never
+touched TP1. **The 514 trades that reached TP1 and then stopped out appear in
+neither column** — `longTPHit1` makes the stop subtract one from *both*
+counters. That is 23% of all trades, and it is the worst-behaved 23%, removed.
+
+The third effect is quieter and equally real: the panel prints
+`Target R:R  1 : 3` while crediting the win at **TP1, one risk unit away**.
+
+*(Caveat on the bucket counts: the dashboard tracks a trade until it stops,
+reaches TP3, or a new signal overwrites it, while the decomposition uses a 48h
+horizon. The counts are approximate at the margins — but 1173 against 1182 on
+the loss column shows the erasure is not.)*
+
+### THE HONEST SCORE — each trade counted once
+
+Held-out halves, market entry at the flip close, stop `3 × ATR(100)/2`, fees:
+
+| | 1R win | 2R win | **3R win** | R/signal at 3R | control | EDGE |
+|---|---|---|---|---|---|---|
+| Min30 | 49% | 32% | **24%** | **−0.127 ± 0.052** (−2.5 SE) | −0.116 | −0.011 (−0.2 SE) |
+| Min15 | 46% | 29% | **22%** | **−0.277 ± 0.035** (−7.9 SE) | −0.210 | −0.067 (−1.7 SE) |
+| Min5 | 48% | 32% | **24%** | **−0.321 ± 0.020** (−16.0 SE) | −0.275 | −0.046 (−2.0 SE) |
+
+**Fails the pre-registered bar at all three timeframes.**
+
+**The win rate at the 3R it advertises is 22–24%, not 60%.** At 1R — where the
+dashboard actually credits its wins — it is 46–49%, and even that is below the
+break-even a 1R target needs after fees.
+
+The EDGE row is the other half: **−0.011, −0.067, −0.046 against random entries
+of the identical shape.** Indistinguishable from a coin toss at Min30, worse at
+the other two.
+
+### Verdict
+
+Not a candidate. The signal engine is honest — no repaint, no lookahead, and
+the flips are real trend flips. What is not honest is the number on the panel,
+and it is wrong in three compounding ways that together turn a 22% win rate at
+3R into a printed 60%.
+
+**The general lesson, which is the one worth keeping:** an indicator that
+computes its own performance is reporting the author's accounting, not the
+strategy's. This is the second indicator in this sequence whose on-chart
+scoreboard could not show a loss — Liquidity Entry Zones deleted stopped
+trades' drawings, this one deletes them from the arithmetic. Neither was
+dishonest by intent and both were wrong by the same margin.

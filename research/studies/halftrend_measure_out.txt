@@ -41,3 +41,83 @@ Min30   83 days x 60 symbols   (2239 signals)
 
   VERDICT — pre-registered: positive at 2 SE, held out, 3R
     -0.127 ± 0.052   -2.5 SE   => FAILS
+
+====================================================================================================
+Min15   83 days x 60 symbols   (4694 signals)
+====================================================================================================
+
+  THE DASHBOARD'S OWN COUNTER, reproduced over the whole universe:  3467W / 2533L = 57.8%
+  on the SAME 4694 trades, walked once each:
+    never reached TP1, stopped          2503  (53%)   the dashboard counts these, correctly, as losses
+    reached TP1 then stopped out        1160  (25%)   the dashboard DELETES these entirely
+    reached TP1/TP2 and ran out            3
+    reached TP3                         1028  (22%)   the dashboard counts each of these THREE times
+
+  DISCOVERY (newer half) — honest score, one count per trade
+                                  n   /day   win   risk  R/signal     SE  total R
+    target 1R                  2392   0.96   47%  0.96%    -0.205  0.021   -491.1
+    target 2R                  2392   0.96   30%  0.96%    -0.249  0.029   -595.8
+    target 3R                  2392   0.96   22%  0.96%    -0.286  0.035   -684.7
+  CONTROL random, 3R           7058   2.82   26%  0.99%    -0.120  0.021   -847.0
+  EDGE over the control                                              -0.166  0.040   -4.1 SE
+  splits at 3R
+    symbols A              n=1227   -0.300 ± 0.048
+    symbols B              n=1165   -0.272 ± 0.050
+    longs                  n=1206   -0.244 ± 0.050
+    shorts                 n=1186   -0.329 ± 0.048
+
+  HELD OUT (older half) — honest score, one count per trade
+                                  n   /day   win   risk  R/signal     SE  total R
+    target 1R                  2302   0.92   46%  0.93%    -0.218  0.021   -502.1
+    target 2R                  2302   0.92   29%  0.93%    -0.270  0.029   -621.3
+    target 3R                  2302   0.92   22%  0.93%    -0.277  0.035   -637.0
+  CONTROL random, 3R           7282   2.91   23%  0.97%    -0.210  0.020  -1526.3
+  EDGE over the control                                              -0.067  0.040   -1.7 SE
+  splits at 3R
+    symbols A              n=1168   -0.293 ± 0.049
+    symbols B              n=1134   -0.259 ± 0.050
+    longs                  n=1129   -0.380 ± 0.048
+    shorts                 n=1173   -0.178 ± 0.051
+
+  VERDICT — pre-registered: positive at 2 SE, held out, 3R
+    -0.277 ± 0.035   -7.9 SE   => FAILS
+
+====================================================================================================
+Min5   83 days x 60 symbols   (14923 signals)
+====================================================================================================
+
+  THE DASHBOARD'S OWN COUNTER, reproduced over the whole universe:  12087W / 7932L = 60.4%
+  on the SAME 14923 trades, walked once each:
+    never reached TP1, stopped          7748  (52%)   the dashboard counts these, correctly, as losses
+    reached TP1 then stopped out        3631  (24%)   the dashboard DELETES these entirely
+    reached TP1/TP2 and ran out            1
+    reached TP3                         3543  (24%)   the dashboard counts each of these THREE times
+
+  DISCOVERY (newer half) — honest score, one count per trade
+                                  n   /day   win   risk  R/signal     SE  total R
+    target 1R                  7242   2.90   48%  0.55%    -0.305  0.013  -2211.1
+    target 2R                  7242   2.90   32%  0.55%    -0.327  0.017  -2369.9
+    target 3R                  7242   2.90   24%  0.55%    -0.359  0.021  -2603.3
+  CONTROL random, 3R          22509   9.00   25%  0.56%    -0.304  0.012  -6843.7
+  EDGE over the control                                              -0.055  0.024   -2.3 SE
+  splits at 3R
+    symbols A              n=3598   -0.354 ± 0.029
+    symbols B              n=3644   -0.365 ± 0.029
+    longs                  n=3631   -0.302 ± 0.030
+    shorts                 n=3611   -0.418 ± 0.028
+
+  HELD OUT (older half) — honest score, one count per trade
+                                  n   /day   win   risk  R/signal     SE  total R
+    target 1R                  7681   3.07   48%  0.53%    -0.300  0.012  -2300.6
+    target 2R                  7681   3.07   32%  0.53%    -0.300  0.017  -2307.5
+    target 3R                  7681   3.07   24%  0.53%    -0.321  0.020  -2462.3
+  CONTROL random, 3R          23577   9.43   25%  0.53%    -0.275  0.012  -6484.2
+  EDGE over the control                                              -0.046  0.023   -2.0 SE
+  splits at 3R
+    symbols A              n=3915   -0.349 ± 0.028
+    symbols B              n=3766   -0.291 ± 0.029
+    longs                  n=3816   -0.396 ± 0.028
+    shorts                 n=3865   -0.246 ± 0.029
+
+  VERDICT — pre-registered: positive at 2 SE, held out, 3R
+    -0.321 ± 0.020   -16.0 SE   => FAILS
