@@ -907,6 +907,8 @@ dpaUsePrem = input(true, 'Step 4b · also require premium / discount', group = D
 dpaPremPct = input.float(50.0, 'premium above (%)', minval = 0, maxval = 100, step = 1, group = DPA_G)
 dpaNeedAoi = input(true,  'Step 5 · price must be inside a 1h FVG', group = DPA_G,
      tooltip = 'Verbatim: "There is a clear one-hour fair value gap sitting inside the OTE zone. That gives me an area of interest, not an entry."\n\nThis is the gate that makes setups rare. With it off you will get far more signals and they will not be this model.')
+dpaAoiWindow = input.int(12, 'Bars the area stays live after price reaches it', minval = 1, maxval = 60, group = DPA_G,
+     tooltip = 'The article: price reaches the area of interest, THEN you wait for the five-minute change of character. The confirmation routinely arrives a few bars later, often after price has stepped back out of the gap.\n\nRequiring both on the SAME bar is what made this gate nearly impossible to pass. 12 bars on a 5m chart is one hour.')
 dpaChochOnly = input(true, 'Step 7 · require a CHoCH, not a BOS', group = DPA_G,
      tooltip = 'A change of character breaks structure AGAINST the prevailing internal trend. A BOS is a continuation break and is a weaker claim. Uses LuxAlgo\'s own labelling, so the label drawn on your chart and the trigger here can never disagree.')
 
@@ -941,6 +943,10 @@ var array<dpaTrade> dpaTrades = array.new<dpaTrade>()
 // every bar — which is exactly why an earlier build reported 23 setups and
 // zero of everything else.
 var int   dpaAoi      = 0
+var int   dpaChochN   = 0
+var int   dpaPassHtf  = 0
+var int   dpaPassOte  = 0
+var int   dpaPassAoi  = 0
 var int   dpaTrig     = 0
 var int   dpaReject   = 0
 var int   dpaCount    = 0
@@ -959,6 +965,7 @@ dpaHtfBias = na(dpaHtfRaw) ? 0 : (dpaHtfRaw < 0 ? BULLISH : BEARISH)
 
 // ── Steps 2-5 · the 1h leg, all from the last CLOSED 1h bar ──────────────────
 dpaMidData() =>
+    int  bt = time[1]                    // identity of the 1h bar, for dedupe
     // The last CONFIRMED swing on the structure timeframe. ta.pivothigh only
     // returns a value once `dpaLegLen` bars have closed beyond the pivot, so
     // this cannot repaint; valuewhen then carries the most recent one forward.
@@ -972,8 +979,8 @@ dpaMidData() =>
     bool  bear = high[1] < low[3]
     float gTop = bull ? low[1]  : bear ? low[3]  : na
     float gBot = bull ? high[3] : bear ? high[1] : na
-    [rh, rl, bull, bear, gTop, gBot]
-[dpaRh, dpaRl, dpaGapBull, dpaGapBear, dpaGapTop, dpaGapBot] =
+    [rh, rl, bull, bear, gTop, gBot, bt]
+[dpaRh, dpaRl, dpaGapBull, dpaGapBear, dpaGapTop, dpaGapBot, dpaGapTime] =
      request.security(syminfo.tickerid, dpaMid, dpaMidData(), lookahead = barmerge.lookahead_off)
 
 dpaSpan  = dpaRh - dpaRl
@@ -999,26 +1006,36 @@ dpaInOte(bool isLong) =>
 
 // The most recent 1h FVG is held until price trades fully through it, which is
 // the article's "area of interest" persisting until it is consumed.
-var float dpaAoiTop  = na
-var float dpaAoiBot  = na
-var int   dpaAoiBias = 0
+var float dpaAoiTop   = na
+var float dpaAoiBot   = na
+var int   dpaAoiBias  = 0
+var int   dpaAoiKey   = 0
+var int   dpaAoiTouch = na
 if dpaOn and barstate.isconfirmed
-    if dpaGapBull and not na(dpaGapTop) and (na(dpaAoiTop) or dpaGapTop != dpaAoiTop)
+    // Register only when the 1h bar that produced the gap is one we have not
+    // already taken. Keying on time rather than price is what stops a consumed
+    // zone from immediately re-arming itself.
+    if (dpaGapBull or dpaGapBear) and not na(dpaGapTop) and dpaGapTime != dpaAoiKey
         dpaAoiTop  := dpaGapTop
         dpaAoiBot  := dpaGapBot
-        dpaAoiBias := BULLISH
-        dpaAoi     += 1
-    if dpaGapBear and not na(dpaGapTop) and (na(dpaAoiTop) or dpaGapTop != dpaAoiTop)
-        dpaAoiTop  := dpaGapTop
-        dpaAoiBot  := dpaGapBot
-        dpaAoiBias := BEARISH
+        dpaAoiBias := dpaGapBull ? BULLISH : BEARISH
+        dpaAoiKey  := dpaGapTime
+        dpaAoiTouch := na
         dpaAoi     += 1
     if not na(dpaAoiTop) and (dpaAoiBias == BULLISH ? close < dpaAoiBot : close > dpaAoiTop)
         dpaAoiTop  := na          // traded through: the area is spent
         dpaAoiBot  := na
         dpaAoiBias := 0
+    // "Price reaches my area of interest... then I wait for confirmation."
+    // Record WHEN it was reached; the confirmation is allowed to arrive later.
+    if not na(dpaAoiTop) and low <= dpaAoiTop and high >= dpaAoiBot
+        dpaAoiTouch := bar_index
 
-dpaInAoi = na(dpaAoiTop) ? false : (low <= dpaAoiTop and high >= dpaAoiBot)
+// BUG 2 was requiring the CHoCH to land on the exact bar price sat inside the
+// gap. The article does not: price reaches the area, THEN you wait for the
+// five-minute confirmation, which routinely arrives a few bars later and often
+// after price has stepped back out. Simultaneity made step 5 nearly impossible.
+dpaInAoi = not na(dpaAoiTouch) and (bar_index - dpaAoiTouch) <= dpaAoiWindow
 
 // ── Step 7 · the 5m confirmation, taken from LuxAlgo's own CHoCH detection ───
 dpaShortTrig = dpaChochOnly ? currentAlerts.internalBearishCHoCH : (currentAlerts.internalBearishCHoCH or currentAlerts.internalBearishBOS)
@@ -1033,6 +1050,14 @@ if dpaOn and barstate.isconfirmed and (dpaShortTrig or dpaLongTrig)
     bool step4 = dpaInOte(isLong)
     bool step4b = not dpaUsePrem or dpaSpan <= 0 or (isLong ? close <= dpaMid50 : close >= dpaMid50)
     bool step5 = not dpaNeedAoi or (dpaInAoi and dpaAoiBias == (isLong ? BULLISH : BEARISH))
+    // Counted as a funnel so the panel can name the gate that closed.
+    dpaChochN += 1
+    if step1
+        dpaPassHtf += 1
+        if step4 and step4b
+            dpaPassOte += 1
+            if step5
+                dpaPassAoi += 1
     if step1 and step4 and step4b and step5
         dpaTrig += 1
         // Step 8a: the stop goes at invalidation — the internal high/low that
@@ -1128,18 +1153,24 @@ if dpaOn and dpaNew and dpaTrades.size() > 0
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 if dpaOn and dpaPanel and barstate.islast
-    var table dpaT = table.new(position.top_right, 2, 12, border_width = 1)
+    var table dpaT = table.new(position.top_right, 2, 15, border_width = 1)
     int dpaSettled  = dpaWonN + dpaLostN + dpaExpiredN
     int dpaResolved = dpaWonN + dpaLostN
     dpaT.cell(0, 0, 'Riptide DPA', text_color = color.white, bgcolor = #0e7c86, text_size = size.small)
     dpaT.cell(1, 0, dpaHtf + '>' + dpaMid + '>' + timeframe.period, text_color = color.white, bgcolor = #0e7c86, text_size = size.small)
-    dpaLbl = array.from('HTF bias', 'Fib leg (span)', '1h areas seen', 'All steps aligned', 'Rejected under ' + str.tostring(dpaMinR, '#.#') + 'R',
+    dpaLbl = array.from(
+         'HTF bias', 'Fib leg span', '1h areas found',
+         '─ CHoCH on this TF', '─ passed HTF bias', '─ passed OTE', '─ passed area',
+         'Rejected under ' + str.tostring(dpaMinR, '#.#') + 'R',
          'Setups taken', 'Filled', 'Never filled', 'Target', 'Stopped', 'Net R')
     dpaVal = array.from(
          dpaHtfBias == BULLISH ? 'bullish' : dpaHtfBias == BEARISH ? 'bearish' : 'flat',
-         dpaSpan > 0 ? str.tostring(dpaSpan, format.mintick) : '—',
+         dpaSpan > 0 ? str.tostring(dpaSpan, format.mintick) : 'no leg yet',
          str.tostring(dpaAoi),
-         str.tostring(dpaTrig),
+         str.tostring(dpaChochN),
+         str.tostring(dpaPassHtf),
+         str.tostring(dpaPassOte),
+         str.tostring(dpaPassAoi),
          str.tostring(dpaReject),
          str.tostring(dpaCount),
          str.tostring(dpaFilledN),
@@ -1150,7 +1181,7 @@ if dpaOn and dpaPanel and barstate.islast
     for i = 0 to dpaLbl.size() - 1
         dpaT.cell(0, i + 1, dpaLbl.get(i), text_color = GRAY, text_size = size.tiny, text_halign = text.align_left)
         dpaT.cell(1, i + 1, dpaVal.get(i), text_size = size.tiny, text_halign = text.align_right,
-             text_color = i == 10 ? (dpaNetR > 0 ? GREEN : RED) : chart.fg_color)
+             text_color = i == 13 ? (dpaNetR > 0 ? GREEN : RED) : chart.fg_color)
 
 alertcondition(dpaNew, 'DPA setup', 'Riptide DPA: all eight steps aligned')
 //---------------------------------------------------------------------------------------------------------------------}
