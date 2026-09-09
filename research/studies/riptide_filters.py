@@ -190,7 +190,7 @@ def study_a(setups, tf):
     print(f"\n  A. THE TREND INTERVAL — Riptide's own setups, its own entry "
           f"and stop\n     (shipped: {TREND_INTERVAL})")
     print(f"  {'interval':<10}{'conv':<8}" + "".join(
-        f"{h:>22}" for h in ("DISCOVERY", "HELD OUT")))
+        f"{h:>29}" for h in ("DISCOVERY", "HELD OUT")))
     print(f"  {'':<10}{'':<8}" + "".join(
         f"{'agree':>8}{'against':>8}{'gap':>6}" for _ in range(2)))
     res = {}
@@ -202,12 +202,14 @@ def study_a(setups, tf):
                 a = [x.r for x in sub if x.dirs[(h, conv)]]
                 b = [x.r for x in sub if not x.dirs[(h, conv)]]
                 if len(a) < 25 or len(b) < 25:
-                    line += f"{'too few':>22}"
+                    line += f"{'too few':>29}"
                     cells.append(None)
                     continue
-                ma, mb = mean_se(a)[0], mean_se(b)[0]
-                cells.append(ma - mb)
-                line += f"{ma:>+8.3f}{mb:>+8.3f}{ma - mb:>+6.3f}"
+                (ma, sa), (mb, sb) = mean_se(a), mean_se(b)
+                se = (sa ** 2 + sb ** 2) ** 0.5
+                cells.append((ma - mb, se))
+                line += (f"{ma:>+8.3f}{mb:>+8.3f}{ma - mb:>+7.3f}"
+                         f"{(ma - mb) / se if se else 0:>+6.1f}")
             res[(h, conv)] = cells
             print(line)
     return res
@@ -267,14 +269,25 @@ def verdict(all_a, all_b):
             if len(good) < 4:
                 print(f"    {h:<8}{conv:<8} incomparable")
                 continue
-            one_sign = all(c > 0 for c in good) or all(c < 0 for c in good)
-            beats = sum(1 for c, b in zip(good, base[conv])
-                        if b is not None and c > b)
-            mark = ("PASSES" if h != "Day1" and one_sign and all(c > 0 for c in good)
-                    and beats >= 3 else "")
+            gaps = [g for g, _ in good]
+            one_sign = all(g > 0 for g in gaps) or all(g < 0 for g in gaps)
+            beats = sum(1 for (g, _), b in zip(good, base[conv])
+                        if b is not None and g > b[0])
+            # Inverse-variance pooling of the four panels. They are separate
+            # timeframes and separate window halves, so treating them as
+            # independent is defensible; it is stated rather than assumed.
+            w = [1 / (se ** 2) for _, se in good if se > 0]
+            gw = [g / (se ** 2) for g, se in good if se > 0]
+            pooled = sum(gw) / sum(w) if w else 0.0
+            pse = (1 / sum(w)) ** 0.5 if w else 0.0
+            mark = ("PASSES" if h != "Day1" and one_sign
+                    and all(g > 0 for g in gaps) and beats >= 3 else "")
             print(f"    {h:<8}{conv:<8}"
-                  + "  ".join(f"{c:+.3f}" for c in good)
-                  + f"   one sign {one_sign}   beats Day1 {beats}/4   {mark}")
+                  + "  ".join(f"{g:+.3f}" for g in gaps)
+                  + f"   one sign {str(one_sign):<5} beats Day1 {beats}/4"
+                  + f"   pooled {pooled:+.3f} ± {pse:.3f}"
+                  + f" ({pooled / pse if pse else 0:+.1f} SE)   {mark}")
+
     print(f"\n  B — the unit must decline monotonically in BOTH halves; "
           f"percent keeps the seat unless\n      ATR orders and percent does not")
     for tf, b in all_b.items():
