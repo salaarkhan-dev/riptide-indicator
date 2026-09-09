@@ -1,0 +1,49 @@
+EARLY SIGNALS — was the raid finished?
+1399 early signals · baseline +0.007 ± 0.033 R per signal
+bar: 3 SE, monotone, same sign on every split (research.harness.report)
+
+1. RECLAIM — gap's near edge vs the SWEPT LEVEL, in ATR
+  still beyond: +0.070 (n=261)  at the level: +0.021 (n=104)  reclaimed: -0.126 (n=343)  well past: +0.047 (n=691)
+  top-bottom -0.023 ± 0.089  -0.3 SE  NOT monotone
+  symbols A          -0.035
+  symbols B          -0.008
+  window 1st half    -0.229
+  window 2nd half    +0.155
+  => rejected  (needs monotone, >=3 SE, and one sign on every split)
+
+3. GRAB CLOSE — where the raid bar closed vs the level, in ATR
+  body through: +0.028 (n=486)  closed beyond: -0.081 (n=178)  closed inside: +0.002 (n=394)  closed well inside: +0.028 (n=341)
+  top-bottom -0.001 ± 0.086  -0.0 SE  NOT monotone
+  symbols A          -0.013
+  symbols B          +0.014
+  window 1st half    -0.225
+  window 2nd half    +0.189
+  => rejected  (needs monotone, >=3 SE, and one sign on every split)
+
+4. BARS FROM SWEEP — how long after the raid the gap formed
+  2 bars: +0.306 (n=32)  3-4 bars: -0.057 (n=436)  5+ bars: +0.026 (n=931)
+  top-bottom -0.280 ± 0.239  -1.2 SE  NOT monotone
+  symbols A          -0.412
+  symbols B          +0.105
+  window 1st half    +0.232
+  window 2nd half    -0.646
+  => rejected  (needs monotone, >=3 SE, and one sign on every split)
+
+2. NEXT BAR — did the bar after the gap avoid a new raid extreme?
+  too few rows to bucket
+
+2b. THE SAME FILTER, PAID FOR — entry delayed one bar, which is
+    what acting on it actually means. The limit sits at the same gap
+    price; only the fill window starts a bar later.
+    unfiltered, every early      +0.007 ± 0.033   n=1399
+    filtered, entry unchanged    +0.023 ± 0.033   n=1379   (not actionable — uses the next bar)
+    filtered, entry DELAYED 1bar -0.041 ± 0.032   n=1379
+    net vs doing nothing         -0.048 ± 0.046   -1.0 SE   => FAILS
+    keeps 99% of early signals
+
+HOW OFTEN THE RAID WAS STILL RUNNING WHEN THE GAP FIRED
+  gap formed while price was still beyond the swept level   365/1399  (26%)
+  the very next bar made a NEW raid extreme                 20/1399  (1%)
+  R on the 'still beyond' half   +0.056 ± 0.065
+  R on the 'raid extended' half  -1.112 ± 0.019
+  median bars from sweep to gap  5

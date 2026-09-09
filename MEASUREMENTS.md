@@ -4546,3 +4546,73 @@ the tag that answers "which chart am I opening". No entry, no stop, no grade, an
 for outcome tracking** — /stats exists to judge trades, and a heads-up has no
 outcome to judge. The measurement above is why the message says, in the
 message, that it is not a trade.
+
+
+---
+
+## Was the raid FINISHED when the early fired? — `research/studies/early_raid.py`
+
+Prompted by a live observation: the early sometimes fires and *then* the sweep
+runs further, taking out a stop frozen at `grab_low - sl_buffer`. The mechanism
+is real and visible in the code — the early takes the FIRST imbalance within
+`early_max_bars` and nothing asks whether the raid has stopped extending.
+
+Four ways of asking, all of them geometry the engine already computes and
+throws away. 1399 early signals, baseline **+0.007 ± 0.033 R**. Bar is
+`harness.report`'s: 3 SE, monotone, same sign on every split.
+
+| | top−bottom | | verdict |
+|---|---|---|---|
+| 1. reclaim of the swept level, in ATR | −0.023 ± 0.089 | −0.3 SE | rejected, not monotone |
+| 3. where the raid bar CLOSED vs the level | −0.001 ± 0.086 | −0.0 SE | rejected, not monotone |
+| 4. bars from sweep to gap | −0.280 ± 0.239 | −1.2 SE | rejected, not monotone |
+| 2. next bar made a new raid extreme | — | — | only 20 rows in one bucket |
+
+Every one of them flips sign between window halves — reclaim runs −0.229 then
++0.155, grab-close −0.225 then +0.189, bars-from-sweep +0.232 then −0.646. That
+is the signature of noise, and it is the same shape that produced +4.4 SE on
+one half of the trendline slope study and the opposite sign on the other.
+
+### The finding is in what did NOT need a filter
+
+**The described failure happens 26% of the time and does not cost anything.**
+365 of 1399 early signals formed their gap while price was still beyond the
+swept level — a bounce inside an unfinished raid, exactly as described. Those
+score **+0.056 ± 0.065**, slightly BETTER than the +0.007 baseline. The thing
+that looks broken on a chart is not the thing losing money.
+
+**What does kill a trade is rare and cannot be filtered.** When the very next
+bar makes a new raid extreme, the trade returns **−1.112 ± 0.019** — a full
+stop plus fees, essentially deterministic. But it is only **20 of 1399 (1.4%)**,
+worth +0.016 R per signal if every one could be avoided.
+
+And it cannot be, for two independent reasons:
+
+**It is circular.** The stop sits just beyond the raid extreme, so "the next bar
+makes a new raid extreme" is very nearly a restatement of "the stop was hit".
+The −1.112 is not a prediction, it is the loss being observed.
+
+**Acting on it means waiting a bar, and waiting costs more than it saves.**
+Re-simulated with the limit at the same gap price and the fill window starting
+one bar later:
+
+| | R/signal | n |
+|---|---|---|
+| unfiltered, every early | +0.007 ± 0.033 | 1399 |
+| filtered, entry unchanged (not actionable — uses the next bar) | +0.023 ± 0.033 | 1379 |
+| **filtered, entry DELAYED one bar** | **−0.041 ± 0.032** | 1379 |
+
+Net **−0.048 ± 0.046, −1.0 SE: worse than doing nothing.** The 22 R saved by
+skipping 20 dead trades is more than given back in fills lost on the other
+1379 — the limit at the gap edge often fills on the very next bar, and a delay
+forfeits those.
+
+Nor can the order simply be cancelled on a new extreme instead of delayed: for
+a long, the gap edge sits ABOVE the raid low, so price making a new low has
+already traded through the entry. The fill always happens first.
+
+### Verdict
+
+No change. The early trigger stays as it is. The mechanism is real, common, and
+harmless; the version that hurts is rare, near-tautological, and costs more to
+avoid than it takes.
