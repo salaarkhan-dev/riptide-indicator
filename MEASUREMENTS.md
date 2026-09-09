@@ -4263,3 +4263,75 @@ into one.
 change, it is reversible, and `/stats` will score it forward. It has not been
 shipped here: it should go through a held-out test on a window this study has
 not touched, and the decision is the user's.
+
+---
+
+## HELD-OUT: does Hour8 replicate? — `research/studies/trend_holdout.py`
+
+`riptide_filters.py` found Hour8 beat the shipped Day1 across eight arms. Eight
+arms earns a confirmation, not a deployment. This file can only agree or
+disagree with a prediction fixed before it was written: **Hour8's
+agree-minus-against gap positive on both timeframes under both conventions,
+and larger than Day1's in at least three of four.**
+
+### FRESH WINDOW — days 83–166 back. PASSES, 4/4.
+
+Nothing in this project had looked further back than 83 days. The engine runs
+over the whole series so its warm-up and cluster state match live; only signals
+landing in the older half are scored.
+
+| | conv | agree | against | **gap** | SE | |
+|---|---|---|---|---|---|---|
+| Min30 Day1 | st | −0.143 | −0.026 | **−0.117** | 0.065 | −1.8 |
+| Min30 Day1 | st+di | −0.092 | −0.080 | −0.012 | 0.072 | −0.2 |
+| **Min30 Hour8** | st | −0.036 | −0.127 | **+0.091** | 0.065 | +1.4 |
+| **Min30 Hour8** | st+di | +0.018 | −0.134 | **+0.152** | 0.072 | +2.1 |
+| Min15 Day1 | st | −0.043 | −0.087 | +0.045 | 0.052 | +0.9 |
+| Min15 Day1 | st+di | −0.058 | −0.067 | +0.009 | 0.056 | +0.2 |
+| **Min15 Hour8** | st | −0.005 | −0.124 | **+0.119** | 0.052 | +2.3 |
+| **Min15 Hour8** | st+di | +0.049 | −0.129 | **+0.178** | 0.056 | +3.2 |
+
+**All four Hour8 cells positive. Beats Day1 4/4.** 3,442 setups.
+
+Shrinkage is there and is expected: pooled +0.127/+0.142 on discovery against
++0.091 to +0.178 here. The sign held, which was the test.
+
+**The sharper finding is what Day1 did.** On this window the shipped filter
+went **negative on Min30 SuperTrend (−0.117, −1.8 SE)** — setups agreeing with
+the daily trend scored *worse* than those against it. Hour8 stayed positive on
+the same setups in the same window. `location.py` had already found the daily
+trend's absolute lift did not survive its older half; this is the same thing
+appearing in the relative split, on Riptide's own signals.
+
+### SYMBOL HOLD-OUT — NOT AVAILABLE, and the first run mis-reported it
+
+The plan was ranks 61–120 by turnover. **`list_symbols` applies Riptide's
+`TOP_N = 60`, so `allsyms[60:120]` was an empty list and the set never ran** —
+and the script printed **"symbols FAIL"** for a test that had not happened. A
+missing test reported as a failed one, which is worse than either.
+
+Rebuilt with the cap lifted, the answer is that the test cannot be run at all:
+`MIN_VOL_USDT = 3,000,000` leaves roughly **65** tradeable perpetuals in total,
+so past rank 60 there are **5** names. There is no second universe to hold out.
+The script now reports this as an ABSENT test and refuses to fold it into the
+verdict.
+
+So the window hold-out carries this alone, and the generality-across-instruments
+question stays open rather than answered.
+
+### Where this leaves the change
+
+`RIPTIDE_TREND_INTERVAL` from `Day1` to `Hour8` is a one-line, reversible
+environment change that `/stats` scores forward.
+
+For it: discovered on eight arms and confirmed on a window it was not found on,
+positive in 8 of 8 cells across discovery and hold-out, under both conventions,
+beating the incumbent in 4/4 on the held-out set — while the incumbent itself
+turned negative there.
+
+Against it: individual cells are 1.4–3.2 SE, not overwhelming; the pooled
+figures lean on treating two timeframes over the same symbols as independent,
+which they are not; and no symbol hold-out was possible, so this is one
+regime-generality test rather than two.
+
+Still not shipped. The evidence supports it and the decision is the user's.

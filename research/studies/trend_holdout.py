@@ -20,8 +20,11 @@ TWO HELD-OUT SETS, BOTH UNTOUCHED
           and nothing in this project has looked further back than that.
 
   SYMBOL  Ranks 61-120 of the same turnover-ordered universe, on the recent
-          window. Riptide scans the top 60 and every study here has used them,
-          so these sixty symbols are new to the project entirely.
+          window — IF THEY EXIST. They largely do not: the turnover floor
+          leaves about 65 tradeable perpetuals in total, so past rank 60 there
+          are a handful of names rather than a second universe. The run reports
+          this as an ABSENT test rather than a failed one, which is the
+          distinction the first version of this file got wrong.
 
 They test different things and both are reported. A fresh WINDOW asks whether
 the effect was a property of one regime. Fresh SYMBOLS ask whether it was a
@@ -79,6 +82,31 @@ CONVS = ("st", "st+di")
 # back. riptide_filters.py used the recent 83 days at half these pages.
 TIME_TFS = (("Min30", 4), ("Min15", 8))
 SYM_TFS = (("Min30", 2), ("Min15", 4))
+
+
+async def wider_universe(sess, skip: int, want: int) -> list[str]:
+    """Ranks `skip+1` .. `skip+want` of the same turnover ordering.
+
+    Rebuilt here rather than taken from `list_symbols`, which truncates at
+    Riptide's TOP_N and therefore cannot express "the ones the bot does not
+    scan" — which is precisely the set a symbol hold-out needs.
+    """
+    from riptide.exchange import BASE, QUOTE, filter_by_turnover, get_json
+    d = await get_json(sess, f"{BASE}/api/v1/contract/detail")
+    if not d or not d.get("data"):
+        return []
+    pool = [c["symbol"] for c in d["data"]
+            if c.get("quoteCoin") == QUOTE and c.get("state") == 0
+            and c.get("apiAllowed") is not False
+            and not any("tradfi" in p for p in (c.get("conceptPlate") or []))]
+    import riptide.exchange as ex
+    keep = ex.TOP_N
+    try:
+        ex.TOP_N = skip + want          # rank deeper, for this call only
+        ranked = await filter_by_turnover(sess, pool)
+    finally:
+        ex.TOP_N = keep
+    return ranked[skip:skip + want]
 
 
 async def gaps(sess, syms, tf, pages, older_half, cache):
@@ -179,9 +207,31 @@ def verdict(name, per_tf):
 
 async def main():
     async with aiohttp.ClientSession() as sess:
-        allsyms = await list_symbols(sess)
-        top = allsyms[:SYMBOLS]
-        fresh = allsyms[SYMBOLS:SYMBOLS * 2]
+        # list_symbols() applies Riptide's TOP_N cap, so it returns exactly
+        # the 60 the bot scans and slicing past it yields nothing. The first
+        # run of this file did exactly that and printed "symbols FAIL" for a
+        # set that never ran — a missing test reported as a failed one, which
+        # is worse than either. RIPTIDE_TOP_N is read at import time, so the
+        # wider universe is fetched by ranking the same way with the cap
+        # lifted for this call only.
+        top = await list_symbols(sess)
+        fresh = await wider_universe(sess, len(top), SYMBOLS)
+        # A SYMBOL HOLD-OUT MAY SIMPLY NOT EXIST, and saying so is the honest
+        # outcome. Riptide's turnover floor (RIPTIDE_MIN_VOL_USDT) leaves only
+        # about 65 tradeable perpetuals in total, so "the sixty the bot does
+        # not scan" is a handful of names, not a second universe. Reporting a
+        # thin set as though it were a hold-out would be worse than reporting
+        # that the test cannot be run.
+        MIN_FRESH = 20
+        if len(fresh) < MIN_FRESH:
+            print(f"\n  SET 2 IS NOT AVAILABLE: only {len(fresh)} symbols "
+                  f"exist past rank {len(top)} once the turnover floor is\n"
+                  f"  applied, against the {MIN_FRESH} this would need. The "
+                  f"liquid universe is roughly {len(top) + len(fresh)} names "
+                  f"in total,\n  so a second disjoint universe does not "
+                  f"exist to hold out. NOT a failure — an\n  absent test, "
+                  f"and the window hold-out below carries the verdict alone.")
+            fresh = []
         print("HELD-OUT TEST for Hour8 — one prediction, no new arms")
         print(f"discovery said: all four panels positive, pooled +0.127 (st) "
               f"and +0.142 (st+di), beating the shipped {TREND_INTERVAL}")
@@ -218,8 +268,15 @@ async def main():
                  f"symbols, {n} setups", res)
         ok_sym = verdict("FRESH SYMBOLS", per_tf2) if per_tf2 else False
 
-        print(f"\n{'=' * 96}\n  BOTH: window {'PASS' if ok_time else 'FAIL'}"
-              f"   symbols {'PASS' if ok_sym else 'FAIL'}\n{'=' * 96}")
+        sym_state = ("PASS" if ok_sym else "FAIL") if per_tf2 else "NOT RUN"
+        print(f"\n{'=' * 96}\n  BOTH: window "
+              f"{'PASS' if ok_time else 'FAIL'}"
+              f"   symbols {sym_state}\n{'=' * 96}")
+        if not per_tf2:
+            print("  SET 2 produced no data. That is a SKIPPED test, not a "
+                  "failed one, and\n  the window result must not be read as "
+                  "'one of two passed'.")
+            return
         if ok_time and ok_sym:
             print("  Hour8 replicated on a window and a symbol set it was not "
                   "found on.")

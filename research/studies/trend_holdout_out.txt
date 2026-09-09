@@ -6,3 +6,31 @@ prediction: four cells positive on each held-out set, and better than Day1 in >=
   SET 1 — FRESH WINDOW: the older half of a doubled fetch, ~days 83-166 back
   (the same top 60 symbols; nothing here has been scored before)
 ================================================================================================
+
+  Min30 — 83 days x 60 symbols, 1249 setups
+  interval  conv        agree  against      gap     SE        n agree  n against
+  Day1      st         -0.143   -0.026   -0.117  0.065  -1.8      614        635
+  Day1      st+di      -0.092   -0.080   -0.012  0.072  -0.2      383        866
+  Hour8     st         -0.036   -0.127   +0.091  0.065  +1.4      601        648
+  Hour8     st+di      +0.018   -0.134   +0.152  0.072  +2.1      412        837
+
+  Min15 — 83 days x 60 symbols, 2193 setups
+  interval  conv        agree  against      gap     SE        n agree  n against
+  Day1      st         -0.043   -0.087   +0.045  0.052  +0.9     1156       1037
+  Day1      st+di      -0.058   -0.067   +0.009  0.056  +0.2      731       1462
+  Hour8     st         -0.005   -0.124   +0.119  0.052  +2.3     1106       1087
+  Hour8     st+di      +0.049   -0.129   +0.178  0.056  +3.2      798       1395
+
+  FRESH WINDOW: +0.091  +0.152  +0.119  +0.178
+    all four positive: True    beats Day1: 4/4    => PASSES
+
+================================================================================================
+  SET 2 — FRESH SYMBOLS: ranks 61-120 by turnover, recent window
+  (Riptide scans the top 60; these sixty are new to the project)
+================================================================================================
+
+================================================================================================
+  BOTH: window PASS   symbols FAIL
+================================================================================================
+  Split. One set replicated and the other did not, which is weaker than
+  either taken alone would suggest — read the failing set as the binding one.
