@@ -1,2 +1,95 @@
 Riptide's two survivors, on Riptide's own pipeline
 60 symbols · limit at the gap, stop beyond the raid, 2R target, fees 0.02/0.06%
+
+====================================================================================================
+Min30   83 days x 60 symbols   (1284 setups, 19278 raids)
+====================================================================================================
+
+  A. THE TREND INTERVAL — Riptide's own setups, its own entry and stop
+     (shipped: Day1)
+  interval  conv                        DISCOVERY                     HELD OUT
+                       agree against   gap   agree against   gap
+  Day1      st        +0.031  -0.075 +0.107  +1.2  -0.076  -0.110 +0.035  +0.4
+  Day1      st+di     +0.122  -0.117 +0.239  +2.5  -0.091  -0.096 +0.005  +0.1
+  Hour8     st        +0.062  -0.101 +0.163  +1.8  -0.007  -0.175 +0.168  +1.8
+  Hour8     st+di     +0.097  -0.085 +0.182  +1.8  +0.024  -0.151 +0.176  +1.7
+  Hour4     st        +0.047  -0.089 +0.137  +1.5  -0.077  -0.113 +0.037  +0.4
+  Hour4     st+di     +0.030  -0.049 +0.079  +0.8  -0.138  -0.073 -0.065  -0.7
+  Min60     st        +0.018  -0.060 +0.078  +0.9  -0.099  -0.090 -0.009  -0.1
+  Min60     st+di     -0.081  +0.006 -0.087  -0.9  -0.207  -0.043 -0.164  -1.7
+
+  B. sweep_worth's DISTANCE UNIT — expected R per RAID
+     (shipped: percent, cut at 3%; a raid that never converts scores 0.0)
+   -- distance in percent --
+  band                                 DISCOVERY                          HELD OUT
+                    n   conv   E[R]/raid      SE      n   conv   E[R]/raid      SE
+  0-1             172    20%      -0.019   0.039    121    32%      -0.037   0.060
+  1-2             576    14%      +0.011   0.019    494    16%      +0.004   0.022
+  2-3             502     7%      +0.009   0.014    495     9%      +0.009   0.014
+  >3             1532     1%      +0.003   0.003   1578     1%      +0.003   0.004
+      monotone decline:  discovery False   held out False
+   -- distance in ATR --
+  band                                 DISCOVERY                          HELD OUT
+                    n   conv   E[R]/raid      SE      n   conv   E[R]/raid      SE
+  0-2             228    34%      -0.078   0.044    216    34%      +0.000   0.048
+  2-3.5           754    10%      +0.028   0.015    743    13%      +0.012   0.016
+  3.5-6           837     1%      +0.003   0.004    868     1%      -0.004   0.002
+  >6              963     0%      +0.006   0.004    861     0%      +0.001   0.003
+      monotone decline:  discovery False   held out False
+
+====================================================================================================
+Min15   83 days x 60 symbols   (2113 setups, 31782 raids)
+====================================================================================================
+
+  A. THE TREND INTERVAL — Riptide's own setups, its own entry and stop
+     (shipped: Day1)
+  interval  conv                        DISCOVERY                     HELD OUT
+                       agree against   gap   agree against   gap
+  Day1      st        -0.025  -0.085 +0.060  +0.8  -0.138  -0.208 +0.070  +0.9
+  Day1      st+di     +0.008  -0.096 +0.104  +1.3  -0.172  -0.173 +0.001  +0.0
+  Hour8     st        +0.007  -0.121 +0.128  +1.7  -0.136  -0.210 +0.074  +1.0
+  Hour8     st+di     +0.025  -0.102 +0.127  +1.6  -0.099  -0.207 +0.108  +1.3
+  Hour4     st        -0.073  -0.035 -0.037  -0.5  -0.199  -0.146 -0.053  -0.7
+  Hour4     st+di     -0.030  -0.070 +0.040  +0.5  -0.203  -0.158 -0.045  -0.6
+  Min60     st        +0.009  -0.119 +0.128  +1.7  -0.189  -0.158 -0.031  -0.4
+  Min60     st+di     -0.039  -0.062 +0.023  +0.3  -0.159  -0.179 +0.020  +0.2
+
+  B. sweep_worth's DISTANCE UNIT — expected R per RAID
+     (shipped: percent, cut at 3%; a raid that never converts scores 0.0)
+   -- distance in percent --
+  band                                 DISCOVERY                          HELD OUT
+                    n   conv   E[R]/raid      SE      n   conv   E[R]/raid      SE
+  0-1             705    20%      +0.013   0.022    555    23%      -0.050   0.025
+  1-2            1119     9%      -0.001   0.011   1174     8%      -0.010   0.010
+  2-3             720     4%      -0.003   0.010    773     4%      -0.001   0.008
+  >3             1771     1%      +0.001   0.003   1810     1%      +0.000   0.002
+      monotone decline:  discovery False   held out False
+   -- distance in ATR --
+  band                                 DISCOVERY                          HELD OUT
+                    n   conv   E[R]/raid      SE      n   conv   E[R]/raid      SE
+  0-2             341    36%      -0.011   0.043    351    34%      -0.059   0.039
+  2-3.5          1167    12%      +0.012   0.013   1219    11%      -0.014   0.012
+  3.5-6          1202     2%      -0.001   0.004   1234     1%      -0.003   0.003
+  >6             1605     1%      -0.001   0.002   1508     0%      +0.001   0.002
+      monotone decline:  discovery False   held out False
+
+====================================================================================================
+  VERDICTS, against the bars fixed before the run
+====================================================================================================
+  A — an interval replaces Day1 only if its gap keeps ONE SIGN in all four panels
+      and beats Day1's gap in at least three
+    Day1    st      +0.107  +0.035  +0.060  +0.070   one sign True  beats Day1 0/4   pooled +0.068 ± 0.042 (+1.6 SE)   
+    Day1    st+di   +0.239  +0.005  +0.104  +0.001   one sign True  beats Day1 0/4   pooled +0.083 ± 0.044 (+1.9 SE)   
+    Hour8   st      +0.163  +0.168  +0.128  +0.074   one sign True  beats Day1 4/4   pooled +0.127 ± 0.042 (+3.0 SE)   PASSES
+    Hour8   st+di   +0.182  +0.176  +0.127  +0.108   one sign True  beats Day1 3/4   pooled +0.142 ± 0.045 (+3.2 SE)   PASSES
+    Hour4   st      +0.137  +0.037  -0.037  -0.053   one sign False beats Day1 2/4   pooled +0.009 ± 0.042 (+0.2 SE)   
+    Hour4   st+di   +0.079  -0.065  +0.040  -0.045   one sign False beats Day1 0/4   pooled +0.002 ± 0.044 (+0.0 SE)   
+    Min60   st      +0.078  -0.009  +0.128  -0.031   one sign False beats Day1 1/4   pooled +0.043 ± 0.042 (+1.0 SE)   
+    Min60   st+di   -0.087  -0.164  +0.023  +0.020   one sign False beats Day1 1/4   pooled -0.043 ± 0.046 (-0.9 SE)   
+
+  B — the unit must decline monotonically in BOTH halves; percent keeps the seat unless
+      ATR orders and percent does not
+    Min30   percent   discovery False   held out False
+    Min30   ATR       discovery False   held out False
+    Min15   percent   discovery False   held out False
+    Min15   ATR       discovery False   held out False

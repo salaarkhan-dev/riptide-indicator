@@ -4177,3 +4177,89 @@ indistinguishable from random entry at two timeframes and significantly worse
 at the third, while producing 50–300 alerts a day with nothing to rank them by.
 The port is exact, tested, and the signal list is diffable against the chart,
 so this is a measurement of the indicator rather than of a translation of it.
+
+---
+
+## The two survivors, on Riptide's own pipeline — `research/studies/riptide_filters.py`
+
+Eleven studies left exactly two variables standing. Both are tested here on
+**Riptide's actual signals with its actual entry and stop** — a limit at the
+fair value gap, the stop beyond the raid extreme — because every earlier
+measurement of them used a market entry with an ATR stop, which is not what
+ships. 60 symbols, Min30 and Min15, ~83 days split in half.
+
+### A. THE TREND INTERVAL — Hour8 passes, and it is NOT the 4h
+
+Agree minus against, holding the entry constant. Four panels: Min30 discovery
+and held-out, Min15 discovery and held-out.
+
+| interval | conv | M30 disc | M30 held | M15 disc | M15 held | one sign | pooled |
+|---|---|---|---|---|---|---|---|
+| **Day1 (shipped)** | st | +0.107 | +0.035 | +0.060 | +0.070 | yes | +0.068 ± 0.042 (1.6 SE) |
+| Day1 | st+di | +0.239 | +0.005 | +0.104 | +0.001 | yes | +0.083 ± 0.044 (1.9 SE) |
+| **Hour8** | **st** | **+0.163** | **+0.168** | **+0.128** | **+0.074** | **yes** | **+0.127 ± 0.042 (3.0 SE)** |
+| **Hour8** | **st+di** | **+0.182** | **+0.176** | **+0.127** | **+0.108** | **yes** | **+0.142 ± 0.045 (3.2 SE)** |
+| Hour4 | st | +0.137 | +0.037 | −0.037 | −0.053 | **no** | +0.009 (0.2 SE) |
+| Hour4 | st+di | +0.079 | −0.065 | +0.040 | −0.045 | **no** | +0.002 (0.0 SE) |
+| Min60 | st | +0.078 | −0.009 | +0.128 | −0.031 | **no** | +0.043 (1.0 SE) |
+| Min60 | st+di | −0.087 | −0.164 | +0.023 | +0.020 | **no** | −0.043 (−0.9 SE) |
+
+**Hour8 is the only interval that holds one sign across all four panels, and it
+does so under BOTH conventions.** That is the part that makes it hard to
+dismiss as best-of-eight: a noise winner scatters across arms, and this one
+does not. It beats Day1 in 4/4 panels on SuperTrend alone and 3/4 with DI, and
+roughly doubles the shipped filter's sorting power.
+
+**AND 4h FAILS — which corrects something this document said two studies ago.**
+`lez_entry.py` found the 4h bias held its sign in all four panels and reported
+it as the one variable still standing. That was measured on **LEZ's** signals
+with a market entry and an ATR stop. On **Riptide's** signals with Riptide's
+entry and stop, 4h flips on both Min15 panels and pools to +0.009, which is
+nothing. The earlier result was not wrong about what it measured; it was wrong
+as a guide to what would ship, and only testing the real pipeline showed it.
+
+**Honest limits on the pooled figure.** The four panels are treated as
+independent for inverse-variance pooling. The two window halves genuinely are
+disjoint, but the same 60 symbols appear in Min30 and Min15, so a cleanly
+trending symbol contributes twice and the 3.0–3.2 SE is optimistic. The claim
+worth standing behind is the **sign consistency across four panels**, which is
+what Hour4 and Min60 fail and which needs no independence assumption. The
+individual panels are 1.7–1.8 SE each.
+
+### B. `sweep_worth`'s DISTANCE UNIT — neither orders, percent keeps its seat
+
+Expected R per RAID: conversion rate times what the setup earns, with a raid
+that converts to nothing scoring 0.0 rather than being dropped — because the
+filter gates whether to OPEN the chart, and a raid that produces nothing is the
+cost of having opened it.
+
+| distance % | conv | E[R]/raid, M30 | | distance ATR | conv | E[R]/raid, M30 |
+|---|---|---|---|---|---|---|
+| 0–1% | 20–32% | −0.019 / −0.037 | | 0–2 ATR | 34–36% | −0.078 / +0.000 |
+| 1–2% | 14–16% | +0.011 / +0.004 | | 2–3.5 | 10–13% | +0.028 / +0.012 |
+| 2–3% | 7–9% | +0.009 / +0.009 | | 3.5–6 | 1–2% | +0.003 / −0.004 |
+| >3% | 1% | +0.003 / +0.003 | | >6 | 0–1% | +0.006 / +0.001 |
+
+**Neither unit declines monotonically, in any half, on either timeframe. No
+change to `sweep_worth`.**
+
+The reason is the one `shift_distance.py` found and this confirms on the real
+pipeline: **the nearest raids convert most often and are worth least.** A near
+raid means the structure level is close, which means the setup that follows has
+a tight stop, which means a large `fee / risk_pct`. That mechanism was first
+seen with a synthetic 1.5 ATR stop and might have been an artefact of it. It is
+not — Riptide's stop sits at the raid extreme and the same thing happens.
+
+**What this does confirm is that the filter is doing its stated job.**
+Conversion orders beautifully in both units, and ATR orders it more sharply
+(34% → 0%) than percent (20% → 1%). `sweep_worth`'s docstring says it answers
+"is this chart worth looking at", and conversion is the right metric for that.
+It was never an expected-R filter and this settles that it should not be made
+into one.
+
+### The only shippable change to come out of eleven studies
+
+`RIPTIDE_TREND_INTERVAL` from `Day1` to `Hour8`. It is a one-line environment
+change, it is reversible, and `/stats` will score it forward. It has not been
+shipped here: it should go through a held-out test on a window this study has
+not touched, and the decision is the user's.
