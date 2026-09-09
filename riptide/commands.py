@@ -18,6 +18,7 @@ from . import market
 from . import tracker
 from . import watch
 from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
+                     MAX_SWEEP_RVOL,
                      INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE, POI_REQUIRED,
                      POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS, SWEEP_INTERVALS,
                      SWEEP_WATCH_ONLY,
@@ -153,7 +154,9 @@ def status_text(db, state) -> str:
     if SWEEP_ALERTS:
         poi_line += (f" · sweeps {'+'.join(SWEEP_INTERVALS)}"
                      + (" in POI" if POI_SWEEPS and POI_REQUIRED else "")
-                     + (" · WATCH only" if SWEEP_WATCH_ONLY else ""))
+                     + (" · WATCH only" if SWEEP_WATCH_ONLY else "")
+                     + (f" · rvol<{MAX_SWEEP_RVOL:g}"
+                        if SWEEP_WATCH_ONLY and MAX_SWEEP_RVOL > 0 else ""))
     return (
         f"<b>Riptide status</b>\n\n"
         f"build      <code>{build_id()}</code>\n"
