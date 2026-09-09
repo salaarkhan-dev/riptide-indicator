@@ -5451,3 +5451,79 @@ assumes the entry limit actually rests; a marketable limit pays taker.
 `RIPTIDE_FEE_MAKER` and `RIPTIDE_FEE_TAKER` now override the defaults, because
 MEXC's rate is a distribution across pairs and time — zero-fee promotions run on
 many pairs at once — rather than a constant.
+
+
+---
+
+## Exit policy, done properly — `research/studies/exit_grid.py`
+
+Twenty-five policies (targets 1–3R × plain / break-even at 1R and 1.5R /
+partial at 0.5R and 1R), on Min30 and Min15, early and confirmed. Fees at the
+corrected 0.010/0.022, plus a zero-fee bound.
+
+**Two instruments were replaced.** The fee (twice the true rate) and the
+drawdown — `portfolio.simulate`'s eight-slot cap makes it path-dependent, and
+two runs of the same rule gave +20% and +11%. Drawdown here is the **uncapped
+R equity curve**: one unit per trade, in exit-time order, no slots, no
+compounding. Deterministic, so a difference between rules is a difference
+between rules.
+
+Twenty-five cells is an optimisation, so the best cell is chosen on the
+**discovery** half and reported on the **held-out** half — that estimates the
+decision procedure, not the winning cell.
+
+### Plain wins every panel
+
+| panel | chosen on discovery | held out vs deployed 2R |
+|---|---|---|
+| Min30 early | plain @ 2.5R | −0.016 ± 0.043 (−0.4 SE) |
+| Min30 confirmed | plain @ 3R | +0.012 ± 0.100 (+0.1 SE) |
+| Min15 early | plain @ 2.5R | +0.007 ± 0.044 (+0.2 SE) |
+| Min15 confirmed | plain @ 3R | +0.003 ± 0.105 (+0.0 SE) |
+
+**Not one of the twenty-five is a partial or a break-even.** The deployed
+plain @ 2R is not beaten on any panel.
+
+### The partial buys the win rate and destroys the return
+
+Min30 early, discovery:
+
+| policy | win | full SL | R/signal | total R | maxDD | R/DD |
+|---|---|---|---|---|---|---|
+| **plain @ 2R (deployed)** | 38% | 60% | **+0.027** | **+52.3** | 58.6 | **0.89** |
+| plain @ 2.5R | 34% | 64% | +0.035 | +68.3 | 73.0 | 0.94 |
+| **half at 0.5R @ 2R** | **67%** | **33%** | **−0.007** | **−13.0** | 53.9 | **−0.24** |
+| BE at 1R @ 2R | **32%** | 54% | +0.018 | +36.2 | 61.7 | 0.59 |
+
+The partial nearly doubles the win rate and halves full stop-outs — and takes
+total R from **+52 to −13**. The drawdown it buys is **8% smaller** (53.9 vs
+58.6). That is the trade in full.
+
+**Break-even lowers the win rate**, 38% → 32%, and costs R. Third confirmation.
+
+### And the fee is NOT why the partial fails
+
+At **zero fees**, Min30 early held out:
+
+| policy | win | R/signal | total R | R/DD |
+|---|---|---|---|---|
+| **plain @ 2R** | 38% | **+0.048** | **+86.5** | **2.58** |
+| half at 1R @ 3R | 52% | +0.032 | +56.7 | 1.65 |
+| half at 0.5R @ 2R | **66%** | +0.002 | +3.4 | 0.11 |
+
+Even with **no fee at all**, the partial is +0.002 against plain's +0.048. It
+cuts the winners, and the winners are the entire return. The fee makes it worse;
+it is not the cause.
+
+### CORRECTION to the interim reading
+
+An intermediate run off the path-dependent account simulation suggested the
+partial was "no longer disastrous" at the corrected fee (65% win, ret/DD 1.00 vs
+1.21) and that 1.5R "edges 2R". **Both are withdrawn.** On the deterministic
+instrument the partial is −0.24 R/DD against plain's 0.89, and 1.5R is +0.019
+against 2R's +0.027. The chaotic simulation was reading its own noise.
+
+### Min15 is worse on both axes
+
+Held out, early: Min30 **+0.020 R** with a 34.7 R drawdown; Min15 **−0.012 R**
+with a **75.8 R** drawdown. Twice the drawdown for negative return.
