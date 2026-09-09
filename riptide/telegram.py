@@ -17,7 +17,7 @@ import aiohttp
 
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
-                     TREND_INTERVAL, log)
+                     TREND_INTERVAL, TRENDLINE_CONFLUENCE_BARS, log)
 from .engine import (Early, Setup, Sweep, grade_of, shift_odds,
                      sweep_worth)
 
@@ -384,6 +384,54 @@ def grade_letter(x, early: bool = False) -> str:
     return grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[0]
 
 
+def tl_mark(x) -> str:
+    """📐 in the headline when a trendline break agrees with this signal.
+
+    THE MARK IS NOT A GRADE AND MUST NOT READ LIKE ONE. The grade letter beside
+    it is backed by a measurement that replicated; this is not. Offline it came
+    out +0.206 R over 3773 early signals, positive in all five panels and above
+    a 25-seed placebo floor in every one — but only +0.7 SE on the held-out
+    half against a bar of 2, and a break the OTHER way does nothing at all,
+    which argues it is noise.
+
+    So it gets its own glyph rather than a letter, it never changes the grade,
+    it never gates a send, and `tl_note` below says in the message itself that
+    it is unproven. It is in the headline because that is the only line the
+    notification preview shows, and the whole point is to be able to spot these
+    without opening the chat — but a marker in a preview is exactly the thing
+    that gets read as a verdict, which is why the body has to disclaim it.
+    """
+    return "📐" if tl_agrees(x) else ""
+
+
+def tl_agrees(x) -> bool:
+    """Whether the stored distance counts as confluence at all.
+
+    THE WINDOW IS THE WHOLE THING. The raw bars-since-break is stored, and on
+    the first live scan 40% of signals had SOME earlier break behind them — 38
+    bars, 69, 108. The measured effect is gone by 20. A mark on 40% of alerts
+    would mean nothing while still looking like it meant something.
+    """
+    b = getattr(x, "tl_break", -1)
+    return isinstance(b, int) and 0 <= b <= TRENDLINE_CONFLUENCE_BARS
+
+
+def tl_note(x) -> str | None:
+    """The line under the alert that says what the mark means, honestly."""
+    if not tl_agrees(x):
+        return None
+    b = x.tl_break
+    when = "this bar" if b == 0 else f"{b} bar{'' if b == 1 else 's'} ago"
+    return (f"<i>📐 trendline broke {'up' if _tl_up(x) else 'down'} {when} — "
+            f"UNPROVEN, being measured in /stats</i>")
+
+
+def _tl_up(x) -> bool:
+    """Which way the agreeing break went. A swept HIGH implies a short, so the
+    sweep's mapping is inverted exactly as it is everywhere else."""
+    return (not x.is_high) if isinstance(x, Sweep) else x.is_long
+
+
 def setup_message(s: Setup) -> str:
     tf = (f"{tf_label(s.tf or INTERVAL)}→{tf_label(ENTRY_INTERVAL)}"
           if s.entry_tf == "LTF" else tf_label(s.tf or INTERVAL))
@@ -399,9 +447,10 @@ def setup_message(s: Setup) -> str:
             if s.also_early else "")
     why = _grade(s)
     return "\n".join(x for x in (
-        _headline("🎯 CONFIRMED", s.is_long, s.symbol, tf,
+        _headline(f"🎯 CONFIRMED{tl_mark(s)}", s.is_long, s.symbol, tf,
                   grade=grade_chip(s)),
         why,
+        tl_note(s),
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         "",
@@ -423,9 +472,10 @@ def early_message(s: Early) -> str:
     bars = s.bars_from_sweep
     why = _grade(s, early=True)
     return "\n".join(x for x in (
-        _headline("⚡ EARLY", s.is_long, s.symbol, tf_label(s.tf or INTERVAL),
-                  grade=grade_chip(s, True)),
+        _headline(f"⚡ EARLY{tl_mark(s)}", s.is_long, s.symbol,
+                  tf_label(s.tf or INTERVAL), grade=grade_chip(s, True)),
         why,
+        tl_note(s),
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         "",

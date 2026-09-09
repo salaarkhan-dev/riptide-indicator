@@ -415,6 +415,7 @@ TRENDLINE_SPACE = float(os.getenv("RIPTIDE_TRENDLINE_SPACE", "2.0"))
 # reason the digest says "not a trade" in the message itself.
 TRENDLINE_MIN_SLOPE = float(os.getenv("RIPTIDE_TRENDLINE_MIN_SLOPE", "0.15"))
 
+
 # Same rule as every other freshness window here: minimum 2, because a bar
 # that has just closed is already one full step old. See _min_fresh.
 TRENDLINE_FRESH_BARS = int(os.getenv("RIPTIDE_TRENDLINE_FRESH_BARS", "2"))
@@ -617,3 +618,28 @@ def build_id() -> str:
         if value:
             return value
     return "unknown"
+
+# How recent a same-direction trendline breakout has to be to count as
+# CONFLUENCE on a trade alert, in bars of that signal's own timeframe.
+#
+# NOT COSMETIC, AND THE FIRST LIVE CHECK PROVED IT. The tag stores the raw
+# bars-since-break, and without this window 667 of 1662 signals — 40% — carried
+# a "confluence" whose most recent break was 38, 69 or 108 bars old. The
+# measured effect does not survive anywhere near that far:
+#
+#     window   kept   difference vs no break
+#        3      1%          +0.126
+#        5      2%          +0.178
+#       10      3%          +0.206   <- this
+#       20     10%          +0.052
+#       40     26%          -0.002
+#
+# 10 is CFG.early_max_bars, which is the engine's own notion of "recent enough
+# to be the same event", and it was fixed in advance rather than read off that
+# table. A marker on 40% of alerts would mean nothing and would still look like
+# it meant something, which is worse than not having one.
+#
+# The raw distance is stored regardless, so a different window can be measured
+# later from rows already on disk without re-recording anything.
+TRENDLINE_CONFLUENCE_BARS = int(
+    os.getenv("RIPTIDE_TRENDLINE_CONFLUENCE_BARS", "0")) or CFG.early_max_bars

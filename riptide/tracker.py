@@ -37,7 +37,8 @@ import statistics
 import time
 
 from .config import (BAR_SECONDS, INTERVAL, INTERVALS, TRACK, TRACK_FILL_BARS,
-                     TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_INTERVAL, log)
+                     TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_INTERVAL,
+                     TRENDLINE_CONFLUENCE_BARS, log)
 from .engine import Candle, Setup, grade_of
 
 PENDING, OPEN = "pending", "open"          # still live
@@ -51,7 +52,7 @@ RESOLVED = (WON, LOST, TIMEOUT)
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
             "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence, "
-            "di_dir, rsi_ext, poi, regraded, tf, trend_tf")
+            "di_dir, rsi_ext, poi, regraded, tf, trend_tf, tl_break")
 
 CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
@@ -124,6 +125,14 @@ def init(db) -> None:
         # stored. The grade breakdown skips them, exactly as `regraded` already
         # does for rows predating the POI column.
         ("trend_tf", "TEXT DEFAULT ''", "old rows are excluded from the grades"),
+        # Bars since a same-direction Liquidity Trendline breakout, or -1 for
+        # none. MEASUREMENT ONLY — it gates nothing and must not. The offline
+        # study (research/studies/early_breakout.py) put it at +0.7 SE on the
+        # held-out half, which is an encouraging shape and not evidence, so
+        # this exists to accumulate the forward sample that could settle it.
+        # -1 rather than NULL so old rows and "no break" stay distinguishable:
+        # old rows carry the default and are excluded from the breakdown.
+        ("tl_break", "INT DEFAULT -2", "trendline confluence, measured forward"),
     ):
         if col not in have:
             db.execute(f"ALTER TABLE outcomes ADD COLUMN {col} {decl}")
@@ -174,7 +183,7 @@ def arm(db, sid: str, s, from_bar: int | None = None,
     start = from_bar if from_bar is not None \
         else max(detected, last_closed_bar(now, getattr(s, "tf", "")))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
                 # Early has no shift; its sweep bar is the comparable anchor.
@@ -183,7 +192,8 @@ def arm(db, sid: str, s, from_bar: int | None = None,
                 getattr(s, "confluence", 0),
                 getattr(s, "di_dir", 0), getattr(s, "rsi_ext", 0.0),
                 int(getattr(s, "poi", False)), 1,
-                getattr(s, "tf", "") or INTERVAL, TREND_INTERVAL))
+                getattr(s, "tf", "") or INTERVAL, TREND_INTERVAL,
+                int(getattr(s, "tl_break", -1))))
     db.commit()
 
 
@@ -371,7 +381,8 @@ def live_band(db, letter: str, kind: str, min_n: int = 30):
 def summary(db, kind: str | None = None) -> dict:
     """Pass a kind to describe one strategy alone; omit it for both together."""
     sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind, "
-           "confluence, di_dir, rsi_ext, poi, regraded, trend_tf FROM outcomes")
+           "confluence, di_dir, rsi_ext, poi, regraded, trend_tf, tl_break "
+           "FROM outcomes")
     rows = (db.execute(sql + " WHERE kind=?", (kind,)).fetchall() if kind
             else db.execute(sql).fetchall())
     if not rows:
@@ -400,6 +411,26 @@ def summary(db, kind: str | None = None) -> dict:
         "against": _bucket(against),
         "mfe": statistics.fmean([m for m, _ in filled]) if filled else 0.0,
         "mae": statistics.fmean([m for _, m in filled]) if filled else 0.0,
+        # TRENDLINE CONFLUENCE, ACCUMULATING. r[14] is tl_break: bars since a
+        # same-direction breakout, -1 for none, -2 on rows armed before the
+        # column existed. Those are excluded rather than folded into "no
+        # break", because they are not a measurement of anything — the same
+        # reasoning that keeps pre-POI rows out of the grade bands.
+        #
+        # This gates NOTHING. Offline it is +0.7 SE on the held-out half
+        # against a bar of 2, and this exists to find out whether the forward
+        # sample agrees. See research/studies/early_breakout.py.
+        # The WINDOW decides membership, not merely "a break exists". The raw
+        # distance is stored so a different window can be measured later from
+        # rows already on disk, but 40% of signals have SOME break behind them
+        # and the effect is gone by 20 bars. tl_break == -2 marks rows armed
+        # before the column existed; those are excluded from both sides rather
+        # than counted as "no break", which they are not a measurement of.
+        "tl_yes": _bucket([(r[0], r[1]) for r in rows if r[14] is not None
+                           and 0 <= r[14] <= TRENDLINE_CONFLUENCE_BARS]),
+        "tl_no": _bucket([(r[0], r[1]) for r in rows if r[14] is not None
+                          and (r[14] == -1
+                               or r[14] > TRENDLINE_CONFLUENCE_BARS)]),
         # By grade. Computed from the stored poi and trend_dir columns rather
         # than a saved letter, so a change to the ladder re-grades history
         # instead of stranding it. Rows armed before the POI column existed

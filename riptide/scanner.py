@@ -24,6 +24,7 @@ from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
 from .engine import (Early, Sweep, atr_series, grade_of, run_engine,
                      sweep_worth)
 from .exchange import fetch_candles, list_symbols
+from .trendline import trendline_signals
 from .storage import (already_sent, early_already_sent, early_sig, first_run,
                       meta_get, meta_set, record, record_early,
                       record_sweep, sweep_already_sent, sweep_sig, sig_id)
@@ -169,6 +170,29 @@ async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
             if with_trend or not trend_on:
                 keep_e.append(e)
 
+        # Trendline confluence, MEASURED AND SHOWN, GATING NOTHING.
+        #
+        # research/studies/early_breakout.py asked whether an early signal with
+        # a same-direction Liquidity Trendline breakout behind it scores better
+        # than one without. Offline it came out +0.206 R over 3773 signals,
+        # positive in all five panels, above a 25-seed placebo floor in every
+        # one, and replicating at +0.154 on confirmed setups — but only +0.7 SE
+        # on the held-out half, against a bar of 2. That is an encouraging
+        # shape, not evidence, and the opposite-direction break does nothing at
+        # all, which argues the other way.
+        #
+        # So it is recorded forward and printed on the alert, and it decides
+        # NOTHING. Filtering on +0.7 SE is exactly the mistake the trendline
+        # slope study demonstrated, where +4.4 SE on one half of the data
+        # reversed sign on the other.
+        #
+        # Costs one pass over the candles already fetched — measured at 1.6 ms
+        # per symbol, about 0.2 s for a full 60-symbol two-timeframe cycle.
+        try:
+            _tag_trendline(cs, (*keep_s, *keep_w, *keep_e))
+        except Exception as e:
+            log.warning("trendline confluence failed on %s: %s", symbol, e)
+
         # Latest close, for the alert footer. Display only — nothing decides
         # anything on it, and the engine has already finished by this point.
         px = cs[-1].c
@@ -180,6 +204,46 @@ async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
             log.debug("%s: %d setup(s) dropped against the %s trend",
                       symbol, dropped, TREND_INTERVAL)
         return keep_s, keep_w, keep_e, cs
+
+
+def _bar_of(x) -> int:
+    """The bar a signal became real, as an index into the scanned candles.
+
+    Each signal type has its own: the shift bar for a confirmed setup, the gap
+    bar for an early, the raid bar for a sweep. Using one field for all three
+    would silently measure a different moment for two of them.
+    """
+    for attr in ("fvg_bar", "mss_bar", "sweep_bar"):
+        v = getattr(x, attr, None)
+        if isinstance(v, int) and v >= 0:
+            return v
+    return -1
+
+
+def _tag_trendline(cs, signals) -> None:
+    """Stamp `tl_break` = bars since a same-direction breakout, or -1.
+
+    ONLY BREAKS AT OR BEFORE THE SIGNAL'S OWN BAR COUNT. A later one is the
+    future, and it would look wonderful — which is precisely why the guard is
+    written down rather than assumed. Both series come off the same closed
+    candles, so "at or before" is the whole check.
+    """
+    if not signals:
+        return
+    ups, dns = [], []
+    for s in trendline_signals(cs):
+        (ups if s.is_long else dns).append(s.bar)
+    for x in signals:
+        x.tl_break = -1
+        b = _bar_of(x)
+        if b < 0:
+            continue
+        # A swept HIGH implies a short, so it wants a DOWNSIDE break — the
+        # same mapping the trend and POI checks already use for sweeps.
+        want_up = (not x.is_high) if isinstance(x, Sweep) else x.is_long
+        prior = [k for k in (ups if want_up else dns) if k <= b]
+        if prior:
+            x.tl_break = b - max(prior)
 
 
 def _same_trade(e: Early, s) -> bool:

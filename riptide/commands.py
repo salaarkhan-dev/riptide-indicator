@@ -183,6 +183,35 @@ def _bucket_line(name: str, b: dict) -> str:
             f"{b['setups']:>3} setups · {b['win_pct']:.0f}% win")
 
 
+def _tl_block(s) -> str:
+    """The trendline-confluence rows in /stats, or a note saying why not yet.
+
+    Shown even when thin, because the whole reason the column exists is that
+    the offline result was not strong enough to act on and only forward data
+    can settle it. Hiding the sample until it is big would mean never watching
+    it grow.
+
+    The SE is on every line deliberately. The offline difference was +0.206 R
+    with 128 signals behind it and it still failed at +0.7 SE on the held-out
+    half; a mean printed without its error bar is how that becomes a decision.
+    """
+    yes, no = s.get("tl_yes") or {}, s.get("tl_no") or {}
+    ny, nn = yes.get("setups", 0), no.get("setups", 0)
+    if not (ny or nn):
+        return ""
+    out = ["", "<b>📐 trendline confluence</b>  <i>measured, not filtered</i>"]
+    out.append(_bucket_line("with 📐", yes) if ny >= 1 else "with 📐     —")
+    out.append(_bucket_line("without", no) if nn >= 1 else "without     —")
+    if ny >= 10 and nn >= 10:
+        d = yes["r_setup"] - no["r_setup"]
+        dse = (yes["se_setup"] ** 2 + no["se_setup"] ** 2) ** 0.5
+        out.append(f"{'difference':<12}{d:+.3f} ± {dse:.3f}"
+                   f"   {d / dse if dse else 0:+.1f} SE")
+    out.append("<i>offline: +0.206 R over 3773 signals but only +0.7 SE held "
+               "out, so it is on trial. It changes nothing that is sent.</i>")
+    return "\n".join(out)
+
+
 def stats_text(db) -> str:
     if not TRACK:
         return ("Outcome tracking is off.\n\n"
@@ -266,6 +295,10 @@ def stats_text(db) -> str:
         body += ("\n<i>This is out-of-sample: live alerts, in whatever regime "
                  "has actually occurred. Where it disagrees with the backtest, "
                  "believe this.</i>")
+    # Last, and separate, because it is the one block on trial rather than
+    # reporting. Folding it in with the grades would put a candidate beside
+    # measurements that have already replicated.
+    body += _tl_block(s)
     return body
 
 
