@@ -4844,3 +4844,78 @@ about one signal a day, so the clock is worth starting — the same reasoning th
 justifies the open-interest logger. Tagging alerts that have the confluence, and
 letting `/stats` score the tag forward, changes nothing that is sent and costs
 one extra computation per symbol per scan on candles already fetched.
+
+
+---
+
+## "Support and Resistance Levels with Breaks" — `research/studies/srbreak_measure.py`
+
+Ported exactly (`srbreak.py`). The reason to measure it is a genuine collision:
+**Riptide and this indicator are opposite bets on the same candle.** Riptide
+sees price take out a pivot low and reads a raid — reversal, long. This reads
+close crossing under a pivot low on expanding volume and calls it a breakdown —
+continuation, short.
+
+And the collision is not open in the abstract. `context.py` already measured
+sweep-to-setup conversion against raid volume over 7869 sweeps: **26.4% for the
+quietest quintile down to 6.5% for the loudest, monotone, +15.6 SE.** Loud raids
+are breakouts. That is this indicator's premise, arrived at independently, and
+it is the strongest single result in this file. So the promising use was never a
+new strategy — it was a **negative filter** on Riptide.
+
+### Three things about the indicator itself, before any numbers
+
+**The lines are drawn 16 bars to the left of where they became knowable.**
+`plot(..., offset = -(rightBars+1))`. `pivothigh(15,15)` is `na` until 15 bars
+after the pivot, plus one for the `[1]`. The *signal* is honest and
+non-repainting; the *picture* makes every break look like a break of a level
+that was already sitting there. It was not.
+
+**A quiet, clean break prints nothing at all.** The clean label needs `osc > 20`;
+the wick labels do not test volume. A break that is neither wicky nor loud falls
+through every branch and leaves no mark — easy to read as "that never happened".
+
+**The alerts and the arrows are different conditions.** `alertcondition` tests
+only the cross plus `osc > threshold` — no wick test. Wiring those alerts up
+subscribes you to something other than what you see.
+
+### Nothing passes
+
+**As a trade of its own** — market at the close, 1.5 ATR stop, 2R, MEXC fees:
+
+| | n | win | R/signal |
+|---|---|---|---|
+| clean break | 897 | 34% | **−0.097 ± 0.048** |
+| wick break | 310 | 35% | −0.057 ± 0.082 |
+
+The fifth indicator in this file to fail as a standalone. Note it is *not* a
+free +0.097 to fade: the stop and target are asymmetric and both sides pay fees.
+
+**As a negative filter** — the pre-registered primary. Early signals with a
+contradicting clean break in the preceding 10 bars:
+
+| panel | n | R | vs the rest | |
+|---|---|---|---|---|
+| all early | 394 (10%) | −0.026 | −0.011 ± 0.062 | −0.2 SE |
+| **held out** | 197 | −0.086 | **−0.087 ± 0.084** | **−1.0 SE** |
+
+The held-out half leans the predicted way — contradicted signals do worse, win
+rate 25% against a 30% baseline — but at −1.0 SE, and the all-panel is flat.
+**Fails.**
+
+**As confluence, the sign flips between populations.** An agreeing clean break
+scores **−0.058 on early** and **+0.177 on confirmed** (+1.3 SE, n=73). A
+mechanism does not help one signal type and hurt the other; noise does exactly
+that. The wick arms are all under 50 rows and say nothing.
+
+### Verdict
+
+Not adopted in any of the three roles. Coverage was reasonable (10% for the
+contradicting arm, unlike the trendline confluence's 3%) and the direction on
+the held-out half was the predicted one, which is more than most — but −1.0 SE
+with a flat aggregate is not a finding.
+
+**The premise it shares with the +15.6 SE conversion result still stands. This
+particular formalisation of it does not sort R.** Which `context.py` had already
+warned about from the other side: it found a huge effect on conversion and none
+on expectancy, and those are different questions.

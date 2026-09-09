@@ -1,0 +1,44 @@
+SR BREAK vs RIPTIDE — opposite bets on the same event
+3773 early · 694 confirmed · window 10 bars
+PRE-REGISTERED: a CONTRADICTING clean break must score WORSE. Better is a FAIL.
+
+COVERAGE  contradicting clean break within 10 bars: 394/3773 (10%)
+
+EARLY — all   n=3773
+                                     n    win  R/signal     SE
+    all signals                   3773    30%    -0.016  0.020
+    CONTRADICTING clean break      394    30%    -0.026  0.058
+      vs the rest                                -0.011  0.062   -0.2 SE   placebo +0.004
+    agreeing clean break            85    22%    -0.072  0.114
+      vs the rest                                -0.058  0.115   -0.5 SE   placebo +0.036
+    contradicting WICK              84    31%    -0.019  0.138
+      vs the rest                                -0.003  0.140   -0.0 SE   placebo +0.039
+    agreeing WICK                   34    38%    +0.186  0.228
+      vs the rest                                +0.204  0.229   +0.9 SE   placebo +0.039
+
+EARLY — HELD OUT (older half), the pre-registered one   n=1777
+                                     n    win  R/signal     SE
+    all signals                   1777    30%    -0.009  0.029
+    CONTRADICTING clean break      197    25%    -0.086  0.078
+      vs the rest                                -0.087  0.084   -1.0 SE   placebo -0.015
+    agreeing clean break            38    21%    -0.173  0.177
+      vs the rest                                -0.167  0.180   -0.9 SE   placebo -0.108
+    contradicting WICK              46    30%    +0.011  0.193
+      vs the rest                                +0.020  0.195   +0.1 SE   placebo -0.091
+    agreeing WICK                   17   too few
+
+CONFIRMED — all   n=694
+                                     n    win  R/signal     SE
+    all signals                    694    26%    +0.017  0.043
+    CONTRADICTING clean break        9   too few
+    agreeing clean break            73    27%    +0.176  0.132
+      vs the rest                                +0.177  0.139   +1.3 SE   placebo -0.012
+    contradicting WICK               4   too few
+    agreeing WICK                   13   too few
+
+======================================================================
+THE BREAK AS A TRADE OF ITS OWN — market at the close, 1.5 ATR stop, 2R
+======================================================================
+                                     n    win  R/signal     SE
+    clean                          897    34%    -0.097  0.048
+    wick                           310    35%    -0.057  0.082
