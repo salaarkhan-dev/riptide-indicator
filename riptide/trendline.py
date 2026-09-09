@@ -172,13 +172,26 @@ def pivot_lows(cs, n: int):
 
 
 def trendline_signals(cs, pivot_len: int = PIVOT_LEN, space: float = SPACE,
-                      atr_len: int = ATR_LEN) -> list[Signal]:
+                      atr_len: int = ATR_LEN, levels_out=None) -> list[Signal]:
     """Every breakout the indicator prints, in bar order.
 
     One pass, mirroring the Pine's per-bar execution order exactly: the pivot
     high block, then the up-channel extension, then the pivot low block, then
     the down-channel extension. That order matters — `broken` is written by the
     first two and read by the third.
+
+    `levels_out`, when given, is filled with one (support, resistance) tuple
+    per bar — the live extended line levels as the chart draws them, or None
+    on a side with no channel. It follows `run_engine`'s sweeps_out/early_out
+    pattern for the same reason: anything that wants the channel state has to
+    read it out of THIS loop rather than re-deriving it, or the two drift and
+    nothing says so. Support is the ascending low-side line and resistance the
+    descending high-side one.
+
+    The levels are the DRAWN line, offset included — see the module docstring
+    on the one-time (period - 1) slope-unit distortion at creation. That is
+    deliberate: a stop placed by eye goes under the line on the screen, not
+    under the true pivot-to-pivot projection.
     """
     atr = atr_series(cs, atr_len)
     ph_at = {c: (j, px) for c, j, px in pivot_highs(cs, pivot_len)}
@@ -316,4 +329,11 @@ def trendline_signals(cs, pivot_len: int = PIVOT_LEN, space: float = SPACE,
                 slup, sldn = top.slope(), btm.slope()
                 top.x2, top.y2 = i, top.y2 + slup
                 btm.x2, btm.y2 = i, btm.y2 + sldn
+
+        if levels_out is not None:
+            # Read AFTER both live extensions, so it is the line as it stands
+            # going into the next bar — which is the level a stop resting under
+            # it would sit at when that bar trades.
+            levels_out.append((dnln[1].y2 if len(dnln) > 1 else None,
+                               upln[1].y2 if len(upln) > 1 else None))
     return out

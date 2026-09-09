@@ -4692,3 +4692,86 @@ produced +4.4 SE on one half of its data and the opposite sign on the other, and
 the only reason it was caught is that nobody was permitted to act on the first
 half. This removes the temptation mechanically rather than relying on
 discipline.
+
+
+---
+
+## A trendline as the stop — `research/studies/trendline_stop.py`
+
+From a live TAO trade: early alert filled on the retest, an ascending Liquidity
+Trendline support underneath, stop parked under the line and dragged up with it.
+It worked. One winning trade is the weakest evidence for a rule and the best
+reason to test one, because the rule is specific enough to be wrong measurably.
+
+**Three claims were bundled together and only two are testable.**
+
+### A — "I entered on the FVG retest" is already what the bot does
+
+Early signals enter with a LIMIT at the gap edge; the scorer fills only when
+price returns to touch it. The retest *is* the fill. Nothing to change.
+
+### Coverage settles a lot of it: 18%
+
+Only 699 of 3,900 early signals across the full 60-symbol universe had a live
+trendline on the correct side of the trade at entry. **The rule applies to
+roughly one trade in five**, so whatever it does, it cannot move the aggregate
+much. The TAO trade was one of that fifth, and it won.
+
+### B — "stop under the line" is not a trendline effect, it is a wider stop
+
+| | risk | win | full SL | R/signal | vs plain |
+|---|---|---|---|---|---|
+| plain fixed stop | 1.78% | 41% | 58% | +0.067 | — |
+| **B  stop at the line** | **3.10%** | 44% | 48% | +0.020 | −0.6 SE |
+
+The line sits **74% further from entry** than the raid extreme. A stop is
+one-dimensional — same risk means same price — so there is no separate control
+to run: arm B *is* "use a much wider stop", and the drop in stop-outs is
+mechanical rather than structural. A wider stop was already tested in
+`stops.py` (the risk floor: inverted U, not supported), and here it costs net R
+in all three panels.
+
+### C — the actual idea, trailing up the line, is a wash
+
+Initial risk unchanged, so this is a clean exit-management comparison.
+
+| | win | full SL | R/signal | vs plain |
+|---|---|---|---|---|
+| all, plain | 41% | 58% | +0.067 | — |
+| all, trailed | 36% | 51% | +0.065 | **−0.0 SE** |
+| discovery, trailed | 35% | 54% | +0.005 | −0.1 SE |
+| **held out, trailed** | 37% | 47% | +0.155 | **+0.1 SE** |
+
+**No arm beats the plain stop anywhere.** On a first pass with the 23-symbol
+corpus the held-out half showed +0.092 for the trail; widening to 60 symbols
+shrank it to +0.014, which is what noise does when it gets more data.
+
+### What DOES replicate, in all three panels
+
+**Full stop-outs fall — 58% → 51%** (55% → 47% held out). That is real and it
+is what the idea was reached for.
+
+**But the win rate falls with it — 41% → 36%.** A trailed-out trade exits at a
+scratch or small loss instead of running to target, and a scratch is not a win.
+This is precisely the mechanism `stops.py` documented for break-even: it "cuts
+full losses but LOWERS the win rate". Net R is unchanged because the two cancel.
+
+### My own pre-registered expectation was half wrong
+
+Recorded before the run: *"the trail raises the win rate, cuts full stop-outs,
+and loses net R."* Actual: it **lowers** the win rate, cuts full stop-outs, and
+costs **nothing**. Two of three wrong, in the direction of my own prior being
+too pessimistic about R and too optimistic about the win rate.
+
+### Verdict
+
+Not adopted, and not because it is harmful — because it is free and does
+nothing. If fewer full stop-outs is worth a lower win rate to trade
+comfortably, the trail costs no measurable R and that is a legitimate
+discretionary reason to use it on the ~18% of setups where a line exists. It is
+not an edge, it should not be automated, and it should not be expected to
+improve returns.
+
+For the win rate specifically, `stops.py` already found the better instrument:
+a partial at 1R took LEZ from 33% to 50% win and 66% to 50% full stop-outs for
+0.007 R.

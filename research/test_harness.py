@@ -195,5 +195,54 @@ check("defaults are unchanged",
       round(simulate_market(cs, 0, 100.0, 90.0, True, fee_maker=0.0,
                             fee_taker=0.0).r, 6), -1.0)
 
+# ---------------------------------------------------------------- 13
+# The structural trailing stop. It exists because a trendline stop was
+# proposed from a chart, and a chart cannot show what the rule does to the
+# trades where the line was in the way.
+print("\n13. simulate(trail=...) — a stop that follows a structural line")
+# Entry 100, stop 90 (risk 10). A rising line reaches 95 by bar 3; price then
+# falls to 94. Plain would survive; the trail is hit at 95 => -0.5R.
+cs = bars([(100, 101,  99, 100),      # 0 signal bar
+           (100, 100,  99, 100),      # 1 fill
+           (100, 106,  99, 105),      # 2
+           (105, 106,  94,  95)])     # 3 falls to 94
+plain = simulate(cs, 0, 100.0, 90.0, True, target_r=3.0, fill_bars=3,
+                 fee_pct=0.0, fee_maker=0.0, fee_taker=0.0)
+trail = [None, None, 95.0, 95.0]
+tr = simulate(cs, 0, 100.0, 90.0, True, target_r=3.0, fill_bars=3,
+              trail=trail, fee_pct=0.0, fee_maker=0.0, fee_taker=0.0)
+check("plain stop is not touched", plain.exit, "timeout")
+check("the trailed stop is", tr.exit, "stop")
+check("and it exits at the line, -0.5R", round(tr.r, 6), -0.5)
+
+# THE STOP NEVER MOVES AGAINST THE TRADE. A line that falls back must not
+# widen the risk after entry.
+cs = bars([(100, 101,  99, 100),
+           (100, 100,  99, 100),
+           (100, 106,  99, 105),
+           (105, 106,  91,  92),      # would survive a stop at 90, not at 95
+           (92,  93,   89,  90)])
+tr = simulate(cs, 0, 100.0, 90.0, True, target_r=3.0, fill_bars=3,
+              trail=[None, None, 95.0, 80.0, 80.0], fee_pct=0.0,
+              fee_maker=0.0, fee_taker=0.0)
+check("a line dropping to 80 does not reopen the risk", round(tr.r, 6), -0.5)
+
+# The level is read from the PREVIOUS bar: a line only exists once the bar
+# that extended it has closed.
+cs = bars([(100, 101,  99, 100),
+           (100, 100,  99, 100),
+           (100, 106,  94,  95)])     # bar 2 dips to 94
+tr = simulate(cs, 0, 100.0, 90.0, True, target_r=3.0, fill_bars=3,
+              trail=[None, None, 95.0], fee_pct=0.0, fee_maker=0.0, fee_taker=0.0)
+check("bar 2's own level cannot stop bar 2", tr.exit, "timeout")
+
+# A trail that never fires leaves the plain result untouched.
+cs = bars([(100, 101, 99, 100), (100, 100, 99, 100), (100, 131, 99, 130)])
+a = simulate(cs, 0, 100.0, 90.0, True, target_r=3.0, fill_bars=3,
+             fee_pct=0.0, fee_maker=0.0, fee_taker=0.0)
+b = simulate(cs, 0, 100.0, 90.0, True, target_r=3.0, fill_bars=3,
+             trail=[None, None, 80.0], fee_pct=0.0, fee_maker=0.0, fee_taker=0.0)
+check("an irrelevant line changes nothing", round(a.r, 6), round(b.r, 6))
+
 print("\n" + ("FAILED: " + ", ".join(FAILED) if FAILED else "ALL PASS"))
 sys.exit(1 if FAILED else 0)

@@ -71,10 +71,28 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
              horizon_bars: int = TRACK_HORIZON_BARS,
              be_arm_r: float = 0.0, be_lock_r: float = 0.0,
              part_at_r: float = 0.0, part_to_r: float = 0.0,
+             trail: list | None = None,
              fee_pct: float = FEE_PCT,
              fee_maker: float = 0.0,
              fee_taker: float = 0.06) -> Outcome:
-    """One trade, scored from the bar the entry was actually touched on."""
+    """One trade, scored from the bar the entry was actually touched on.
+
+    `trail`, when given, is a per-bar list of candidate stop levels — a
+    structural line to rest the stop under, indexed the same as `cs`, with
+    None on bars where there is none. It lives HERE rather than in a study's
+    private copy for the reason the simulate_market docstring already gives:
+    research/studies/mss_entry.py kept its own copy of a scorer and got the
+    entry bar wrong, silently, for as long as nobody compared them.
+
+    THE STOP ONLY EVER MOVES IN THE TRADE'S FAVOUR. A structural line can fall
+    as well as rise, and a stop that follows it down would widen the risk after
+    entry — which is not a stop, it is a hope. When the line vanishes the stop
+    freezes where it was.
+
+    The level for bar k is read from `trail[k - 1]`, never `trail[k]`: a line
+    is only extended once bar k-1 has closed, so using bar k's own value would
+    place the stop using a level that did not exist while the bar traded.
+    """
     risk = abs(entry - stop)
     if risk <= 0 or entry <= 0:
         return Outcome(0.0, False, None, 0.0, 0.0, None)
@@ -107,6 +125,16 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
         fav = (c.h - entry) / risk if is_long else (entry - c.l) / risk
         adv = (c.l - entry) / risk if is_long else (entry - c.h) / risk
         mfe, mae = max(mfe, fav), min(mae, adv)
+
+        # Raise the stop to the structural line BEFORE testing it, using the
+        # previous bar's level — see the docstring. Never in the losing
+        # direction, and never past the entry into a guaranteed profit that
+        # the trade has not earned.
+        if trail is not None and k - 1 >= 0 and k - 1 < len(trail):
+            lv_ = trail[k - 1]
+            if lv_ is not None:
+                cur_stop = max(cur_stop, lv_) if is_long \
+                    else min(cur_stop, lv_)
 
         if (c.l <= cur_stop) if is_long else (c.h >= cur_stop):
             r = banked + size * sgn * (cur_stop - entry) / risk
