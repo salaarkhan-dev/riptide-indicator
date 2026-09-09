@@ -194,7 +194,7 @@ no volume field, so every earlier "volume" test was measuring something else.
 | chart DI agrees | -0.241 (-1.5) | -0.078 (-1.6) |
 | ATR percentile (volatility regime) | +0.017 (+0.1) | -0.001 (-0.0) |
 | BTC DAILY trend agrees | -0.094 (-0.9) | **-0.122 (-2.6)** |
-| **BTC 30m trend agrees** | +0.192 (+1.8) | **+0.174 (+3.6) CANDIDATE** |
+| **BTC 30m trend agrees** | +0.192 (+1.8) | **+0.174 (+3.6) — RETIRED, see `three_ideas.py`: −0.6 SE held out** |
 
 > **LABELS SWAPPED — see the BTC sign correction at the end of this file.**
 > Both BTC rows read backwards: they measure BTC going the OTHER way.
@@ -5078,3 +5078,71 @@ than a correlated bundle about to snap. That is the opposite of what the
 drawdown work would have suggested, and it is why the position cap stays exactly
 as it is: fewer, larger losses on wide days is a drawdown problem, and this says
 nothing about drawdown.
+
+
+---
+
+## Ideas 3, 4 and 5 — `research/studies/three_ideas.py`
+
+### 3. BTC 30m regime — the standing CANDIDATE is RETIRED
+
+`context.py` flagged BTC's 30m trend *against* the trade as a CANDIDATE at
+**+0.174, 3.6 SE**, monotone, surviving all four splits and the risk-tercile
+control. It has sat in this file as promising ever since, and `btc_dir` is
+recorded on every signal and printed on every alert.
+
+| panel | BTC against | BTC with | difference | |
+|---|---|---|---|---|
+| all early | +0.073 | −0.129 | **+0.202 ± 0.040** | **+5.1 SE** |
+| **held out** | −0.035 | +0.002 | **−0.036 ± 0.058** | **−0.6 SE** |
+
+**+5.1 SE on the full panel and the held-out half reverses the sign.** The full
+panel is carried entirely by the discovery half. This is the same shape as the
+trendline slope study, at a larger magnitude, and it is the most emphatic
+demonstration in this file that a large SE on pooled data is worth nothing on
+its own.
+
+**The candidate is retired.** It should not be re-proposed without a fresh
+window, and the earlier +3.6 SE is best read as having been measured on what is
+now the discovery half.
+
+### 4. Internal MTF agreement — fails, and the first run was an impossible test
+
+Min30 signals with a same-direction Min15 signal within 10 bars:
+
+| panel | with | without | difference | |
+|---|---|---|---|---|
+| all Min30 | +0.026 | −0.038 | +0.063 ± 0.043 | +1.5 SE |
+| overlapping window | +0.026 | −0.061 | +0.086 ± 0.058 | +1.5 SE |
+| **older half of the overlap** | +0.013 | −0.068 | **+0.081 ± 0.080** | **+1.0 SE** |
+
+**Fails.** Consistently positive across three panels and above the placebo floor
+every time, which is more than most — but +1.0 SE is not evidence.
+
+**The first run reported "0 rows" for the held-out panel and that was a real
+methodological bug, not a null.** Both corpora fetch 2000 bars, so Min30 spans
+~42 days and Min15 only ~21 — and the held-out half of Min30 is the *older*
+half, which the Min15 data does not reach at all. Restricting Min30 to the
+window Min15 actually covers is what the table above does.
+
+### 5. Pool memory — fails, and its secondary died on the next check
+
+Raid count on the same level: **not monotone**, −0.4 SE all, +0.5 SE held out.
+The 3rd-raid bucket looks good in both panels (+0.084, +0.272) on 116 and 72
+rows. Nothing there.
+
+**The `pivots` reading nearly became a finding, and is worth recording as a
+near miss.** Pool swing count on early held-out: 2 swings −0.041, 4+ swings
+**+0.208 ± 0.098** — a difference of **+0.249, +2.4 SE**, above its placebo
+floor, and positive on the full panel too (+1.6 SE). It was not pre-registered,
+so the immediate next step was to check it elsewhere rather than report it:
+
+| | 4+ minus 2 swings | |
+|---|---|---|
+| early, held out (where it was found) | +0.249 | **+2.4 SE** |
+| **early, discovery — the other half** | **−0.017** | **−0.2 SE** |
+| confirmed, all — independent population | +0.095 | +0.8 SE |
+| confirmed, held out | +0.087 | +0.5 SE |
+
+**Gone.** One half of one population. The cost of checking was two minutes; the
+cost of not checking would have been a filter on the alert path.

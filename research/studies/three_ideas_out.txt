@@ -1,0 +1,66 @@
+THREE IDEAS — 4449 signals on Min30, 4210 on Min15
+
+3. BTC 30m REGIME — early, all   n=3756
+                                     n    win  R/signal     SE
+    all with a BTC reading        3756    30%    -0.016  0.020
+    BTC AGAINST the trade         2092    32%    +0.073  0.027
+    BTC with the trade            1664    27%    -0.129  0.029
+      difference                                 +0.202  0.040   +5.1 SE
+
+3. BTC 30m REGIME — early, HELD OUT (pre-registered)   n=1766
+                                     n    win  R/signal     SE
+    all with a BTC reading        1766    30%    -0.018  0.029
+    BTC AGAINST the trade          980    28%    -0.035  0.038
+    BTC with the trade             786    32%    +0.002  0.044
+      difference                                 -0.036  0.058   -0.6 SE
+
+4. MTF AGREEMENT — early, all Min30 — NOT held out, windows differ   n=3756 on Min30
+                                     n    win  R/signal     SE
+    all Min30 signals             3756    30%    -0.016  0.020
+    with a Min15 signal too       1285    31%    +0.026  0.035
+    without                       2471    29%    -0.038  0.024
+      difference                                 +0.063  0.043   +1.5 SE   placebo -0.011
+
+4. MTF AGREEMENT — early, OVERLAPPING window only   n=1946 on Min30
+                                     n    win  R/signal     SE
+    all Min30 signals             1946    30%    -0.004  0.028
+    with a Min15 signal too       1285    31%    +0.026  0.035
+    without                        661    29%    -0.061  0.047
+      difference                                 +0.086  0.058   +1.5 SE   placebo -0.001
+
+4. MTF AGREEMENT — early, OLDER half of the overlap (pre-registered)   n=943 on Min30
+                                     n    win  R/signal     SE
+    all Min30 signals              943    29%    -0.017  0.039
+    with a Min15 signal too        595    29%    +0.013  0.051
+    without                        348    27%    -0.068  0.062
+      difference                                 +0.081  0.080   +1.0 SE   placebo -0.030
+
+5. POOL MEMORY — early, all   n=3756
+                                     n    win  R/signal     SE
+    all signals                   3756    30%    -0.016  0.020
+    1st raid of the level         3016    30%    -0.015  0.022
+    2nd                            591    31%    -0.040  0.051
+    3rd                            116    36%    +0.084  0.124
+    4th or later                    33    24%    -0.090  0.201
+      difference                                 -0.076  0.202   -0.4 SE
+                                                                 NOT monotone
+
+   and the same idea read off `pivots`, the swing count already on the alert
+    2 swings                      2616    30%    -0.025  0.024
+    3 swings                       773    29%    -0.035  0.045
+    4+ swings                      367    32%    +0.083  0.065
+
+5. POOL MEMORY — early, HELD OUT (pre-registered)   n=1766
+                                     n    win  R/signal     SE
+    all signals                   1766    30%    -0.018  0.029
+    1st raid of the level         1358    29%    -0.028  0.033
+    2nd                            310    30%    -0.055  0.070
+    3rd                             72    42%    +0.272  0.157
+    4th or later                    26    31%    +0.097  0.237
+      difference                                 +0.124  0.239   +0.5 SE
+                                                                 NOT monotone
+
+   and the same idea read off `pivots`, the swing count already on the alert
+    2 swings                      1254    29%    -0.041  0.034
+    3 swings                       342    30%    -0.047  0.069
+    4+ swings                      170    38%    +0.208  0.098
