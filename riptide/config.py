@@ -350,13 +350,57 @@ SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
 # both unreadable and past Telegram's per-chat rate limit, and a market-wide
 # move is exactly when it would happen.
 TRENDLINE_ALERTS = os.getenv("RIPTIDE_TRENDLINE_ALERTS", "1") == "1"
-TRENDLINE_INTERVAL = os.getenv("RIPTIDE_TRENDLINE_INTERVAL", "Hour4")
+# More than one is allowed and 15m+30m is the default, because a 30m close is
+# also a 15m close: both land in the SAME digest rather than in two messages,
+# and a symbol that breaks on both at once is shown once, on the slower one.
+# The raw rate at 15m+30m is 161 a day, which is not readable — the slope gate
+# below is what makes this pair viable, and it is not optional at these speeds.
+TRENDLINE_INTERVALS = tuple(dict.fromkeys(
+    i.strip() for i in
+    os.getenv("RIPTIDE_TRENDLINE_INTERVALS", "Min15,Min30").split(",")
+    if i.strip())) or ("Hour4",)
 # Pivot length and channel padding, matching the indicator's own defaults. Left
 # configurable because they are the indicator's inputs and someone comparing
 # against a chart set differently needs to be able to match it — not because
 # any value here has been measured as better. None has.
 TRENDLINE_PIVOT = int(os.getenv("RIPTIDE_TRENDLINE_PIVOT", "5"))
 TRENDLINE_SPACE = float(os.getenv("RIPTIDE_TRENDLINE_SPACE", "2.0"))
+# THE STEEPNESS GATE, in |slope| / ATR(200) at the break. A flat line is a
+# horizontal level, and price crossing a horizontal level is the most ordinary
+# thing a chart does; a steeply descending resistance broken upward is at least
+# a picture worth looking at. This drops the flat ones.
+#
+# IT IS A VOLUME CONTROL AND NOT A QUALITY FILTER, and that distinction was
+# measured rather than assumed — research/studies/trendline_slope.py, 9082
+# breaks at Min15 and 4327 at Min30, asking whether steep breaks follow through
+# more often than flat ones over the next 8 bars:
+#
+#     Min15 discovery   flat 43.4%   steep 52.4%   +9.0pp   +4.4 SE
+#     Min15 HELD OUT    flat 46.0%   steep 43.0%   -3.1pp   -1.4 SE
+#     Min30 HELD OUT    flat 43.8%   steep 44.0%   +0.2pp   +0.1 SE
+#
+# The discovery half said steep breaks continue nine points more often at 4.4
+# SE. The held-out half REVERSED it. That is what a fitted result looks like,
+# and the only reason it was caught is that the threshold was chosen on one
+# half and read on the other. If anything the lean is the other way: steep
+# breaks' adverse excursion grows faster than their favourable one, on both
+# timeframes held out. So this filter buys READABILITY, nothing more, and
+# nothing in the alert claims otherwise.
+#
+# What it does buy, on the same measurement:
+#
+#     >= 0.00   100% kept   161 a day at 15m+30m   unreadable
+#     >= 0.05    68%        110
+#     >= 0.10    39%         63
+#     >= 0.15    20%         32   <- the default
+#     >= 0.20    10%         16
+#
+# Continuation sits at 44-48% at every threshold on both halves, against a 50%
+# coin flip. These breaks very slightly MEAN REVERT. That is the fourth
+# independent measurement in this project pointing the same way and it is the
+# reason the digest says "not a trade" in the message itself.
+TRENDLINE_MIN_SLOPE = float(os.getenv("RIPTIDE_TRENDLINE_MIN_SLOPE", "0.15"))
+
 # Same rule as every other freshness window here: minimum 2, because a bar
 # that has just closed is already one full step old. See _min_fresh.
 TRENDLINE_FRESH_BARS = int(os.getenv("RIPTIDE_TRENDLINE_FRESH_BARS", "2"))

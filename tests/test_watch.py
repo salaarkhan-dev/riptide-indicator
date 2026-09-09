@@ -50,14 +50,24 @@ watch.tg.tg_send = fake_send
 LAST_OPEN = (int(time.time()) // STEP) * STEP - STEP
 
 
-def candles(n=NBARS):
-    """Flat bars; the port is stubbed out, so only the timestamps matter."""
-    t0 = LAST_OPEN - (n - 1) * STEP
-    return [Candle(t0 + i * STEP, 100.0, 101.0, 99.0, 100.0, 1.0)
+def candles(n=NBARS, step=STEP):
+    """Flat bars ending on the last CLOSED bar of that step's own grid.
+
+    Each timeframe needs its own grid. A 4h-aligned series read as Min15 puts
+    the newest bar's close hours in the past, so a 15m freshness window can
+    never contain it and every multi-timeframe test would fail for a reason
+    that has nothing to do with the code under test. Found exactly that way.
+    """
+    last = (int(time.time()) // step) * step - step
+    t0 = last - (n - 1) * step
+    return [Candle(t0 + i * step, 100.0, 101.0, 99.0, 100.0, 1.0)
             for i in range(n)]
 
 
 CS = candles()
+# Same bars on each watched grid, so a break can be fresh on more than one.
+BY_TF = {"Min15": candles(step=900), "Min30": candles(step=1800),
+         "Hour4": CS}
 # Which canned breakouts each symbol reports. Set per test.
 PLAN: dict = {}
 
@@ -76,28 +86,41 @@ watch.trendline_signals = fake_signals
 
 async def _fetch_router(sess, symbol, interval=""):
     fake_signals.symbol = symbol
-    return CS
+    return BY_TF.get(interval, CS)
 
 
 watch.fetch_candles = _fetch_router
 
 
-def sig(bars_back: int, is_long=True, price=100.0, line=98.0) -> Signal:
+# The fixture bars are flat — high 101, low 99, close 100 — so every true range
+# is 2.0 and ATR(200) is exactly 2.0. A slope of 0.5 is therefore 0.25 ATR per
+# bar, comfortably over the 0.15 default gate, and a slope of 0.1 is 0.05 ATR,
+# comfortably under it. Both thresholds are exercised below.
+STEEP, FLAT = 0.5, 0.1
+
+
+def sig(bars_back: int, is_long=True, price=100.0, line=98.0,
+        slope=STEEP) -> Signal:
     """A breakout on the bar `bars_back` before the newest one."""
     i = len(CS) - 1 - bars_back
+    # Sign is guaranteed by construction in the real port — an up channel comes
+    # only from descending pivot highs — so the fixture matches that and the
+    # gate reads the magnitude.
     return Signal(bar=i, is_long=is_long, price=price, line_y=line,
-                  x1=i - 30, y1=line, pivots=4)
+                  x1=i - 30, y1=line, pivots=4,
+                  slope=-slope if is_long else slope, run=30)
 
 
-def run(db, symbols):
+def run(db, symbols, tfs=None):
     sent.clear()
-    return asyncio.run(watch.cycle(None, db, symbols)), list(sent)
+    return asyncio.run(watch.cycle(None, db, symbols, tfs)), list(sent)
 
 
 def main():
     db = storage.db_init()
-    watch.set_interval(db, "Hour4")
+    watch.set_intervals(db, ["Hour4"])
     watch.set_enabled(db, True)
+    watch.set_min_slope(db, 0.15)
     good = []
 
     def ok(cond, msg):
@@ -124,7 +147,7 @@ def main():
 
     print("\n3. bar_time is the bar's CLOSE, not its open")
     breaks = asyncio.run(watch.scan_symbol(None, asyncio.Semaphore(1),
-                                           "AAA_USDT", "Hour4"))
+                                           "AAA_USDT", "Hour4", 0.0))
     ok(len(breaks) == 1, f"one break parsed: got {len(breaks)}")
     ok(breaks[0].bar_time == CS[-1].t + STEP,
        f"close, not open: got {breaks[0].bar_time}, "
@@ -189,7 +212,7 @@ def main():
         if symbol == "BAD_USDT":
             raise RuntimeError("exchange said no")
         fake_signals.symbol = symbol
-        return CS
+        return BY_TF.get(interval, CS)
     keep, watch.fetch_candles = watch.fetch_candles, boom
     PLAN.clear()
     PLAN["DDD_USDT"] = [sig(0, True)]
@@ -207,11 +230,62 @@ def main():
     c = db.execute("SELECT COUNT(*) FROM seen_trendline").fetchone()[0]
     ok(c > 0, f"and its own table has the breaks: {c}")
 
-    print("\n9. An unknown timeframe falls back rather than crashing")
+    print("\n9. The steepness gate drops flat lines — and does NOT record "
+          "them\n   (recording a break the gate rejected would make lowering "
+          "the gate\n   later silent, because dedupe would already have "
+          "claimed every one)")
+    PLAN.clear()
+    PLAN["STEEP_USDT"] = [sig(0, True, slope=STEEP)]
+    PLAN["FLAT_USDT"] = [sig(0, True, slope=FLAT)]
+    n, msgs = run(db, list(PLAN))
+    ok(n == 1, f"only the steep one is sent: got {n}")
+    ok("STEEP" in msgs[0] and "FLAT" not in msgs[0],
+       "the flat line is not in the message")
+    flat_sig = watch.sig_of("FLAT_USDT", "Hour4", CS[-1].t, True)
+    ok(not watch.already_sent(db, flat_sig),
+       "and the flat break is NOT recorded, so a lower gate would still find "
+       "it")
+    watch.set_min_slope(db, 0.0)
+    n, msgs = run(db, ["FLAT_USDT"])
+    ok(n == 1, f"with the gate at 0 the same flat break now sends: got {n}")
+    watch.set_min_slope(db, 0.15)
+
+    print("\n10. Two timeframes make ONE digest, and a symbol on both is "
+          "listed\n    once, on the slower one")
+    PLAN.clear()
+    PLAN["BOTH_USDT"] = [sig(0, True)]
+    PLAN["ONLY_USDT"] = [sig(0, False)]
+    n, msgs = run(db, list(PLAN), ("Min15", "Min30"))
+    ok(len(msgs) == 1, f"one message for two timeframes: got {len(msgs)}")
+    body = msgs[0]
+    # Counting the bare name would count it twice per line — the TradingView
+    # URL carries the symbol as well as the label. The label is the line.
+    ok(body.count("<b>BOTH</b>") == 1,
+       f"the doubled symbol appears once: got {body.count('<b>BOTH</b>')}")
+    ok("interval=30" in body and "BOTHUSDT.P&interval=15" not in body,
+       "and the link it kept is the SLOWER timeframe's")
+    ok("15m+30m" in body, "the header names both timeframes")
+
+    print("\n11. The digest is ordered steepest first, because that is the "
+          "only\n    recommendation it makes")
+    PLAN.clear()
+    PLAN["MILD_USDT"] = [sig(0, True, slope=0.4)]
+    PLAN["SHARP_USDT"] = [sig(0, True, slope=0.9)]
+    n, msgs = run(db, list(PLAN))
+    body = msgs[0]
+    ok(body.index("SHARP") < body.index("MILD"),
+       "the steeper break is listed first")
+
+    print("\n12. An unknown timeframe falls back rather than crashing")
     storage.meta_set(db, "trendline_tf", "Fortnight")
-    ok(watch.interval(db) == "Hour4",
-       f"falls back to the config: got {watch.interval(db)}")
-    watch.set_interval(db, "Hour4")
+    ok(watch.intervals(db) == watch.TRENDLINE_INTERVALS,
+       f"falls back to the config {watch.TRENDLINE_INTERVALS}: "
+       f"got {watch.intervals(db)}")
+    storage.meta_set(db, "trendline_tf", "Fortnight,Min30")
+    ok(watch.intervals(db) == ("Min30",),
+       f"and a partly-bad list keeps the good half: got "
+       f"{watch.intervals(db)}")
+    watch.set_intervals(db, ["Hour4"])
 
     print(f"\n{'ALL PASS' if all(good) else 'FAILURES'}  "
           f"{sum(good)}/{len(good)}")

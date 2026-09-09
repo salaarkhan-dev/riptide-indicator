@@ -116,6 +116,19 @@ class Line:
 
 @dataclass
 class Signal:
+    """One arrow on the chart.
+
+    THE BREAK CONDITION IS STRICTER THAN "CLOSES BEYOND THE LINE", and this is
+    worth being explicit about because it is the natural thing to assume. The
+    Pine tests `b.l > top.get_y2()` on the up side and `b.h < btm.get_y2()` on
+    the down side: the bar's LOW must be above the line, or its HIGH below it.
+    The entire candle, wick included, has to be clear. A candle that closes
+    beyond the line but whose wick is still touching it prints no arrow.
+
+    The `plotshape(..., offset = -1)` in the source only moves the triangle one
+    bar to the left so it does not sit on top of the candle. The condition
+    itself is evaluated on the breaking bar, which is `bar` here.
+    """
     bar: int           # the bar the breakout fires on; entry is its close
     is_long: bool      # plup -> long, pldn -> short
     price: float       # that bar's close
@@ -123,6 +136,14 @@ class Signal:
     x1: int            # the channel's anchor pivot, for inspection
     y1: float
     pivots: int        # how many pivots were stored when it was built
+    # The slope of the line that was broken, in price per bar, and how many
+    # bars it spanned at the break. Recorded rather than computed later
+    # because the line object is discarded on the break — by the time anything
+    # downstream looks, it is gone. Sign is guaranteed by construction: an up
+    # channel is only built from DESCENDING pivot highs and a down channel from
+    # ASCENDING pivot lows, so what varies is steepness alone.
+    slope: float = 0.0
+    run: int = 0
 
 
 def pivot_highs(cs, n: int):
@@ -224,11 +245,13 @@ def trendline_signals(cs, pivot_len: int = PIVOT_LEN, space: float = SPACE,
             if c.l > top.y2:
                 sig_y = top.y2
                 x1, y1 = top.x1, top.y1
+                slope, run = top.slope(), top.x2 - top.x1
                 upln = []
                 broken = True
                 upbin.clear()
                 plup = True
-                out.append(Signal(i, True, c.c, sig_y, x1, y1, len(upbin)))
+                out.append(Signal(i, True, c.c, sig_y, x1, y1, len(upbin),
+                                  slope, run))
             if len(upln) > 1:
                 slup, sldn = top.slope(), btm.slope()
                 top.x2, top.y2 = i, top.y2 + slup
@@ -282,11 +305,13 @@ def trendline_signals(cs, pivot_len: int = PIVOT_LEN, space: float = SPACE,
             if c.h < btm.y2:
                 sig_y = btm.y2
                 x1, y1 = btm.x1, btm.y1
+                slope, run = btm.slope(), btm.x2 - btm.x1
                 dnln = []
                 broken = True
                 dnbin.clear()
                 pldn = True
-                out.append(Signal(i, False, c.c, sig_y, x1, y1, len(dnbin)))
+                out.append(Signal(i, False, c.c, sig_y, x1, y1, len(dnbin),
+                                  slope, run))
             if len(dnln) > 1:
                 slup, sldn = top.slope(), btm.slope()
                 top.x2, top.y2 = i, top.y2 + slup

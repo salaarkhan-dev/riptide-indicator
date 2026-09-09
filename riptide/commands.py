@@ -128,11 +128,10 @@ def status_text(db, state) -> str:
     # nothing about whether the heads-ups are running would be the same kind of
     # silence the gate counters exist to remove.
     if watch.enabled(db):
-        tl_tf = watch.interval(db)
         tl_n = db.execute("SELECT COUNT(*) FROM seen_trendline").fetchone()[0]
-        tl_line = (f"{tg.tf_label(tl_tf)} bars · ~"
-                   f"{TRENDLINE_RATE.get(tl_tf, '?')}/day · {tl_n} recorded "
-                   f"· heads-up only, not in /stats")
+        tl_line = (f"{'+'.join(tg.tf_label(t) for t in watch.intervals(db))}"
+                   f" · slope ≥ {watch.min_slope(db):.2f} · ~{_tl_rate(db)}"
+                   f"/day · {tl_n} recorded · heads-up only, not in /stats")
     else:
         tl_line = "off · /trendline on"
     poi_line = ("POI required" if POI_REQUIRED else "POI not required")
@@ -257,73 +256,120 @@ def stats_text(db) -> str:
     return body
 
 
-# The measured alert rate per timeframe, across 60 symbols
+# The measured alert rate per timeframe, across 60 symbols, at slope >= 0
 # (research/studies/trendline_rate.py). Printed by /trendline because the
 # timeframe IS the product decision here: a heads-up fails by arriving too
 # often to read, and this is the only number that says whether it will.
 TRENDLINE_RATE = {"Min15": 109, "Min30": 52, "Min60": 25, "Hour4": 7}
+# What fraction of breaks each steepness gate keeps, measured over 9082 breaks
+# at Min15 and 4327 at Min30 — the two curves agreed to within a point, so one
+# table covers both. See research/studies/trendline_slope.py.
+TRENDLINE_KEEP = ((0.0, 1.00), (0.05, 0.68), (0.10, 0.39), (0.15, 0.20),
+                  (0.20, 0.10), (0.30, 0.02))
 # What a human types, and what the exchange calls it.
 _TF_WORD = {v: k for k, v in tg.TF_LABEL.items()}
 
 
+def _tl_rate(db) -> int:
+    """Alerts a day at the current timeframes and steepness gate."""
+    floor = watch.min_slope(db)
+    keep = 1.0
+    for cut, frac in TRENDLINE_KEEP:
+        if floor >= cut:
+            keep = frac
+    return round(sum(TRENDLINE_RATE.get(t, 0) for t in watch.intervals(db))
+                 * keep)
+
+
 def trendline_cmd(db, text: str) -> str:
-    """/trendline — read the state, or set the switch or the timeframe."""
+    """/trendline — read the state, or set the switch, timeframes or slope."""
     parts = text.strip().split()
     arg = parts[1].lower() if len(parts) > 1 else ""
 
     if arg in ("on", "off"):
         watch.set_enabled(db, arg == "on")
-        tf = watch.interval(db)
-        rate = TRENDLINE_RATE.get(tf)
         return (f"Trendline heads-ups <b>{arg.upper()}</b> · "
-                f"{tg.tf_label(tf)} bars"
-                + (f"\n<i>about {rate} a day across the universe, in one "
-                   f"digest per bar close.</i>" if arg == "on" and rate else "")
+                f"{'+'.join(tg.tf_label(t) for t in watch.intervals(db))}"
+                + (f"\n<i>about {_tl_rate(db)} a day across the universe, in "
+                   f"one digest per bar close.</i>" if arg == "on" else "")
                 + "\n\n<i>This overrides RIPTIDE_TRENDLINE_ALERTS in "
                   "riptide.conf and survives updates, so a change on GitHub "
                   "will not take effect until you set it back the other "
                   "way.</i>")
 
+    if arg == "slope":
+        try:
+            v = float(parts[2])
+        except (IndexError, ValueError):
+            return ("<code>/trendline slope 0.15</code> — the minimum "
+                    "steepness of the broken line, in ATR per bar.\n\n"
+                    + "\n".join(f"  <code>{c:.2f}</code>  keeps {f:.0%} of "
+                                f"breaks" for c, f in TRENDLINE_KEEP)
+                    + "\n\n<i>0 sends every break, including flat lines.</i>")
+        watch.set_min_slope(db, v)
+        return (f"Steepness gate <b>{max(0.0, v):.2f}</b> ATR per bar · about "
+                f"<b>{_tl_rate(db)} a day</b> now.\n"
+                f"Takes effect at the next close — no restart.\n\n"
+                f"<i>This is a VOLUME dial, not a quality one, and that was "
+                f"measured rather than assumed: steep breaks looked 9 points "
+                f"better on the discovery half at 4.4 SE and the held-out half "
+                f"reversed it. Steeper means fewer and better-looking, not "
+                f"more likely to work.</i>")
+
     if arg:
-        tf = _TF_WORD.get(arg, arg if arg in BAR_SECONDS else "")
-        if tf not in TRENDLINE_RATE:
-            return ("Timeframe must be one of "
-                    + ", ".join(f"<code>{tg.tf_label(t)}</code>"
-                                for t in TRENDLINE_RATE)
-                    + ".\n\n<i>Not because the others would break anything — "
-                      "because those are the four whose alert rate has "
-                      "actually been counted, and the rate is the only thing "
-                      "that decides whether this is readable.</i>")
-        watch.set_interval(db, tf)
-        rate = TRENDLINE_RATE[tf]
+        want = []
+        for w in arg.replace("+", ",").split(","):
+            w = w.strip()
+            tf = _TF_WORD.get(w, w if w in BAR_SECONDS else "")
+            if tf not in TRENDLINE_RATE:
+                return ("Timeframes must come from "
+                        + ", ".join(f"<code>{tg.tf_label(t)}</code>"
+                                    for t in TRENDLINE_RATE)
+                        + " — e.g. <code>/trendline 15m,30m</code>.\n\n"
+                          "<i>Not because the others would break anything — "
+                          "because those are the four whose alert rate has "
+                          "been counted, and the rate is the only thing that "
+                          "decides whether this stays readable.</i>")
+            want.append(tf)
+        watch.set_intervals(db, want)
+        rate = _tl_rate(db)
         warn = ("\n\n⚠️ <i>That is a feed, not an alert. Anything you scroll "
-                "past also buries the ones you would have opened.</i>"
-                if rate > 30 else "")
-        return (f"Trendline heads-ups now on <b>{tg.tf_label(tf)}</b> bars · "
-                f"about <b>{rate} a day</b> across the universe.\n"
-                f"Takes effect at the next {tg.tf_label(tf)} close — no "
-                f"restart." + warn)
+                "past also buries the ones you would have opened. "
+                "<code>/trendline slope 0.2</code> thins it.</i>"
+                if rate > 40 else "")
+        return (f"Trendline heads-ups now on <b>"
+                f"{'+'.join(tg.tf_label(t) for t in want)}</b> · about "
+                f"<b>{rate} a day</b> at slope "
+                f"{watch.min_slope(db):.2f}.\nTakes effect at the next close "
+                f"— no restart." + warn)
 
     on = watch.enabled(db)
-    tf = watch.interval(db)
+    tfs = watch.intervals(db)
+    floor = watch.min_slope(db)
     rows = "\n".join(
-        f"  <code>/trendline {tg.tf_label(t):<4}</code> ~{n:>3} a day"
-        + ("   <b>← now</b>" if t == tf else "")
+        f"  <code>/trendline {tg.tf_label(t):<4}</code> ~{n:>3} a day on its "
+        f"own" + ("   <b>← watched</b>" if t in tfs else "")
         for t, n in TRENDLINE_RATE.items())
     return (f"<b>Trendline breakout heads-ups</b> — "
-            f"{'ON' if on else 'off'} · {tg.tf_label(tf)} bars\n\n"
+            f"{'ON' if on else 'off'} · "
+            f"{'+'.join(tg.tf_label(t) for t in tfs)} · slope ≥ {floor:.2f} · "
+            f"<b>~{_tl_rate(db)} a day</b>\n\n"
             f"<i>A break of a trendline drawn from confirmed pivots, on every "
-            f"symbol at once, in one digest per bar close. It is the thing "
-            f"TradingView will not do: which chart is worth opening.</i>\n\n"
+            f"symbol at once, in one digest per bar close. The whole candle "
+            f"has to clear the line — wick included — which is stricter than "
+            f"closing beyond it, and it is exactly the blue and red arrows on "
+            f"the chart.</i>\n\n"
             f"<b>It is not a trade.</b> <i>The same break was scored through "
             f"the same harness as everything else here and came out NEGATIVE "
-            f"per signal and indistinguishable from a random entry. There is "
-            f"no entry, no stop and no grade on it, and it is not in /stats — "
-            f"there is no outcome to score. Open the chart and decide "
-            f"yourself.</i>\n\n"
-            f"<b>Alert rate</b>, measured over 60 symbols:\n{rows}\n\n"
-            f"<code>/trendline off</code> — stop them\n"
-            f"<code>/trendline on</code> — start again")
+            f"per signal and indistinguishable from a random entry. Over the "
+            f"next 8 bars it continues 44-48% of the time against a 50% coin "
+            f"flip. There is no entry, no stop and no grade on it, and it is "
+            f"not in /stats — there is no outcome to score.</i>\n\n"
+            f"<b>Rate per timeframe</b>, 60 symbols, before the slope "
+            f"gate:\n{rows}\n\n"
+            f"<code>/trendline 15m,30m</code> — watch both\n"
+            f"<code>/trendline slope 0.2</code> — steeper lines only, fewer\n"
+            f"<code>/trendline off</code> — stop them")
 
 
 async def handle_command(sess, db, state, text: str) -> None:

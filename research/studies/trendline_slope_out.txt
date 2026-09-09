@@ -1,0 +1,58 @@
+Trendline break — does the SLOPE separate anything?
+60 symbols · follow-through over 8 bars · no fees, no stop: this is not a trade, it is 'was the chart worth opening'
+
+============================================================================================
+Min15   83 days x 60 symbols   (9082 breaks with 8 bars of follow-through)
+============================================================================================
+
+  HOW STEEP ARE THEY — |slope| / ATR(200), all breaks
+    p10 0.018  p25 0.041  p50 0.080  p75 0.134  p90 0.199
+
+  VOLUME AND CONTINUATION by threshold (continuation's null is 50%)
+  |slope|/ATR >=     kept  % kept  alerts/day   cont DISC   cont HELD    MFE    MAE
+  0.00               9082    100%         109  47.7% ±0.7  45.7% ±0.8   1.50   1.49
+  0.02               8081     89%          97  48.5% ±0.8  45.8% ±0.8   1.49   1.49
+  0.05               6262     69%          75  49.2% ±0.9  45.1% ±0.9   1.45   1.50
+  0.10               3572     39%          43  50.2% ±1.1  44.1% ±1.2   1.41   1.54
+  0.15               1832     20%          22  52.7% ±1.6  42.6% ±1.7   1.46   1.54
+  0.20                897     10%          11  51.1% ±2.2  39.4% ±2.5   1.48   1.63
+  0.30                235      3%           3  53.2% ±4.2  38.3% ±5.0   1.63   1.77
+  0.50                 41      0%           0  65.6% ±8.4           —   1.48   1.89
+
+  PRE-REGISTERED TEST — quartiles cut on DISCOVERY (flat < 0.042, steep >= 0.137), read on HELD OUT
+    discovery    flat 43.4% (n=1183)   steep 52.4% (n=1184)   diff +9.0pp ± 2.0   +4.4 SE
+    HELD OUT     flat 46.0% (n=1152)   steep 43.0% (n=1008)   diff -3.1pp ± 2.1   -1.4 SE
+
+  MFE - MAE by quartile, held out (a bigger number means the break went
+  somewhere rather than nowhere, in either direction)
+    flat   n=1152   +0.132 ± 0.072 ATR
+    steep  n=1008   -0.288 ± 0.080 ATR
+
+============================================================================================
+Min30   83 days x 60 symbols   (4327 breaks with 8 bars of follow-through)
+============================================================================================
+
+  HOW STEEP ARE THEY — |slope| / ATR(200), all breaks
+    p10 0.017  p25 0.039  p50 0.078  p75 0.132  p90 0.193
+
+  VOLUME AND CONTINUATION by threshold (continuation's null is 50%)
+  |slope|/ATR >=     kept  % kept  alerts/day   cont DISC   cont HELD    MFE    MAE
+  0.00               4327    100%          52  45.3% ±1.0  45.9% ±1.1   1.54   1.49
+  0.02               3806     88%          46  45.4% ±1.1  46.5% ±1.2   1.50   1.49
+  0.05               2920     67%          35  46.3% ±1.3  46.3% ±1.4   1.48   1.50
+  0.10               1641     38%          20  46.1% ±1.7  45.3% ±1.8   1.46   1.62
+  0.15                851     20%          10  46.6% ±2.3  44.2% ±2.5   1.55   1.77
+  0.20                392      9%           5  46.9% ±3.5  44.8% ±3.7   1.64   1.86
+  0.30                100      2%           1  41.8% ±6.0  45.5% ±8.7   1.91   2.44
+  0.50                 18      0%           0           —           —   1.57   1.64
+
+  PRE-REGISTERED TEST — quartiles cut on DISCOVERY (flat < 0.040, steep >= 0.131), read on HELD OUT
+    discovery    flat 43.3% (n=577)   steep 45.2% (n=578)   diff +1.8pp ± 2.9   +0.6 SE
+    HELD OUT     flat 43.8% (n=516)   steep 44.0% (n=516)   diff +0.2pp ± 3.1   +0.1 SE
+
+  MFE - MAE by quartile, held out (a bigger number means the break went
+  somewhere rather than nowhere, in either direction)
+    flat   n=516    +0.345 ± 0.249 ATR
+    steep  n=516    -0.205 ± 0.107 ATR
+
+[exited with code 0]

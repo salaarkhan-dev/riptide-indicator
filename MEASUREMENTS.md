@@ -4462,10 +4462,86 @@ market-wide move, which is the one time the alert was worth having. So
 `riptide/watch.py` sends **one digest per bar close** rather than one message
 per break, and a quiet close sends nothing at all.
 
+---
+
+## Does the SLOPE of the broken line separate anything? — `research/studies/trendline_slope.py`
+
+Asked because the natural reading of the chart says it should: a steeply
+descending resistance broken upward is a trend changing, while a nearly **flat**
+line is just a horizontal level, and price crossing a horizontal level is the
+most ordinary thing a chart does.
+
+Not the trading question — that is settled and the answer is no. This asks the
+weaker thing a heads-up actually promises: after the alert, did the chart **do**
+anything? Continuation over the next 8 bars, against a known null of 50%.
+No fees, no stop, no R.
+
+Steepness is `|slope| / ATR(200)` at the break, so a 100000-dollar chart and a
+0.008-dollar one are on the same scale. 9082 breaks at Min15, 4327 at Min30.
+
+### The pre-registered test failed, and it failed in the most instructive way
+
+Quartiles cut on the **discovery** half, read on the **held-out** half:
+
+| | flat quartile | steep quartile | difference | |
+|---|---|---|---|---|
+| Min15 discovery | 43.4% | 52.4% | **+9.0pp** | **+4.4 SE** |
+| Min15 **held out** | 46.0% | 43.0% | **−3.1pp** | −1.4 SE |
+| Min30 discovery | 43.3% | 45.2% | +1.8pp | +0.6 SE |
+| Min30 **held out** | 43.8% | 44.0% | +0.2pp | +0.1 SE |
+
+The discovery half says steep breaks continue nine points more often at 4.4 SE.
+That is a publishable-looking number. **The held-out half reverses the sign.**
+
+This is the cleanest example in the whole file of why the discovery/held-out
+split is not a formality. Nothing about the +4.4 SE looked like noise from
+inside the discovery half — the n was 2367, the effect was large, and the story
+was one a trader would nod along to. It was noise.
+
+If anything the lean is the *other* way. MFE − MAE on the held-out half:
+
+| | Min15 | Min30 |
+|---|---|---|
+| flat | +0.132 ± 0.072 ATR | +0.345 ± 0.249 |
+| steep | **−0.288 ± 0.080** | **−0.205 ± 0.107** |
+
+Steep breaks' adverse excursion grows faster than their favourable one, on both
+timeframes, held out (−3.9 SE and −2.0 SE). A steeply falling resistance broken
+upward looks like a violent counter-trend pop that gets sold. Reported as a
+lean rather than a finding: it was not the pre-registered primary, and MFE−MAE
+is a statistic that inflates with volatility on both sides.
+
+### Continuation is BELOW the coin flip at every threshold
+
+44–48% on both halves at every cut from 0.00 to 0.30, at both timeframes. These
+breaks very slightly **mean revert**. That is the fourth independent
+measurement in this project pointing the same way, and it is why the digest says
+"not a trade" in the message itself.
+
+### What the slope gate is actually for
+
+Volume, and it is labelled as volume:
+
+| `\|slope\|/ATR ≥` | kept | alerts/day at 15m+30m |
+|---|---|---|
+| 0.00 | 100% | 161 |
+| 0.05 | 68% | 110 |
+| 0.10 | 39% | 63 |
+| **0.15** | **20%** | **32** ← default |
+| 0.20 | 10% | 16 |
+
+That is what makes 15m+30m readable at all, and it is the only claim made for
+it.
+
+---
+
 ### What shipped
 
-`RIPTIDE_TRENDLINE_ALERTS=1`, `RIPTIDE_TRENDLINE_INTERVAL=Hour4`, live-settable
-with `/trendline 1h`. No entry, no stop, no grade, and deliberately **not armed
+`RIPTIDE_TRENDLINE_ALERTS=1`, `RIPTIDE_TRENDLINE_INTERVALS=Min15,Min30`,
+`RIPTIDE_TRENDLINE_MIN_SLOPE=0.15` — about 32 a day. Live-settable with
+`/trendline 15m,30m` and `/trendline slope 0.2`. A 30m close is also a 15m
+close, so both land in one digest and a chart that broke on both is listed
+once, on the slower one. No entry, no stop, no grade, and deliberately **not armed
 for outcome tracking** — /stats exists to judge trades, and a heads-up has no
 outcome to judge. The measurement above is why the message says, in the
 message, that it is not a trade.

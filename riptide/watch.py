@@ -26,13 +26,24 @@ wrapped whole — a failure in a watch list must never be able to cost a trade
 alert, which is the same reasoning that already wraps `_arm` and the market
 logger in the scanner.
 
-ONE DIGEST PER BAR CLOSE, NOT ONE MESSAGE PER BREAK. Bar closes are
-synchronised across the universe, so breaks do not arrive spread out — they
-arrive together. Measured over 60 symbols, the worst single 4h close had 20
-symbols break at once (research/studies/trendline_rate.py). Twenty separate
-messages in one second is unreadable and is past Telegram's per-chat rate
-limit; one message listing twenty symbols is a glance. So the digest is the
-unit, and a quiet close sends nothing at all.
+ONE DIGEST PER BAR CLOSE, NOT ONE MESSAGE PER BREAK, AND NOT ONE PER
+TIMEFRAME. Bar closes are synchronised across the universe, so breaks do not
+arrive spread out — they arrive together. Measured over 60 symbols, the worst
+single 4h close had 20 symbols break at once
+(research/studies/trendline_rate.py). Twenty separate messages in one second is
+unreadable and is past Telegram's per-chat rate limit; one message listing
+twenty symbols is a glance. A 30m close is also a 15m close, so those go in the
+same message too, and a chart that broke on both is listed once. A quiet close
+sends nothing at all.
+
+THE STEEPNESS GATE IS A VOLUME CONTROL AND IS LABELLED AS ONE. A flat trendline
+is a horizontal level and price crossing one is the most ordinary thing a chart
+does, so dropping the flat breaks is what makes 15m+30m readable at all — 161 a
+day becomes 32. Whether it also picks BETTER breaks was measured and the answer
+is no: research/studies/trendline_slope.py found +9.0pp continuation for steep
+breaks on the discovery half at 4.4 SE, and the held-out half reversed it to
+-3.1pp. The gate is kept for the readability and nothing in the message claims
+more than that. See config.TRENDLINE_MIN_SLOPE for the table.
 
 WHY IT RUNS ON ITS OWN TIMER rather than inside the scan cycle: the scanner
 wakes on the fastest structure timeframe and fetches Riptide's intervals. This
@@ -50,11 +61,12 @@ import time
 from . import storage
 from . import telegram as tg
 from .config import (BAR_SECONDS, CONCURRENCY, TRENDLINE_ALERTS,
-                     TRENDLINE_FRESH_BARS, TRENDLINE_INTERVAL,
-                     TRENDLINE_MAX_LINES, TRENDLINE_PIVOT, TRENDLINE_SPACE,
-                     log)
+                     TRENDLINE_FRESH_BARS, TRENDLINE_INTERVALS,
+                     TRENDLINE_MAX_LINES, TRENDLINE_MIN_SLOPE, TRENDLINE_PIVOT,
+                     TRENDLINE_SPACE, log)
+from .engine import atr_series
 from .exchange import fetch_candles
-from .trendline import trendline_signals
+from .trendline import ATR_LEN, trendline_signals
 
 # `from . import storage` rather than `from .storage import meta_get`, and the
 # reason is a circular import: storage.db_init() creates this module's table,
@@ -100,24 +112,43 @@ def enabled(db) -> bool:
     return v == "1" if v in ("0", "1") else TRENDLINE_ALERTS
 
 
-def interval(db) -> str:
-    """Live timeframe: the /trendline override if one is set, else the config.
+def intervals(db) -> tuple:
+    """Live timeframes: the /trendline override if one is set, else the config.
 
-    Validated on read rather than on write, so a database carrying a value
-    this build no longer knows falls back instead of crashing the loop.
+    Validated on read rather than on write, so a database carrying a value this
+    build no longer knows falls back instead of taking the loop down.
     """
-    v = storage.meta_get(db, "trendline_tf", "")
-    return v if v in BAR_SECONDS else TRENDLINE_INTERVAL
+    v = [i.strip() for i in
+         storage.meta_get(db, "trendline_tf", "").split(",") if i.strip()]
+    good = tuple(dict.fromkeys(i for i in v if i in BAR_SECONDS))
+    return good or tuple(i for i in TRENDLINE_INTERVALS if i in BAR_SECONDS) \
+        or ("Hour4",)
+
+
+def min_slope(db) -> float:
+    """Live steepness gate, in |slope| / ATR(200). 0 means every break."""
+    v = storage.meta_get(db, "trendline_min_slope", "")
+    try:
+        return max(0.0, float(v)) if v else TRENDLINE_MIN_SLOPE
+    except ValueError:
+        return TRENDLINE_MIN_SLOPE
 
 
 class Break:
     """One symbol's break, with everything the digest line needs."""
     __slots__ = ("symbol", "tf", "is_long", "bar_time", "price", "line_y",
-                 "age_bars", "sig")
+                 "age_bars", "slope_atr", "sig")
 
 
-async def scan_symbol(sess, sem, symbol: str, tf: str) -> list[Break]:
-    """Breaks on this symbol in the last RECENT_BARS bars, newest last."""
+async def scan_symbol(sess, sem, symbol: str, tf: str,
+                      floor: float = 0.0) -> list[Break]:
+    """Breaks on this symbol in the last RECENT_BARS bars, newest last.
+
+    `floor` is the steepness gate, in |slope| / ATR(200). It is applied HERE
+    rather than in the digest so a break that never qualified is never recorded
+    either — otherwise lowering the gate later would find every one of them
+    already marked as sent and stay silent.
+    """
     async with sem:
         cs = await fetch_candles(sess, symbol, tf)
     # The port needs ATR(200) valid before any channel can exist, plus room for
@@ -130,11 +161,20 @@ async def scan_symbol(sess, sem, symbol: str, tf: str) -> list[Break]:
         return []
     sigs = trendline_signals(cs, pivot_len=TRENDLINE_PIVOT,
                              space=TRENDLINE_SPACE)
+    atr = atr_series(cs, ATR_LEN)
     step = BAR_SECONDS[tf]
     cutoff = len(cs) - RECENT_BARS
     out = []
     for s in sigs:
         if s.bar < cutoff:
+            continue
+        # Steepness in the symbol's own volatility, so a 100000-dollar chart
+        # and a 0.008-dollar one are on the same scale. The sign is guaranteed
+        # by construction — an up channel is built only from descending pivot
+        # highs — so only the magnitude carries information.
+        a = atr[s.bar] if s.bar < len(atr) else 0.0
+        slope_atr = abs(s.slope) / a if a and a > 0 else 0.0
+        if slope_atr < floor:
             continue
         b = Break()
         b.symbol, b.tf, b.is_long = symbol, tf, s.is_long
@@ -144,23 +184,47 @@ async def scan_symbol(sess, sem, symbol: str, tf: str) -> list[Break]:
         b.bar_time = cs[s.bar].t + step
         b.price, b.line_y = s.price, s.line_y
         b.age_bars = len(cs) - 1 - s.bar
+        b.slope_atr = slope_atr
         b.sig = sig_of(symbol, tf, cs[s.bar].t, s.is_long)
         out.append(b)
     return out
 
 
-def _line(b: Break) -> str:
-    """One symbol in the digest: where it is, what it cleared, clickable.
+def _line(b: Break, show_tf: bool) -> str:
+    """One symbol in the digest: where it is, how steep the line was, clickable.
 
-    The distance past the line is the one number that separates a decisive
-    break from a close that grazed it, and it is the reason to open one chart
-    before another.
+    The two numbers are the two reasons to open one chart before another. The
+    slope is how steep the broken line was in the symbol's own volatility —
+    a flat line is a horizontal level and breaking one is the most ordinary
+    thing a chart does. The gap is how far past the line the candle closed.
     """
     gap = 100 * abs(b.price - b.line_y) / b.line_y if b.line_y else 0.0
+    tf = f" <code>{tg.tf_label(b.tf)}</code>" if show_tf else ""
     return (f"{'🟢' if b.is_long else '🔴'} <a href='"
             f"{tg.tv_link(b.symbol, b.tf)}'><b>{b.symbol.replace('_USDT', '')}"
-            f"</b></a>  <code>{tg.fmt(b.price)}</code>  "
-            f"<i>{gap:.2f}% past the line</i>")
+            f"</b></a>{tf}  <code>{tg.fmt(b.price)}</code>  "
+            f"<i>slope {b.slope_atr:.2f} · {gap:.2f}% past</i>")
+
+
+def collapse(breaks: list[Break]) -> list[Break]:
+    """One line per symbol per direction, keeping the SLOWEST timeframe.
+
+    A 30m close is also a 15m close, so when both are watched the same chart
+    can print an arrow on both at once. They are genuinely two different lines,
+    but to a reader they are one event — "this chart just broke" — and listing
+    it twice is the kind of noise that makes a digest stop being read.
+
+    The slower timeframe is the one kept because it is the larger structure and
+    because its chart link is the one worth opening first. Both are still
+    RECORDED; this only decides what the message shows.
+    """
+    best: dict = {}
+    for b in breaks:
+        k = (b.symbol, b.is_long)
+        cur = best.get(k)
+        if cur is None or BAR_SECONDS[b.tf] > BAR_SECONDS[cur.tf]:
+            best[k] = b
+    return list(best.values())
 
 
 # Telegram rejects a sendMessage body over 4096 characters. This leaves room
@@ -177,19 +241,23 @@ def _line(b: Break) -> str:
 MAX_CHARS = 3800
 
 
-def digest(breaks: list[Break], tf: str, when: int) -> str:
-    """The whole message. Ups first, then downs, each side newest-first.
+def digest(breaks: list[Break], tfs, when: int) -> str:
+    """The whole message. Ups first, then downs, steepest line first.
 
-    Deliberately flat and short. Every line is a link, and the only judgement
-    offered is the distance past the line — because no other judgement here
-    has survived a measurement.
+    Deliberately flat and short. Every line is a link, and the ordering is the
+    only recommendation offered: the steepest break at the top, because a flat
+    line is a horizontal level and breaking one says the least.
 
     Trimmed by BOTH a line count and a character budget; see MAX_CHARS.
     """
+    breaks = sorted(collapse(breaks),
+                    key=lambda b: (not b.is_long, -b.slope_atr))
     ups = [b for b in breaks if b.is_long]
     dns = [b for b in breaks if not b.is_long]
+    show_tf = len(set(b.tf for b in breaks)) > 1
     clock = tg.local_clock()
-    head = (f"📐 <b>TRENDLINE BREAKS</b>  {tg.tf_label(tf)}  ·  "
+    label_tf = "+".join(tg.tf_label(t) for t in tfs)
+    head = (f"📐 <b>TRENDLINE BREAKS</b>  {label_tf}  ·  "
             f"{len(breaks)} symbol{'s' if len(breaks) != 1 else ''}"
             + (f"  ·  {clock}" if clock else ""))
     foot = f"\n<i>{tg.signal_age(when)}</i>"
@@ -205,7 +273,7 @@ def digest(breaks: list[Break], tf: str, when: int) -> str:
         parts += ["", header]
         used += len(header) + 2
         for b in group:
-            row = _line(b)
+            row = _line(b, show_tf)
             if shown >= TRENDLINE_MAX_LINES or used + len(row) > MAX_CHARS:
                 break
             parts.append(row)
@@ -218,24 +286,30 @@ def digest(breaks: list[Break], tf: str, when: int) -> str:
     return "\n".join(parts)
 
 
-async def cycle(sess, db, symbols) -> int:
-    """One pass over the universe. Returns how many breaks were sent.
+async def cycle(sess, db, symbols, tfs=None) -> int:
+    """One pass over the universe, across every timeframe that just closed.
 
-    Everything found in the recent window is RECORDED, sent or not, exactly as
-    the scanner does: dedupe has to cover the breaks that were suppressed too,
-    or a restart replays them.
+    ONE DIGEST covering all of them, not one per timeframe: a 30m close is also
+    a 15m close, and two messages arriving in the same second is the thing the
+    digest exists to prevent.
+
+    Everything that clears the steepness gate is RECORDED, sent or not, exactly
+    as the scanner does: dedupe has to cover the breaks that were suppressed
+    too, or a restart replays them.
     """
-    tf = interval(db)
-    if tf not in BAR_SECONDS:
-        log.warning("trendline: unknown interval %r, watch idle", tf)
+    tfs = tuple(tfs) if tfs else intervals(db)
+    tfs = tuple(t for t in tfs if t in BAR_SECONDS)
+    if not tfs:
+        log.warning("trendline: no valid interval configured, watch idle")
         return 0
+    floor = min_slope(db)
     sem = asyncio.Semaphore(CONCURRENCY)
+    jobs = [(s, tf) for tf in tfs for s in symbols]
     results = await asyncio.gather(
-        *(scan_symbol(sess, sem, s, tf) for s in symbols),
+        *(scan_symbol(sess, sem, s, tf, floor) for s, tf in jobs),
         return_exceptions=True)
 
     now = int(time.time())
-    window = TRENDLINE_FRESH_BARS * BAR_SECONDS[tf]
     fresh: list[Break] = []
     seen = stale = dupe = failed = 0
     for r in results:
@@ -249,7 +323,10 @@ async def cycle(sess, db, symbols) -> int:
                 continue
             record(db, b.sig, b.symbol, b.tf, b.bar_time, b.is_long, b.price,
                    b.line_y)
-            if now - b.bar_time > window:
+            # Counted in BARS of that break's OWN timeframe — a 30m break gets
+            # a 30m window, a 15m break a 15m one. A single global window would
+            # either bin the slower timeframe or let the faster one go stale.
+            if now - b.bar_time > TRENDLINE_FRESH_BARS * BAR_SECONDS[b.tf]:
                 stale += 1
                 continue
             fresh.append(b)
@@ -259,42 +336,65 @@ async def cycle(sess, db, symbols) -> int:
     paused = storage.meta_get(db, "alerts_paused", "0") == "1"
     sent = 0
     if fresh and not paused:
-        fresh.sort(key=lambda b: (not b.is_long, b.symbol))
-        if await tg.tg_send(sess, digest(fresh, tf, max(b.bar_time
-                                                        for b in fresh))):
+        if await tg.tg_send(sess, digest(fresh, tfs,
+                                         max(b.bar_time for b in fresh))):
             sent = len(fresh)
-    log.info("trendline %s: %d symbols · %d break(s) in the last %d bars · "
-             "%d already sent · %d not fresh · %d fetch failed · %d SENT",
-             tf, len(symbols), seen, RECENT_BARS, dupe, stale, failed, sent)
+    log.info("trendline %s: %d symbols · slope >= %.2f · %d break(s) in the "
+             "last %d bars · %d already sent · %d not fresh · %d fetch failed "
+             "· %d SENT", "+".join(tfs), len(symbols), floor, seen,
+             RECENT_BARS, dupe, stale, failed, sent)
     return sent
 
 
 def _seconds_to_next_close(step: int, pad: int = 20) -> float:
     """Wake just after the bar closes. The pad is longer than the scanner's 10s
-    because MEXC publishes a 4h candle a little less promptly than a 15m one,
+    because MEXC publishes a bar a little less promptly than the clock does,
     and a wake that lands before the close simply finds nothing."""
     now = time.time()
     return (step - (now % step)) + pad
 
 
+def _due(db, seen_bucket: dict, now: float) -> tuple:
+    """Which watched timeframes have a bar that closed since the last wake.
+
+    Keyed on `now // step`, so it is self-correcting: a missed wake, a restart
+    or a clock jump changes the bucket and the timeframe is simply scanned on
+    the next pass rather than being skipped forever. On the very first wake
+    every bucket is new, so everything is scanned once — and the freshness gate
+    then decides whether any of it was recent enough to send.
+    """
+    out = []
+    for tf in intervals(db):
+        step = BAR_SECONDS[tf]
+        bucket = int(now // step)
+        if seen_bucket.get(tf) != bucket:
+            seen_bucket[tf] = bucket
+            out.append(tf)
+    return tuple(out)
+
+
 async def watch_loop(sess, db, state) -> None:
-    """Run forever, once per bar close of the watch timeframe.
+    """Run forever, waking on the fastest watched timeframe's close.
 
     Never exits on an error. app.py takes the whole process down when any
     supervised task finishes, and a watch list is not worth a restart — so the
     loop logs, sleeps and comes back, exactly like scan_loop.
 
-    It re-reads the timeframe every iteration, so /trendline 1h takes effect on
-    the next wake without a restart.
+    Every setting is re-read each iteration, so `/trendline 30m` or
+    `/trendline slope 0.2` takes effect on the next close without a restart.
     """
+    seen_bucket: dict = {}
     while True:
-        tf = interval(db)
-        step = BAR_SECONDS.get(tf, BAR_SECONDS[TRENDLINE_INTERVAL])
+        tfs = intervals(db)
+        step = min(BAR_SECONDS[t] for t in tfs)
         try:
             await asyncio.sleep(_seconds_to_next_close(step))
             if not enabled(db):
                 continue
-            n = await cycle(sess, db, state.get("symbols", []))
+            due = _due(db, seen_bucket, time.time())
+            if not due:
+                continue
+            n = await cycle(sess, db, state.get("symbols", []), due)
             state["trendline_cycle"] = time.time()
             state["trendline_sent"] = n
         except asyncio.CancelledError:
@@ -308,5 +408,9 @@ def set_enabled(db, on: bool) -> None:
     storage.meta_set(db, "trendline_alerts", "1" if on else "0")
 
 
-def set_interval(db, tf: str) -> None:
-    storage.meta_set(db, "trendline_tf", tf)
+def set_intervals(db, tfs) -> None:
+    storage.meta_set(db, "trendline_tf", ",".join(tfs))
+
+
+def set_min_slope(db, v: float) -> None:
+    storage.meta_set(db, "trendline_min_slope", f"{max(0.0, v):.4f}")

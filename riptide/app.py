@@ -105,7 +105,8 @@ async def main() -> None:
         tasks.append(asyncio.create_task(
             watch.watch_loop(sess, db, state), name="trendline"))
         if watch.enabled(db):
-            log.info("trendline watch on, %s bars", watch.interval(db))
+            log.info("trendline watch on, %s bars, slope >= %.2f",
+                     "+".join(watch.intervals(db)), watch.min_slope(db))
         if TG_COMMANDS:
             tasks.append(asyncio.create_task(
                 command_loop(sess, db, state), name="commands"))
