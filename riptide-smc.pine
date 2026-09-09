@@ -1006,36 +1006,58 @@ dpaInOte(bool isLong) =>
 
 // The most recent 1h FVG is held until price trades fully through it, which is
 // the article's "area of interest" persisting until it is consumed.
-var float dpaAoiTop   = na
-var float dpaAoiBot   = na
-var int   dpaAoiBias  = 0
-var int   dpaAoiKey   = 0
-var int   dpaAoiTouch = na
-if dpaOn and barstate.isconfirmed
-    // Register only when the 1h bar that produced the gap is one we have not
-    // already taken. Keying on time rather than price is what stops a consumed
-    // zone from immediately re-arming itself.
-    if (dpaGapBull or dpaGapBear) and not na(dpaGapTop) and dpaGapTime != dpaAoiKey
-        dpaAoiTop  := dpaGapTop
-        dpaAoiBot  := dpaGapBot
-        dpaAoiBias := dpaGapBull ? BULLISH : BEARISH
-        dpaAoiKey  := dpaGapTime
-        dpaAoiTouch := na
-        dpaAoi     += 1
-    if not na(dpaAoiTop) and (dpaAoiBias == BULLISH ? close < dpaAoiBot : close > dpaAoiTop)
-        dpaAoiTop  := na          // traded through: the area is spent
-        dpaAoiBot  := na
-        dpaAoiBias := 0
-    // "Price reaches my area of interest... then I wait for confirmation."
-    // Record WHEN it was reached; the confirmation is allowed to arrive later.
-    if not na(dpaAoiTop) and low <= dpaAoiTop and high >= dpaAoiBot
-        dpaAoiTouch := bar_index
+// Areas of interest are an ARRAY, not one slot. A single slot was the reason
+// "passed area" read 0: every new 1h gap overwrote the previous one AND wiped
+// its touch record, so the zone with the right bias was almost never the
+// current one. LuxAlgo keeps its own fair value gaps in an array for the same
+// reason.
+type dpaZone
+    float top
+    float bot
+    int   bias
+    int   key
+    int   touched
 
-// BUG 2 was requiring the CHoCH to land on the exact bar price sat inside the
-// gap. The article does not: price reaches the area, THEN you wait for the
-// five-minute confirmation, which routinely arrives a few bars later and often
-// after price has stepped back out. Simultaneity made step 5 nearly impossible.
-dpaInAoi = not na(dpaAoiTouch) and (bar_index - dpaAoiTouch) <= dpaAoiWindow
+var array<dpaZone> dpaZones = array.new<dpaZone>()
+
+if dpaOn and barstate.isconfirmed
+    // Register a new 1h gap once, keyed on the bar that produced it.
+    if (dpaGapBull or dpaGapBear) and not na(dpaGapTop)
+        bool known = false
+        if dpaZones.size() > 0
+            for i = 0 to dpaZones.size() - 1
+                if dpaZones.get(i).key == dpaGapTime
+                    known := true
+        if not known
+            dpaZones.push(dpaZone.new(dpaGapTop, dpaGapBot,
+                 dpaGapBull ? BULLISH : BEARISH, dpaGapTime, na))
+            dpaAoi += 1
+            if dpaZones.size() > 20
+                dpaZones.shift()
+
+    // Record touches, and retire a zone once price has closed through it.
+    if dpaZones.size() > 0
+        for i = dpaZones.size() - 1 to 0
+            dpaZone z = dpaZones.get(i)
+            if z.bias == BULLISH ? close < z.bot : close > z.top
+                dpaZones.remove(i)
+            else if low <= z.top and high >= z.bot
+                z.touched := bar_index
+
+dpaInAoiFor(bool isLong) =>
+    bool hit = false
+    if dpaZones.size() > 0
+        for i = 0 to dpaZones.size() - 1
+            dpaZone z = dpaZones.get(i)
+            if z.bias == (isLong ? BULLISH : BEARISH) and not na(z.touched)
+                if bar_index - z.touched <= dpaAoiWindow
+                    hit := true
+    hit
+
+// The confirmation is allowed to arrive AFTER price reached the area, which is
+// what the article describes: price reaches the area of interest, then you wait
+// for the five-minute change of character. Requiring both on the same bar made
+// this gate nearly impossible to pass.
 
 // ── Step 7 · the 5m confirmation, taken from LuxAlgo's own CHoCH detection ───
 dpaShortTrig = dpaChochOnly ? currentAlerts.internalBearishCHoCH : (currentAlerts.internalBearishCHoCH or currentAlerts.internalBearishBOS)
@@ -1049,7 +1071,7 @@ if dpaOn and barstate.isconfirmed and (dpaShortTrig or dpaLongTrig)
     bool step1 = dpaHtfBias == 0 or dpaHtfBias == (isLong ? BULLISH : BEARISH)
     bool step4 = dpaInOte(isLong)
     bool step4b = not dpaUsePrem or dpaSpan <= 0 or (isLong ? close <= dpaMid50 : close >= dpaMid50)
-    bool step5 = not dpaNeedAoi or (dpaInAoi and dpaAoiBias == (isLong ? BULLISH : BEARISH))
+    bool step5 = not dpaNeedAoi or dpaInAoiFor(isLong)
     // Counted as a funnel so the panel can name the gate that closed.
     dpaChochN += 1
     if step1
@@ -1129,12 +1151,19 @@ if dpaOn and dpaUseOte and barstate.islast and dpaSpan > 0
     dpaEq := line.new(bar_index - 80, dpaMid50, bar_index + 10, dpaMid50,
          color = color.new(GRAY, 40), style = line.style_dotted)
 
-var box dpaAoiBox = na
-if dpaOn and barstate.islast and not na(dpaAoiTop)
-    box.delete(dpaAoiBox)
-    dpaAoiBox := box.new(bar_index - 50, dpaAoiTop, bar_index + 10, dpaAoiBot,
-         border_color = color.new(#0e7c86, 40),
-         bgcolor = color.new(#0e7c86, 88))
+var array<box> dpaZoneBoxes = array.new<box>()
+if dpaOn and barstate.islast
+    while dpaZoneBoxes.size() > 0
+        box.delete(dpaZoneBoxes.shift())
+    if dpaZones.size() > 0
+        for i = 0 to dpaZones.size() - 1
+            dpaZone z = dpaZones.get(i)
+            color zc = z.bias == BULLISH ? GREEN : RED
+            dpaZoneBoxes.push(box.new(bar_index - 60, z.top, bar_index + 10, z.bot,
+                 border_color = color.new(zc, 55), bgcolor = color.new(zc, 92),
+                 text = na(z.touched) ? '1h FVG' : '1h FVG · touched',
+                 text_color = color.new(zc, 35), text_size = size.tiny,
+                 text_halign = text.align_right))
 
 if dpaOn and dpaNew and dpaTrades.size() > 0
     dpaTrade t = dpaTrades.get(dpaTrades.size() - 1)
