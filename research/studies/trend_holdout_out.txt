@@ -1,0 +1,8 @@
+HELD-OUT TEST for Hour8 — one prediction, no new arms
+discovery said: all four panels positive, pooled +0.127 (st) and +0.142 (st+di), beating the shipped Day1
+prediction: four cells positive on each held-out set, and better than Day1 in >= 3
+
+================================================================================================
+  SET 1 — FRESH WINDOW: the older half of a doubled fetch, ~days 83-166 back
+  (the same top 60 symbols; nothing here has been scored before)
+================================================================================================
