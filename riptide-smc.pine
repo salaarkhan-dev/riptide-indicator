@@ -862,65 +862,64 @@ alertcondition(currentAlerts.bearishFairValueGap,       'Bearish FVG',          
 
 //---------------------------------------------------------------------------------------------------------------------}
 //---------------------------------------------------------------------------------------------------------------------}
-//RIPTIDE DPA LAYER — the liquidity-sweep reversal, built on LuxAlgo's structures
+//RIPTIDE DPA — the 4h > 1h > 5m cascade from dailypriceaction.com/blog/smc-trading-strategy/
 //---------------------------------------------------------------------------------------------------------------------{
-// Everything above this line is LuxAlgo's, unchanged. Nothing below rewrites
-// it — this reads what it already computed:
+// Everything above is LuxAlgo's, unchanged. This layer adds the article's
+// eight steps and reads LuxAlgo's own state for the execution leg.
 //
-//   swingHigh / swingLow        the external pivots whose stops get swept
-//   internalLow / internalHigh  the internal structure the article's
-//                               confirmation breaks ("takes out the most recent
-//                               internal low, and closes below it")
-//   currentAlerts.internal*     LuxAlgo's own CHoCH/BOS detection, reused as the
-//                               acceptance trigger rather than re-derived
-//   trailing.top / .bottom      the dealing range the OTE band is measured on
-//   internalOrderBlocks         the entry zones, already mitigation-managed
-//   atrMeasure                  the same ATR everything else here uses
+//   1  HTF structure          4h   trend context
+//   2  external highs/lows    1h   BOS must be a candle CLOSE, "not just a wick"
+//   3  CHoCH confirms         1h   the direction is set here
+//   4  premium / discount     1h   50% of the 1h dealing range; shorts only above
+//   5  area of interest       1h   a 1h FVG sitting INSIDE the OTE zone
+//   6  targets                4h   prior low, then below equal lows
+//   7  LTF confirmation      5m   CHoCH: "breaks structure, takes out the most
+//                                 recent internal low, and closes below it"
+//   8  execute                5m   stop above the lower high that preceded the
+//                                 break; minimum 3R
 //
-// THE MODEL (dailypriceaction.com/blog/liquidity-sweep-reversals/):
-//   1  a swing high/low forms inside the OTE zone
-//   2  price wicks through it and does NOT accept there
-//   3  price accepts back through internal structure — the change of character
-//   then enter, stop beyond the sweep, target 3R.
+// RUN THIS ON THE 5-MINUTE CHART. Step 7 and 8 are chart-timeframe events; the
+// 4h and 1h legs are fetched. On a 30m chart the cascade still evaluates but
+// the execution leg is 30m, which is not the model the article describes.
+//
+// Every request.security below uses lookahead_off and reads [1] — the last
+// CLOSED bar of the higher timeframe. LuxAlgo's own drawFairValueGaps uses
+// lookahead_on with [0] values, which reads the unfinished bar; that pattern is
+// deliberately not reused here.
 
-DPA_GROUP = 'Riptide DPA · liquidity sweep model'
+DPA_G  = 'Riptide DPA · the 4h > 1h > 5m cascade'
+DPA_G2 = 'Riptide DPA · entry, stop, target'
 
-showDpaInput      = input(true,  'Enable the DPA layer', group = DPA_GROUP,
-     tooltip = 'Off leaves you with LuxAlgo exactly as published.\n\nTHIS LAYER READS LUXALGO\'S STATE, so two of its switches feed it:\n\n• "Show Internal Structure" (on by default) drives the acceptance trigger. Turn it off and no setup can ever fire, because the CHoCH flags this layer reads are only set when LuxAlgo evaluates internal structure.\n\n• "Internal Order Blocks" (on by default) supplies the limit entry. Turn it off and the entry silently falls back to the acceptance close, which is the market entry this layer\'s own tooltip advises against.\n\nBoth are on out of the box. This note exists so that turning one off later does not look like a bug in the model.')
-dpaOteInput       = input(true,  'Sweep must be inside the OTE band', group = DPA_GROUP,
-     tooltip = 'Step 1 of the model. The band is measured across LuxAlgo\'s own trailing high and low — the same range its Premium/Discount zones use, so turning those on shows you exactly what this is testing against.\n\nThe related 50% premium/discount split measured -0.176 / -0.242 in our own data and its edge vanished once stop size was held constant. That was the 50% HALF, not this 62-79% BAND — a different test, so this ships ON as the article specifies. Watch the panel with it off.')
-dpaOteLoInput     = input.float(62.0, 'OTE from %', minval = 0, maxval = 100, step = 0.5, group = DPA_GROUP, inline = 'ote')
-dpaOteHiInput     = input.float(79.0, 'to %',       minval = 0, maxval = 100, step = 0.5, group = DPA_GROUP, inline = 'ote')
-dpaChochOnlyInput = input(true,  'Acceptance must be a CHoCH, not a BOS', group = DPA_GROUP,
-     tooltip = 'The article calls for a "change of character" — a break AGAINST the prevailing internal trend. A BOS is a continuation break and is a weaker claim. Uses LuxAlgo\'s own labelling.')
-dpaWaitInput      = input.int(12, 'Bars to wait for acceptance', minval = 1, maxval = 60, group = DPA_GROUP,
-     tooltip = 'Past this the raid is treated as a genuine breakout, which is the article\'s stated invalidation.')
-dpaEntryInput     = input.string('Order block (limit)', 'Entry', options = ['Order block (limit)', 'Acceptance close (market)'], group = DPA_GROUP,
-     tooltip = 'The limit into LuxAlgo\'s most recent unmitigated internal order block is the default. Market-entering measured -0.064 R on confirmed setups and -0.048 on early ones in our data, and entering at the structure break instead of the retrace lost on all six arms tested — risk inflates 1.46x because the stop cannot move with the entry.')
-dpaFillInput      = input.int(10, 'Bars to leave the limit working', minval = 1, maxval = 60, group = DPA_GROUP,
-     tooltip = 'Cancelling at 5 bars instead of 10 measured -0.069 R per setup. 20-30% never fill; that is a zero, not a loss.')
-dpaStopInput      = input.string('Sweep extreme', 'Stop', options = ['Sweep extreme', 'Internal structure'], group = DPA_GROUP,
-     tooltip = 'The strategy article puts the stop at the structure that invalidates the idea. Our data says the sweep extreme: every tighter stop tested lost, and a 15m stop on a 30m setup halved the win rate from 56.5% to 27.3%. Both ship; the panel scores whichever you pick.')
-dpaBufferInput    = input.float(0.0, 'Extra room beyond the stop (x ATR)', minval = 0, step = 0.05, group = DPA_GROUP,
-     tooltip = 'The article says "a few pips above the sweep high, not directly on it". Swept 0 to 1.0 ATR here and ZERO was the peak, so the default disagrees with the article.')
-dpaTargetInput    = input.float(3.0, 'Target (R)', minval = 0.5, step = 0.5, group = DPA_GROUP,
-     tooltip = '3R is the article\'s stated minimum and our own ladder points the same way — R per signal rose monotonically 2R +0.093, 3R +0.124, 4R +0.150 across ten targets. It costs win rate: 2R wins 41%, 3R wins 35%. The win rate is set by this input and almost nothing else.')
-dpaMaxRiskInput   = input.float(2.5, 'Skip setups risking more than (x ATR)', minval = 0, step = 0.1, group = DPA_GROUP,
-     tooltip = 'One trade risking 8 ATR carries the size of eight normal ones. 2.5 measured as the peak: +0.083 R per signal against +0.045 at 3 ATR. 0 turns it off.')
-dpaPanelInput     = input(true,  'Show the self-test panel', group = DPA_GROUP,
-     tooltip = 'Scores every setup this layer has drawn on this chart, net of fees. An indicator that cannot tell you whether it works is not worth trusting.')
-dpaMakerInput     = input.float(0.02, 'Maker fee %', minval = 0, step = 0.01, group = DPA_GROUP, inline = 'fee')
-dpaTakerInput     = input.float(0.06, 'Taker fee %', minval = 0, step = 0.01, group = DPA_GROUP, inline = 'fee')
+dpaOn      = input(true,  'Enable the DPA cascade', group = DPA_G,
+     tooltip = 'Off leaves you with LuxAlgo exactly as published.\n\nThis layer reads two of LuxAlgo\'s switches: "Show Internal Structure" (on by default) drives the 5m confirmation, and its CHoCH labelling decides step 7. Turning it off means no setup can ever fire.')
+dpaHtf     = input.timeframe('240', 'Step 1 · HTF structure', group = DPA_G,
+     tooltip = 'The article uses Daily/4h for context. Our own data makes the DAILY the strongest single axis measured — agreeing +0.056 against -0.083, +4.5 SE on 8218 signals — so "D" is worth testing against the article\'s 240.')
+dpaMid     = input.timeframe('60',  'Steps 2-5 · structure timeframe', group = DPA_G,
+     tooltip = 'The article\'s 1-hour leg: external highs and lows, the change of character that sets direction, the premium/discount split, and the fair value gap that becomes the area of interest.')
+dpaRangeLen = input.int(40, 'Dealing range (bars of that timeframe)', minval = 10, maxval = 200, group = DPA_G,
+     tooltip = 'How far back the 1h external high and low are measured for the premium/discount split. The article says "external structure" without a number.')
+dpaPremPct = input.float(50.0, 'Step 4 · premium above (%)', minval = 0, maxval = 100, step = 1, group = DPA_G,
+     tooltip = 'Verbatim: "the 50 percent level acting as the dividing line... I only look for short trades in premium. Anything below the 50 percent level is discount."\n\nOur own test of this exact split measured -0.176 / -0.242 and its edge vanished once stop size was held constant, because entering deep in discount means entering near the raid extreme, which means a tight stop, and tight stops already score better. It ships ON because it is the article\'s rule; the panel will tell you what it is worth here.')
+dpaNeedAoi = input(true,  'Step 5 · price must be inside a 1h FVG', group = DPA_G,
+     tooltip = 'Verbatim: "There is a clear one-hour fair value gap sitting inside the OTE zone. That gives me an area of interest, not an entry."\n\nThis is the gate that makes setups rare. With it off you will get far more signals and they will not be this model.')
+dpaChochOnly = input(true, 'Step 7 · require a CHoCH, not a BOS', group = DPA_G,
+     tooltip = 'A change of character breaks structure AGAINST the prevailing internal trend. A BOS is a continuation break and is a weaker claim. Uses LuxAlgo\'s own labelling, so the label drawn on your chart and the trigger here can never disagree.')
 
-// @type            a liquidity raid awaiting acceptance
-type dpaRaid
-    float extreme
-    int   bar
-    bool  isHigh
-    bool  done
+dpaStopMode = input.string('Preceding internal high/low (article)', 'Step 8a · stop',
+     options = ['Preceding internal high/low (article)', 'Sweep extreme (measured)'], group = DPA_G2,
+     tooltip = 'Verbatim: "If price takes out the lower high that formed before the break, the idea is wrong, and that is where my stop goes." That is LuxAlgo\'s internalHigh, and it is the DEFAULT here because it is the article\'s rule.\n\nOur data disagrees and it is worth knowing: every stop tighter than the raid extreme that we tested lost, and a 15m stop on a 30m setup halved the win rate from 56.5% to 27.3%. Switch to the second option and compare the panel.')
+dpaBuffer  = input.float(0.0, 'Extra room beyond the stop (x ATR)', minval = 0, step = 0.05, group = DPA_G2,
+     tooltip = 'Swept 0 to 1.0 ATR in our data and ZERO was the peak on both signal types.')
+dpaMinR    = input.float(3.0, 'Step 8b · minimum R', minval = 0.5, step = 0.5, group = DPA_G2,
+     tooltip = 'Verbatim: "My minimum is 3R." Our own ladder agrees on direction — R per signal rose monotonically 2R +0.093, 3R +0.124, 4R +0.150 across ten targets on 2748 alerts. It costs win rate: 2R wins 41%, 3R wins 35%.\n\nSetups that cannot reach this against the pre-planned target are REJECTED, which is the article\'s filter and not a display preference.')
+dpaUseStructTgt = input(true, 'Target the prior swing, not a fixed R', group = DPA_G2,
+     tooltip = 'Step 6: "First target is a prior low." When on, the target is LuxAlgo\'s opposing swing level and the minimum-R filter above decides whether the trade is taken at all. When off, the target is simply the minimum R.\n\nWorth knowing before you rely on it: we measured the nearest opposing liquidity pool at a median 0.16R away, with 95% below 1R. On this data "target the pool" and "take a 3R" are usually not both satisfiable — which is why the reject counter in the panel matters.')
+dpaFillBars = input.int(10, 'Bars to leave the limit working', minval = 1, maxval = 60, group = DPA_G2)
+dpaMaker   = input.float(0.02, 'Maker fee %', minval = 0, step = 0.01, group = DPA_G2, inline = 'fee')
+dpaTaker   = input.float(0.06, 'Taker fee %', minval = 0, step = 0.01, group = DPA_G2, inline = 'fee')
+dpaPanel   = input(true, 'Show the self-test panel', group = DPA_G2)
 
-// @type            a live or settled setup
-type dpaSetup
+type dpaTrade
     float entry
     float stop
     float target
@@ -931,140 +930,179 @@ type dpaSetup
     bool  closed
     float risk
 
-var array<dpaRaid>  dpaRaids  = array.new<dpaRaid>()
-var array<dpaSetup> dpaSetups = array.new<dpaSetup>()
-var int dpaN = 0, dpaFilled = 0, dpaWon = 0, dpaLost = 0, dpaExpired = 0, dpaSwept = 0
-var float dpaNet = 0.0
+var array<dpaTrade> dpaTrades = array.new<dpaTrade>()
+// One `var` per line. Pine applies `var` only to the FIRST declaration on a
+// line, so `var int a = 0, b = 0` silently makes everything after `a` reset
+// every bar — which is exactly why an earlier build reported 23 setups and
+// zero of everything else.
+var int   dpaAoi      = 0
+var int   dpaTrig     = 0
+var int   dpaReject   = 0
+var int   dpaCount    = 0
+var int   dpaFilledN  = 0
+var int   dpaWonN     = 0
+var int   dpaLostN    = 0
+var int   dpaExpiredN = 0
+var float dpaNetR     = 0.0
 
-// The OTE band, measured across LuxAlgo's trailing extremes — the same range
-// its Premium/Discount zones draw, so the two agree by construction.
-dpaSpan   = trailing.top - trailing.bottom
-dpaSellLo = trailing.bottom + dpaSpan * dpaOteLoInput / 100.0
-dpaSellHi = trailing.bottom + dpaSpan * dpaOteHiInput / 100.0
-dpaBuyHi  = trailing.top    - dpaSpan * dpaOteLoInput / 100.0
-dpaBuyLo  = trailing.top    - dpaSpan * dpaOteHiInput / 100.0
+// ── Step 1 · HTF structure ───────────────────────────────────────────────────
+dpaHtfDir() =>
+    [_sl, _sd] = ta.supertrend(5.0, 14)
+    _sd[1]                       // ta.supertrend: -1 is UP, +1 is DOWN
+dpaHtfRaw  = request.security(syminfo.tickerid, dpaHtf, dpaHtfDir(), lookahead = barmerge.lookahead_off)
+dpaHtfBias = na(dpaHtfRaw) ? 0 : (dpaHtfRaw < 0 ? BULLISH : BEARISH)
 
-dpaInOte(float px, bool isHigh) =>
-    bool ok = true
-    if dpaOteInput and dpaSpan > 0
-        if isHigh
-            ok := px >= dpaSellLo and px <= dpaSellHi
-        else
-            ok := px >= dpaBuyLo and px <= dpaBuyHi
-    ok
+// ── Steps 2-5 · the 1h leg, all from the last CLOSED 1h bar ──────────────────
+dpaMidData() =>
+    float rh  = ta.highest(high, dpaRangeLen)[1]
+    float rl  = ta.lowest(low,   dpaRangeLen)[1]
+    // A 1h fair value gap on the last closed bar: the classic three-bar
+    // imbalance, bar[1] against bar[3].
+    bool  bull = low[1] > high[3]
+    bool  bear = high[1] < low[3]
+    float gTop = bull ? low[1]  : bear ? low[3]  : na
+    float gBot = bull ? high[3] : bear ? high[1] : na
+    [rh, rl, bull, bear, gTop, gBot]
+[dpaRh, dpaRl, dpaGapBull, dpaGapBear, dpaGapTop, dpaGapBot] =
+     request.security(syminfo.tickerid, dpaMid, dpaMidData(), lookahead = barmerge.lookahead_off)
 
-// STEP 2 — the sweep. Price trades through a swing point and closes back inside.
-if showDpaInput and barstate.isconfirmed
-    bool tookHigh = not na(swingHigh.currentLevel) and high > swingHigh.currentLevel and close <= swingHigh.currentLevel
-    bool tookLow  = not na(swingLow.currentLevel)  and low  < swingLow.currentLevel  and close >= swingLow.currentLevel
-    if tookHigh and dpaInOte(swingHigh.currentLevel, true)
-        dpaRaids.push(dpaRaid.new(high, bar_index, true, false))
-        dpaSwept += 1
-    if tookLow and dpaInOte(swingLow.currentLevel, false)
-        dpaRaids.push(dpaRaid.new(low, bar_index, false, false))
-        dpaSwept += 1
-    if dpaRaids.size() > 30
-        dpaRaids.shift()
+dpaSpan  = dpaRh - dpaRl
+dpaMid50 = dpaRl + dpaSpan * dpaPremPct / 100.0
 
-// STEP 3 — acceptance. LuxAlgo has already decided whether this bar broke
-// internal structure and whether that break was a CHoCH or a BOS; both flags
-// are read rather than re-derived, so the label on the chart and the trigger
-// here can never disagree.
-bool dpaShortOk = dpaChochOnlyInput ? currentAlerts.internalBearishCHoCH : (currentAlerts.internalBearishCHoCH or currentAlerts.internalBearishBOS)
-bool dpaLongOk  = dpaChochOnlyInput ? currentAlerts.internalBullishCHoCH : (currentAlerts.internalBullishCHoCH or currentAlerts.internalBullishBOS)
-bool dpaNew = false
+// The most recent 1h FVG is held until price trades fully through it, which is
+// the article's "area of interest" persisting until it is consumed.
+var float dpaAoiTop  = na
+var float dpaAoiBot  = na
+var int   dpaAoiBias = 0
+if dpaOn and barstate.isconfirmed
+    if dpaGapBull and not na(dpaGapTop) and (na(dpaAoiTop) or dpaGapTop != dpaAoiTop)
+        dpaAoiTop  := dpaGapTop
+        dpaAoiBot  := dpaGapBot
+        dpaAoiBias := BULLISH
+        dpaAoi     += 1
+    if dpaGapBear and not na(dpaGapTop) and (na(dpaAoiTop) or dpaGapTop != dpaAoiTop)
+        dpaAoiTop  := dpaGapTop
+        dpaAoiBot  := dpaGapBot
+        dpaAoiBias := BEARISH
+        dpaAoi     += 1
+    if not na(dpaAoiTop) and (dpaAoiBias == BULLISH ? close < dpaAoiBot : close > dpaAoiTop)
+        dpaAoiTop  := na          // traded through: the area is spent
+        dpaAoiBot  := na
+        dpaAoiBias := 0
 
-if showDpaInput and barstate.isconfirmed and dpaRaids.size() > 0
-    for i = 0 to dpaRaids.size() - 1
-        dpaRaid r = dpaRaids.get(i)
-        if not r.done and bar_index > r.bar and bar_index - r.bar <= dpaWaitInput
-            if (r.isHigh and dpaShortOk) or (not r.isHigh and dpaLongOk)
-                r.done := true
-                bool isLong = not r.isHigh
-                // Entry: the nearest unmitigated internal order block facing the
-                // trade, which is LuxAlgo's own array and already has price-based
-                // mitigation applied to it upstream.
-                float entryPx = close
-                if dpaEntryInput == 'Order block (limit)' and internalOrderBlocks.size() > 0
-                    for j = 0 to internalOrderBlocks.size() - 1
-                        orderBlock ob = internalOrderBlocks.get(j)
-                        if ob.bias == (isLong ? BULLISH : BEARISH)
-                            entryPx := isLong ? ob.barHigh : ob.barLow
-                            break
-                float raw  = dpaStopInput == 'Sweep extreme' ? r.extreme :
-                     (isLong ? internalLow.currentLevel : internalHigh.currentLevel)
-                float stopPx = (na(raw) ? r.extreme : raw) + (isLong ? -1 : 1) * dpaBufferInput * atrMeasure
-                float risk = math.abs(entryPx - stopPx)
-                bool sane = risk > 0 and (isLong ? stopPx < entryPx : stopPx > entryPx)
-                bool sized = dpaMaxRiskInput <= 0 or risk <= dpaMaxRiskInput * atrMeasure
-                if sane and sized
-                    dpaSetups.push(dpaSetup.new(entryPx, stopPx,
-                         entryPx + (isLong ? 1 : -1) * risk * dpaTargetInput,
-                         isLong, bar_index, na, false, false, risk))
-                    dpaN += 1
-                    dpaNew := true
-                    if dpaSetups.size() > 100
-                        dpaSetups.shift()
+dpaInAoi = na(dpaAoiTop) ? false : (low <= dpaAoiTop and high >= dpaAoiBot)
 
-// Scoring, the way research/harness.py scores a trade: the stop wins a bar
-// spanning both, the target cannot resolve on the fill bar, fees in units of R.
-if showDpaInput and barstate.isconfirmed and dpaSetups.size() > 0
-    for i = 0 to dpaSetups.size() - 1
-        dpaSetup s = dpaSetups.get(i)
-        if not s.closed
-            if not s.filled
-                if bar_index > s.bar and (s.isLong ? low <= s.entry : high >= s.entry)
-                    s.filled := true
-                    s.fillBar := bar_index
-                    dpaFilled += 1
-                else if bar_index - s.bar > dpaFillInput
-                    s.closed := true
-                    dpaExpired += 1
+// ── Step 7 · the 5m confirmation, taken from LuxAlgo's own CHoCH detection ───
+dpaShortTrig = dpaChochOnly ? currentAlerts.internalBearishCHoCH : (currentAlerts.internalBearishCHoCH or currentAlerts.internalBearishBOS)
+dpaLongTrig  = dpaChochOnly ? currentAlerts.internalBullishCHoCH : (currentAlerts.internalBullishCHoCH or currentAlerts.internalBullishBOS)
+
+dpaNew = false
+if dpaOn and barstate.isconfirmed and (dpaShortTrig or dpaLongTrig)
+    bool isLong = dpaLongTrig
+    // Step 1: the HTF must agree. Step 4: shorts only in premium, longs only
+    // in discount. Step 5: price must be in the area of interest.
+    bool step1 = dpaHtfBias == 0 or dpaHtfBias == (isLong ? BULLISH : BEARISH)
+    bool step4 = dpaSpan <= 0 or (isLong ? close <= dpaMid50 : close >= dpaMid50)
+    bool step5 = not dpaNeedAoi or (dpaInAoi and dpaAoiBias == (isLong ? BULLISH : BEARISH))
+    if step1 and step4 and step5
+        dpaTrig += 1
+        // Step 8a: the stop goes at invalidation — the internal high/low that
+        // formed before the break, which LuxAlgo is already tracking.
+        float structStop = isLong ? internalLow.currentLevel : internalHigh.currentLevel
+        float raw = dpaStopMode == 'Sweep extreme (measured)' ? (isLong ? low : high) : structStop
+        float stopPx = (na(raw) ? (isLong ? low : high) : raw) + (isLong ? -1 : 1) * dpaBuffer * atrMeasure
+        float entryPx = close
+        float risk = math.abs(entryPx - stopPx)
+        // Step 6: the pre-planned target is the opposing swing.
+        float structTgt = isLong ? swingHigh.currentLevel : swingLow.currentLevel
+        float tgtPx = entryPx + (isLong ? 1 : -1) * risk * dpaMinR
+        if dpaUseStructTgt and not na(structTgt)
+            tgtPx := structTgt
+        float rr = risk > 0 ? math.abs(tgtPx - entryPx) / risk : 0.0
+        bool sane = risk > 0 and (isLong ? stopPx < entryPx and tgtPx > entryPx : stopPx > entryPx and tgtPx < entryPx)
+        // Step 8b: below the minimum R the trade is not taken. This is the
+        // article's filter, so a rejection is counted rather than hidden.
+        if sane and rr >= dpaMinR
+            dpaTrades.push(dpaTrade.new(entryPx, stopPx, tgtPx, isLong, bar_index, na, false, false, risk))
+            dpaCount += 1
+            dpaNew := true
+            if dpaTrades.size() > 100
+                dpaTrades.shift()
+        else if sane
+            dpaReject += 1
+
+// ── Scoring ──────────────────────────────────────────────────────────────────
+if dpaOn and barstate.isconfirmed and dpaTrades.size() > 0
+    for i = 0 to dpaTrades.size() - 1
+        dpaTrade t = dpaTrades.get(i)
+        if not t.closed
+            if not t.filled
+                if bar_index > t.bar and (t.isLong ? low <= t.entry : high >= t.entry)
+                    t.filled  := true
+                    t.fillBar := bar_index
+                    dpaFilledN += 1
+                else if bar_index - t.bar > dpaFillBars
+                    t.closed := true
+                    dpaExpiredN += 1
             else
-                float rPct = 100 * s.risk / s.entry
-                if s.isLong ? low <= s.stop : high >= s.stop
-                    s.closed := true
-                    dpaLost += 1
-                    dpaNet -= 1.0 + (dpaMakerInput + dpaTakerInput) / rPct
-                else if bar_index > s.fillBar and (s.isLong ? high >= s.target : low <= s.target)
-                    s.closed := true
-                    dpaWon += 1
-                    dpaNet += dpaTargetInput - (dpaMakerInput + dpaMakerInput) / rPct
+                float rPct = 100 * t.risk / t.entry
+                float rMul = math.abs(t.target - t.entry) / t.risk
+                if t.isLong ? low <= t.stop : high >= t.stop
+                    t.closed := true
+                    dpaLostN += 1
+                    dpaNetR  -= 1.0 + (dpaMaker + dpaTaker) / rPct
+                else if bar_index > t.fillBar and (t.isLong ? high >= t.target : low <= t.target)
+                    t.closed := true
+                    dpaWonN  += 1
+                    dpaNetR  += rMul - (dpaMaker + dpaMaker) / rPct
 
-if showDpaInput and dpaNew and dpaSetups.size() > 0
-    dpaSetup s = dpaSetups.get(dpaSetups.size() - 1)
-    line.new(bar_index, s.entry,  bar_index + dpaFillInput, s.entry,  color = #0e7c86, width = 2)
-    line.new(bar_index, s.stop,   bar_index + dpaFillInput, s.stop,   color = RED,   style = line.style_dashed)
-    line.new(bar_index, s.target, bar_index + dpaFillInput, s.target, color = GREEN, style = line.style_dashed)
-    label.new(bar_index, s.target, (s.isLong ? '▲ ' : '▼ ') + str.tostring(dpaTargetInput, '#.#') + 'R',
-         color = color(na), textcolor = s.isLong ? GREEN : RED,
+// ── Drawing ──────────────────────────────────────────────────────────────────
+var box dpaAoiBox = na
+if dpaOn and barstate.islast and not na(dpaAoiTop)
+    box.delete(dpaAoiBox)
+    dpaAoiBox := box.new(bar_index - 50, dpaAoiTop, bar_index + 10, dpaAoiBot,
+         border_color = color.new(#0e7c86, 40),
+         bgcolor = color.new(#0e7c86, 88))
+
+if dpaOn and dpaNew and dpaTrades.size() > 0
+    dpaTrade t = dpaTrades.get(dpaTrades.size() - 1)
+    line.new(bar_index, t.entry,  bar_index + dpaFillBars, t.entry,  color = #0e7c86, width = 2)
+    line.new(bar_index, t.stop,   bar_index + dpaFillBars, t.stop,   color = RED,   style = line.style_dashed)
+    line.new(bar_index, t.target, bar_index + dpaFillBars, t.target, color = GREEN, style = line.style_dashed)
+    label.new(bar_index, t.target,
+         (t.isLong ? '▲ ' : '▼ ') + str.tostring(math.abs(t.target - t.entry) / t.risk, '#.#') + 'R',
+         color = color(na), textcolor = t.isLong ? GREEN : RED,
          style = label.style_label_left, size = size.small,
-         tooltip = 'sweep → acceptance → entry\n\nEntry ' + str.tostring(s.entry, format.mintick) +
-                   '\nStop ' + str.tostring(s.stop, format.mintick) + '   (' +
-                   str.tostring(100 * s.risk / s.entry, '#.##') + '% risk)' +
-                   '\nTarget ' + str.tostring(s.target, format.mintick) +
+         tooltip = 'All eight steps aligned.\n\nEntry ' + str.tostring(t.entry, format.mintick) +
+                   '\nStop ' + str.tostring(t.stop, format.mintick) + '   (' +
+                   str.tostring(100 * t.risk / t.entry, '#.##') + '% risk)' +
+                   '\nTarget ' + str.tostring(t.target, format.mintick) +
                    '\n\nSize by risk, never by margin: notional = account × risk% ÷ stop%.')
 
-if showDpaInput and dpaPanelInput and barstate.islast
-    var table dpaT = table.new(position.top_right, 2, 9, border_width = 1)
-    int settled = dpaWon + dpaLost + dpaExpired
-    int resolved = dpaWon + dpaLost
+// ── Panel ────────────────────────────────────────────────────────────────────
+if dpaOn and dpaPanel and barstate.islast
+    var table dpaT = table.new(position.top_right, 2, 11, border_width = 1)
+    int dpaSettled  = dpaWonN + dpaLostN + dpaExpiredN
+    int dpaResolved = dpaWonN + dpaLostN
     dpaT.cell(0, 0, 'Riptide DPA', text_color = color.white, bgcolor = #0e7c86, text_size = size.small)
-    dpaT.cell(1, 0, str.tostring(dpaTargetInput, '#.#') + 'R', text_color = color.white, bgcolor = #0e7c86, text_size = size.small)
-    dpaLabels = array.from('Sweeps in OTE', 'Setups', 'Filled', 'Never filled', 'Target', 'Stopped', 'Win rate', 'Net R')
-    dpaValues = array.from(
-         str.tostring(dpaSwept),
-         str.tostring(dpaN),
-         str.tostring(dpaFilled),
-         str.tostring(dpaExpired),
-         str.tostring(dpaWon),
-         str.tostring(dpaLost),
-         resolved > 0 ? str.tostring(100.0 * dpaWon / resolved, '#') + '%' : '—',
-         settled > 0 ? str.tostring(dpaNet, '+#.#;-#.#') : '—')
-    for i = 0 to dpaLabels.size() - 1
-        dpaT.cell(0, i + 1, dpaLabels.get(i), text_color = GRAY, text_size = size.tiny, text_halign = text.align_left)
-        dpaT.cell(1, i + 1, dpaValues.get(i), text_size = size.tiny, text_halign = text.align_right,
-             text_color = i == 7 ? (dpaNet > 0 ? GREEN : RED) : chart.fg_color)
+    dpaT.cell(1, 0, dpaHtf + '>' + dpaMid + '>' + timeframe.period, text_color = color.white, bgcolor = #0e7c86, text_size = size.small)
+    dpaLbl = array.from('HTF bias', '1h areas seen', 'All steps aligned', 'Rejected under ' + str.tostring(dpaMinR, '#.#') + 'R',
+         'Setups taken', 'Filled', 'Never filled', 'Target', 'Stopped', 'Net R')
+    dpaVal = array.from(
+         dpaHtfBias == BULLISH ? 'bullish' : dpaHtfBias == BEARISH ? 'bearish' : 'flat',
+         str.tostring(dpaAoi),
+         str.tostring(dpaTrig),
+         str.tostring(dpaReject),
+         str.tostring(dpaCount),
+         str.tostring(dpaFilledN),
+         str.tostring(dpaExpiredN),
+         str.tostring(dpaWonN) + (dpaResolved > 0 ? '  ' + str.tostring(100.0 * dpaWonN / dpaResolved, '#') + '%' : ''),
+         str.tostring(dpaLostN),
+         dpaSettled > 0 ? str.tostring(dpaNetR, '+#.#;-#.#') : '—')
+    for i = 0 to dpaLbl.size() - 1
+        dpaT.cell(0, i + 1, dpaLbl.get(i), text_color = GRAY, text_size = size.tiny, text_halign = text.align_left)
+        dpaT.cell(1, i + 1, dpaVal.get(i), text_size = size.tiny, text_halign = text.align_right,
+             text_color = i == 9 ? (dpaNetR > 0 ? GREEN : RED) : chart.fg_color)
 
-alertcondition(dpaNew, 'DPA setup', 'Riptide DPA: sweep accepted, setup live')
+alertcondition(dpaNew, 'DPA setup', 'Riptide DPA: all eight steps aligned')
 //---------------------------------------------------------------------------------------------------------------------}
