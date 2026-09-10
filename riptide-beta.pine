@@ -400,7 +400,11 @@ cpUseCtx    = input.bool(false, "Context gaps",     inline = "cpz2", group = gCP
 cpUsePivot  = input.bool(true,  "Structure extremes (HH / LH / LL / HL)", group = gCP,
      tooltip = "The swing highs and lows themselves, which is where most of these patterns belong and the one place the filter was not looking.\n\nCAPTURED SEPARATELY FROM THE POOLS, because a pool is a set of EQUAL pivots and most swings never join one. The filter wants every HH, LH, LL and HL, not only those that lined up with another.\n\nA point, not a band: a swing is a price, so the pattern has to land on it within the tolerance below.")
 cpPivTol    = input.float(0.35, "  how close counts (x ATR)", minval = 0.05, maxval = 2.0, step = 0.05, group = gCP)
-cpShowLevels = input.bool(true, "Draw entry and stop", group = gCP,
+cpStructMin = input.float(0.0, "  smallest swing that counts (x ATR)", minval = 0.0, maxval = 10.0, step = 0.1, group = gCP,
+     tooltip = "A floor on how far price has to travel between two turns for the second one to count as structure.\n\n0 takes every pivot the swing rule finds, which on a 30m chart is a lot of small noise turns. Raise it and the structure coarsens: the zigzag straightens out, small counter-swings are absorbed into the leg they interrupt, and the HH / LH / LL / HL reading is taken from what is left.\n\nIt drives the CANDLE FILTER as well as the drawing, so a pivot the zigzag has absorbed can no longer host a confirmation. What you see is what is filtered on.")
+cpShowZig   = input.bool(false, "Show market structure (zigzag)", group = gCP,
+     tooltip = "The structure the filter is actually using, drawn as a thin dotted line from turn to turn with each one tagged HH, LH, LL or HL.\n\nOff by default because it is a debug view: it answers whether a confirmation was refused because the shape failed or because the level it sat on is not a swing the structure rule kept.")
+cpShowLevels = input.bool(false, "Draw entry and stop", group = gCP,
      tooltip = "Two short lines on the pattern: entry at the body edge on the trade side, stop beyond its furthest wick, exactly as the reference sheet marks them.\n\nOff leaves just the arrow, which still carries both prices on hover.")
 cpMinGap    = input.int(3, "  bars between marks", minval = 1, maxval = 20, group = gCP,
      tooltip = "A floor on how close together two confirmations may print.\n\nZones overlap — a gap sits inside a block sits inside a swept band — so a run of rejection candles can satisfy a DIFFERENT zone on each bar and print a mark on each. Every zone already fires once per visit; this catches the rest.")
@@ -532,6 +536,34 @@ type CpPivot
     bool   isHigh
     string tag
     bool   armed = true
+
+// The zigzag's running state. AN OBJECT RATHER THAN A HANDFUL OF GLOBALS
+// because Pine forbids a function assigning to a global variable, while an
+// object's fields can be written from anywhere — which is the only way the turn
+// logic can live in one place instead of being inlined twice.
+// The last confirmation drawn, and everything needed to replace it. Same reason
+// as CpZig: a function cannot assign to a global, and cpDraw has to hand its
+// handles back so the next bar can delete them if the 1CP becomes a 2CP.
+type CpMark
+    label  lbl    = na
+    line   ln1    = na
+    line   ln2    = na
+    int    bar    = -9999
+    string kind   = ""
+    bool   isBull = false
+    string zone   = ""
+    float  ztop   = na
+    float  zbot   = na
+
+type CpZig
+    int    bar    = na
+    float  px     = na
+    bool   isHigh = false
+    bool   started = false
+    float  lastHi = na
+    float  lastLo = na
+    line   ln     = na
+    label  lbl    = na
 
 // One tracked setup, from FVG creation through fill to resolution.
 type Trade
@@ -695,22 +727,78 @@ ictPL = ta.pivotlow(low,  pivotLeft, 1)
 // Captured here rather than read back off the clusters, because a cluster is a
 // POOL of equal pivots and most swings never become one. The filter wants every
 // HH, LH, LL and HL, not only the ones that lined up with another.
-var array<CpPivot> cpPivots = array.new<CpPivot>()
-var float cpLastHi = na
-var float cpLastLo = na
+//
+// A ZIGZAG, NOT A LIST OF PIVOTS, and the difference matters. Structure
+// alternates: a high is followed by a low. Two highs in a row are one turn seen
+// twice, so the higher of the pair replaces the lower rather than both being
+// kept — otherwise a filter looking for "at a swing high" matches a shoulder as
+// readily as the peak. The threshold then absorbs turns that did not travel far
+// enough to be a leg at all.
+var array<CpPivot> cpPivots  = array.new<CpPivot>()
+var array<line>    cpZigLns  = array.new<line>()
+var array<label>   cpZigLbls = array.new<label>()
+var CpZig          zig       = CpZig.new()
+
+cpTagOf(CpZig z, bool isHigh, float px) =>
+    isHigh ? (na(z.lastHi) ? "swing high" : px > z.lastHi ? "HH" : "LH")
+           : (na(z.lastLo) ? "swing low"  : px > z.lastLo ? "HL" : "LL")
+
+// One turn of the zigzag.
+cpTurn(CpZig z, bool isHigh, float px, int pbar) =>
+    if not z.started
+        z.started := true
+        z.bar     := pbar
+        z.px      := px
+        z.isHigh  := isHigh
+    else if isHigh == z.isHigh
+        // Same side twice: one turn seen again further out. Extend it rather
+        // than recording two, or a filter looking for "at a swing high" matches
+        // a shoulder as readily as the peak.
+        if isHigh ? px > z.px : px < z.px
+            z.bar := pbar
+            z.px  := px
+            if not na(z.ln)
+                z.ln.set_xy2(pbar, px)
+            if cpPivots.size() > 0
+                CpPivot lastP = cpPivots.get(0)
+                lastP.price := px
+                lastP.bar   := pbar
+                lastP.tag   := cpTagOf(z, isHigh, px)
+                if not na(z.lbl)
+                    z.lbl.set_xy(pbar, px)
+                    z.lbl.set_text(lastP.tag)
+    else if math.abs(px - z.px) >= atr * cpStructMin
+        // A real leg. Draw it, and its far end becomes the new anchor.
+        string t = cpTagOf(z, isHigh, px)
+        if isHigh
+            z.lastHi := px
+        else
+            z.lastLo := px
+        cpPivots.unshift(CpPivot.new(price = px, bar = pbar, isHigh = isHigh, tag = t))
+        if cpShowZig
+            z.ln := line.new(z.bar, z.px, pbar, px, xloc = xloc.bar_index,
+                 color = color.new(color.gray, 40), style = line.style_dotted, width = 1)
+            cpZigLns.push(z.ln)
+            z.lbl := label.new(pbar, px, t, xloc = xloc.bar_index, yloc = yloc.price,
+                 style = isHigh ? label.style_label_down : label.style_label_up,
+                 color = color.new(color.gray, 100), textcolor = color.new(color.gray, 20),
+                 size = size.tiny)
+            cpZigLbls.push(z.lbl)
+        z.bar    := pbar
+        z.px     := px
+        z.isHigh := isHigh
 
 if not na(ph)
-    string t = na(cpLastHi) ? "swing high" : (ph > cpLastHi ? "HH" : "LH")
-    cpPivots.unshift(CpPivot.new(price = ph, bar = bar_index - effPivotRight,
-         isHigh = true, tag = t))
-    cpLastHi := ph
+    cpTurn(zig, true,  ph, bar_index - effPivotRight)
 if not na(pl)
-    string t = na(cpLastLo) ? "swing low" : (pl > cpLastLo ? "HL" : "LL")
-    cpPivots.unshift(CpPivot.new(price = pl, bar = bar_index - effPivotRight,
-         isHigh = false, tag = t))
-    cpLastLo := pl
+    cpTurn(zig, false, pl, bar_index - effPivotRight)
+
 while cpPivots.size() > 60
     cpPivots.pop()
+while cpZigLns.size() > 40
+    line.delete(cpZigLns.shift())
+while cpZigLbls.size() > 40
+    label.delete(cpZigLbls.shift())
 
 // ta.* calls are unconditional: they carry state and must run every bar.
 emaLine = ta.ema(close, emaLen)
@@ -2432,6 +2520,12 @@ if barstate.islast and showTrendTag and tagOk
 var array<line>  cpLines  = array.new<line>()
 var array<label> cpLabels = array.new<label>()
 
+// The last mark drawn, held so a 1CP can be REPLACED when the next bar turns it
+// into a 2CP. A single candle cannot be classified on its own bar — whether it
+// is a 1CP or the first half of a 2CP is a fact about the bar AFTER it — so the
+// mark goes up immediately and is corrected one bar later if it has to be.
+var CpMark mark = CpMark.new()
+
 // Held so the oldest can be retired deliberately. Labels are capped at 500
 // across the whole script and TradingView drops the oldest silently when the
 // cap is hit — which would take the raid X's and pool lines with it, not the
@@ -2443,63 +2537,112 @@ cpTrim() =>
     while cpLines.size() > cpKeep * 2
         line.delete(cpLines.shift())
 
-cpDraw(bool isBull, string nm, string kind, string zname, float ztop, float zbot,
-       float entry, float stop) =>
+cpDraw(CpMark mk, bool isBull, string nm, string kind, string zname, float ztop,
+       float zbot, float entry, float stop) =>
     color col = isBull ? bullCol : bearCol
     float off = atr * 0.85          // clear of Riptide's own marks, not beside them
     float y   = isBull ? cpLo - off : cpHi + off
 
-    // Risk as a share of price, because a textbook pattern at a zone is still
-    // a bad trade if the stop is a long way off, and that is not visible from
-    // the shape.
-    float rr  = entry > 0 ? 100 * math.abs(entry - stop) / entry : na
+    // NAME AND PLACE, NOTHING ELSE. The entry and stop were on here and they are
+    // the two numbers a reader already has from the setup layer; repeating them
+    // on a confirmation made the hover longer without making it more useful.
+    string tip = kind + "  ·  " + nm + "\nat " + zname + "  " + f2s(zbot) + " – " + f2s(ztop)
 
-    string tip = kind + "  ·  " + nm
-         + "\n" + f2s(close) + "  ·  " + syminfo.ticker + " " + timeframe.period
-         + "\n\nat " + zname + "  " + f2s(zbot) + " – " + f2s(ztop)
-         + "\nentry  " + f2s(entry)
-         + "\nstop   " + f2s(stop) + "  ·  " + str.tostring(rr, "#.##") + "%"
+    // TRIANGLES, at size.tiny. Riptide draws its own bigger, so the two layers
+    // separate by weight rather than by shape — which is what was wanted, and
+    // arrows turned out to read as a louder signal than the setup they sit next
+    // to rather than a quieter one.
+    mk.lbl := label.new(bar_index, y, "", xloc = xloc.bar_index, yloc = yloc.price,
+         color   = col,
+         style   = isBull ? label.style_triangleup : label.style_triangledown,
+         size    = size.tiny,
+         tooltip = tip)
+    cpLabels.push(mk.lbl)
 
-    // ARROWS, NOT TRIANGLES. Riptide already draws a filled triangle for its own
-    // setups, an X for a raid and a dot for one in progress — so a triangle here
-    // was the same mark as a setup, in the same two colours, and there was no
-    // way to tell a confirmation from a signal. Arrows are the one directional
-    // glyph the indicator was not already spending.
-    cpLabels.push(label.new(bar_index, y, "", xloc = xloc.bar_index, yloc = yloc.price,
-         color     = col,
-         style     = isBull ? label.style_arrowup : label.style_arrowdown,
-         size      = size.tiny,
-         tooltip   = tip))
-    cpTrim()
-
+    mk.ln1 := na
+    mk.ln2 := na
     if cpShowLevels
-        // Short and thin. These are levels to read, not zones to fill — drawn
-        // long or solid they would compete with the setup's own entry and stop,
-        // which are the ones the engine actually alerts on.
         int x1 = bar_index - (cpTwo ? 1 : 0)
         int x2 = bar_index + 3
-        cpLines.push(line.new(x1, entry, x2, entry, xloc = xloc.bar_index,
-             color = col, style = line.style_solid, width = 1))
-        cpLines.push(line.new(x1, stop, x2, stop, xloc = xloc.bar_index,
-             color = color.new(col, 55), style = line.style_dotted, width = 1))
+        mk.ln1 := line.new(x1, entry, x2, entry, xloc = xloc.bar_index,
+             color = col, style = line.style_solid, width = 1)
+        mk.ln2 := line.new(x1, stop, x2, stop, xloc = xloc.bar_index,
+             color = color.new(col, 55), style = line.style_dotted, width = 1)
+        cpLines.push(mk.ln1)
+        cpLines.push(mk.ln2)
+    cpTrim()
 
-// Re-arming runs unconditionally: a zone becomes available again on the bar
-// price leaves it, and that bar usually carries no pattern at all.
+// A SINGLE CANDLE CANNOT BE CLASSIFIED ON ITS OWN BAR. Whether a pin is a 1CP
+// or the first half of a 2CP is a fact about the bar AFTER it — and the old code
+// fired the 1CP, claimed the zone, then let the min-gap suppress the 2CP that
+// followed. So an inverted hammer with an engulfing marubozu behind it read as
+// "1CP · inverted hammer" forever, which is the weaker of the two readings and
+// the wrong one.
+//
+// The mark now goes up on the pin bar and is REPLACED the next bar if the
+// engulfing arrives. Immediate, and correct once it can be.
+//
+// The replacement re-reads the zone, because a 2CP takes its direction from the
+// engulfing candle and that can be the OPPOSITE of the pin's: an inverted hammer
+// is a bearish 1CP, and a green engulfing behind it makes the pair a bullish 2CP.
+// When the flip finds no zone on the new side the 1CP is left standing — it was
+// a valid pattern at a valid level when it printed.
 var int cpLastBullBar = -9999
 var int cpLastBearBar = -9999
 
+cpClearLast(CpMark mk) =>
+    label.delete(mk.lbl)
+    line.delete(mk.ln1)
+    line.delete(mk.ln2)
+
 if cpOn and barstate.isconfirmed
     cpRearm()
-    if cpBull or cpBear
+    bool two     = cp2Bull or cp2Bear
+    bool upgrade = two and mark.kind == "1CP" and mark.bar == bar_index - 1
+
+    if upgrade
+        // Same direction: the zone the 1CP claimed is this pattern's zone and is
+        // already disarmed, so reuse it rather than asking for a second one.
+        string zn = mark.isBull == cpBull ? mark.zone : ""
+        float  zt = mark.ztop
+        float  zb = mark.zbot
+        if zn == ""
+            [n2, t2, b2] = cpZoneTake(cpBull, cpLo, cpHi)
+            zn := n2
+            zt := t2
+            zb := b2
+        if zn != ""
+            cpClearLast(mark)
+            mark.bar    := bar_index
+            mark.kind   := "2CP"
+            mark.isBull := cpBull
+            mark.zone   := zn
+            mark.ztop   := zt
+            mark.zbot   := zb
+            if cpBull
+                cpLastBullBar := bar_index
+            else
+                cpLastBearBar := bar_index
+            cpDraw(mark, cpBull, cpName, "2CP", zn, zt, zb, cpEntry, cpStop)
+            alert((cpBull ? "Bullish " : "Bearish ") + "2CP — " + cpName +
+                  " at " + zn + " @ " + f2s(close), alert.freq_once_per_bar_close)
+
+    else if cpBull or cpBear
         int since = cpBull ? bar_index - cpLastBullBar : bar_index - cpLastBearBar
         if since >= cpMinGap
             [zn, zt, zb] = cpZoneTake(cpBull, cpLo, cpHi)
             if zn != ""
+                mark.bar    := bar_index
+                mark.kind   := cpKind
+                mark.isBull := cpBull
+                mark.zone   := zn
+                mark.ztop   := zt
+                mark.zbot   := zb
                 if cpBull
                     cpLastBullBar := bar_index
                 else
                     cpLastBearBar := bar_index
-                cpDraw(cpBull, cpName, cpKind, zn, zt, zb, cpEntry, cpStop)
+                cpDraw(mark, cpBull, cpName, cpKind, zn, zt, zb, cpEntry, cpStop)
                 alert((cpBull ? "Bullish " : "Bearish ") + cpKind + " — " + cpName +
                       " at " + zn + " @ " + f2s(close), alert.freq_once_per_bar_close)
 
