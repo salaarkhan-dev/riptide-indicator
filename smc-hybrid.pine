@@ -127,6 +127,7 @@ rejectionTooltip                = 'WHAT HAS TO HAPPEN AT THE ZONE BEFORE AN ARRO
 pinRatioTooltip                 = 'How many times the body the rejecting wick must be.\n\n2 is the textbook hammer. 3 is a proper pin and roughly a third as many signals. Below 2 you are calling almost any bar with a wick a rejection.'
 marubozuTooltip                 = 'How much of a confirmation candle\'s range must be body.\n\n0.7 is a strong candle; 0.85 is a strict marubozu with almost no wick. An engulfing of the pin\'s body also passes regardless of this, since the two say the same thing in different ways — a MARUBOZU IS NOT AN ENGULFING, one is a single-bar shape and the other a two-bar relation, and confirmation accepts either.'
 setupBoxTooltip                 = 'Outline the zone that is currently WAITING for its retest, so the live setup is separated from every other block on the chart.\n\nThe outline is removed the moment the zone is retested or price closes through it, which is what keeps the chart from filling up with dead levels.'
+pinDebugTooltip                 = 'TURN THIS ON WHEN AN ARROW YOU EXPECTED DID NOT APPEAR. It marks EVERY pin candle on the chart, zone or no zone, so the two reasons an arrow can go missing stop looking alike.\n\n  ▲ below the bar   long LOWER wick — green is a hammer, red a hanging man\n  ▼ above the bar   long UPPER wick — green an inverted hammer, red a shooting star\n  ✕ below the bar   a pin that WAS inside a live zone and still produced no arrow\n\nThe position and colour carry the whole name, so there is no text to read.\n\nHOW TO READ IT. No triangle on a candle you consider a rejection means the SHAPE test rejected it — raise or lower Pin Wick : Body. A triangle but no arrow means the shape was found and something else vetoed it. A ✕ narrows that further: the pin was in a zone, so the veto was the structure filter, the tests-per-zone cap, the leave-and-return rule, or the zone having been pushed out of the drawn five.\n\nNo ✕ and no arrow at a zone you were watching means price never actually traded inside the block the indicator holds — which is usually the answer, and not the one people expect.'
 zoneTestsTooltip                = 'How many separate returns to the same zone may print an arrow.\n\nEach return counts once: price has to leave the zone before coming back can count again. 1 is strict SMC — the first retest is the trade. 2 allows the common case where the first touch is a shallow wick and the real test comes after.\n\nBeyond that a zone is being worn out rather than defended, which is the opposite of the setup.'
 withTrendTooltip                = 'Only signal a demand zone while swing structure is bullish, and a supply zone while it is bearish.\n\nWITHOUT THIS you get short arrows into a rally, because a supply block forms above every impulse and price walks back into it on the way up. That is the trade this whole system measured as the worst one available: counter-trend entries came out at -0.588 R against +0.038 for the same construction with the trend, the single largest separation found anywhere in the research.\n\nTurn it off to see every zone touch regardless of direction.'
 dashTooltip                     = 'A small read-out of the current bias and the last event, for scanning many charts quickly. OFF by default so the chart looks exactly like the base indicator.'
@@ -226,6 +227,7 @@ rejectionModeInput              = input.string( REJ_PIN,    'Rejection Required'
 pinWickRatioInput               = input.float(  2.0,        'Pin Wick : Body',          group = ALERT_GROUP,    tooltip = pinRatioTooltip,  minval = 1.0, maxval = 6.0, step = 0.5)
 marubozuBodyInput               = input.float(  0.7,        'Confirm Body : Range',     group = ALERT_GROUP,    tooltip = marubozuTooltip,  minval = 0.4, maxval = 0.95, step = 0.05)
 showSetupBoxInput               = input(        true,       'Outline Zone Awaiting Retest', group = ALERT_GROUP, tooltip = setupBoxTooltip)
+showPinDebugInput               = input(        false,      'Show Every Pin Candle (debug)', group = ALERT_GROUP, tooltip = pinDebugTooltip)
 maxZoneTestsInput               = input.int(    2,          'Tests Allowed Per Zone',   group = ALERT_GROUP,    tooltip = zoneTestsTooltip, minval = 1, maxval = 5)
 showDashInput                   = input(        false,      'Show Status Read-out',     group = ALERT_GROUP,    tooltip = dashTooltip)
 
@@ -297,6 +299,11 @@ type alerts
     // listing the candidates.
     string demandPattern            = ''
     string supplyPattern            = ''
+    // DIAGNOSTIC — a pin printed INSIDE a live zone and no arrow came of it.
+    // Without this a missing arrow has two indistinguishable causes: the shape
+    // was never recognised, or it was recognised and something downstream
+    // vetoed it. They need completely different fixes.
+    bool pinVetoed                  = false
     // ADDED — A BREAK JUST CUT A ZONE AND THERE IS NOTHING TO DO YET. This is
     // the first half of the setup and it was never modelled: the old build
     // marked the break and marked the entry with the same weight, so a chart
@@ -884,14 +891,25 @@ touchOrderBlocks(bool internal = false) =>
                 eachOrderBlock.leftZone := true
                 eachOrderBlock.touched  := false
 
+            // THE PIN MODE USED TO ALSO DEMAND A CLOSE PAST THE ZONE MIDLINE
+            // AND THAT WAS AN INVENTED SECOND FILTER. The pin shape already
+            // says the body finished in the far half of ITS OWN range, which is
+            // the claim being made; stacking a zone-midline test on top vetoed
+            // perfectly good hammers that dipped into the lower part of a wide
+            // zone and closed inside it. The zone was still defended. All that
+            // is really required is that the candle did not close straight
+            // THROUGH the zone, which is what the test is now.
             bool pinNow = bull ? bullPin : bearPin
             // Named on the bar that carries the shape: the pin itself in the
             // one-bar modes, the PREVIOUS bar in the two-bar mode, since that
             // is where the pin was.
             string shapeNow = patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : ''
             string shapePrev = eachOrderBlock.pinAge == 2 ? (patHammer[2] ? 'hammer' : patHangingMan[2] ? 'hanging man' : patInvHammer[2] ? 'inverted hammer' : patShootingStar[2] ? 'shooting star' : '') : (patHammer[1] ? 'hammer' : patHangingMan[1] ? 'hanging man' : patInvHammer[1] ? 'inverted hammer' : patShootingStar[1] ? 'shooting star' : '')
-            bool oneBarFire = rejectionModeInput == REJ_ANY ? inNow : rejectionModeInput == REJ_CLOSE ? (inNow and (bull ? (close >= mid and close > open) : (close <= mid and close < open))) : rejectionModeInput == REJ_PIN ? (inNow and pinNow and (bull ? close > mid : close < mid)) : false
+            bool oneBarFire = rejectionModeInput == REJ_ANY ? inNow : rejectionModeInput == REJ_CLOSE ? (inNow and (bull ? (close >= mid and close > open) : (close <= mid and close < open))) : rejectionModeInput == REJ_PIN ? (inNow and pinNow and (bull ? close > eachOrderBlock.barLow : close < eachOrderBlock.barHigh)) : false
             bool fire = rejectionModeInput == REJ_CONFIRM ? twoBarFire : oneBarFire
+
+            if inNow and pinNow and not (fire and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
+                currentAlerts.pinVetoed := true
 
             if fire and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
                 eachOrderBlock.touched    := true
@@ -1345,6 +1363,19 @@ drawPremiumDiscountZones() =>
 parsedOpen  = showTrendInput ? open : na
 candleColor = internalTrend.bias == BULLISH ? swingBullishColor : swingBearishColor
 plotcandle(parsedOpen,high,low,close,color = candleColor, wickcolor = candleColor, bordercolor = candleColor)
+
+//---------------------------------------------------------------------------------------------------------------------}
+//PIN DIAGNOSTIC — off by default
+//---------------------------------------------------------------------------------------------------------------------{
+// A MISSING ARROW HAS TWO CAUSES THAT LOOK IDENTICAL ON A CHART: the shape was
+// never recognised, or it was recognised and something downstream vetoed it.
+// Guessing between them is how tuning goes wrong, so these make the difference
+// visible. plotshape rather than labels — there is no object budget to spend on
+// a diagnostic, and position plus colour already carry the full name.
+plotshape(showPinDebugInput and pinLower ? low  - atrMeasure * 0.9 : na, title = 'Pin · lower wick (hammer / hanging man)',        style = shape.triangleup,   location = location.absolute, color = candleGreen ? swingBullishColor : swingBearishColor, size = size.tiny)
+plotshape(showPinDebugInput and pinUpper ? high + atrMeasure * 0.9 : na, title = 'Pin · upper wick (inverted hammer / shooting star)', style = shape.triangledown, location = location.absolute, color = candleGreen ? swingBullishColor : swingBearishColor, size = size.tiny)
+plotshape(showPinDebugInput and currentAlerts.pinVetoed ? low - atrMeasure * 1.5 : na, title = 'Pin inside a zone that produced no arrow', style = shape.xcross, location = location.absolute, color = GRAY, size = size.tiny)
+//---------------------------------------------------------------------------------------------------------------------}
 
 if showHighLowSwingsInput or showPremiumDiscountZonesInput
     updateTrailingExtremes()
