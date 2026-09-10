@@ -125,6 +125,7 @@ tflabTooltip                    = 'Fires when price ENTERS the zone — the entr
 watchTooltip                    = 'A hollow dot where a break cut a zone, placed clear of the origin candle — below a demand zone, above a supply one.\n\nNOT AN ENTRY. It says the structure moved and a zone was left behind: mark it and wait. The dot is deleted the moment the zone is retested or price closes through it, so what stays on the chart is only what is still pending.'
 rejectionTooltip                = 'WHAT HAS TO HAPPEN AT THE ZONE BEFORE AN ARROW PRINTS.\n\nAny touch — price traded into the zone. TFlab\'s raw behaviour: earliest, and it fires on wicks that close straight through.\n\nClose back out — the bar closed on the better side of the zone midline. One bar, no shape required.\n\nPin bar — a real rejection candle. The rejecting wick is at least N times the body and the opposite wick is smaller. A LOWER wick is bullish and an UPPER wick bearish, whatever colour the body is: hammer and hanging man are the same lower-wick shape, inverted hammer and shooting star the same upper-wick one.\n\nPin + confirm — the pin, then proof the move was real, by EITHER route: an engulfing marubozu on the next bar, or a displacement gap the bar after that. Both say the same thing — price left decisively — and a gap needs one more bar to exist, which is why the window is two.\n\nNOTE THAT ACCEPTING THE GAP LOOSENS THIS MODE rather than tightening it: it is a second way to pass, not an extra hurdle.\n\nNONE OF THIS IS MEASURED. Candlestick patterns are the most-tested and most-consistently-empty thing in this literature. They will make the arrows match what you look for by eye; whether they raise R is open and can be run over the 333-day set.'
 pinRatioTooltip                 = 'How many times the body the rejecting wick must be.\n\n2 is the textbook hammer. 3 is a proper pin and roughly a third as many signals. Below 2 you are calling almost any bar with a wick a rejection.'
+acceptEngulfTooltip             = 'THIS IS NOT ONE OF THE TWELVE PATTERNS — it is an addition, and it is on by default because it is what the charts keep showing.\n\nEvery pattern in that list starts with a pin: a long wick doing the rejecting. But a zone can also be defended by BODY — price arrives, and the next candle simply engulfs the last one and closes hard away. No wick, no pin, and by the list nothing happened.\n\nWith this on, an engulfing marubozu inside a zone counts as a rejection on its own. Same test the confirmation candle uses: the body dominates its own range AND covers the previous body.\n\nTurn it off to run strictly to the twelve.'
 marubozuTooltip                 = 'How much of a confirmation candle\'s range must be body.\n\n0.7 is a strong candle; 0.85 is a strict marubozu with almost no wick. An engulfing of the pin\'s body also passes regardless of this, since the two say the same thing in different ways — a MARUBOZU IS NOT AN ENGULFING, one is a single-bar shape and the other a two-bar relation, and confirmation accepts either.'
 setupBoxTooltip                 = 'Outline the zone that is currently WAITING for its retest, so the live setup is separated from every other block on the chart.\n\nThe outline is removed the moment the zone is retested or price closes through it, which is what keeps the chart from filling up with dead levels.'
 zoneRejectTooltip               = 'A small triangle wherever a rejection candle prints INSIDE a live zone — below the bar for demand, above it for supply.\n\nNOT AN ENTRY, AND THE DIFFERENCE MATTERS. It has none of the entry gating: no leave-and-return test, no structure filter, no per-zone cap. It says only "the shape happened at the level". A zone\'s own formation candles will trip it, which is correct — those ARE rejections, they are just not retests.\n\nThe big arrow is the entry. This is what to read the chart by.'
@@ -229,6 +230,7 @@ signalWithTrendInput            = input(        true,       'Signals With Struct
 rejectionModeInput              = input.string( REJ_PIN,    'Rejection Required',       group = ALERT_GROUP,    tooltip = rejectionTooltip, options = [REJ_ANY, REJ_CLOSE, REJ_PIN, REJ_CONFIRM])
 pinWickRatioInput               = input.float(  2.0,        'Pin Wick : Body',          group = ALERT_GROUP,    tooltip = pinRatioTooltip,  minval = 1.0, maxval = 6.0, step = 0.5)
 marubozuBodyInput               = input.float(  0.7,        'Confirm Body : Range',     group = ALERT_GROUP,    tooltip = marubozuTooltip,  minval = 0.4, maxval = 0.95, step = 0.05)
+acceptEngulfInput               = input(        true,       'Engulfing Counts Without A Pin', group = ALERT_GROUP, tooltip = acceptEngulfTooltip)
 showSetupBoxInput               = input(        true,       'Outline Zone Awaiting Retest', group = ALERT_GROUP, tooltip = setupBoxTooltip)
 showZoneRejectInput             = input(        true,       'Mark Rejections At Zones ▲▼', group = ALERT_GROUP,  tooltip = zoneRejectTooltip)
 showPinDebugInput               = input(        false,      'Show Every Pin Candle (debug)', group = ALERT_GROUP, tooltip = pinDebugTooltip)
@@ -570,10 +572,6 @@ patShootingStar = pinUpper and candleRed
 patDragonfly    = pinLower and not candleGreen and not candleRed
 patGravestone   = pinUpper and not candleGreen and not candleRed
 
-// ONE NAMING CHAIN, AS A SERIES, so `pinName[1]` and `pinName[2]` reach back to
-// an earlier bar's shape. This existed as three copied ternaries in three
-// functions, which is how the doji hole survived in all of them at once.
-pinName = patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patDragonfly ? 'dragonfly doji' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : patGravestone ? 'gravestone doji' : ''
 
 // Standalone direction is the wick.
 bullPin = pinLower
@@ -588,6 +586,11 @@ bodyDominant = candleRng > 0 and candleBody >= marubozuBodyInput * candleRng
 engulfsPrior = candleBody >= math.abs(close[1] - open[1]) and math.max(close, open) >= math.max(close[1], open[1]) and math.min(close, open) <= math.min(close[1], open[1])
 bullConfirm  = candleGreen and bodyDominant and engulfsPrior
 bearConfirm  = candleRed   and bodyDominant and engulfsPrior
+
+// ONE NAMING CHAIN, AS A SERIES, so `pinName[1]` and `pinName[2]` reach back to
+// an earlier bar's shape. This existed as three copied ternaries in three
+// functions, which is how the doji hole survived in all of them at once.
+pinName = patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patDragonfly ? 'dragonfly doji' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : patGravestone ? 'gravestone doji' : (bullConfirm or bearConfirm) ? 'engulfing marubozu' : ''
 
 // DISPLACEMENT — the other way a rejection proves itself. A gap between the
 // bar before last and this one means price left so fast nothing traded in
@@ -934,7 +937,11 @@ touchOrderBlocks(bool internal = false) =>
             // zone and closed inside it. The zone was still defended. All that
             // is really required is that the candle did not close straight
             // THROUGH the zone, which is what the test is now.
-            bool pinNow = bull ? bullPin : bearPin
+            // A REJECTION IS BY WICK OR BY BODY. The twelve patterns all start
+            // with a pin, but a zone defended by a candle that simply engulfs
+            // the last one and closes hard away is the same event with the
+            // rejection expressed as body rather than wick.
+            bool pinNow = (bull ? bullPin : bearPin) or (acceptEngulfInput and (bull ? bullConfirm : bearConfirm))
             // Named on the bar that carries the shape: the pin itself in the
             // one-bar modes, the PREVIOUS bar in the two-bar mode, since that
             // is where the pin was.
@@ -966,9 +973,17 @@ touchOrderBlocks(bool internal = false) =>
             // A rejection shape landed in this zone and produced nothing. Name
             // the gate that stopped it, checked in the order they apply, so the
             // answer is on the chart rather than reconstructed afterwards.
-            if inNow and pinNow and not (fire and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
+            // THE BLIND SPOT THIS CLOSES. The ✕ used to require a shape, so the
+            // one case that produced NOTHING AT ALL — price sitting in a zone,
+            // moving the right way, and no shape qualifying — looked exactly
+            // like the indicator not seeing the zone. Those need opposite
+            // fixes and the chart could not tell them apart.
+            //
+            // Limited to bars that closed in the zone's direction, so a range
+            // inside a wide zone does not print a ✕ on every bar.
+            if inNow and (bull ? close > open : close < open) and not (fire and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
                 currentAlerts.pinVetoed := true
-                currentAlerts.vetoReason := (requireLeaveFirstInput and not eachOrderBlock.leftZone) ? 'price has not left this zone since it was cut — turn off Only After Price Leaves to signal formations too' : eachOrderBlock.touched ? 'this return already signalled — price has to leave the zone before it can count again' : eachOrderBlock.tests >= maxZoneTestsInput ? 'zone has used all ' + str.tostring(maxZoneTestsInput) + ' of its allowed tests' : 'the shape was found but the rejection test for this mode did not pass'
+                currentAlerts.vetoReason := not pinNow ? 'price is in this zone and moving the right way, but no rejection shape formed on this bar — lower Pin Wick : Body, or the move was not decisive enough to engulf' : (requireLeaveFirstInput and not eachOrderBlock.leftZone) ? 'price has not left this zone since it was cut — turn off Only After Price Leaves to signal formations too' : eachOrderBlock.touched ? 'this return already signalled — price has to leave the zone before it can count again' : eachOrderBlock.tests >= maxZoneTestsInput ? 'zone has used all ' + str.tostring(maxZoneTestsInput) + ' of its allowed tests' : 'the shape was found but the rejection test for this mode did not pass'
 
             if fire and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
                 eachOrderBlock.touched    := true
@@ -1327,7 +1342,7 @@ touchFairValueGaps() =>
             eachFairValueGap.leftZone := true
             eachFairValueGap.touched  := false
 
-        bool pinNow = bull ? bullPin : bearPin
+        bool pinNow = (bull ? bullPin : bearPin) or (acceptEngulfInput and (bull ? bullConfirm : bearConfirm))
         bool oneBarFire = rejectionModeInput == REJ_ANY ? inNow : rejectionModeInput == REJ_CLOSE ? (inNow and (bull ? (close >= math.avg(zTop, zBot) and close > open) : (close <= math.avg(zTop, zBot) and close < open))) : rejectionModeInput == REJ_PIN ? (inNow and pinNow and (bull ? close > zBot : close < zTop)) : false
         bool fire = rejectionModeInput == REJ_CONFIRM ? twoBarFire : oneBarFire
 
