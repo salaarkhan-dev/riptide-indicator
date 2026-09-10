@@ -5969,3 +5969,84 @@ trend. A 0.63 R separation — the largest number in this study by far, and it i
 grade.** Exactly the trap the control was built to catch.
 
 **Verdict: not adopted.** No second strategy here.
+
+---
+
+# PHASE A — the deployed model on 333 days. The edge does not survive.
+
+`research/studies/replicate.py` · 60 symbols · nothing tuned, nothing chosen
+
+The exchange caps a *response* at 2000 bars but serves any *window*. Paging back
+yields **333 days with no discontinuities**, ~3 seconds a symbol. It was
+available all along. Every study in this project ran on 42 days.
+
+### First, the validation — the deep pipeline reproduces the known number
+
+| Min30 confirmed, trailing window | bets | win | R/bet | SE | total R | R/DD |
+|---|---|---|---|---|---|---|
+| **last 42d** | 77 | **51%** | **+0.477** | 0.167 | +36.8 | 3.14 |
+| last 90d | 156 | 42% | +0.199 | 0.114 | +31.0 | 2.28 |
+| last 180d | 280 | 39% | +0.106 | 0.083 | +29.8 | 1.07 |
+| last 270d | 402 | 38% | +0.060 | 0.069 | +24.1 | 0.87 |
+| **last 333d** | 500 | **38%** | **+0.063** | 0.062 | +31.4 | 1.13 |
+
+The 42-day row matches the known figure (74 bets, 52%, +0.509) to within the
+window boundary. **The loader is sound, so the decay is real.**
+
+### The finding
+
+**+0.063 ± 0.062 R per bet over a year is one standard error from zero.**
+
+And total R barely moves down the ladder — +36.8 at 42 days against +31.4 at 333.
+**Essentially all of the past year's profit was made in the last six weeks; the
+preceding 291 days netted about −5 R.**
+
+| Min30 confirmed by quarter | bets | win | R/bet | total R |
+|---|---|---|---|---|
+| 2025Q4 | 123 | 37% | +0.058 | +7.1 |
+| 2026Q1 | 120 | 34% | −0.074 | −8.9 |
+| 2026Q2 | 139 | 35% | −0.008 | −1.1 |
+| **2026Q3** | 118 | **46%** | **+0.289** | **+34.1** |
+
+**Every study in this project was measured on the one quarter that worked.** The
+"held-out half" was held out *within* that quarter, so it was never out of
+sample in the way that matters.
+
+### Survivorship is NOT the explanation, which makes this worse
+
+| | bets | win | R/bet |
+|---|---|---|---|
+| Min30 confirmed · LONG | 267 | 38% | +0.081 |
+| Min30 confirmed · SHORT | 233 | 38% | +0.042 |
+
+Long minus short: **+0.039 R, +0.3 SE.** Symmetric. Walking today's most liquid
+coins back a year should have *flattered* the deep window, and it came back at
+zero anyway. The pre-registered warning was "a gain over 42 days is the bias
+talking" — there was no gain to explain away.
+
+### Three prior conclusions this overturns
+
+**1. "52% win rate, well above the ~35% break-even."** The real figure is **38%
+over a year, against a ~35% break-even.** Barely above water, not comfortably
+above it. That reassurance was drawn from the best quarter and was wrong.
+
+**2. "Take Min30 confirmed, not early."** Over 333 days: confirmed +0.063 ±
+0.062, early +0.028 ± 0.028. The difference is **+0.5 SE**. Confirmed still wins
+on R/DD (1.13 vs 0.88) and on traffic (1.5 vs 6.9 bets/day), which is a real
+reason to prefer it — but not the edge difference that was claimed.
+
+**3. "45 tests, one survivor, so the structural variations don't matter."** They
+were all measured inside one favourable quarter. That does not make them alive —
+it means the negatives were measured on the wrong window as well as an
+underpowered one.
+
+### What is actually true now
+
+The system is **marginal, not broken**: +31.4 R over 500 bets at R/DD 1.13,
+positive in three of the last four quarters by total R but negative in two of
+four by R per bet. At ~1.5 bets a day that is roughly +0.1 R a day, with a
+27.8 R drawdown to sit through.
+
+Whether Q3 is a better *regime* or the other three quarters are the truth is not
+answerable from one year of data. What is answerable: **the 52% / +0.5 R version
+of this system does not exist over a year.**
