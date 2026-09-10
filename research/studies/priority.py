@@ -47,6 +47,7 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 import research.env  # noqa: F401  (must precede riptide.config)
 
 import asyncio                                          # noqa: E402
+import math                                             # noqa: E402
 import json                                             # noqa: E402
 import os                                               # noqa: E402
 import statistics                                       # noqa: E402
@@ -177,6 +178,73 @@ def cluster_panel(title, rows, days):
               f"{' THIN' if len(sub) < 40 else ''}")
 
 
+def traffic(title, rows, days, tfs, kinds, grade="B"):
+    """How many SEPARATE bets a policy actually offers, and how they arrive.
+
+    "Separate" means a distinct candle close. Two confirmed alerts on the same
+    30m close are one bet however many symbols printed it; two on consecutive
+    closes are two, however close together they feel. That is the unit a person
+    can act on, and it is the number that decides whether a policy is a product
+    or a curiosity.
+
+    THE DAILY DISTRIBUTION MATTERS AS MUCH AS THE MEAN. A policy averaging two
+    bets a day made of quiet weeks and busy Tuesdays is a different thing to
+    live with than one that reliably offers two, and only the histogram
+    separates them.
+    """
+    sub = keep(rows, tfs, kinds, grade)
+    if not sub:
+        print(f"\n{title}: nothing")
+        return
+    bets = clusters(sub)
+    byday = {}
+    for b in bets:
+        byday[int(b.t // 86400)] = byday.get(int(b.t // 86400), 0) + 1
+    counts = sorted(byday.values())
+    sizes = {}
+    for x in sub:
+        sizes[(x.tf, x.t)] = sizes.get((x.tf, x.t), 0) + 1
+    bundles = sorted(sizes.values())
+
+    wsig, spansig = worst_streak(sub)
+    wbet, spanbet = worst_streak(bets)
+    msig, sesig = mean_se([x.r for x in sub])
+    mbet, sebet = mean_se([x.r for x in bets])
+
+    print(f"\n{title}")
+    print(f"  alerts                {len(sub):>6}   "
+          f"{len(sub) / days:>5.1f} / day")
+    print(f"  SEPARATE BETS         {len(bets):>6}   "
+          f"{len(bets) / days:>5.1f} / day   "
+          f"(one per candle close, however many symbols)")
+    print(f"  active days           {len(byday):>6}   "
+          f"of {days:.0f} days in the window had at least one bet")
+    print(f"  bets on an active day        median {statistics.median(counts):>3.0f}"
+          f" · busiest {counts[-1]}")
+    print(f"  symbols per bet              median "
+          f"{statistics.median(bundles):>3.0f} · biggest bundle {bundles[-1]}")
+    print(f"  win rate              per alert {sum(1 for x in sub if x.r > 0) / len(sub):>4.0%}"
+          f"   ·  per bet {sum(1 for x in bets if x.r > 0) / len(bets):>4.0%}")
+    print(f"  R                     per alert {msig:>+6.3f} (SE {sesig:.3f})"
+          f"  ·  per bet {mbet:>+6.3f} (SE {sebet:.3f})")
+    # A streak is only readable next to what chance alone produces at this
+    # win rate and this many bets: log(n) / -log(loss rate).
+    wr = sum(1 for x in bets if x.r > 0) / len(bets)
+    exp = (math.log(len(bets)) / -math.log(1 - wr)) if 0 < wr < 1 else 0
+    print(f"  worst losing run      {wsig:>3} alerts in {spansig:>5.1f}h"
+          f"   ·  {wbet:>3} bets in {spanbet:>5.1f}h "
+          f"({spanbet / 24:.1f} days)")
+    print(f"  chance alone would give        {exp:>4.1f} bets in a row at this "
+          f"win rate over {len(bets)} bets")
+    gaps = sorted((b.t - a.t) / 86400
+                  for a, b in zip(sorted(bets, key=lambda z: z.t),
+                                  sorted(bets, key=lambda z: z.t)[1:]))
+    if gaps:
+        print(f"  wait between bets     median "
+              f"{gaps[len(gaps) // 2] * 24:>4.1f}h · longest quiet stretch "
+              f"{gaps[-1]:.1f} days")
+
+
 FIELDS = ("tf", "kind", "r", "filled", "poi", "grade", "t", "risk", "half")
 
 
@@ -227,10 +295,15 @@ async def main():
                   rows, days)
     cluster_panel("SAME-CLOSE ALERTS AS ONE BET — HELD OUT (older half)",
                   [x for x in rows if x.half == "held"], days / 2)
+    traffic("HOW MANY SEPARATE BETS — Min30 CONFIRMED", rows, days,
+            ("Min30",), ("confirmed",))
+    traffic("HOW MANY SEPARATE BETS — Min30 + Min15 CONFIRMED", rows, days,
+            ("Min30", "Min15"), ("confirmed",))
+    traffic("for comparison — EVERYTHING now sent", rows, days,
+            ("Min30", "Min15"), ("early", "confirmed"))
     print(f"\nHOW ORDINARY A LOSING RUN IS, at each win rate:")
     print(f"  {'win rate':<12}{'P(6 losses in a row)':>24}"
           f"{'expected worst run in 50 trades':>34}")
-    import math
     for w in (0.30, 0.35, 0.38, 0.42, 0.50):
         p6 = (1 - w) ** 6
         exp = math.log(50) / -math.log(1 - w)

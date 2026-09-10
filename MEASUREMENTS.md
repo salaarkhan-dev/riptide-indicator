@@ -5706,3 +5706,41 @@ above understates how ordinary that run was.
 Each collection costs minutes of API traffic for a table that prints instantly,
 and — more to the point — every policy is now read off **exactly the same
 sample** rather than a fresh one that quietly moved between questions.
+
+### How many separate bets, and what the losing runs really look like
+
+"Separate" means a distinct candle close. Two confirmed alerts on the same 30m
+close are **one** bet however many symbols printed it; two on consecutive
+closes are **two**, however close together they feel.
+
+| | Min30 confirmed | Min30+Min15 confirmed | everything (deployed) |
+|---|---|---|---|
+| alerts / day | 2.0 | 4.0 | 31.0 |
+| **separate bets / day** | **1.8** | **3.5** | 16.0 |
+| days with at least one bet | 29 of 42 | 30 of 42 | 42 of 42 |
+| bets on an active day | median 3, busiest 6 | median 4, busiest 13 | median 11, busiest 37 |
+| symbols per bet | median 1, biggest 3 | median 1, biggest 5 | median 1, biggest 18 |
+| **win rate per bet** | **52%** | 47% | 42% |
+| R per bet | +0.509 (SE 0.172) | +0.346 (SE 0.121) | +0.087 (SE 0.051) |
+| **worst losing run** | **10 bets over 3.4 days** | 5 bets over 14.5h | 19 bets over 13.2h |
+| chance alone would give | 5.8 | 7.9 | 12.1 |
+| wait between bets | median 6.5h, longest quiet 4.5 days | median 2.8h | median 0.8h |
+
+**Min30 confirmed is roughly two separate bets a day, and a third of days have
+none at all.** The longest quiet stretch in 42 days was 4.5 days with nothing.
+That is the real cost of the win rate, and it is not small: a policy that is
+silent for most of a week is a different thing to sit with than one firing
+every 45 minutes.
+
+**The best cell still produced a ten-bet losing run.** Ten in a row at a 52%
+win rate over 73 bets is well past the 5.8 that chance alone would give — a
+small-sample tail rather than a broken cell, but the honest reading is that
+**confirmed-only reduces how often a bad run happens; it does not remove it.**
+Unlike the deployed stream's runs, this one was spread over **3.4 days**, so
+those were ten genuinely separate decisions rather than one market move.
+
+Worth noting against the earlier ranking: adding Min15 confirmed *shortens* the
+worst run (10 bets to 5) and doubles the traffic, at the cost of five points of
+win rate. Neither difference clears its own error bar, which is the point —
+these two cells are not distinguishable on 42 days of data, and the choice
+between them is about how many trades a week you want, not about edge.
