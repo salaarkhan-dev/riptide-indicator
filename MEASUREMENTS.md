@@ -5895,3 +5895,77 @@ The exit has now been moved by a fixed multiple (25 policies), by a break-even
 rule, by a partial, by a structural trail, and by the chart's own liquidity. All
 five families lose to plain 2R. **The exit is not where the remaining headroom
 is, and this was the last untested way in.**
+
+---
+
+## FVG continuation — a second strategy, tested against its own control
+
+`research/studies/fvg_continuation.py` · 60 symbols · Hour8 trend must agree · target 2R
+
+Everything tested in this project until now is the same trade: liquidity raided,
+structure shifts, price returns to a gap. This is a different model — no sweep,
+no pool, no shift. A displacement with the higher-timeframe trend leaves a gap,
+price retraces into it, you go with the trend.
+
+**The trap was designed for in advance.** "Enter with the Hour8 trend" is already
+the strongest filter in this system, so a continuation model will look
+profitable for reasons that are already deployed. Every arm therefore sits
+against a **control**: a limit half an ATR below the close with the stop an ATR
+under it, on bars sampled from the same trending population, no gap required. If
+the gap cannot beat that, the gap is decoration.
+
+### Min30, held out (42 days)
+
+| arm | bets/day | risk | win | R/bet | vs CONTROL |
+|---|---|---|---|---|---|
+| gap ≥ 0.05 ATR *(engine default)* | 44.5 | 0.33% | 21% | −0.569 | −12.2 SE |
+| gap ≥ 0.25 ATR | 37.3 | 0.49% | 39% | −0.141 | −1.7 SE |
+| gap ≥ 0.50 ATR | 27.4 | 0.66% | 38% | −0.110 | −0.9 SE |
+| **gap ≥ 0.25 ATR, stop under leg** | 37.3 | 1.19% | 44% | +0.038 | **+2.0 SE** |
+| counter-trend gaps *(the mirror)* | 44.9 | 0.34% | 21% | −0.588 | −12.8 SE |
+| CONTROL: any dip in the trend | 4.7 | 0.81% | 46% | −0.059 | — |
+
+### Verdict: 1 of 3 conditions, marginally, and it fails the strongest one
+
+**PRIMARY — beat the control held out by 2 SE:** passes at *exactly* +2.0 SE with
+fees, **+1.7 SE without them**. Sitting on the threshold, and flattered by the
+fee.
+
+**SECOND — reproduce on Hour4 (333 days):** **FAILS.** The same arm is +0.035 at
+**+0.4 SE**, with or without fees. This check has now killed three candidates in
+a row.
+
+**THIRD — overlap with the deployed model:** 32% on Min30 and **57% on Hour4**.
+On the longer sample more than half of these "new" signals land within three
+bars of one the engine already sends. It is not an independent second stream.
+
+**And it is untradeable as specified: 37 bets a day**, against 1.8 for Min30
+confirmed. Twenty times the traffic for +0.038 R.
+
+### What actually moved the numbers, and it was not the gap
+
+The same signals, the same entries, differing only in where the stop goes:
+
+| gap ≥ 0.25 ATR, Min30 held out | risk | win | R/bet |
+|---|---|---|---|
+| stop at the gap's far edge | 0.49% | 39% | −0.141 |
+| stop under the whole leg | 1.19% | 44% | **+0.038** |
+
+**+0.18 R from the stop alone**, and at zero fees still +0.108 — so roughly 40%
+of it is fees and 60% is real. The gap filter moves R by a fraction of that.
+
+This is the **fourth** time the risk distance has turned out to dominate the
+entry logic in this project, and it is the clearest statement of it: across
+every study here, *how far the stop sits* has mattered more than *where the
+entry is chosen*. The near-zero-risk arms are the proof — a 0.05 ATR gap puts
+the stop 0.33% away, where a 0.032% round trip is a large fraction of R, and the
+convexity of fee-in-R does the rest.
+
+### The counter-trend mirror is the deployed filter, restated
+
+Counter-trend gaps run −0.588 against +0.038 for the same construction with the
+trend. A 0.63 R separation — the largest number in this study by far, and it is
+**the Hour8 trend filter that is already deployed and already required by the
+grade.** Exactly the trap the control was built to catch.
+
+**Verdict: not adopted.** No second strategy here.
