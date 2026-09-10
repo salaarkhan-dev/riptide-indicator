@@ -563,6 +563,18 @@ patHangingMan   = pinLower and candleRed
 patInvHammer    = pinUpper and candleGreen
 patShootingStar = pinUpper and candleRed
 
+// A CANDLE THAT CLOSES EXACTLY ON ITS OPEN IS NEITHER GREEN NOR RED, and the
+// four names above all require one or the other — so a doji-bodied pin matched
+// nothing and came back unnamed. It is also the PUREST form of the shape: all
+// wick, no body at all. Classical naming has words for both.
+patDragonfly    = pinLower and not candleGreen and not candleRed
+patGravestone   = pinUpper and not candleGreen and not candleRed
+
+// ONE NAMING CHAIN, AS A SERIES, so `pinName[1]` and `pinName[2]` reach back to
+// an earlier bar's shape. This existed as three copied ternaries in three
+// functions, which is how the doji hole survived in all of them at once.
+pinName = patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patDragonfly ? 'dragonfly doji' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : patGravestone ? 'gravestone doji' : ''
+
 // Standalone direction is the wick.
 bullPin = pinLower
 bearPin = pinUpper
@@ -926,8 +938,8 @@ touchOrderBlocks(bool internal = false) =>
             // Named on the bar that carries the shape: the pin itself in the
             // one-bar modes, the PREVIOUS bar in the two-bar mode, since that
             // is where the pin was.
-            string shapeNow = patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : ''
-            string shapePrev = eachOrderBlock.pinAge == 2 ? (patHammer[2] ? 'hammer' : patHangingMan[2] ? 'hanging man' : patInvHammer[2] ? 'inverted hammer' : patShootingStar[2] ? 'shooting star' : '') : (patHammer[1] ? 'hammer' : patHangingMan[1] ? 'hanging man' : patInvHammer[1] ? 'inverted hammer' : patShootingStar[1] ? 'shooting star' : '')
+            string shapeNow  = pinName
+            string shapePrev = eachOrderBlock.pinAge == 2 ? pinName[2] : pinName[1]
             bool oneBarFire = rejectionModeInput == REJ_ANY ? inNow : rejectionModeInput == REJ_CLOSE ? (inNow and (bull ? (close >= mid and close > open) : (close <= mid and close < open))) : rejectionModeInput == REJ_PIN ? (inNow and pinNow and (bull ? close > eachOrderBlock.barLow : close < eachOrderBlock.barHigh)) : false
             bool fire = rejectionModeInput == REJ_CONFIRM ? twoBarFire : oneBarFire
 
@@ -1323,7 +1335,7 @@ touchFairValueGaps() =>
             eachFairValueGap.touched := true
             eachFairValueGap.tests   += 1
             eachFairValueGap.pinAge  := 0
-            string nm = rejectionModeInput != REJ_CONFIRM ? (patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : '') : (patHammer[1] ? 'hammer' : patHangingMan[1] ? 'hanging man' : patInvHammer[1] ? 'inverted hammer' : patShootingStar[1] ? 'shooting star' : '')
+            string nm = rejectionModeInput != REJ_CONFIRM ? pinName : confirmGap ? pinName[2] : pinName[1]
             if bull
                 currentAlerts.demandFvgTouch := true
                 currentAlerts.demandPattern  := nm + (nm != '' and rejectionModeInput == REJ_CONFIRM ? (confirmGap ? ' + displacement gap' : ' + green marubozu') : '') + (nm != '' ? ' at an FVG' : 'FVG')
@@ -1338,7 +1350,10 @@ touchFairValueGaps() =>
             eachFairValueGap.pinAge := (inNow and pinAny and (eachFairValueGap.leftZone or not requireLeaveFirstInput) and not eachFairValueGap.touched and eachFairValueGap.tests < maxZoneTestsInput) ? 1 : eachFairValueGap.pinAge == 1 ? 2 : 0
 
         if (inNow and pinNow) or twoBarFire
-            currentAlerts.zoneRejectAge := pinNow ? 0 : confirmGap ? 2 : 1
+            currentAlerts.zoneRejectAge  := pinNow ? 0 : confirmGap ? 2 : 1
+            // This line was simply missing, so every rejection at a gap came
+            // back with no pattern name on it.
+            currentAlerts.zoneRejectName := (pinNow ? pinName : confirmGap ? pinName[2] : pinName[1]) + ' at an FVG'
             currentAlerts.zoneRejectTop := zTop
             currentAlerts.zoneRejectBot := zBot
             if bull
@@ -1772,7 +1787,7 @@ if showZoneRejectInput and (currentAlerts.zoneRejectBull or currentAlerts.zoneRe
          color = rjDown ? swingBearishColor : swingBullishColor,
          style = rjDown ? label.style_triangledown : label.style_triangleup,
          size = size.tiny,
-         tooltip = eventTooltip((rjDown ? 'Rejection at supply' : 'Rejection at demand') + (currentAlerts.zoneRejectName != '' ? '  ·  ' + currentAlerts.zoneRejectName : ''), close, (na(currentAlerts.zoneRejectTop) ? '' : 'zone  ' + str.tostring(currentAlerts.zoneRejectBot, format.mintick) + ' – ' + str.tostring(currentAlerts.zoneRejectTop, format.mintick) + '\n') + 'shape only — not the retest entry'))
+         tooltip = eventTooltip((rjDown ? 'Rejection at supply' : 'Rejection at demand') + (currentAlerts.zoneRejectName != '' ? '  ·  ' + currentAlerts.zoneRejectName : ''), close, (na(currentAlerts.zoneRejectTop) ? '' : 'zone  ' + str.tostring(currentAlerts.zoneRejectBot, format.mintick) + ' – ' + str.tostring(currentAlerts.zoneRejectTop, format.mintick) + '\n') + (currentAlerts.vetoReason != '' ? 'no entry: ' + currentAlerts.vetoReason : 'shape only — see the arrow for the entry')))
 
 if showPinDebugInput and currentAlerts.pinVetoed
     label.new(chart.point.new(time, na, low - atrMeasure * 1.5), '', xloc.bar_time,
