@@ -6266,3 +6266,54 @@ ships is the count — `⚖ 3 longs already open` — drawn from the reader's ow
 journal, so they can hold a risk budget across the book rather than per alert.
 Information, with the measurement behind it in `/legend`, and explicitly not a
 filter, because the data says a later position is not a worse bet.
+
+## What actually discriminates between the alerts you receive
+
+Three things printed on every alert, measured over 333 days on the deep window.
+
+### Risk % — the best candidate found in this project since the volume gate
+
+| Min30 confirmed, by risk % | bets | win | R/bet | SE |
+|---|---|---|---|---|
+| tightest quarter, <1.21% | 145 | 35% | −0.024 | 0.117 |
+| **1.21 – 1.72%** | 139 | **43%** | **+0.188** | 0.120 |
+| **1.72 – 2.59%** | 127 | **43%** | **+0.185** | 0.124 |
+| widest quarter, >2.59% | 137 | **26%** | **−0.210** | 0.107 |
+
+An inverted U: **the middle half beats the two extremes by +0.318 R at +2.7 SE.**
+Both tails have a mechanism — a tight stop pays a large fee as a fraction of R
+(the convexity that has now appeared five times), and a very wide stop means the
+raid itself was violent, which is a move continuing rather than exhausting.
+
+**By quarter: +0.7, +3.3, +1.8, −0.4 SE — the sign holds in 3 of 4.** It is
+*absent in 2026Q3*, the one quarter that paid, and present in the three that did
+not. That is the opposite of every variable killed earlier today, all of which
+lived in Q3 alone.
+
+**What holds it back, stated plainly:**
+- **It does not appear in the early stream at all** — −0.0 SE overall, quarters
+  −0.4, −0.2, +1.5, −1.0. A fee-and-continuation mechanism should show in both.
+- Six comparisons were made (three variables × two signal types) and this is the
+  best. Corrected for that, 2.7 SE is around p ≈ 0.04.
+- The circular-shift null has not been run on it.
+
+**Status: the most promising thing on the alert, not a rule.** It is reported so
+a reader can weight by it, not gated.
+
+### The other two are nothing
+
+| Min30 confirmed | R/bet | |
+|---|---|---|
+| Day pool | +0.111 (61) | vs Pivot +0.043 (456) — +0.4 SE |
+| swings in the pool | 1: +0.111 · 2: +0.071 · 3: +0.046 · 4+: +0.075 | flat |
+
+Swings are flat on confirmed and non-monotone on early (2 swings −0.031, 3
+swings +0.118), which is the same verdict `pivot_filter.py` reached by a much
+longer route. Pool source repeats the 42-day finding at the same non-significance.
+
+### The grade letter carries no information right now
+
+`GRADES` gives A to (confirmed, POI, trend agrees) and B to (early, POI, trend
+agrees). With POI required and the floor at B, a trend disagreement drops either
+kind to C and it is never sent. **So every alert sent is A if confirmed and B if
+early** — the letter and the ★ are the same fact twice.
