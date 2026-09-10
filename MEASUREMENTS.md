@@ -5590,3 +5590,106 @@ resolves to **C** unless `riptide.conf` is loaded — so the first run reported
 grade C results under a grade B heading. Both now interpolate the same
 constant. It is the same class of defect this project keeps finding in other
 people's indicators: a label that can disagree with the filter it describes.
+
+---
+
+## Which alerts to actually take — and why five losses in a row is not a broken system
+
+`research/studies/priority.py` · 60 symbols · 42 days · POI required · grade B+
+
+Two things prompted this: a real run of five or six trades taken and all lost,
+and the reader's own proposal to **give priority to 30m confirmed because it
+wins more often**.
+
+The proposal is right, and it is right for a reason worth stating. Every
+earlier attempt in this project to raise the win rate moved the **exit** —
+partials, break-even, nearer targets — and `exit_grid.py` showed what that buys:
+65% wins for −3% return, or 39% wins for +20%. The win rate is a dial the exit
+sets, and turning it does not make money. **Selecting a better cell is a
+different mechanism**: it takes fewer trades from a population that genuinely
+wins more often, and nothing about the exit changes.
+
+### The alerts are not independent bets, and that is the real finding
+
+The first pass reported a worst losing run of **13 straight losses** for a cell
+winning 50% of the time. A binomial says that should essentially never happen
+over 82 trades, so the streak column got a second column — how long the run
+took:
+
+| stream | worst losing run | spanning |
+|---|---|---|
+| everything sent (deployed) | **40 losses** | **12.0 hours** |
+| everything sent, held out | 24 losses | **3.8 hours** |
+| Min30 confirmed only | 13 losses | 88.5 hours |
+
+**Twenty-four consecutive losers inside 3.8 hours is not twenty-four bets that
+went wrong. It is one market event that fired two dozen alerts at once.** When
+the whole book turns over together, every open position loses together — so
+counting them as separate trades makes the streak, the sample size and the
+standard error all fiction.
+
+So every policy is also reported with **same-close alerts averaged into one
+bet**, which is what the breadth line on the alert has been asking the reader
+to do since it shipped. That is a re-framing rather than an independent
+confirmation — it was introduced after seeing the per-signal table — but it is
+applied uniformly and both views agree on the split that matters.
+
+### Held out, as one bet per close
+
+| policy | bets | /day | win | R/bet | SE | total R | maxDD | R/DD | worst run |
+|---|---|---|---|---|---|---|---|---|---|
+| everything (deployed) | 316 | 15.2 | 38% | +0.024 | 0.075 | +7.5 | 21.5 | 0.35 | 11 |
+| **confirmed only, both TFs** | 59 | 2.8 | **49%** | **+0.411** | 0.193 | **+24.2** | **4.2** | **5.71** | **4** |
+| Min30 confirmed only | 23 | 1.1 | 61% | +0.801 | 0.315 | +18.4 | 3.1 | 5.99 | 3 |
+| Min15 confirmed only | 36 | 1.7 | 42% | +0.162 | 0.239 | +5.8 | 4.2 | 1.37 | 4 |
+| Min30 **early** only | 152 | 7.3 | 34% | **−0.072** | 0.107 | **−11.0** | 17.5 | −0.63 | 10 |
+| Min15 early only | 150 | 7.2 | 39% | +0.055 | 0.108 | +8.3 | 23.9 | 0.35 | 11 |
+
+**The confirmed stream made +24.2 R held out. The early stream lost 16.7 R of
+it back.** Early signals are 88% of everything that reaches the phone and they
+are worth approximately nothing out of sample — Min30 early is outright
+negative on both the per-signal and the per-bet view.
+
+Taking confirmed only also cuts the worst losing run from **11 to 4**.
+
+### Grade A is the same filter, arrived at from the other side
+
+`GRADES` gives A to `(confirmed, POI, trend agrees)`. Since POI is already
+required and a trend disagreement drops a confirmed setup to C, **every
+confirmed alert that clears the deployed grade B floor is already a grade A**.
+The two rows are identical in every panel, which also answers the open question
+left by `min15_worth.py`: "Min15 at grade A only" *is* Min15 confirmed, and it
+is the weaker half of the pair.
+
+### What this does and does not license
+
+**Does:** take confirmed setups, both timeframes, and treat every alert sharing
+one candle close as a single bet sized once.
+
+**Does not:** the held-out confirmed sample is **59 bets**, +0.411 ± 0.193 —
+about 2 SE from zero. Suggestive, not settled. The R/DD of 5.71 rests on a 4.2 R
+drawdown observed over 21 days, and a small drawdown over a short window is
+mostly luck; it will get worse. Narrowing further to **Min30 confirmed alone**
+is where the numbers point, but 23 held-out bets cannot carry that decision,
+and Min15 confirmed is positive there too.
+
+### On the losing run itself
+
+| win rate | P(6 losses in a row) | expected worst run in 50 trades |
+|---|---|---|
+| 35% | 7.5% | 9.1 |
+| 38% | 5.7% | 8.2 |
+| 50% | 1.6% | 5.6 |
+
+Six straight losses is not evidence of a broken system at any of these rates —
+it is what the deployed win rate looks like from the inside, several times a
+year. The clustering makes it likelier still: five or six trades taken from one
+session are close to **one bet placed five or six times**, and the arithmetic
+above understates how ordinary that run was.
+
+### A caching change, so the window stops moving
+
+`gather()` writes the collected rows to `RIPTIDE_ROW_CACHE` and reloads them.
+Each collection costs minutes of API traffic for a table that prints instantly,
+and — more to the point — every policy is now read off **exactly the same
+sample** rather than a fresh one that quietly moved between questions.
