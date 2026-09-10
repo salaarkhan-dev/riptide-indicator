@@ -1,0 +1,96 @@
+CHOOSING SYMBOLS
+333 days · 60 symbols · features from the trailing 240 bars, strictly before each signal
+boot [ , ] is the 5th-95th percentile over 4000 resamples OF THE UNIVERSE.
+OK marks a cell whose 5th percentile is above zero.
+
+==============================================================================
+1. DOES A SYMBOL RANKING PERSIST? — the test that decides whether a
+   'best symbols' list can be shipped at all
+==============================================================================
+
+ALL tradeable signals  (the biggest sample there is)
+  59 symbols with 6+ trades in each half, split at the median signal time
+  H1-best half   -> H2  +0.038 R/trade over 1039 trades
+  H1-worst half  -> H2  +0.042 R/trade over 1108 trades
+  the ranking is worth  -0.004 R/trade in the half it could not see
+  shuffled-ranking null: |diff| p95 0.154, max 0.281   ->  RANKING IS NOISE
+  Spearman rank correlation H1 vs H2  +0.129   (0 means last year's leaderboard tells you nothing)
+
+CONFIRMED only
+  35 symbols with 4+ trades in each half, split at the median signal time
+  H1-best half   -> H2  +0.059 R/trade over 102 trades
+  H1-worst half  -> H2  -0.000 R/trade over 103 trades
+  the ranking is worth  +0.059 R/trade in the half it could not see
+  shuffled-ranking null: |diff| p95 0.384, max 0.574   ->  RANKING IS NOISE
+  Spearman rank correlation H1 vs H2  +0.146   (0 means last year's leaderboard tells you nothing)
+
+CONFIRMED, stop 1.2-2.6%  (the survivor)
+  14 symbols with 3+ trades in each half, split at the median signal time
+  H1-best half   -> H2  +0.535 R/trade over 33 trades
+  H1-worst half  -> H2  +0.021 R/trade over 30 trades
+  the ranking is worth  +0.514 R/trade in the half it could not see
+  shuffled-ranking null: |diff| p95 0.895, max 1.465   ->  RANKING IS NOISE
+  Spearman rank correlation H1 vs H2  +0.178   (0 means last year's leaderboard tells you nothing)
+
+==============================================================================
+2. EX-ANTE PROPERTIES — knowable before the year starts, so a filter
+   built on one of these can generalise
+==============================================================================
+
+-- ALL tradeable  (4230 trades with features)
+  realised volatility, terciles at 0.65% and 0.97% median true range per bar
+    calm                     1411 tr  952 bets  51 sym  37% win  +0.026±0.044  boot [-0.035, +0.078]       +53.8 R
+    middle                   1410 tr  920 bets  56 sym  36% win  +0.018±0.044  boot [-0.048, +0.064]        -1.2 R
+    wild                     1409 tr 1034 bets  59 sym  36% win  +0.001±0.042  boot [-0.046, +0.049]       +51.7 R
+  turnover, terciles at 109,890 and 662,677 USDT per bar  (5M and 32M a day)
+    thin                     1411 tr 1080 bets  41 sym  38% win  +0.078±0.042  boot [+0.011, +0.126]  OK   +97.6 R
+    middle                   1410 tr 1016 bets  48 sym  37% win  +0.012±0.042  boot [-0.034, +0.066]       +47.2 R
+    deep                     1409 tr  986 bets  42 sym  35% win  -0.040±0.043  boot [-0.101, +0.024]       -40.5 R
+  meme label (9 symbols, listed in the docstring)
+    meme                      664 tr  517 bets   9 sym  36% win  -0.021±0.059  boot [-0.068, +0.038]        +7.2 R
+    not meme                 3566 tr 2145 bets  51 sym  36% win  +0.034±0.029  boot [-0.012, +0.068]       +97.0 R
+
+-- CONFIRMED  (600 trades with features)
+  realised volatility, terciles at 0.67% and 0.98% median true range per bar
+    calm                      201 tr  184 bets  47 sym  38% win  +0.066±0.103  boot [-0.085, +0.207]       +13.2 R
+    middle                    200 tr  178 bets  55 sym  34% win  -0.032±0.102  boot [-0.152, +0.091]        -9.7 R
+    wild                      199 tr  183 bets  50 sym  36% win  +0.040±0.103  boot [-0.055, +0.132]       +10.4 R
+  turnover, terciles at 114,764 and 776,382 USDT per bar  (6M and 37M a day)
+    thin                      201 tr  193 bets  35 sym  36% win  +0.060±0.101  boot [-0.056, +0.165]        +7.2 R
+    middle                    200 tr  178 bets  44 sym  34% win  -0.026±0.103  boot [-0.170, +0.120]        -2.1 R
+    deep                      199 tr  175 bets  34 sym  37% win  +0.059±0.104  boot [-0.064, +0.179]        +8.8 R
+  meme label (9 symbols, listed in the docstring)
+    meme                      101 tr   93 bets   9 sym  44% win  +0.149±0.148  boot [+0.029, +0.324]  OK   +24.2 R
+    not meme                  499 tr  425 bets  51 sym  34% win  +0.037±0.067  boot [-0.068, +0.106]       -10.3 R
+
+-- SURVIVOR cell  (310 trades with features)
+  realised volatility, terciles at 0.72% and 0.95% median true range per bar
+    calm                      104 tr   99 bets  42 sym  39% win  +0.085±0.140  boot [-0.090, +0.258]        +7.8 R
+    middle                    103 tr   92 bets  50 sym  40% win  +0.146±0.147  boot [-0.027, +0.319]       +11.8 R
+    wild                      103 tr   92 bets  43 sym  46% win  +0.322±0.153  boot [+0.117, +0.499]  OK   +35.0 R
+  turnover, terciles at 113,136 and 642,089 USDT per bar  (5M and 31M a day)
+    thin                      104 tr  101 bets  32 sym  45% win  +0.327±0.146  boot [+0.095, +0.495]  OK   +29.9 R
+    middle                    103 tr   92 bets  35 sym  40% win  +0.130±0.149  boot [-0.031, +0.277]       +13.1 R
+    deep                      103 tr   87 bets  27 sym  40% win  +0.170±0.149  boot [-0.041, +0.362]       +11.6 R
+  meme label (9 symbols, listed in the docstring)
+    meme                       55 tr   52 bets   9 sym  56% win  +0.531±0.205  boot [+0.400, +0.743]  OK   +32.8 R
+    not meme                  255 tr  219 bets  48 sym  38% win  +0.123±0.094  boot [-0.032, +0.251]       +21.8 R
+
+==============================================================================
+3. THE SAME AXES, ONE HALF AT A TIME — an effect that is a property
+   of the symbol holds its sign in both halves. One that flips is a
+   period, and shipping it buys the last six months.
+==============================================================================
+
+  ALL tradeable: volatility       H1 wild-calm  -0.029 (1410)  H2 wild-calm  -0.002 (1409)   HOLDS
+  ALL tradeable: turnover         H1 deep-thin  -0.178 (1410)  H2 deep-thin  -0.047 (1410)   HOLDS
+  ALL tradeable: meme             H1 meme-othe  -0.208 (2115)  H2 meme-othe  +0.080 (2115)   FLIPS
+
+  CONFIRMED: volatility           H1 wild-calm  +0.339 (199)  H2 wild-calm  -0.284 (201)   FLIPS
+  CONFIRMED: turnover             H1 deep-thin  -0.347 (199)  H2 deep-thin  +0.206 (201)   FLIPS
+  CONFIRMED: meme                 H1 meme-othe  -0.162 (299)  H2 meme-othe  +0.247 (301)   FLIPS
+
+  SURVIVOR cell: volatility       H1 wild-calm  +0.300 (103)  H2 wild-calm  +0.298 (104)   HOLDS
+  SURVIVOR cell: turnover         H1 deep-thin  -0.313 (103)  H2 deep-thin  +0.014 (104)   FLIPS
+  SURVIVOR cell: meme             H1 meme-othe  +0.171 (154)  H2 meme-othe  +0.543 (156)   HOLDS
+
