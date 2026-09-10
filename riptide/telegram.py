@@ -371,93 +371,36 @@ def grade_letter(x, early: bool = False) -> str:
     return grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[0]
 
 
-def breadth_note(x) -> str | None:
-    """"8 longs on this close — one bet between them" — sizing, not a verdict.
+def marks(x) -> str | None:
+    """The one meta line under the grade: compact chips, no prose.
 
-    Deliberately a plain count and not a glyph or a grade. Breadth is a SIZING
-    input: eight symbols printing the same direction at once are one bet, not
-    eight, and that is the fact the portfolio study found was behind 27% of
-    confirmed losses. It is worth saying whether or not the mean R differs.
+    THIS REPLACED THREE SENTENCES AND THAT WAS THE POINT. Each mark had its own
+    line explaining what it meant and how well it was evidenced — honest, and
+    unreadable at thirty alerts a day. An alert is glanced at on a phone while
+    something is moving; the reader needs the direction, the levels and the
+    handful of facts that change the size, and prose crowds all three off the
+    screen.
 
-    IT SAYS "SIZE IT ONCE" AT EVERY COUNT NOW, not only at eight. That used to
-    be reserved for the 8+ bundle because that was where the RETURN measurably
-    stepped up. `priority.py` then measured something different and much more
-    direct: the deployed stream's worst losing run is forty trades inside
-    TWELVE HOURS, twenty-four inside 3.8 hours on the held-out half. A run like
-    that is not two dozen bets going wrong, it is one market move taking out
-    everything open at once — and that happens at two symbols exactly as it
-    does at eight. The correlation is what the count is warning about, so the
-    warning belongs at every count where there is a second symbol at all.
+    So the CLAIM stays on the alert as a glyph and the EVIDENCE moves to
+    /legend, where it can be as long as it needs to be and is read once. That
+    keeps this project's rule that no mark is a bare assertion — the assertion
+    is still backed, just not re-typed into every message.
 
-    The 8+ return finding is still real and still unproven — +0.187 R over a
-    lone signal at +2.1 SE held out, failed its pre-registration on
-    monotonicity — so it is named on the line without being claimed.
+    🔗 SAYS "SIZE ONCE" AT EVERY COUNT. Eight was where the return measurably
+    stepped up; the correlation of outcomes does not wait for eight. The
+    deployed stream's worst losing run is forty trades inside twelve hours —
+    one market move taking out everything open, which happens at two symbols
+    as readily as at eight.
     """
+    bits = []
+    if tl_agrees(x):
+        b = x.tl_break
+        bits.append(f"📐 {'up' if _tl_up(x) else 'down'} "
+                    f"{'this bar' if b == 0 else f'{b}b ago'}")
     n = getattr(x, "breadth", 0)
-    if not isinstance(n, int) or n < 2:
-        return None
-    side = "longs" if x.is_long else "shorts"
-    extra = " · the 8+ bundle measured stronger, unproven" if n >= 8 else ""
-    return (f"<i>🔗 {n} {side} on this close — one bet between them, "
-            f"size it once{extra}</i>")
-
-
-def priority_note(x, early: bool) -> str | None:
-    """Which of the two streams this alert belongs to, with the number behind it.
-
-    THE ONE THING THE ALERT COULD NOT PREVIOUSLY SAY. Both kinds have always
-    been labelled — ⚡ EARLY and 🎯 CONFIRMED — but the label described the
-    setup's construction, not its worth, and a reader with no reason to prefer
-    one took whichever arrived. Since early signals outnumber confirmed ones
-    roughly five to one, that means almost every trade came from the stream
-    that does not pay.
-
-    Held out, counting same-close alerts as one bet (`priority.py`, 60 symbols,
-    42 days, POI required, grade B+):
-
-        confirmed, both timeframes    59 bets   49% win   +0.411 R  (SE 0.193)
-        early, both timeframes       302 bets   37% win   -0.009 R  (SE 0.076)
-
-    The confirmed stream made +24.2 R over the held-out half. The early
-    stream, five times the traffic, made -2.7 R — it is not a losing bet so
-    much as a free one, and it is the reason a reader taking whatever arrives
-    ends up flat. Taking confirmed only also cut the worst losing run from
-    eleven to four.
-
-    WHAT THE NOTE MUST NOT DO IS OVERSELL THAT. Fifty-nine bets at +0.411 with
-    an SE of 0.193 is roughly two standard errors — suggestive, not settled —
-    and the sample carries an unusually mild drawdown that will get worse. So
-    the line quotes its own n and SE rather than asserting an edge, exactly as
-    the grade line does, and the early note says "not measured to pay" rather
-    than "do not take": the early stream is a heads-up on a level, and it is
-    still the earliest warning the bot has.
-    """
-    if early:
-        return ("<i>⚡ the early stream measures ~0 R held out — a heads-up "
-                "on the level, not a take</i>")
-    return ("<i>★ the confirmed stream is the one that paid held out: "
-            "+0.41 R per bet over 59 bets, SE 0.19 — suggestive, not "
-            "settled</i>")
-
-
-def tl_mark(x) -> str:
-    """📐 in the headline when a trendline break agrees with this signal.
-
-    THE MARK IS NOT A GRADE AND MUST NOT READ LIKE ONE. The grade letter beside
-    it is backed by a measurement that replicated; this is not. Offline it came
-    out +0.206 R over 3773 early signals, positive in all five panels and above
-    a 25-seed placebo floor in every one — but only +0.7 SE on the held-out
-    half against a bar of 2, and a break the OTHER way does nothing at all,
-    which argues it is noise.
-
-    So it gets its own glyph rather than a letter, it never changes the grade,
-    it never gates a send, and `tl_note` below says in the message itself that
-    it is unproven. It is in the headline because that is the only line the
-    notification preview shows, and the whole point is to be able to spot these
-    without opening the chat — but a marker in a preview is exactly the thing
-    that gets read as a verdict, which is why the body has to disclaim it.
-    """
-    return "📐" if tl_agrees(x) else ""
+    if isinstance(n, int) and n >= 2:
+        bits.append(f"🔗 {n} on this close, size once")
+    return f"<i>{' · '.join(bits)}</i>" if bits else None
 
 
 def tl_agrees(x) -> bool:
@@ -470,16 +413,6 @@ def tl_agrees(x) -> bool:
     """
     b = getattr(x, "tl_break", -1)
     return isinstance(b, int) and 0 <= b <= TRENDLINE_CONFLUENCE_BARS
-
-
-def tl_note(x) -> str | None:
-    """The line under the alert that says what the mark means, honestly."""
-    if not tl_agrees(x):
-        return None
-    b = x.tl_break
-    when = "this bar" if b == 0 else f"{b} bar{'' if b == 1 else 's'} ago"
-    return (f"<i>📐 trendline broke {'up' if _tl_up(x) else 'down'} {when} — "
-            f"UNPROVEN, being measured in /stats</i>")
 
 
 def _tl_up(x) -> bool:
@@ -503,12 +436,10 @@ def setup_message(s: Setup) -> str:
             if s.also_early else "")
     why = _grade(s)
     return "\n".join(x for x in (
-        _headline(f"★ 🎯 CONFIRMED{tl_mark(s)}", s.is_long, s.symbol, tf,
+        _headline(f"★ 🎯 CONFIRMED", s.is_long, s.symbol, tf,
                   grade=grade_chip(s)),
         why,
-        priority_note(s, False),
-        tl_note(s),
-        breadth_note(s),
+        marks(s),
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         "",
@@ -529,12 +460,10 @@ def early_message(s: Early) -> str:
     bars = s.bars_from_sweep
     why = _grade(s, early=True)
     return "\n".join(x for x in (
-        _headline(f"⚡ EARLY{tl_mark(s)}", s.is_long, s.symbol,
+        _headline(f"⚡ EARLY", s.is_long, s.symbol,
                   tf_label(s.tf or INTERVAL), grade=grade_chip(s, True)),
         why,
-        priority_note(s, True),
-        tl_note(s),
-        breadth_note(s),
+        marks(s),
         "",
         _levels(s.entry, s.stop, s.risk, s.is_long),
         "",

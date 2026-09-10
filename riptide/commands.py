@@ -39,6 +39,8 @@ HELP = (
     "<b>Riptide</b>\n\n"
     "/status — build, symbols, last and next scan\n"
     "/stats — how the alerts have actually scored\n"
+    "/legend — what the marks on an alert mean, and how well "
+    "each is evidenced\n"
     "/open — your open positions, with buttons to settle them\n"
     "/today — what you logged today, and the free slots\n"
     "/book — your own record, per grade\n"
@@ -53,6 +55,49 @@ HELP = (
     "/help — this\n\n"
     "<i>Symbols and settings are edited in riptide.conf on GitHub; the box "
     "picks them up within about five minutes.</i>"
+)
+
+
+LEGEND = (
+    "<b>What the marks mean</b>\n\n"
+
+    "<b>★ 🎯 CONFIRMED</b> — the stream that paid.\n"
+    "Held out, counting same-close alerts as one bet: <b>+0.41 R per bet "
+    "over 59 bets, SE 0.19</b>, 49% of them winners. Two standard errors "
+    "from zero, so suggestive rather than settled — and the drawdown in "
+    "that sample was unusually mild, which will not last.\n\n"
+
+    "<b>⚡ EARLY</b> — no star, and that is the message.\n"
+    "The early stream measures <b>-0.01 R per bet over 302 bets</b> held "
+    "out: not a losing bet, a free one. It is five times the traffic of "
+    "the confirmed stream, so taking whatever arrives means almost every "
+    "trade comes from the half that does not pay. Kept because it is the "
+    "earliest warning the bot has — a heads-up on a level, not a take.\n\n"
+
+    "<b>A B C D</b> — the grade, from the daily POI and the 8h trend.\n"
+    "Its live rate per band is in /book and /stats. With a POI required, "
+    "every confirmed alert that clears the floor is already an A.\n\n"
+
+    "<b>📐 up/down Nb ago</b> — a trendline break agreeing with the trade.\n"
+    "<b>UNPROVEN.</b> Offline it came out +0.206 R over 3773 early signals "
+    "and cleared a placebo floor in all five panels, but only +0.7 SE on "
+    "the held-out half. It gates nothing and is being measured forward in "
+    "/stats.\n\n"
+
+    "<b>🔗 N on this close, size once</b> — N symbols fired the same "
+    "direction on the same candle.\n"
+    "<b>This is a sizing instruction, not a quality mark.</b> The worst "
+    "losing run in the deployed stream is 40 trades inside 12 hours, 24 "
+    "inside 3.8 hours held out. A run like that is one market move taking "
+    "out everything open, not two dozen independent bets — so N alerts on "
+    "one close are one bet, and five or six of them taken together is one "
+    "bet placed five or six times. The 8+ bundle separately measured "
+    "+0.187 R at +2.1 SE, which failed its pre-registration and is "
+    "claimed for nothing.\n\n"
+
+    "<i>Six losses in a row at a 38% win rate happens 5.7% of the time at "
+    "any given trade — several times a year, without anything being "
+    "wrong.</i>"
 )
 
 
@@ -444,6 +489,9 @@ async def handle_command(sess, db, state, text: str) -> None:
 
     elif cmd == "status":
         await tg.tg_send(sess, status_text(db, state))
+
+    elif cmd == "legend":
+        await tg.tg_send(sess, LEGEND)
 
     elif cmd == "stats":
         await tg.tg_send(sess, stats_text(db))
