@@ -123,7 +123,7 @@ alertFormatTooltip              = 'Readable — for a phone.\nCompact — pipe-d
 arrowTooltip                    = 'A proper arrow where a TRADEABLE signal fires — price RETURNING to a demand or supply zone it had already left. Up and green for bullish, down and red for bearish.\n\nNothing else gets a mark. Every other event already draws its own label — BOS, CHoCH, ✕, EQH/EQL — and those labels carry the full read-out on hover, so a second glyph beside them was noise saying the same thing twice.\n\nHover the arrow for the levels, both biases, the nearest zones and what to watch next.'
 tflabTooltip                    = 'Fires when price ENTERS the zone — the entry these are named for.\n\nNot the same as the "OB Breakout" alerts above, which fire when price closes BEYOND a block and the block is therefore dead. Opposite events.\n\nMain is swing structure, Sub is internal. Each fires once per block, however long price stays inside it.'
 watchTooltip                    = 'TWO MARKS, TWO DIFFERENT JOBS.\n\n○ A HOLLOW DOT where a break just cut a zone. This is NOT an entry. It says the structure moved and a demand or supply zone was left behind at the origin — go mark it and wait. Hover it for the zone\'s exact range.\n\n▲▼ AN ARROW where price came back into that zone and rejected from it. That is the entry the dot was waiting for.\n\nThe dot without a later arrow means the retest never came, or came and did not reject. That is information too: the setup did not complete and there was nothing to take.'
-rejectionTooltip                = 'WHAT HAS TO HAPPEN AT THE ZONE BEFORE AN ARROW PRINTS.\n\nAny touch — price traded into the zone. TFlab\'s raw behaviour: earliest, and it fires on wicks that close straight through.\n\nClose back out — the bar closed on the better side of the zone midline. One bar, no shape required.\n\nPin bar — a real rejection candle: the wick that did the work is at least N times the body, the opposite wick is smaller than the body, and the close is in the far third. Into demand that is a hammer or hanging man; into supply a shooting star or inverted hammer. THOSE ARE THE SAME TWO SHAPES under four names — the name only records where it happened, and we already know where it happened, so only the shape is tested.\n\nPin + confirm — the pin, then the NEXT bar closes decisively the same way: a marubozu (nearly all body) or an engulfing of the pin\'s body. Strictest, and it prints one bar late, because that is when it is known.\n\nNONE OF THESE IS MEASURED. Candlestick patterns are the most-tested and most-consistently-empty thing in this literature. They will make the arrows match what you look for by eye and cut the count hard; whether they raise R is an open question and can be run over the 333-day set.'
+rejectionTooltip                = 'WHAT HAS TO HAPPEN AT THE ZONE BEFORE AN ARROW PRINTS.\n\nAny touch — price traded into the zone. TFlab\'s raw behaviour: earliest, and it fires on wicks that close straight through.\n\nClose back out — the bar closed on the better side of the zone midline. One bar, no shape required.\n\nPin bar — a real rejection candle. The rejecting wick is at least N times the body and the opposite wick is smaller. A LOWER wick is bullish and an UPPER wick bearish, whatever colour the body is: hammer and hanging man are the same lower-wick shape, inverted hammer and shooting star the same upper-wick one.\n\nPin + confirm — the pin, then proof the move was real, by EITHER route: an engulfing marubozu on the next bar, or a displacement gap the bar after that. Both say the same thing — price left decisively — and a gap needs one more bar to exist, which is why the window is two.\n\nNOTE THAT ACCEPTING THE GAP LOOSENS THIS MODE rather than tightening it: it is a second way to pass, not an extra hurdle.\n\nNONE OF THIS IS MEASURED. Candlestick patterns are the most-tested and most-consistently-empty thing in this literature. They will make the arrows match what you look for by eye; whether they raise R is open and can be run over the 333-day set.'
 pinRatioTooltip                 = 'How many times the body the rejecting wick must be.\n\n2 is the textbook hammer. 3 is a proper pin and roughly a third as many signals. Below 2 you are calling almost any bar with a wick a rejection.'
 marubozuTooltip                 = 'How much of a confirmation candle\'s range must be body.\n\n0.7 is a strong candle; 0.85 is a strict marubozu with almost no wick. An engulfing of the pin\'s body also passes regardless of this, since the two say the same thing in different ways — a MARUBOZU IS NOT AN ENGULFING, one is a single-bar shape and the other a two-bar relation, and confirmation accepts either.'
 setupBoxTooltip                 = 'Outline the zone that is currently WAITING for its retest, so the live setup is separated from every other block on the chart.\n\nThe outline is removed the moment the zone is retested or price closes through it, which is what keeps the chart from filling up with dead levels.'
@@ -181,12 +181,12 @@ equalHighsLowsLengthInput       = input.int(    3,          'Bars Confirmation',
 equalHighsLowsThresholdInput    = input.float(  0.1,        'Threshold',                group = EQUAL_GROUP,    tooltip = equalHighsLowsThresholdTooltip,   minval = 0, maxval = 0.5, step = 0.1)
 equalHighsLowsSizeInput         = input.string( TINY,       'Label Size',               group = EQUAL_GROUP,    options = [TINY,SMALL,NORMAL])
 
-showFairValueGapsInput          = input(        false,      'Fair Value Gaps',          group = GAPS_GROUP,     tooltip = showFairValueGapsTooltip)
+showFairValueGapsInput          = input(        true,       'Fair Value Gaps',          group = GAPS_GROUP,     tooltip = showFairValueGapsTooltip)
 fairValueGapsThresholdInput     = input(        true,       'Auto Threshold',           group = GAPS_GROUP,     tooltip = fairValueGapsThresholdTooltip)
 fairValueGapsTimeframeInput     = input.timeframe('',       'Timeframe',                group = GAPS_GROUP,     tooltip = fairValueGapsTimeframeTooltip)
 fairValueGapsBullColorInput     = input.color(color.new(#00ff68, 70), 'Bullish FVG' , group = GAPS_GROUP)
 fairValueGapsBearColorInput     = input.color(color.new(#ff0008, 70), 'Bearish FVG' , group = GAPS_GROUP)
-fairValueGapsExtendInput        = input.int(    1,          'Extend FVG',               group = GAPS_GROUP,     tooltip = fairValueGapsExtendTooltip,       minval = 0)
+fairValueGapsExtendInput        = input.int(    5,          'Extend FVG',               group = GAPS_GROUP,     tooltip = fairValueGapsExtendTooltip,       minval = 0)
 
 showDailyLevelsInput            = input(        false,      'Daily',    group = LEVELS_GROUP,   inline = 'daily')
 dailyLevelsStyleInput           = input.string( SOLID,      '',         group = LEVELS_GROUP,   inline = 'daily',   options = [SOLID,DASHED,DOTTED])
@@ -370,11 +370,14 @@ type orderBlock
     // and this counter is what stops a zone price is oscillating around from
     // printing forever.
     int tests        = 0
-    // A pin printed inside this zone on the PREVIOUS bar and is waiting to see
-    // whether the next one confirms it. Held per block rather than globally
-    // because two zones can be in play at once and a confirmation belongs to
-    // the pin that happened in ITS zone, not to whichever pin was most recent.
-    bool pinPending  = false
+    // HOW MANY BARS AGO A PIN PRINTED INSIDE THIS ZONE, 0 for none. An int
+    // rather than a flag because the two ways a pin can be confirmed resolve on
+    // DIFFERENT BARS: an engulfing marubozu is the very next one, but a fair
+    // value gap needs three bars to exist and its middle bar is that next one,
+    // so the gap is only visible the bar after. Held per block rather than
+    // globally because two zones can be in play at once and a confirmation
+    // belongs to the pin that happened in ITS zone.
+    int pinAge       = 0
     // The zone's own two marks, owned by the block so they can be REMOVED the
     // moment the setup resolves. Dots that outlive their zone are what turned
     // the chart into a field of circles: every break ever made left one behind
@@ -532,6 +535,22 @@ bodyDominant = candleRng > 0 and candleBody >= marubozuBodyInput * candleRng
 engulfsPrior = candleBody >= math.abs(close[1] - open[1]) and math.max(close, open) >= math.max(close[1], open[1]) and math.min(close, open) <= math.min(close[1], open[1])
 bullConfirm  = candleGreen and bodyDominant and engulfsPrior
 bearConfirm  = candleRed   and bodyDominant and engulfsPrior
+
+// DISPLACEMENT — the other way a rejection proves itself. A gap between the
+// bar before last and this one means price left so fast nothing traded in
+// between, which is the same claim an engulfing marubozu makes and often a
+// louder one.
+//
+// COMPUTED HERE RATHER THAN REUSED FROM drawFairValueGaps(). That function
+// reads through request.security at a timeframe the user picks, and it runs
+// AFTER this in the bar's order — so its answer is neither available yet nor
+// necessarily about these three bars. This is the chart's own timeframe, which
+// is the one the zone and the pin live on.
+//
+// The middle bar has to be directional and the gap has to be at least a tenth
+// of its range, so two dojis a tick apart do not count as displacement.
+gapUp = low  > high[2] and close[1] > open[1] and (low - high[2]) >= (high[1] - low[1]) * 0.1
+gapDn = high < low[2]  and close[1] < open[1] and (low[2] - high) >= (high[1] - low[1]) * 0.1
 //---------------------------------------------------------------------------------------------------------------------}
 
 volatilityMeasure                   = orderBlockFilterInput == ATR ? atrMeasure : ta.cum(ta.tr)/bar_index
@@ -841,16 +860,24 @@ touchOrderBlocks(bool internal = false) =>
             if not na(eachOrderBlock.setupBox)
                 eachOrderBlock.setupBox.delete()
                 eachOrderBlock.setupBox := na
-            eachOrderBlock.pinPending := false
+            eachOrderBlock.pinAge := 0
         else
             bool bull    = eachOrderBlock.bias == BULLISH
             bool inNow   = low <= eachOrderBlock.barHigh and high >= eachOrderBlock.barLow
             bool outside = low > eachOrderBlock.barHigh or high < eachOrderBlock.barLow
             float mid    = math.avg(eachOrderBlock.barHigh, eachOrderBlock.barLow)
 
-            // The two-bar trigger is read BEFORE anything is updated, because
-            // it is a verdict on the previous bar's pin and this bar's close.
-            bool twoBarFire = eachOrderBlock.pinPending and (bull ? bullConfirm : bearConfirm)
+            // Read BEFORE anything is updated: it is a verdict on an earlier
+            // bar's pin and on this bar's close.
+            //
+            // TWO CONFIRMATIONS ON TWO DIFFERENT BARS. The engulfing marubozu
+            // is the bar straight after the pin. A fair value gap cannot be
+            // seen that soon — it needs the pin, the displacement bar, and one
+            // more to leave the gap standing — so it resolves a bar later, with
+            // the displacement bar sitting between the pin and now.
+            bool confirmBody = eachOrderBlock.pinAge == 1 and (bull ? bullConfirm : bearConfirm)
+            bool confirmGap  = eachOrderBlock.pinAge == 2 and (bull ? gapUp : gapDn)
+            bool twoBarFire  = confirmBody or confirmGap
 
             // Away from the zone: this return is over, arm the next one.
             if outside
@@ -862,14 +889,14 @@ touchOrderBlocks(bool internal = false) =>
             // one-bar modes, the PREVIOUS bar in the two-bar mode, since that
             // is where the pin was.
             string shapeNow = patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : ''
-            string shapePrev = patHammer[1] ? 'hammer' : patHangingMan[1] ? 'hanging man' : patInvHammer[1] ? 'inverted hammer' : patShootingStar[1] ? 'shooting star' : ''
+            string shapePrev = eachOrderBlock.pinAge == 2 ? (patHammer[2] ? 'hammer' : patHangingMan[2] ? 'hanging man' : patInvHammer[2] ? 'inverted hammer' : patShootingStar[2] ? 'shooting star' : '') : (patHammer[1] ? 'hammer' : patHangingMan[1] ? 'hanging man' : patInvHammer[1] ? 'inverted hammer' : patShootingStar[1] ? 'shooting star' : '')
             bool oneBarFire = rejectionModeInput == REJ_ANY ? inNow : rejectionModeInput == REJ_CLOSE ? (inNow and (bull ? (close >= mid and close > open) : (close <= mid and close < open))) : rejectionModeInput == REJ_PIN ? (inNow and pinNow and (bull ? close > mid : close < mid)) : false
             bool fire = rejectionModeInput == REJ_CONFIRM ? twoBarFire : oneBarFire
 
             if fire and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
                 eachOrderBlock.touched    := true
                 eachOrderBlock.tests      += 1
-                eachOrderBlock.pinPending := false
+                eachOrderBlock.pinAge     := 0
 
                 // The setup resolved, so its waiting marks come off. The zone
                 // box drawn by drawOrderBlocks stays — that is the level. This
@@ -888,7 +915,7 @@ touchOrderBlocks(bool internal = false) =>
                 // a BOS-origin block would double-count it.
                 // In the two-bar mode the shape lives on the PREVIOUS bar and
                 // the marubozu on this one, so the label names both.
-                string firedShape = rejectionModeInput != REJ_CONFIRM ? shapeNow : shapePrev == '' ? '' : shapePrev + (bull ? ' + green marubozu' : ' + red marubozu')
+                string firedShape = rejectionModeInput != REJ_CONFIRM ? shapeNow : shapePrev == '' ? '' : shapePrev + (confirmGap ? ' + displacement gap' : bull ? ' + green marubozu' : ' + red marubozu')
                 if bull
                     currentAlerts.demandPattern     := firedShape
                     currentAlerts.demandTouchOrigin := eachOrderBlock.origin
@@ -916,10 +943,14 @@ touchOrderBlocks(bool internal = false) =>
                 // is inside the zone and past the leave-and-return test counts,
                 // so a pin printed on the bar the block was cut cannot arm.
                 // ANY of the four shapes arms the confirmation, because in the
-                // two-bar case the marubozu is what sets direction — a shooting
-                // star followed by a green marubozu is a bullish signal. Only
-                // the standalone case reads direction off the wick.
-                eachOrderBlock.pinPending := inNow and pinAny and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
+                // two-bar case the marubozu or the gap is what sets direction —
+                // a shooting star followed by a green marubozu is a bullish
+                // signal. Only the standalone case reads direction off the wick.
+                //
+                // A fresh pin restarts the clock; otherwise it ages out after
+                // two bars, which is the whole window either confirmation has.
+                bool newPin = inNow and pinAny and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
+                eachOrderBlock.pinAge := newPin ? 1 : eachOrderBlock.pinAge == 1 ? 2 : 0
 
 deleteOrderBlocks(bool internal = false) =>
     array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
@@ -1002,12 +1033,22 @@ storeOrdeBlock(pivot p_ivot,bool internal = false,int bias, string origin = '') 
             float zoneMid = math.avg(o_rderBlock.barHigh, o_rderBlock.barLow)
             string wait = '\n  · nothing to do yet — this is the WAIT half of the setup'
                  + '\n  · mark ' + str.tostring(o_rderBlock.barLow, format.mintick) + ' – ' + str.tostring(o_rderBlock.barHigh, format.mintick) + ' and let price come back to it'
-                 + '\n  · the arrow prints only on a ' + (rejectionModeInput == REJ_ANY ? 'touch' : rejectionModeInput == REJ_CLOSE ? 'close back out of the zone' : rejectionModeInput == REJ_PIN ? (bias == BULLISH ? 'hammer or hanging man in the zone — a lower wick, either colour' : 'shooting star or inverted hammer in the zone — an upper wick, either colour') : 'pin of any of the four shapes, then an engulfing ' + (bias == BULLISH ? 'green' : 'red') + ' marubozu')
+                 + '\n  · the arrow prints only on a ' + (rejectionModeInput == REJ_ANY ? 'touch' : rejectionModeInput == REJ_CLOSE ? 'close back out of the zone' : rejectionModeInput == REJ_PIN ? (bias == BULLISH ? 'hammer or hanging man in the zone — a lower wick, either colour' : 'shooting star or inverted hammer in the zone — an upper wick, either colour') : 'pin of any of the four shapes, then either an engulfing ' + (bias == BULLISH ? 'green' : 'red') + ' marubozu on the next bar, or a displacement gap one bar after that')
                  + '\n  · this mark disappears when the retest happens or the zone breaks'
             string zoneTip = eventTooltip((bias == BULLISH ? 'Demand zone armed' : 'Supply zone armed') + '  ·  ' + (origin != '' ? origin + ' origin' : 'wait for the retest'), zoneMid, wait)
 
+            // CLEAR OF THE CANDLE, NOT ON IT. Sitting the dot on the zone
+            // midline put it on top of the origin bar, which hid the candle
+            // that made the zone and made the dot fiddly to hover. It now sits
+            // off the bar on the side the trade expects to go — below a demand
+            // zone, above a supply one — which is also how the entry arrows are
+            // placed, so a chart reads the same way top to bottom.
+            //
+            // The dashed outline is what ties the mark to the zone now, so the
+            // dot does not have to sit inside it to be legible.
             if showWatchMarkInput
-                o_rderBlock.watchLabel := label.new(chart.point.new(o_rderBlock.barTime, na, zoneMid), '', xloc.bar_time, color = color.new(zoneCss, 20), style = label.style_circle, size = size.tiny, tooltip = zoneTip)
+                float dotAt = bias == BULLISH ? o_rderBlock.barLow - atrMeasure * 0.5 : o_rderBlock.barHigh + atrMeasure * 0.5
+                o_rderBlock.watchLabel := label.new(chart.point.new(o_rderBlock.barTime, na, dotAt), '', xloc.bar_time, color = color.new(zoneCss, 20), style = label.style_circle, size = size.tiny, tooltip = zoneTip)
 
             // Outline, not fill. drawOrderBlocks already tints every live zone;
             // a second solid box would say nothing new. A dashed border says
