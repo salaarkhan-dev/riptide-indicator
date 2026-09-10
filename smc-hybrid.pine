@@ -128,7 +128,7 @@ pinRatioTooltip                 = 'How many times the body the rejecting wick mu
 marubozuTooltip                 = 'How much of a confirmation candle\'s range must be body.\n\n0.7 is a strong candle; 0.85 is a strict marubozu with almost no wick. An engulfing of the pin\'s body also passes regardless of this, since the two say the same thing in different ways — a MARUBOZU IS NOT AN ENGULFING, one is a single-bar shape and the other a two-bar relation, and confirmation accepts either.'
 setupBoxTooltip                 = 'Outline the zone that is currently WAITING for its retest, so the live setup is separated from every other block on the chart.\n\nThe outline is removed the moment the zone is retested or price closes through it, which is what keeps the chart from filling up with dead levels.'
 zoneRejectTooltip               = 'A small triangle wherever a rejection candle prints INSIDE a live zone — below the bar for demand, above it for supply.\n\nNOT AN ENTRY, AND THE DIFFERENCE MATTERS. It has none of the entry gating: no leave-and-return test, no structure filter, no per-zone cap. It says only "the shape happened at the level". A zone\'s own formation candles will trip it, which is correct — those ARE rejections, they are just not retests.\n\nThe big arrow is the entry. This is what to read the chart by.'
-pinDebugTooltip                 = 'TURN THIS ON WHEN AN ARROW YOU EXPECTED DID NOT APPEAR. It marks EVERY pin candle on the chart, zone or no zone, so the two reasons an arrow can go missing stop looking alike.\n\n  ▲ below the bar   long LOWER wick — green is a hammer, red a hanging man\n  ▼ above the bar   long UPPER wick — green an inverted hammer, red a shooting star\n  ✕ below the bar   a pin that WAS inside a live zone and still produced no arrow\n\nThe position and colour carry the whole name, so there is no text to read.\n\nHOW TO READ IT. No triangle on a candle you consider a rejection means the SHAPE test rejected it — raise or lower Pin Wick : Body. A triangle but no arrow means the shape was found and something else vetoed it. A ✕ narrows that further: the pin was in a zone, so the veto was the structure filter, the tests-per-zone cap, the leave-and-return rule, or the zone having been pushed out of the drawn five.\n\nNo ✕ and no arrow at a zone you were watching means price never actually traded inside the block the indicator holds — which is usually the answer, and not the one people expect.'
+pinDebugTooltip                 = 'TURN THIS ON WHEN AN ARROW YOU EXPECTED DID NOT APPEAR.\n\n  ◇ below the bar   a long LOWER wick — hammer or hanging man\n  ◇ above the bar   a long UPPER wick — inverted hammer or shooting star\n  ✕                 a shape that WAS inside a live zone and produced no arrow. Hover it: it names the gate that stopped it.\n\nGREY ON PURPOSE. A pin standing in open space has no direction — the same upper wick is a rejection at supply and an inverted hammer at demand. Only the coloured triangles claim bull or bear, and they take it from the zone, not the candle.\n\nNo diamond on a candle you consider a rejection means the SHAPE test rejected it: adjust Pin Wick : Body. A diamond and no ✕ at a zone you were watching means price never traded inside the block the indicator actually holds, which is usually the answer.'
 zoneTestsTooltip                = 'How many separate returns to the same zone may print an arrow.\n\nEach return counts once: price has to leave the zone before coming back can count again. 1 is strict SMC — the first retest is the trade. 2 allows the common case where the first touch is a shallow wick and the real test comes after.\n\nBeyond that a zone is being worn out rather than defended, which is the opposite of the setup.'
 withTrendTooltip                = 'Only signal a demand zone while swing structure is bullish, and a supply zone while it is bearish.\n\nWITHOUT THIS you get short arrows into a rally, because a supply block forms above every impulse and price walks back into it on the way up. That is the trade this whole system measured as the worst one available: counter-trend entries came out at -0.588 R against +0.038 for the same construction with the trend, the single largest separation found anywhere in the research.\n\nTurn it off to see every zone touch regardless of direction.'
 dashTooltip                     = 'A small read-out of the current bias and the last event, for scanning many charts quickly. OFF by default so the chart looks exactly like the base indicator.'
@@ -1381,16 +1381,25 @@ plotcandle(parsedOpen,high,low,close,color = candleColor, wickcolor = candleColo
 // between them is how tuning goes wrong. These answer the first half; the ✕
 // drawn further down answers the second.
 //
-// COLOURED BY WHAT THE PATTERN MEANS, NOT BY THE BODY. Colouring these by
-// candle colour inverted them: a HANGING MAN is a lower-wick pin on a red body
-// and is BULLISH by the standalone rule, but it painted red — a bullish
-// rejection wearing a bearish colour, which is worse than no mark at all.
-// Direction now drives both position and colour, and the two agree.
+// NEUTRAL, BECAUSE A SHAPE ON ITS OWN HAS NO DIRECTION. This was coloured by
+// body first and by wick second, and BOTH were wrong for the same underlying
+// reason: on a chart green and red mean bullish and bearish, and a pin candle
+// standing in open space is neither.
 //
-// Which of the four shapes it was is on the arrow's hover and in the candle
-// itself; it does not belong in a channel where it contradicts the meaning.
-plotshape(showPinDebugInput and pinLower ? low  - atrMeasure * 0.9 : na, title = 'Pin · lower wick — hammer or hanging man (bullish)',            style = shape.triangleup,   location = location.absolute, color = swingBullishColor, size = size.tiny)
-plotshape(showPinDebugInput and pinUpper ? high + atrMeasure * 0.9 : na, title = 'Pin · upper wick — shooting star or inverted hammer (bearish)', style = shape.triangledown, location = location.absolute, color = swingBearishColor, size = size.tiny)
+// A long upper wick at a SUPPLY zone is a rejection of higher prices. The same
+// candle at a DEMAND zone, in the classical reading, is an inverted hammer —
+// a bottom signal waiting on confirmation. Same geometry, opposite meaning, and
+// the thing that decides is the zone it landed in. Painting it red mid-rally
+// with no zone anywhere near it asserts a direction nothing has established.
+//
+// So these say only WHICH SHAPE, in grey, and the coloured triangles further
+// down — which fire per zone and take their direction from the block's bias,
+// not the candle's — are the ones allowed to claim bull or bear.
+//
+// Diamonds rather than triangles for the same reason: a triangle points, and
+// pointing is a direction claim.
+plotshape(showPinDebugInput and pinLower ? low  - atrMeasure * 0.9 : na, title = 'Shape · long LOWER wick (hammer / hanging man)',         style = shape.diamond, location = location.absolute, color = color.new(GRAY, 30), size = size.tiny)
+plotshape(showPinDebugInput and pinUpper ? high + atrMeasure * 0.9 : na, title = 'Shape · long UPPER wick (inverted hammer / shooting star)', style = shape.diamond, location = location.absolute, color = color.new(GRAY, 30), size = size.tiny)
 //---------------------------------------------------------------------------------------------------------------------}
 
 if showHighLowSwingsInput or showPremiumDiscountZonesInput
