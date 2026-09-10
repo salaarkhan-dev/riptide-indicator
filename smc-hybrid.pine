@@ -131,6 +131,7 @@ setupBoxTooltip                 = 'Outline the zone that is currently WAITING fo
 zoneRejectTooltip               = 'A small triangle wherever the rejection test passes INSIDE a live zone — below the bar at demand, above it at supply.\n\nTHE COLOUR IS THE ZONE\'S, NOT THE CANDLE\'S, and that is the thing most likely to look wrong. A red triangle means a bearish shape held a SUPPLY zone; it does not mean the candle under it is red. A green marubozu inside a supply zone fires nothing at all — that is a supply zone FAILING, not a long signal, and the zone is the trade thesis.\n\nNOT AN ENTRY. It has none of the entry gating: no leave-and-return test, no structure filter, no per-zone cap. Hover it and it names the zone, the shape, how many bars back the shape sits, and which gate stopped the arrow.'
 pinDebugTooltip                 = 'TURN THIS ON WHEN AN ARROW YOU EXPECTED DID NOT APPEAR.\n\n  ◇ below / above   a pin shape — lower wick is a hammer or hanging man, upper wick an inverted hammer or shooting star. Grey because a shape alone has no direction.\n  ✕                 a shape the mode ACCEPTED that still produced no arrow. Hover it: it names the gate.\n  ·                 price in a zone, moving the right way, and no shape qualified.\n\nNo mark of any kind at a zone you were watching means price never traded inside the block the indicator actually holds, which is usually the answer.\n\nOnly the ✕ is hoverable. The other two are plotshapes on purpose — labels come out of a budget of 500 shared with the sweeps and structure tags, and spending it on a diagnostic makes the oldest of those disappear.'
 leaveFirstTooltip               = 'THE RETEST RULE, AND THE ONE MOST LIKELY TO BE HIDING A SIGNAL YOU EXPECTED.\n\nON: price must trade completely clear of the zone before coming back can count. That is what a retest IS, and it is why a freshly cut block cannot fire on the impulse that created it.\n\nOFF: a rejection candle inside the zone signals whether or not price ever left. This picks up the pattern that forms AS the zone is made — the displacement itself. Those are real rejections, but they are entries at the impulse rather than at the pullback, so the stop is further and the price is worse.\n\nIf a setup you were sure about produced no arrow, turn this off and see whether it appears. If it does, the setup was a formation, not a retest.'
+sweepZoneTooltip                = 'Signal a rejection candle on the bar that SWEEPS a pivot.\n\nA sweep is already a rejection by construction: price traded through the level and closed back inside it. What this adds is the shape test — the wick has to dominate the body, or the bar has to engulf — so a level nudged and given back is separated from one taken and violently refused.\n\nA swept LOW is bullish and a swept HIGH bearish, which is the direction of the reclaim, not of the wick.\n\nThis is the one place a rejection can happen with no order block and no gap anywhere near it, so without it the level carrying the most liquidity is the only one that cannot signal.'
 fvgZoneTooltip                  = 'Treat fair value gaps as retest zones in their own right, not only as order blocks.\n\nA gap is a zone price returns to for the same reason a block is — it is where the move left something behind. Same rejection test, same structure filter, same tests-per-zone cap.\n\nThis roughly doubles the number of zones in play, so expect more signals rather than better ones.'
 zoneTestsTooltip                = 'How many separate returns to the same zone may print an arrow.\n\nEach return counts once: price has to leave the zone before coming back can count again. 1 is strict SMC — the first retest is the trade. 2 allows the common case where the first touch is a shallow wick and the real test comes after.\n\nBeyond that a zone is being worn out rather than defended, which is the opposite of the setup.'
 withTrendTooltip                = 'Only signal a demand zone while swing structure is bullish, and a supply zone while it is bearish.\n\nWITHOUT THIS you get short arrows into a rally, because a supply block forms above every impulse and price walks back into it on the way up. That is the trade this whole system measured as the worst one available: counter-trend entries came out at -0.588 R against +0.038 for the same construction with the trend, the single largest separation found anywhere in the research.\n\nTurn it off to see every zone touch regardless of direction.'
@@ -165,7 +166,7 @@ sweepBearColorInput             = input(        RED,        'Sweep High (bearish
 
 showInternalOrderBlocksInput    = input(        true,       'Internal Order Blocks' ,   group = BLOCKS_GROUP,   tooltip = showInternalOrderBlocksTooltip,   inline = 'iob')
 internalOrderBlocksSizeInput    = input.int(    5,          '',                         group = BLOCKS_GROUP,   minval = 1, maxval = 20,                    inline = 'iob')
-showSwingOrderBlocksInput       = input(        false,      'Swing Order Blocks',       group = BLOCKS_GROUP,   tooltip = showSwingOrderBlocksTooltip,      inline = 'ob')
+showSwingOrderBlocksInput       = input(        true,       'Swing Order Blocks',       group = BLOCKS_GROUP,   tooltip = showSwingOrderBlocksTooltip,      inline = 'ob')
 swingOrderBlocksSizeInput       = input.int(    5,          '',                         group = BLOCKS_GROUP,   minval = 1, maxval = 20,                    inline = 'ob')
 orderBlockFilterInput           = input.string( 'Atr',      'Order Block Filter',       group = BLOCKS_GROUP,   tooltip = orderBlockFilterTooltip,          options = [ATR, RANGE])
 orderBlockMitigationInput       = input.string( HIGHLOW,    'Order Block Mitigation',   group = BLOCKS_GROUP,   tooltip = orderBlockMitigationTooltip,      options = [CLOSE,HIGHLOW])
@@ -255,6 +256,8 @@ alertDemandBosInput             = input(        true,       'Demand BoS',       
 alertSupplyBosInput             = input(        true,       'Supply BoS',                   group = TFLAB_GROUP, inline = 'z3')
 alertDemandFvgInput             = input(        true,       'Demand FVG',                   group = TFLAB_GROUP, inline = 'z4', tooltip = fvgZoneTooltip)
 alertSupplyFvgInput             = input(        true,       'Supply FVG',                   group = TFLAB_GROUP, inline = 'z4')
+alertDemandSweepInput           = input(        true,       'Demand Sweep',                 group = TFLAB_GROUP, inline = 'z5', tooltip = sweepZoneTooltip)
+alertSupplySweepInput           = input(        true,       'Supply Sweep',                 group = TFLAB_GROUP, inline = 'z5')
 
 //---------------------------------------------------------------------------------------------------------------------}
 //DATA STRUCTURES & VARIABLES
@@ -298,6 +301,14 @@ type alerts
     bool supplyBosTouch             = false
     bool demandFvgTouch             = false
     bool supplyFvgTouch             = false
+    // A SWEPT PIVOT IS A REJECTION BY CONSTRUCTION — price went through the
+    // level and closed back inside, which is the same event a pin describes,
+    // measured against a level instead of against a zone. It is also the one
+    // place a rejection can happen with no order block and no gap anywhere
+    // near, so without this the level with the most liquidity behind it is the
+    // only one that cannot signal.
+    bool demandSweepReject          = false
+    bool supplySweepReject          = false
     string demandTouchOrigin        = ''
     string supplyTouchOrigin        = ''
     // ADDED — the zone that was entered, so the entry arrow can name the range
@@ -498,19 +509,20 @@ if barstate.isfirst
             internalSellBoxes.push(box.new(na,na,na,na,xloc = xloc.bar_time,border_color = na))
             internalMidLines.push( line.new(na,na,na,na,xloc = xloc.bar_time,style = line.style_dashed))
 
-// THE MAIN SIGNALS COULD NOT FIRE, AND NOTHING SAID SO. Demand Main and Supply
-// Main are SWING blocks, but swing blocks were only ever stored when 'Swing
-// Order Blocks' was ticked — and that display option is OFF by default. So a
-// panel showing six zone signals all enabled was really running three: every
-// Main alert was silently dead, and Demand/Supply BoS only ever fired off
-// internal structure.
+// A ZONE THAT CAN SIGNAL MUST BE A ZONE YOU CAN SEE. Storage used to be driven
+// by whether an alert NEEDED the zone rather than by whether the box was
+// painted, so Demand Main could fire off swing blocks while 'Swing Order Blocks'
+// was unticked. The signals worked and the reason for them was invisible: a
+// triangle in open space with no box under it, which reads as the indicator
+// malfunctioning and is impossible to argue with.
 //
-// Storing is now driven by whether a signal NEEDS the zone, not by whether the
-// box is painted. Drawing stays on the display inputs, so nothing new appears
-// on the chart — turn 'Swing Order Blocks' on if you want to see the zones the
-// Main arrows are pointing at.
-swingBlocksLive     = showSwingOrderBlocksInput    or alertDemandMainInput or alertSupplyMainInput or alertDemandBosInput or alertSupplyBosInput
-internalBlocksLive  = showInternalOrderBlocksInput or alertDemandSubInput  or alertSupplySubInput  or alertDemandBosInput or alertSupplyBosInput
+// The same principle already governs touchOrderBlocks, which only scans the
+// blocks inside the drawn window. This extends it to the whole set instead of
+// carving out an exception for swing. Swing Order Blocks is therefore ON by
+// default now — those are the zones the Main and BoS signals come from, and a
+// signal whose zone is hidden is worse than no signal.
+swingBlocksLive     = showSwingOrderBlocksInput
+internalBlocksLive  = showInternalOrderBlocksInput
 
 bearishOrderBlockMitigationSource   = orderBlockMitigationInput == CLOSE ? close : high
 bullishOrderBlockMitigationSource   = orderBlockMitigationInput == CLOSE ? close : low
@@ -1272,6 +1284,17 @@ displayStructure(bool internal = false) =>
                 currentAlerts.internalSweepHigh := true
             else
                 currentAlerts.swingSweepHigh    := true
+            // The reclaim direction, not the wick's: a swept HIGH is bearish.
+            if alertSupplySweepInput and (bearPin or (acceptEngulfInput and bearConfirm))
+                currentAlerts.supplySweepReject := true
+                currentAlerts.supplyPattern     := (pinName != '' ? pinName : 'sweep') + ' sweeping ' + (internal ? 'an internal high' : 'a swing high')
+                currentAlerts.supplyTouchTop    := high
+                currentAlerts.supplyTouchBot    := p_ivot.currentLevel
+                currentAlerts.zoneRejectAge     := 0
+                currentAlerts.zoneRejectName    := currentAlerts.supplyPattern
+                currentAlerts.zoneRejectTop     := high
+                currentAlerts.zoneRejectBot     := p_ivot.currentLevel
+                currentAlerts.zoneRejectBear    := true
             drawSweep(p_ivot, true, styleInput == MONOCHROME ? MONO_BEARISH : sweepBearColorInput, internal)
 
     if ta.crossover(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
@@ -1306,6 +1329,16 @@ displayStructure(bool internal = false) =>
                 currentAlerts.internalSweepLow  := true
             else
                 currentAlerts.swingSweepLow     := true
+            if alertDemandSweepInput and (bullPin or (acceptEngulfInput and bullConfirm))
+                currentAlerts.demandSweepReject := true
+                currentAlerts.demandPattern     := (pinName != '' ? pinName : 'sweep') + ' sweeping ' + (internal ? 'an internal low' : 'a swing low')
+                currentAlerts.demandTouchTop    := p_ivot.currentLevel
+                currentAlerts.demandTouchBot    := low
+                currentAlerts.zoneRejectAge     := 0
+                currentAlerts.zoneRejectName    := currentAlerts.demandPattern
+                currentAlerts.zoneRejectTop     := p_ivot.currentLevel
+                currentAlerts.zoneRejectBot     := low
+                currentAlerts.zoneRejectBull    := true
             drawSweep(p_ivot, false, styleInput == MONOCHROME ? MONO_BULLISH : sweepBullColorInput, internal)
 
     if ta.crossunder(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
@@ -1699,6 +1732,8 @@ ev := alertSupplySubInput  and currentAlerts.supplySubTouch  ? ev + (ev == '' ? 
 ev := alertSupplyBosInput  and currentAlerts.supplyBosTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply zone entered (BOS)'      : 'SUPPLY_BOS')  : ev
 ev := alertDemandFvgInput  and currentAlerts.demandFvgTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🟢 demand FVG entered'             : 'DEMAND_FVG')  : ev
 ev := alertSupplyFvgInput  and currentAlerts.supplyFvgTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply FVG entered'             : 'SUPPLY_FVG')  : ev
+ev := currentAlerts.demandSweepReject ? ev + (ev == '' ? '' : sep) + (readable ? '🟢 rejection sweeping a low'  : 'DEMAND_SWEEP') : ev
+ev := currentAlerts.supplySweepReject ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 rejection sweeping a high' : 'SUPPLY_SWEEP') : ev
 
 // Internal events are appended only when the reader wants them. They fire many
 // times more often than swing events, so mixing them in by default would bury
@@ -1736,8 +1771,8 @@ inBias    = internalTrend.bias == BULLISH ? 'bull' : internalTrend.bias == BEARI
 // A dot with no arrow after it is a setup that did not complete — the retest
 // never came, or came and walked straight through. That is worth seeing.
 // ---------------------------------------------------------------------------
-demandEntry = currentAlerts.demandMainTouch or currentAlerts.demandSubTouch or currentAlerts.demandBosTouch or currentAlerts.demandFvgTouch
-supplyEntry = currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or currentAlerts.supplyBosTouch or currentAlerts.supplyFvgTouch
+demandEntry = currentAlerts.demandMainTouch or currentAlerts.demandSubTouch or currentAlerts.demandBosTouch or currentAlerts.demandFvgTouch or currentAlerts.demandSweepReject
+supplyEntry = currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or currentAlerts.supplyBosTouch or currentAlerts.supplyFvgTouch or currentAlerts.supplySweepReject
 
 // WITH-STRUCTURE FILTER, ON BY DEFAULT, AND THIS IS THE MEASURED ONE. A supply
 // block forms above every impulse leg, so in a rally price walks back into
