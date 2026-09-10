@@ -397,6 +397,9 @@ cpUseOB     = input.bool(true,  "Order blocks",     inline = "cpz", group = gCP)
 cpUseSweep  = input.bool(true,  "Swept levels",     inline = "cpz2", group = gCP,
      tooltip = "The three places a rejection is allowed to count.\n\nA swept level is included because it is the one rejection that can happen with no gap and no block anywhere near it — and it is the level with the most liquidity behind it, which is the whole premise of this indicator.")
 cpUseCtx    = input.bool(false, "Context gaps",     inline = "cpz2", group = gCP)
+cpUsePivot  = input.bool(true,  "Structure extremes (HH / LH / LL / HL)", group = gCP,
+     tooltip = "The swing highs and lows themselves, which is where most of these patterns belong and the one place the filter was not looking.\n\nCAPTURED SEPARATELY FROM THE POOLS, because a pool is a set of EQUAL pivots and most swings never join one. The filter wants every HH, LH, LL and HL, not only those that lined up with another.\n\nA point, not a band: a swing is a price, so the pattern has to land on it within the tolerance below.")
+cpPivTol    = input.float(0.35, "  how close counts (x ATR)", minval = 0.05, maxval = 2.0, step = 0.05, group = gCP)
 cpShowLevels = input.bool(true, "Draw entry and stop", group = gCP,
      tooltip = "Two short lines on the pattern: entry at the body edge on the trade side, stop beyond its furthest wick, exactly as the reference sheet marks them.\n\nOff leaves just the arrow, which still carries both prices on hover.")
 cpMinGap    = input.int(3, "  bars between marks", minval = 1, maxval = 20, group = gCP,
@@ -516,6 +519,19 @@ type Fvg
     bool  cpArmed = true          // see CtxFvg: one confirmation per visit
     box   bx
     line  mid
+
+// A market-structure extreme, kept for the candle-confirmation filter.
+//
+// THE POINT, NOT A BAND. A swing high or low is a price, and a confirmation
+// belongs at it or it does not — so this carries a level and an ATR-scaled
+// tolerance rather than a zone. The tag is the structure reading: a high above
+// the last high is a HH and below it a LH, and the same for lows.
+type CpPivot
+    float  price
+    int    bar
+    bool   isHigh
+    string tag
+    bool   armed = true
 
 // One tracked setup, from FVG creation through fill to resolution.
 type Trade
@@ -674,6 +690,27 @@ pl = ta.pivotlow(low,  pivotLeft, effPivotRight)
 // Riptide-coloured diamond already means both rules agree.
 ictPH = ta.pivothigh(high, pivotLeft, 1)
 ictPL = ta.pivotlow(low,  pivotLeft, 1)
+
+// ── market-structure extremes for the candle filter ─────────────────────────
+// Captured here rather than read back off the clusters, because a cluster is a
+// POOL of equal pivots and most swings never become one. The filter wants every
+// HH, LH, LL and HL, not only the ones that lined up with another.
+var array<CpPivot> cpPivots = array.new<CpPivot>()
+var float cpLastHi = na
+var float cpLastLo = na
+
+if not na(ph)
+    string t = na(cpLastHi) ? "swing high" : (ph > cpLastHi ? "HH" : "LH")
+    cpPivots.unshift(CpPivot.new(price = ph, bar = bar_index - effPivotRight,
+         isHigh = true, tag = t))
+    cpLastHi := ph
+if not na(pl)
+    string t = na(cpLastLo) ? "swing low" : (pl > cpLastLo ? "HL" : "LL")
+    cpPivots.unshift(CpPivot.new(price = pl, bar = bar_index - effPivotRight,
+         isHigh = false, tag = t))
+    cpLastLo := pl
+while cpPivots.size() > 60
+    cpPivots.pop()
 
 // ta.* calls are unconditional: they carry state and must run every bar.
 emaLine = ta.ema(close, emaLen)
@@ -1535,11 +1572,18 @@ cpRearm() =>
     for c in clusters
         if not na(c.obTop) and (low > c.obTop or high < c.obBot)
             c.cpObArmed := true
-        if not na(c.grabHigh)
-            float st = c.isHigh ? c.grabHigh : c.level
-            float sb = c.isHigh ? c.level    : c.grabLow
-            if low > st or high < sb
+        // The swept LEVEL, not the whole run from the pool to the raid extreme.
+        // That band can be several ATR deep and stays live for as long as the
+        // raid does, so it was quietly turning most of the chart into a zone —
+        // which is how confirmations ended up printing in mid-move.
+        if not na(c.level)
+            float t = atr * cpPivTol
+            if low > c.level + t or high < c.level - t
                 c.cpSwArmed := true
+    for p in cpPivots
+        float t2 = atr * cpPivTol
+        if low > p.price + t2 or high < p.price - t2
+            p.armed := true
 
 // Claim the first ARMED zone the pattern overlaps, and disarm it. Overlap
 // rather than containment: a pin rejects a zone by reaching INTO it, and asking
@@ -1578,14 +1622,29 @@ cpZoneTake(bool wantBull, float pLo, float pHi) =>
             // The swept level itself, from the raid extreme back to the pool.
             // Only while the raid is live and unconfirmed: once the shift has
             // fired, the gap and the block are the zones and this one is spent.
-            else if cpUseSweep and c.cpSwArmed and c.swept and not c.mssConfirmed and not na(c.grabHigh)
-                float st = c.isHigh ? c.grabHigh : c.level
-                float sb = c.isHigh ? c.level    : c.grabLow
-                if pLo <= st and pHi >= sb
-                    zname := "swept level"
-                    ztop  := st
-                    zbot  := sb
+            else if cpUseSweep and c.cpSwArmed and c.swept and not c.mssConfirmed and not na(c.level)
+                float t = atr * cpPivTol
+                if pLo <= c.level + t and pHi >= c.level - t
+                    zname := "swept " + (c.isHigh ? "high" : "low")
+                    ztop  := c.level + t
+                    zbot  := c.level - t
                     c.cpSwArmed := false
+
+    // THE PAIRING IS THE WHOLE FILTER, and it is the same rule for all three
+    // sources: a BULLISH pattern only counts at a bullish gap, a bullish (demand)
+    // block, or a structure LOW. A BEARISH one only at a bearish gap, a bearish
+    // block, or a structure HIGH. A hammer at a swing high is a hammer in the
+    // wrong place, and the same candle two hundred points lower is a trade.
+    if cpUsePivot and zname == ""
+        float t3 = atr * cpPivTol
+        for p in cpPivots
+            if zname == "" and p.armed and p.isHigh != wantBull
+                float hit = wantBull ? pLo : pHi
+                if math.abs(hit - p.price) <= t3
+                    zname := p.tag
+                    ztop  := p.price + t3
+                    zbot  := p.price - t3
+                    p.armed := false
 
     [zname, ztop, zbot]
 
