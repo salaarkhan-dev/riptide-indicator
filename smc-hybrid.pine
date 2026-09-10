@@ -115,9 +115,7 @@ showOrderBlockVolumeTooltip     = 'Print the volume that traded on the order blo
 activityTooltip                 = 'Two bars inside each block — buy above the mid-line, sell below — each drawn as its share of the volume since the block formed, so the longer bar is the side doing the trading.\n\nBigBeluga\'s own version advances these on a fixed cycle keyed to the origin candle\'s colour, which looks the same but carries no information. This uses the real up-close and down-close volume.'
 showOriginTooltip               = 'Tag each order block with whether a CHoCH or a BOS created it. The distinction is TFlab\'s; the base already knows which tag fired'
 alertModeTooltip                = 'ONE ALERT FOR EVERYTHING is the point of this build.\n\nCreate a single TradingView alert on this indicator and choose "Any alert() function call". Every event below then arrives through that one alert, which is what makes this usable on the free tier where only one alert is allowed.\n\nThe individual alertcondition() entries are also kept, for anyone on a paid plan who prefers one alert per event.'
-alertFormatTooltip              = 'Readable — for a phone.\nCompact — pipe-delimited, for a bot or webhook to parse.\nCustom template — your own wording, below.'
-templateTooltip                 = 'Used only when Message Format is "Custom template".\n\nPlaceholders, replaced when the alert fires:\n\n  {sym}    ticker\n  {tf}     chart timeframe\n  {event}  what happened, e.g. "🟢 CHoCH ↑ (swing)"\n  {price}  close\n  {bias}   swing structure bias\n  {ibias}  internal structure bias\n\nOne template with placeholders rather than a separate message box per event, which is how SMC TFlab does it — twenty boxes to edit, and none of them can say which symbol fired.\n\nFor a webhook into a bot, write JSON:\n{"sym":"{sym}","tf":"{tf}","event":"{event}","price":{price}}'
-tflabTooltip                    = 'Fires when price ENTERS the zone — the entry these messages describe.\n\nNot to be confused with the "OB Breakout" alerts above, which fire when price closes BEYOND a block and the block is therefore dead. Opposite events.\n\nMain is swing structure, Sub is internal. Each fires once per block, however long price stays inside it.'
+alertFormatTooltip              = 'Readable — for a phone.\nCompact — pipe-delimited, for a bot or webhook to parse: symbol|timeframe|event|price|swing bias|internal bias.'
 dashTooltip                     = 'A small read-out of the current bias and the last event, for scanning many charts quickly. OFF by default so the chart looks exactly like the base indicator.'
 
 modeInput                       = input.string( HISTORICAL, 'Mode',                     group = SMART_GROUP,    tooltip = modeTooltip, options = [HISTORICAL, PRESENT])
@@ -206,8 +204,7 @@ alertOrderBlockInput            = input(        true,       'OB mitigation',    
 alertEqualInput                 = input(        true,       'EQH / EQL',                group = ALERT_GROUP,    inline = 'ev2')
 alertGapInput                   = input(        true,       'FVG',                      group = ALERT_GROUP,    inline = 'ev2')
 
-alertFormatInput                = input.string( 'Readable', 'Message Format',           group = ALERT_GROUP,    tooltip = alertFormatTooltip, options = ['Readable','Compact','Custom template'])
-alertTemplateInput              = input.text_area('{sym} {tf}\n{event}\nprice {price}  ·  swing {bias} · internal {ibias}', 'Custom Template', group = ALERT_GROUP, tooltip = templateTooltip)
+alertFormatInput                = input.string( 'Readable', 'Message Format',           group = ALERT_GROUP,    tooltip = alertFormatTooltip, options = ['Readable','Compact'])
 showDashInput                   = input(        false,      'Show Status Read-out',     group = ALERT_GROUP,    tooltip = dashTooltip)
 
 // TFlab's six zone-entry alerts, reproduced. Their "Main" is swing structure
@@ -219,18 +216,12 @@ showDashInput                   = input(        false,      'Show Status Read-ou
 // being invalidated. TFlab's fire when price arrives INSIDE the zone, which is
 // the entry the message describes. Putting TFlab's wording on LuxAlgo's
 // condition would announce a long at the moment demand broke.
-alertDemandMainInput            = input(        true,       'Demand Main (swing, CHoCH)',   group = TFLAB_GROUP, tooltip = tflabTooltip)
-msgDemandMain                   = input.text_area('Long Position in Demand Main Zone ChoCh Origin.',  'Long Signal Message', group = TFLAB_GROUP)
-alertDemandSubInput             = input(        true,       'Demand Sub (internal, CHoCH)', group = TFLAB_GROUP)
-msgDemandSub                    = input.text_area('Long Position in Demand Sub Zone ChoCh Origin.',   'Long Signal Message', group = TFLAB_GROUP)
-alertDemandBosInput             = input(        true,       'Demand BoS',                   group = TFLAB_GROUP)
-msgDemandBos                    = input.text_area('Long Position in Demand Zone BoS Origin.',         'Long Signal Message', group = TFLAB_GROUP)
-alertSupplyMainInput            = input(        true,       'Supply Main (swing, CHoCH)',   group = TFLAB_GROUP)
-msgSupplyMain                   = input.text_area('Short Position in Supply Main Zone ChoCh Origin.', 'Short Signal Message', group = TFLAB_GROUP)
-alertSupplySubInput             = input(        true,       'Supply Sub (internal, CHoCH)', group = TFLAB_GROUP)
-msgSupplySub                    = input.text_area('Short Position in Supply Sub Zone ChoCh Origin.',  'Short Signal Message', group = TFLAB_GROUP)
-alertSupplyBosInput             = input(        true,       'Supply BoS',                   group = TFLAB_GROUP)
-msgSupplyBos                    = input.text_area('Short Position in Supply Zone BoS Origin.',        'Short Signal Message', group = TFLAB_GROUP)
+alertDemandMainInput            = input(        true,       'Demand Main (swing, CHoCH)',   group = TFLAB_GROUP, inline = 'z1', tooltip = tflabTooltip)
+alertSupplyMainInput            = input(        true,       'Supply Main',                  group = TFLAB_GROUP, inline = 'z1')
+alertDemandSubInput             = input(        true,       'Demand Sub (internal, CHoCH)', group = TFLAB_GROUP, inline = 'z2')
+alertSupplySubInput             = input(        true,       'Supply Sub',                   group = TFLAB_GROUP, inline = 'z2')
+alertDemandBosInput             = input(        true,       'Demand BoS',                   group = TFLAB_GROUP, inline = 'z3')
+alertSupplyBosInput             = input(        true,       'Supply BoS',                   group = TFLAB_GROUP, inline = 'z3')
 
 //---------------------------------------------------------------------------------------------------------------------}
 //DATA STRUCTURES & VARIABLES
@@ -1064,16 +1055,16 @@ if alertGapInput
     ev := currentAlerts.bullishFairValueGap    ? ev + (ev == '' ? '' : sep) + (readable ? 'bullish FVG'          : 'FVG_BULL')      : ev
     ev := currentAlerts.bearishFairValueGap    ? ev + (ev == '' ? '' : sep) + (readable ? 'bearish FVG'          : 'FVG_BEAR')      : ev
 
-// The zone-entry events carry the READER'S OWN wording into the single alert,
-// so the text typed in the panel is what arrives on the phone. TFlab's boxes
-// can only ever say a generic sentence; here the same sentence arrives with the
-// symbol, the timeframe and the price attached.
-ev := alertDemandMainInput and currentAlerts.demandMainTouch ? ev + (ev == '' ? '' : sep) + (readable ? msgDemandMain  : 'DEMAND_MAIN')  : ev
-ev := alertDemandSubInput  and currentAlerts.demandSubTouch  ? ev + (ev == '' ? '' : sep) + (readable ? msgDemandSub   : 'DEMAND_SUB')   : ev
-ev := alertDemandBosInput  and currentAlerts.demandBosTouch  ? ev + (ev == '' ? '' : sep) + (readable ? msgDemandBos   : 'DEMAND_BOS')   : ev
-ev := alertSupplyMainInput and currentAlerts.supplyMainTouch ? ev + (ev == '' ? '' : sep) + (readable ? msgSupplyMain  : 'SUPPLY_MAIN')  : ev
-ev := alertSupplySubInput  and currentAlerts.supplySubTouch  ? ev + (ev == '' ? '' : sep) + (readable ? msgSupplySub   : 'SUPPLY_SUB')   : ev
-ev := alertSupplyBosInput  and currentAlerts.supplyBosTouch  ? ev + (ev == '' ? '' : sep) + (readable ? msgSupplyBos   : 'SUPPLY_BOS')   : ev
+// The zone-entry events. The wording is fixed and says WHICH zone was entered,
+// which is more than TFlab's editable boxes can manage — theirs are written
+// before anyone knows the symbol, so every chart sends the same sentence. The
+// symbol, timeframe and price are attached by the message below regardless.
+ev := alertDemandMainInput and currentAlerts.demandMainTouch ? ev + (ev == '' ? '' : sep) + (readable ? '🟢 demand zone entered (swing)'    : 'DEMAND_MAIN') : ev
+ev := alertDemandSubInput  and currentAlerts.demandSubTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🟢 demand zone entered (internal)' : 'DEMAND_SUB')  : ev
+ev := alertDemandBosInput  and currentAlerts.demandBosTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🟢 demand zone entered (BOS)'      : 'DEMAND_BOS')  : ev
+ev := alertSupplyMainInput and currentAlerts.supplyMainTouch ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply zone entered (swing)'    : 'SUPPLY_MAIN') : ev
+ev := alertSupplySubInput  and currentAlerts.supplySubTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply zone entered (internal)' : 'SUPPLY_SUB')  : ev
+ev := alertSupplyBosInput  and currentAlerts.supplyBosTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply zone entered (BOS)'      : 'SUPPLY_BOS')  : ev
 
 // Internal events are appended only when the reader wants them. They fire many
 // times more often than swing events, so mixing them in by default would bury
@@ -1098,22 +1089,12 @@ if ev != ''
     lastEventText := ev
     lastEventTime := time
     if alertOnInput
-        // ONE TEMPLATE WITH PLACEHOLDERS, not one message box per event. It is
-        // shorter to maintain, it is the only version that can name the symbol
-        // that fired — TFlab's per-event boxes cannot, since they are written
-        // before anyone knows which chart it is — and written as JSON it is
-        // what a webhook hands the bot.
-        string body = switch alertFormatInput
-            'Compact' => str.format('{0}|{1}|{2}|{3}|{4}|{5}', syminfo.ticker, timeframe.period, ev, str.tostring(close, format.mintick), bias, inBias)
-            'Readable' => str.format('{0} {1}\n{2}\n{3}  ·  swing {4} · internal {5}', syminfo.ticker, timeframe.period, ev, str.tostring(close, format.mintick), bias, inBias)
-            => str.replace_all(str.replace_all(str.replace_all(str.replace_all(str.replace_all(str.replace_all(
-                   alertTemplateInput,
-                   '{sym}',   syminfo.ticker),
-                   '{tf}',    timeframe.period),
-                   '{event}', ev),
-                   '{price}', str.tostring(close, format.mintick)),
-                   '{bias}',  bias),
-                   '{ibias}', inBias)
+        // TWO FIXED SHAPES, no template to fill in. Both already carry the
+        // symbol, the timeframe and the price, which is the part that actually
+        // has to be there and the part a hand-written message cannot supply.
+        string body = readable
+             ? str.format('{0} {1}\n{2}\n{3}  ·  swing {4} · internal {5}', syminfo.ticker, timeframe.period, ev, str.tostring(close, format.mintick), bias, inBias)
+             : str.format('{0}|{1}|{2}|{3}|{4}|{5}',            syminfo.ticker, timeframe.period, ev, str.tostring(close, format.mintick), bias, inBias)
         alert(body, alert.freq_once_per_bar_close)
 
 //---------------------------------------------------------------------------------------------------------------------}
