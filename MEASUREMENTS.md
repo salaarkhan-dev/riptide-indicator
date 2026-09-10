@@ -6050,3 +6050,78 @@ four by R per bet. At ~1.5 bets a day that is roughly +0.1 R a day, with a
 Whether Q3 is a better *regime* or the other three quarters are the truth is not
 answerable from one year of data. What is answerable: **the 52% / +0.5 R version
 of this system does not exist over a year.**
+
+## Regime conditioning — nothing separates the quarter that paid
+
+`research/studies/regime.py` · 624 Min30 confirmed signals · 333 days
+
+If a variable observable **at signal time** separated Q3 from Q1 and Q2, the
+strategy becomes conditional and useful. Five candidates, each chosen for a
+written-down mechanism, each expressed as a **trailing 30-day percentile** rather
+than a level — a level is a disguised date and would separate quarters by
+construction.
+
+### Whole window — top tercile against bottom
+
+| variable | top R/bet | bottom R/bet | difference | |
+|---|---|---|---|---|
+| market volatility | +0.053 | +0.006 | +0.047 | +0.3 SE |
+| one-way market | +0.095 | −0.011 | +0.106 | +0.7 SE |
+| dispersion | +0.074 | +0.050 | +0.024 | +0.2 SE |
+| volatility rising | +0.001 | +0.116 | −0.115 | −0.7 SE |
+| symbol vol vs market | +0.120 | +0.103 | +0.017 | +0.1 SE |
+
+**Nothing reaches 1 SE.** Five values scattered between −0.7 and +0.7 — what no
+effect looks like.
+
+### The within-quarter test earned its place immediately
+
+`dispersion`, read one quarter at a time:
+
+| quarter | top | bottom | difference |
+|---|---|---|---|
+| 2025Q4 | −0.033 | −0.043 | +0.010 |
+| 2026Q1 | −0.216 | +0.145 | −0.361 |
+| 2026Q2 | −0.172 | +0.344 | −0.516 |
+| **2026Q3** | **+0.461** | −0.284 | **+0.745 (+2.4 SE)** |
+
+**Looking only at Q3, dispersion "explains" the good quarter at +2.4 SE.** It
+reverses in Q1 and Q2 and comes to +0.2 SE over the window. This is the single
+clearest demonstration in the project of why a variable must separate *within*
+the buckets it appears to explain — I already knew Q3 was the good quarter, so
+any variable elevated there would have fit it perfectly and predicted nothing.
+
+`symbol vol vs market` does the same thing more neatly: **+1.6 SE in Q1, −1.5 SE
+in Q2.** Cancelling noise.
+
+### The strict null
+
+| variable | real \|SE\| | circular-shift null p95 | null max |
+|---|---|---|---|
+| market volatility | 0.31 | 2.17 | 2.71 |
+| one-way market | 0.70 | 1.94 | 3.15 |
+| dispersion | 0.16 | 2.23 | 3.10 |
+| volatility rising | 0.73 | 2.01 | 3.41 |
+| symbol vol vs market | 0.11 | 1.83 | 2.92 |
+
+Not one is within a factor of two of its own null.
+
+### 0 of 5, and the power is adequate for the question asked
+
+The quarterly spread being explained is about **0.36 R** (−0.074 to +0.289).
+Terciles of ~170 bets give an SE on the difference of ~0.15–0.20, so a variable
+that *fully* explained the quarterly variation would register near 2 SE. Nothing
+reached 0.7.
+
+**This rules out a large, price-observable regime effect. It does not rule out a
+small one**, and it says nothing about variables not tested here — funding rates,
+open interest, or time-of-day. Open interest is the interesting gap: the bot
+already logs it, and it is the only non-price data source available.
+
+### What this leaves
+
+No regime filter. The honest description of the system is unchanged and now
+better supported: **a marginal edge whose returns arrive in bursts that cannot be
+timed from price.** The practical consequence is about sizing rather than
+filtering — constant small size and patience, not a switch that turns the
+strategy on and off.
