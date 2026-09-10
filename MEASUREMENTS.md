@@ -5527,3 +5527,66 @@ against 2R's +0.027. The chaotic simulation was reading its own noise.
 
 Held out, early: Min30 **+0.020 R** with a 34.7 R drawdown; Min15 **−0.012 R**
 with a **75.8 R** drawdown. Twice the drawdown for negative return.
+
+
+---
+
+## Is Min15 worth scanning — `research/studies/min15_worth.py`
+
+`exit_grid.py` put held-out Min15 early at −0.012 R with a 75.8 R drawdown
+against Min30's +0.020 at 34.7 and that looked damning — but it was **every**
+signal the engine finds, and the bot sends only what survives POI_REQUIRED and
+`MIN_GRADE=B`. So this replicates the deployed gates and asks whether Min15
+earns its place among what actually reaches the phone.
+
+### Among SENT signals, at grade B
+
+| | n | win | R/signal | total R | maxDD | R/DD |
+|---|---|---|---|---|---|---|
+| Min30 early | 498 | 38% | +0.070 | +34.8 | 32.3 | 1.08 |
+| **Min30 confirmed** | 82 | **50%** | **+0.458** | +37.5 | 14.3 | **2.63** |
+| Min15 early | 623 | 37% | +0.046 | +28.6 | 57.9 | 0.49 |
+| Min15 confirmed | 86 | 37% | +0.070 | +6.0 | 9.8 | 0.62 |
+| **Min30 ALONE** | 580 | 40% | **+0.125** | +72.4 | **35.0** | **2.06** |
+| Min30 + Min15 | 1289 | 38% | +0.083 | +107.0 | 84.6 | 1.27 |
+
+Held out: Min30 alone **+10.5 R at 17.8 drawdown (R/DD 0.59)**; combined
+**+11.9 R at 59.8 drawdown (R/DD 0.20)**.
+
+### The pre-registered test PASSES, and it was the wrong test
+
+The primary was: combined must beat Min30 alone on **total R**, held out. It
+does — **+1.4 R**. So by the letter of the pre-registration, Min15 stays.
+
+**That criterion was badly chosen and saying so afterwards is the only honest
+option.** Min15 adds **65% more signals** (204 → 583) for **13% more R** and
+**3.4× the drawdown**. Total R alone cannot see that, and the drawdown was
+listed as a secondary when it should have been half the primary.
+
+What separates the two readings is which one replicates:
+
+| | full window | held out |
+|---|---|---|
+| R/DD, Min30 alone | **2.06** | **0.59** |
+| R/DD, combined | 1.27 | 0.20 |
+
+**The R/DD degradation appears on both halves. The +1.4 R gain is noise-sized.**
+On the evidence that replicates, Min15 makes the equity curve substantially
+worse for a return improvement that cannot be distinguished from zero.
+
+### Not a data question any more
+
+Dropping Min15 is a judgement call the measurement has now framed rather than
+settled: fewer, better signals at a third of the drawdown, against 65% fewer
+alerts. `RIPTIDE_INTERVALS=Min30` is the whole change.
+
+The untested middle is **Min15 at grade A only** — the traffic is mostly grade
+B early, and the A band is where Min30's own strength sits.
+
+### A label bug, found in the first run
+
+The panel titles hardcoded "grade B+" while the gate read `MIN_GRADE`, which
+resolves to **C** unless `riptide.conf` is loaded — so the first run reported
+grade C results under a grade B heading. Both now interpolate the same
+constant. It is the same class of defect this project keeps finding in other
+people's indicators: a label that can disagree with the filter it describes.
