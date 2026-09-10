@@ -116,6 +116,7 @@ activityTooltip                 = 'Two bars inside each block — buy above the 
 showOriginTooltip               = 'Tag each order block with whether a CHoCH or a BOS created it. The distinction is TFlab\'s; the base already knows which tag fired'
 alertModeTooltip                = 'ONE ALERT FOR EVERYTHING is the point of this build.\n\nCreate a single TradingView alert on this indicator and choose "Any alert() function call". Every event below then arrives through that one alert, which is what makes this usable on the free tier where only one alert is allowed.\n\nThe individual alertcondition() entries are also kept, for anyone on a paid plan who prefers one alert per event.'
 alertFormatTooltip              = 'Readable — for a phone.\nCompact — pipe-delimited, for a bot or webhook to parse: symbol|timeframe|event|price|swing bias|internal bias.'
+arrowTooltip                    = 'A proper arrow where a TRADEABLE signal fires — price entering a demand or supply zone. Up and green for bullish, down and red for bearish.\n\nThese are the ones worth stopping for, so they get the arrow and everything else gets a small glyph. Two tiers rather than one, because a chart where every event looks equally important is a chart nobody scans.\n\nHover carries the same full read-out as the glyphs.'
 markerTooltip                   = 'A single small glyph on the bar where an alert fired, colour-coded by direction. HOVER IT for the full read-out: what fired, both structure biases, the nearest demand and supply zones with their prices, and what to watch for next.\n\nOne glyph per bar however many events fired, because the point is to stay readable beside another indicator. Everything else lives in the tooltip.\n\n◆ zone entered   C CHoCH   B BOS   ✕ sweep   = equal high/low   ▪ FVG'
 dashTooltip                     = 'A small read-out of the current bias and the last event, for scanning many charts quickly. OFF by default so the chart looks exactly like the base indicator.'
 
@@ -206,7 +207,9 @@ alertEqualInput                 = input(        true,       'EQH / EQL',        
 alertGapInput                   = input(        true,       'FVG',                      group = ALERT_GROUP,    inline = 'ev2')
 
 alertFormatInput                = input.string( 'Readable', 'Message Format',           group = ALERT_GROUP,    tooltip = alertFormatTooltip, options = ['Readable','Compact'])
-showMarkerInput                 = input(        true,       'Mark Events on Chart',     group = ALERT_GROUP,    tooltip = markerTooltip, inline = 'mk')
+showSignalArrowInput            = input(        true,       'Signal Arrows ▲▼',         group = ALERT_GROUP,    tooltip = arrowTooltip,  inline = 'ar')
+signalArrowSizeInput            = input.string( SMALL,      '',                         group = ALERT_GROUP,    inline = 'ar', options = [TINY,SMALL,NORMAL])
+showMarkerInput                 = input(        true,       'Context Glyphs',           group = ALERT_GROUP,    tooltip = markerTooltip, inline = 'mk')
 markerSizeInput                 = input.string( TINY,       '',                         group = ALERT_GROUP,    inline = 'mk', options = [TINY,SMALL,NORMAL])
 showDashInput                   = input(        false,      'Show Status Read-out',     group = ALERT_GROUP,    tooltip = dashTooltip)
 
@@ -1167,7 +1170,14 @@ watch := not zoneEntry and not na(close) ? watch + '\n  · the zones below are w
 if ev != ''
     lastEventText := ev
     lastEventTime := time
-    if showMarkerInput
+    // TWO TIERS ON PURPOSE. A zone entry is a trade decision now, so it gets a
+    // real arrow; a CHoCH four levels away is context, so it gets a character.
+    // Drawing both at the same weight is how a chart stops being scannable,
+    // which matters more here than usual because this runs beside Riptide.
+    //
+    // The arrow WINS THE BAR. If a zone entry and a CHoCH fire together the
+    // arrow is drawn and the glyph is not, so one event never prints twice.
+    if showSignalArrowInput or showMarkerInput
         string zones = zoneSummary()
         string tip = ev
              + '\n' + syminfo.ticker + '  ·  ' + timeframe.period + '  ·  ' + str.tostring(close, format.mintick)
@@ -1176,13 +1186,24 @@ if ev != ''
              + '\n  internal   ' + inBias
              + (zones != '' ? '\n\nNEAREST ZONES' + zones : '')
              + '\n\nWATCH FOR' + watch
-        label.new(chart.point.new(time, na, bearEvent and not bullEvent ? high + atrMeasure * 0.4 : low - atrMeasure * 0.4),
-             glyph, xloc.bar_time,
-             color = color(na),
-             textcolor = bearEvent and not bullEvent ? swingBearishColor : swingBullishColor,
-             style = bearEvent and not bullEvent ? label.style_label_down : label.style_label_up,
-             size = markerSizeInput,
-             tooltip = tip)
+        bool down = bearEvent and not bullEvent
+        float at  = down ? high + atrMeasure * 0.4 : low - atrMeasure * 0.4
+        color css = down ? swingBearishColor : swingBullishColor
+
+        if zoneEntry and showSignalArrowInput
+            label.new(chart.point.new(time, na, at), '', xloc.bar_time,
+                 color = css,
+                 textcolor = css,
+                 style = down ? label.style_arrowdown : label.style_arrowup,
+                 size = signalArrowSizeInput,
+                 tooltip = tip)
+        else if showMarkerInput
+            label.new(chart.point.new(time, na, at), glyph, xloc.bar_time,
+                 color = color(na),
+                 textcolor = css,
+                 style = down ? label.style_label_down : label.style_label_up,
+                 size = markerSizeInput,
+                 tooltip = tip)
     if alertOnInput
         // TWO FIXED SHAPES, no template to fill in. Both already carry the
         // symbol, the timeframe and the price, which is the part that actually
