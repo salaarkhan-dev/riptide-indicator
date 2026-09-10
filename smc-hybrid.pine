@@ -129,6 +129,8 @@ marubozuTooltip                 = 'How much of a confirmation candle\'s range mu
 setupBoxTooltip                 = 'Outline the zone that is currently WAITING for its retest, so the live setup is separated from every other block on the chart.\n\nThe outline is removed the moment the zone is retested or price closes through it, which is what keeps the chart from filling up with dead levels.'
 zoneRejectTooltip               = 'A small triangle wherever a rejection candle prints INSIDE a live zone — below the bar for demand, above it for supply.\n\nNOT AN ENTRY, AND THE DIFFERENCE MATTERS. It has none of the entry gating: no leave-and-return test, no structure filter, no per-zone cap. It says only "the shape happened at the level". A zone\'s own formation candles will trip it, which is correct — those ARE rejections, they are just not retests.\n\nThe big arrow is the entry. This is what to read the chart by.'
 pinDebugTooltip                 = 'TURN THIS ON WHEN AN ARROW YOU EXPECTED DID NOT APPEAR.\n\n  ◇ below the bar   a long LOWER wick — hammer or hanging man\n  ◇ above the bar   a long UPPER wick — inverted hammer or shooting star\n  ✕                 a shape that WAS inside a live zone and produced no arrow. Hover it: it names the gate that stopped it.\n\nGREY ON PURPOSE. A pin standing in open space has no direction — the same upper wick is a rejection at supply and an inverted hammer at demand. Only the coloured triangles claim bull or bear, and they take it from the zone, not the candle.\n\nNo diamond on a candle you consider a rejection means the SHAPE test rejected it: adjust Pin Wick : Body. A diamond and no ✕ at a zone you were watching means price never traded inside the block the indicator actually holds, which is usually the answer.'
+leaveFirstTooltip               = 'THE RETEST RULE, AND THE ONE MOST LIKELY TO BE HIDING A SIGNAL YOU EXPECTED.\n\nON: price must trade completely clear of the zone before coming back can count. That is what a retest IS, and it is why a freshly cut block cannot fire on the impulse that created it.\n\nOFF: a rejection candle inside the zone signals whether or not price ever left. This picks up the pattern that forms AS the zone is made — the displacement itself. Those are real rejections, but they are entries at the impulse rather than at the pullback, so the stop is further and the price is worse.\n\nIf a setup you were sure about produced no arrow, turn this off and see whether it appears. If it does, the setup was a formation, not a retest.'
+fvgZoneTooltip                  = 'Treat fair value gaps as retest zones in their own right, not only as order blocks.\n\nA gap is a zone price returns to for the same reason a block is — it is where the move left something behind. Same rejection test, same structure filter, same tests-per-zone cap.\n\nThis roughly doubles the number of zones in play, so expect more signals rather than better ones.'
 zoneTestsTooltip                = 'How many separate returns to the same zone may print an arrow.\n\nEach return counts once: price has to leave the zone before coming back can count again. 1 is strict SMC — the first retest is the trade. 2 allows the common case where the first touch is a shallow wick and the real test comes after.\n\nBeyond that a zone is being worn out rather than defended, which is the opposite of the setup.'
 withTrendTooltip                = 'Only signal a demand zone while swing structure is bullish, and a supply zone while it is bearish.\n\nWITHOUT THIS you get short arrows into a rally, because a supply block forms above every impulse and price walks back into it on the way up. That is the trade this whole system measured as the worst one available: counter-trend entries came out at -0.588 R against +0.038 for the same construction with the trend, the single largest separation found anywhere in the research.\n\nTurn it off to see every zone touch regardless of direction.'
 dashTooltip                     = 'A small read-out of the current bias and the last event, for scanning many charts quickly. OFF by default so the chart looks exactly like the base indicator.'
@@ -184,7 +186,7 @@ equalHighsLowsThresholdInput    = input.float(  0.1,        'Threshold',        
 equalHighsLowsSizeInput         = input.string( TINY,       'Label Size',               group = EQUAL_GROUP,    options = [TINY,SMALL,NORMAL])
 
 showFairValueGapsInput          = input(        true,       'Fair Value Gaps',          group = GAPS_GROUP,     tooltip = showFairValueGapsTooltip)
-fairValueGapsThresholdInput     = input(        true,       'Auto Threshold',           group = GAPS_GROUP,     tooltip = fairValueGapsThresholdTooltip)
+fairValueGapsThresholdInput     = input(        false,      'Auto Threshold',           group = GAPS_GROUP,     tooltip = fairValueGapsThresholdTooltip)
 fairValueGapsTimeframeInput     = input.timeframe('',       'Timeframe',                group = GAPS_GROUP,     tooltip = fairValueGapsTimeframeTooltip)
 fairValueGapsBullColorInput     = input.color(color.new(#00ff68, 70), 'Bullish FVG' , group = GAPS_GROUP)
 fairValueGapsBearColorInput     = input.color(color.new(#ff0008, 70), 'Bearish FVG' , group = GAPS_GROUP)
@@ -231,6 +233,7 @@ showSetupBoxInput               = input(        true,       'Outline Zone Awaiti
 showZoneRejectInput             = input(        true,       'Mark Rejections At Zones ▲▼', group = ALERT_GROUP,  tooltip = zoneRejectTooltip)
 showPinDebugInput               = input(        false,      'Show Every Pin Candle (debug)', group = ALERT_GROUP, tooltip = pinDebugTooltip)
 maxZoneTestsInput               = input.int(    2,          'Tests Allowed Per Zone',   group = ALERT_GROUP,    tooltip = zoneTestsTooltip, minval = 1, maxval = 5)
+requireLeaveFirstInput          = input(        true,       'Only After Price Leaves',  group = ALERT_GROUP,    tooltip = leaveFirstTooltip)
 showDashInput                   = input(        false,      'Show Status Read-out',     group = ALERT_GROUP,    tooltip = dashTooltip)
 
 // TFlab's six zone-entry alerts, reproduced. Their "Main" is swing structure
@@ -248,6 +251,8 @@ alertDemandSubInput             = input(        true,       'Demand Sub (interna
 alertSupplySubInput             = input(        true,       'Supply Sub',                   group = TFLAB_GROUP, inline = 'z2')
 alertDemandBosInput             = input(        true,       'Demand BoS',                   group = TFLAB_GROUP, inline = 'z3')
 alertSupplyBosInput             = input(        true,       'Supply BoS',                   group = TFLAB_GROUP, inline = 'z3')
+alertDemandFvgInput             = input(        true,       'Demand FVG',                   group = TFLAB_GROUP, inline = 'z4', tooltip = fvgZoneTooltip)
+alertSupplyFvgInput             = input(        true,       'Supply FVG',                   group = TFLAB_GROUP, inline = 'z4')
 
 //---------------------------------------------------------------------------------------------------------------------}
 //DATA STRUCTURES & VARIABLES
@@ -289,6 +294,8 @@ type alerts
     bool supplyMainTouch            = false
     bool supplySubTouch             = false
     bool supplyBosTouch             = false
+    bool demandFvgTouch             = false
+    bool supplyFvgTouch             = false
     string demandTouchOrigin        = ''
     string supplyTouchOrigin        = ''
     // ADDED — the zone that was entered, so the entry arrow can name the range
@@ -343,6 +350,14 @@ type fairValueGap
     int bias
     box topBox
     box bottomBox
+    // ADDED — a gap is a zone price comes back to, so it carries exactly the
+    // state an order block carries. Note top and bottom are NOT ordered here:
+    // a bearish gap is built with top below bottom, so every comparison has to
+    // go through math.max / math.min rather than trusting the field names.
+    bool touched     = false
+    bool leftZone    = false
+    int tests        = 0
+    int pinAge       = 0
 
 type trend
     int bias
@@ -929,11 +944,11 @@ touchOrderBlocks(bool internal = false) =>
             // A rejection shape landed in this zone and produced nothing. Name
             // the gate that stopped it, checked in the order they apply, so the
             // answer is on the chart rather than reconstructed afterwards.
-            if inNow and pinNow and not (fire and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
+            if inNow and pinNow and not (fire and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
                 currentAlerts.pinVetoed := true
-                currentAlerts.vetoReason := not eachOrderBlock.leftZone ? 'price has not left this zone since it was cut, so there is nothing to retest yet' : eachOrderBlock.touched ? 'this return already signalled — price has to leave the zone before it can count again' : eachOrderBlock.tests >= maxZoneTestsInput ? 'zone has used all ' + str.tostring(maxZoneTestsInput) + ' of its allowed tests' : 'the shape was found but the rejection test for this mode did not pass'
+                currentAlerts.vetoReason := (requireLeaveFirstInput and not eachOrderBlock.leftZone) ? 'price has not left this zone since it was cut — turn off Only After Price Leaves to signal formations too' : eachOrderBlock.touched ? 'this return already signalled — price has to leave the zone before it can count again' : eachOrderBlock.tests >= maxZoneTestsInput ? 'zone has used all ' + str.tostring(maxZoneTestsInput) + ' of its allowed tests' : 'the shape was found but the rejection test for this mode did not pass'
 
-            if fire and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
+            if fire and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
                 eachOrderBlock.touched    := true
                 eachOrderBlock.tests      += 1
                 eachOrderBlock.pinAge     := 0
@@ -989,7 +1004,7 @@ touchOrderBlocks(bool internal = false) =>
                 //
                 // A fresh pin restarts the clock; otherwise it ages out after
                 // two bars, which is the whole window either confirmation has.
-                bool newPin = inNow and pinAny and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
+                bool newPin = inNow and pinAny and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
                 eachOrderBlock.pinAge := newPin ? 1 : eachOrderBlock.pinAge == 1 ? 2 : 0
 
 deleteOrderBlocks(bool internal = false) =>
@@ -1257,6 +1272,69 @@ displayStructure(bool internal = false) =>
 
 fairValueGapBox(leftTime,rightTime,topPrice,bottomPrice,boxColor) => box.new(chart.point.new(leftTime,na,topPrice),chart.point.new(rightTime + fairValueGapsExtendInput * (time-time[1]),na,bottomPrice), xloc=xloc.bar_time, border_color = boxColor, bgcolor = boxColor)
 
+// @function        ADDED — a gap is a zone too, so it gets the same treatment.
+//
+// SAME RULES AS touchOrderBlocks AND DELIBERATELY SO. A fair value gap is where
+// price moved so fast it left something behind, which is the same claim an
+// order block makes about a candle; both are levels price comes back to. Giving
+// gaps a weaker or different test would mean two kinds of signal wearing the
+// same arrow.
+//
+// THE ONE THING THAT IS NOT THE SAME is the geometry. A bearish gap is built
+// with `top` BELOW `bottom` — that is how the base constructs it and the boxes
+// render fine either way — so every comparison here goes through math.max and
+// math.min instead of trusting the field names. Reading them literally silently
+// inverts every bearish gap.
+//
+// No visible-window cap either, because every live gap is drawn: the base
+// deletes them on mitigation rather than keeping a hidden backlog, so "on the
+// chart" and "in the array" already mean the same thing.
+touchFairValueGaps() =>
+    for eachFairValueGap in fairValueGaps
+        float zTop   = math.max(eachFairValueGap.top, eachFairValueGap.bottom)
+        float zBot   = math.min(eachFairValueGap.top, eachFairValueGap.bottom)
+        bool bull    = eachFairValueGap.bias == BULLISH
+        bool inNow   = low <= zTop and high >= zBot
+        bool outside = low > zTop or high < zBot
+
+        bool confirmBody = eachFairValueGap.pinAge == 1 and (bull ? bullConfirm : bearConfirm)
+        bool confirmGap  = eachFairValueGap.pinAge == 2 and (bull ? gapUp : gapDn)
+        bool twoBarFire  = confirmBody or confirmGap
+
+        if outside
+            eachFairValueGap.leftZone := true
+            eachFairValueGap.touched  := false
+
+        bool pinNow = bull ? bullPin : bearPin
+        bool oneBarFire = rejectionModeInput == REJ_ANY ? inNow : rejectionModeInput == REJ_CLOSE ? (inNow and (bull ? (close >= math.avg(zTop, zBot) and close > open) : (close <= math.avg(zTop, zBot) and close < open))) : rejectionModeInput == REJ_PIN ? (inNow and pinNow and (bull ? close > zBot : close < zTop)) : false
+        bool fire = rejectionModeInput == REJ_CONFIRM ? twoBarFire : oneBarFire
+
+        if fire and (eachFairValueGap.leftZone or not requireLeaveFirstInput) and not eachFairValueGap.touched and eachFairValueGap.tests < maxZoneTestsInput
+            eachFairValueGap.touched := true
+            eachFairValueGap.tests   += 1
+            eachFairValueGap.pinAge  := 0
+            string nm = rejectionModeInput != REJ_CONFIRM ? (patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : '') : (patHammer[1] ? 'hammer' : patHangingMan[1] ? 'hanging man' : patInvHammer[1] ? 'inverted hammer' : patShootingStar[1] ? 'shooting star' : '')
+            if bull
+                currentAlerts.demandFvgTouch := true
+                currentAlerts.demandPattern  := nm + (nm != '' and rejectionModeInput == REJ_CONFIRM ? (confirmGap ? ' + displacement gap' : ' + green marubozu') : '') + (nm != '' ? ' at an FVG' : 'FVG')
+                currentAlerts.demandTouchTop := zTop
+                currentAlerts.demandTouchBot := zBot
+            else
+                currentAlerts.supplyFvgTouch := true
+                currentAlerts.supplyPattern  := nm + (nm != '' and rejectionModeInput == REJ_CONFIRM ? (confirmGap ? ' + displacement gap' : ' + red marubozu') : '') + (nm != '' ? ' at an FVG' : 'FVG')
+                currentAlerts.supplyTouchTop := zTop
+                currentAlerts.supplyTouchBot := zBot
+        else
+            eachFairValueGap.pinAge := (inNow and pinAny and (eachFairValueGap.leftZone or not requireLeaveFirstInput) and not eachFairValueGap.touched and eachFairValueGap.tests < maxZoneTestsInput) ? 1 : eachFairValueGap.pinAge == 1 ? 2 : 0
+
+        if inNow and (pinNow or twoBarFire)
+            currentAlerts.zoneRejectTop := zTop
+            currentAlerts.zoneRejectBot := zBot
+            if bull
+                currentAlerts.zoneRejectBull := true
+            else
+                currentAlerts.zoneRejectBear := true
+
 deleteFairValueGaps() =>
     for [index,eachFairValueGap] in fairValueGaps
         if (low < eachFairValueGap.bottom and eachFairValueGap.bias == BULLISH) or (high > eachFairValueGap.top and eachFairValueGap.bias == BEARISH)
@@ -1412,6 +1490,8 @@ if showHighLowSwingsInput or showPremiumDiscountZonesInput
         drawPremiumDiscountZones()
 
 if showFairValueGapsInput
+    if alertDemandFvgInput or alertSupplyFvgInput
+        touchFairValueGaps()
     deleteFairValueGaps()
 
 getCurrentStructure(swingsLengthInput,false)
@@ -1553,6 +1633,8 @@ ev := alertDemandBosInput  and currentAlerts.demandBosTouch  ? ev + (ev == '' ? 
 ev := alertSupplyMainInput and currentAlerts.supplyMainTouch ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply zone entered (swing)'    : 'SUPPLY_MAIN') : ev
 ev := alertSupplySubInput  and currentAlerts.supplySubTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply zone entered (internal)' : 'SUPPLY_SUB')  : ev
 ev := alertSupplyBosInput  and currentAlerts.supplyBosTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply zone entered (BOS)'      : 'SUPPLY_BOS')  : ev
+ev := alertDemandFvgInput  and currentAlerts.demandFvgTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🟢 demand FVG entered'             : 'DEMAND_FVG')  : ev
+ev := alertSupplyFvgInput  and currentAlerts.supplyFvgTouch  ? ev + (ev == '' ? '' : sep) + (readable ? '🔴 supply FVG entered'             : 'SUPPLY_FVG')  : ev
 
 // Internal events are appended only when the reader wants them. They fire many
 // times more often than swing events, so mixing them in by default would bury
@@ -1590,8 +1672,8 @@ inBias    = internalTrend.bias == BULLISH ? 'bull' : internalTrend.bias == BEARI
 // A dot with no arrow after it is a setup that did not complete — the retest
 // never came, or came and walked straight through. That is worth seeing.
 // ---------------------------------------------------------------------------
-demandEntry = currentAlerts.demandMainTouch or currentAlerts.demandSubTouch or currentAlerts.demandBosTouch
-supplyEntry = currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or currentAlerts.supplyBosTouch
+demandEntry = currentAlerts.demandMainTouch or currentAlerts.demandSubTouch or currentAlerts.demandBosTouch or currentAlerts.demandFvgTouch
+supplyEntry = currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or currentAlerts.supplyBosTouch or currentAlerts.supplyFvgTouch
 
 // WITH-STRUCTURE FILTER, ON BY DEFAULT, AND THIS IS THE MEASURED ONE. A supply
 // block forms above every impulse leg, so in a rally price walks back into
