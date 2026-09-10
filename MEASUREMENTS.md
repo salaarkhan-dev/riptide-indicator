@@ -5819,3 +5819,79 @@ this project runs on. It is far too slow to trade — 0.2 bets a day — but as 
 *out-of-sample window for testing a mechanism* it is eight times anything used
 here so far. Any future claim about market structure should be checked against
 it before being believed.
+
+---
+
+## The liquidity target — the one untested exit dimension, and it fails
+
+`research/studies/liquidity_target.py` · POI required · grade B+ · one bet per close
+
+Every exit ever tested here used a **fixed** multiple of risk — 25 policies, four
+targets, five families. None asked whether the target should depend on the
+chart. "Take profit into the opposing liquidity" is the standard SMC answer and
+the engine already has the machinery, so this was the last genuinely untested
+dimension in the exit.
+
+### Where the pool actually sits — the finding that explains everything else
+
+| | median distance to nearest unswept pool | share closer than 2R |
+|---|---|---|
+| Min30 confirmed | 1.2 R | **77%** |
+| Hour4 confirmed | 1.1 R | **81%** |
+| Hour4 early | 1.2 R | 79% |
+
+**"Target the liquidity" is, on this data, almost always a *closer* target.** So
+it is not a new mechanism at all — it is the exit dial that `exit_grid.py`
+already priced, reached by a different route.
+
+And it behaves exactly as that predicts. Win rate up, money down:
+
+| Min30 confirmed, full window | win | R/bet | vs deployed |
+|---|---|---|---|
+| plain 2R *(deployed)* | 53% | **+0.529** | — |
+| nearest pool | **57%** | +0.194 | −1.5 SE |
+| pool beyond it | 57% | +0.558 | +0.1 SE |
+
+The pre-registered expectation said "the nearest pool beats 2R on win rate and
+loses on R." It does, on all four full-window panels.
+
+### Both pre-registered conditions FAIL
+
+**Primary — Min30 confirmed, held out:** the nearest pool is **−1.9 SE worse**
+than plain 2R (+0.111 against +0.775).
+
+**Second — Hour4, 333 days, the fresh check:** every liquidity policy is
+negative against the deployed exit on both held-out panels — nearest pool −0.5
+SE on confirmed and −0.9 SE on early.
+
+**Across eight panels, not one liquidity target beats plain 2R held out, and
+the sign is negative in every one.** That is not a close call.
+
+### The floor was the interesting cell, and it is the worst one
+
+The expectation was that a floor would help — take the trade only when the pool
+is far enough away to pay for the risk. The opposite happens, and the cleanest
+row is the diagnostic one:
+
+| Min30 confirmed, full window | bets | win | R/bet |
+|---|---|---|---|
+| plain 2R, all trades | 74 | 53% | +0.529 |
+| **2R, only when a pool sits 2R+ away** | 17 | **29%** | −0.142 (−1.8 SE) |
+
+That row holds the exit fixed at 2R and changes only *which trades are taken*.
+**Trades whose nearest liquidity is far away are worse trades, not better
+ones** — the reverse of the intuition that clear air ahead is good.
+
+**One confound, and it is not small.** "Pool is far in R" and "the stop is
+tight" are close to the same statement, since R is the denominator. So this row
+may be re-measuring the tight-stop population rather than anything about
+liquidity, and tight stops pay proportionally more in fees and stop out on
+noise. The honest reading is that the filter fails; *why* it fails is not
+settled by this study.
+
+### What this closes
+
+The exit has now been moved by a fixed multiple (25 policies), by a break-even
+rule, by a partial, by a structural trail, and by the chart's own liquidity. All
+five families lose to plain 2R. **The exit is not where the remaining headroom
+is, and this was the last untested way in.**
