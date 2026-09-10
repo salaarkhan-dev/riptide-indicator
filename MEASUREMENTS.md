@@ -6317,3 +6317,24 @@ longer route. Pool source repeats the 42-day finding at the same non-significanc
 agrees). With POI required and the floor at B, a trend disagreement drops either
 kind to C and it is never sent. **So every alert sent is A if confirmed and B if
 early** — the letter and the ★ are the same fact twice.
+
+### Risk % reference bands — fixed round boundaries, not fitted
+
+| risk % | bets | share | win | R/bet | SE |
+|---|---|---|---|---|---|
+| 0.0 – 0.8% | 59 | 12% | 32% | −0.107 | 0.182 |
+| 0.8 – 1.2% | 89 | 18% | 38% | +0.060 | 0.151 |
+| **1.2 – 1.6%** | 111 | 22% | **45%** | **+0.229** | 0.135 |
+| **1.6 – 2.0%** | 95 | 19% | **41%** | **+0.104** | 0.142 |
+| **2.0 – 2.6%** | 74 | 15% | **46%** | **+0.330** | 0.170 |
+| 2.6 – 3.5% | 69 | 14% | **25%** | −0.245 | 0.149 |
+| over 3.5% | 69 | 14% | 28% | −0.194 | 0.152 |
+
+**1.2 % – 2.6 % is one contiguous block**: three consecutive bands, all positive,
+win rates 41–46%. Everything outside runs 25–38% and is negative but for the
+0.8–1.2% band. The cliff above 2.6% is the sharpest edge in the table — the win
+rate roughly halves, 46% to 25%.
+
+The same table on EARLY signals is incoherent — +0.049, −0.070, +0.130, −0.038,
+−0.005, −0.067, +0.083 — non-monotone with no block. **The effect is
+confirmed-only**, which remains the main reason not to treat it as established.
