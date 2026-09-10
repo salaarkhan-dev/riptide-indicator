@@ -1,4 +1,8 @@
-"""An EXACT port of `halftrend.pine` — the signal engine AND its own scoreboard.
+"""An EXACT port of the HalfTrend indicator — the signal engine AND its own
+scoreboard.
+
+The Pine source this was ported from has been removed from the repository; the
+port stands on its own and the numbers it produced are in MEASUREMENTS.md.
 
 Separate from Riptide entirely. It shares the candle fetcher and the scorer and
 nothing else: no cluster, no POI, no grade, no `sweep_worth`. Riptide's settings
