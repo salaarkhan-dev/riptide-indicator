@@ -605,6 +605,12 @@ type CpBlock
     float  top
     float  bot
     int    barIdx
+    // THE BOX IS ANCHORED BY TIME, NOT BY BAR INDEX. A bar_index coordinate has
+    // to stay near the current bar — Pine refuses one a few thousand bars back
+    // with RE10026 — and an order block is exactly the thing that should still
+    // be drawn from where it formed however long ago that was. LuxAlgo anchors
+    // its boxes by time for this reason and so does this.
+    int    barTime
     bool   isBull
     bool   armed = true
     box    bx    = na
@@ -900,8 +906,10 @@ lxParsedLow  = lxWide ? high : low
 
 var array<float> lxHighs = array.new<float>()
 var array<float> lxLows  = array.new<float>()
+var array<int>   lxTimes = array.new<int>()
 lxHighs.push(lxParsedHigh)
 lxLows.push(lxParsedLow)
+lxTimes.push(time)
 
 var LxPivot lxSwingHigh = LxPivot.new(na, na, false)
 var LxPivot lxSwingLow  = LxPivot.new(na, na, false)
@@ -915,9 +923,9 @@ var array<box>     lxIntBx   = array.new<box>()
 
 if barstate.isfirst
     for i = 1 to obLuxSwingN
-        lxSwingBx.push(box.new(na, na, na, na, xloc = xloc.bar_index, extend = extend.right))
+        lxSwingBx.push(box.new(na, na, na, na, xloc = xloc.bar_time, extend = extend.right))
     for i = 1 to obLuxIntN
-        lxIntBx.push(box.new(na, na, na, na, xloc = xloc.bar_index, extend = extend.right))
+        lxIntBx.push(box.new(na, na, na, na, xloc = xloc.bar_time, extend = extend.right))
 
 // A bar is the start of a new leg when it is the extreme of the window that
 // follows it. `leg` flips between the two states and the flip is the pivot.
@@ -953,7 +961,7 @@ lxStoreOB(LxPivot p, bool internal, bool isBull) =>
         int idx = p.barIndex + (isBull ? src.indexof(src.min()) : src.indexof(src.max()))
         array<CpBlock> blocks = internal ? lxIntOB : lxSwingOB
         blocks.unshift(CpBlock.new(top = lxHighs.get(idx), bot = lxLows.get(idx),
-             barIdx = idx, isBull = isBull))
+             barIdx = idx, barTime = lxTimes.get(idx), isBull = isBull))
         while blocks.size() > 100
             blocks.pop()
     true
@@ -994,8 +1002,8 @@ lxDrawOB(bool internal) =>
                 CpBlock ob = blocks.get(i)
                 color oc = internal ? (ob.isBull ? obLuxIntBull : obLuxIntBear)
                      : (ob.isBull ? obLuxBull : obLuxBear)
-                b.set_lefttop(ob.barIdx, ob.top)
-                b.set_rightbottom(bar_index, ob.bot)
+                b.set_top_left_point(     chart.point.new(ob.barTime, na, ob.top))
+                b.set_bottom_right_point( chart.point.new(last_bar_time, na, ob.bot))
                 b.set_bgcolor(oc)
                 b.set_border_color(internal ? color(na) : oc)
             else
