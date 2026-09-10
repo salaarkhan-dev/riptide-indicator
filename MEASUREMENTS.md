@@ -6338,3 +6338,40 @@ rate roughly halves, 46% to 25%.
 The same table on EARLY signals is incoherent — +0.049, −0.070, +0.130, −0.038,
 −0.005, −0.067, +0.083 — non-monotone with no block. **The effect is
 confirmed-only**, which remains the main reason not to treat it as established.
+
+### The risk band against the circular-shift null — one half survives, decisively
+
+`research/studies/risk_band.py` · 626 confirmed signals · 333 days · 300 rotations
+
+The band shipped as `take` / `marginal` / `skip` on 1.2–2.6%. Testing its two
+halves separately took it apart, and the pre-registered expectation was **wrong
+in both directions.**
+
+| contrast | in-band | out | difference | real \|z\| | null p95 | null max | quarters |
+|---|---|---|---|---|---|---|---|
+| whole band 1.2–2.6% | 44% win, +0.212 | 31%, −0.125 | +0.337 | 2.83 | 1.76 | 3.07 | 3 of 4 |
+| **upper edge: ≤2.6% vs >2.6%** | **41% win, +0.141** | **26%, −0.226** | **+0.367** | **2.84** | **1.38** | **1.95** | **4 of 4** |
+| lower edge: ≥1.2% vs <1.2% | 38%, +0.067 | 35%, −0.038 | +0.104 | 0.77 | 1.74 | 2.79 | 2 of 4 |
+| lower edge, ZERO FEES | 38%, +0.080 | 35%, −0.002 | +0.082 | 0.60 | 1.78 | 2.87 | 2 of 4 |
+
+**The upper edge beats the null's MAXIMUM over 300 rotations** — not its p95, its
+largest value — so p < 1/300, and it holds its sign in **all four quarters**
+(+0.031, +0.321, +0.721, +0.230). Even Bonferroni-corrected over the four
+contrasts here it stays under 1.3%. **This is the best-evidenced result in the
+project after the sweep volume gate.**
+
+And it is the half with **no arithmetic explanation.** Fees are negligible on a
+wide stop, so nothing about cost accounts for a 26% win rate. The reading is
+behavioural: a raid that large was a violent move, and a violent move continues
+rather than exhausts.
+
+**The lower edge failed everything.** It does not clear the null with fees
+(0.77) or without them (0.60), and holds its sign in 2 quarters of 4. The
+pre-registration expected it to clear with fees and collapse without; it never
+cleared at all. The fee contribution is also smaller than assumed — the
+difference moves only from +0.104 to +0.082 when fees are switched off, so
+tight stops cost about 0.02 R against the rest of the range, not the larger
+figure the entry-location work implied.
+
+**Deployed change: the verdict is now one-sided.** Over 2.6% prints `skip`;
+everything else prints nothing. A `take` would assert the half that failed.

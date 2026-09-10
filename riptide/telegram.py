@@ -334,45 +334,41 @@ def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
     return f"{src} pool @ {fmt(level)}{extra}"
 
 
-# Where a CONFIRMED setup's risk-to-price puts it, measured over 333 days on
-# 628 signals. Boundaries are round numbers fixed in advance, not fitted, so
-# this is a lookup rather than a curve:
+# ONLY THE UPPER EDGE SURVIVED, so only the upper edge is printed.
 #
-#   0.0-0.8%  32% win  -0.107      1.6-2.0%  41% win  +0.104
-#   0.8-1.2%  38% win  +0.060      2.0-2.6%  46% win  +0.330
-#   1.2-1.6%  45% win  +0.229      2.6-3.5%  25% win  -0.245
-#                                  over 3.5% 28% win  -0.194
+# The band shipped for a few hours as take / marginal / skip on 1.2%-2.6%, and
+# then risk_band.py tested its two halves separately against a circular-shift
+# null. They came apart completely:
 #
-# 1.2 to 2.6 is one contiguous block of three bands, and the sharpest edge in
-# the table sits at 2.6 where the win rate roughly halves. Both tails have a
-# mechanism: a tight stop pays a large fee as a share of R, and a very wide one
-# means the raid itself was violent, which reads as a move continuing rather
-# than exhausting.
-RISK_TAKE = (1.2, 2.6)
-RISK_MARGINAL = 0.8
+#   over 2.6%   real |z| 2.84 against a null p95 of 1.38 and a null MAX of
+#               1.95 over 300 rotations — larger than every rotation, so
+#               p < 1/300 — and the sign holds in 4 quarters of 4.
+#               26% win against 41%, -0.226 R against +0.141.
+#
+#   under 1.2%  real |z| 0.77 against a p95 of 1.74. Does not clear, sign holds
+#               in 2 quarters of 4, and it still does not clear with fees
+#               switched off (0.60). The lower boundary was not supported and
+#               has been withdrawn rather than left on the alert.
+#
+# The surviving half is also the one with no arithmetic explanation: fees are
+# negligible on a wide stop, so nothing about cost accounts for a 26% win rate
+# there. The reading is behavioural — a raid that large was a violent move, and
+# a violent move continues rather than exhausts.
+RISK_WIDE = 2.6
 
 
 def risk_verdict(riskpct: float) -> str:
-    """take / marginal / skip, or "" when there is no evidence to offer one.
+    """"skip" when the stop is wider than 2.6% of price, otherwise nothing.
 
-    CONFIRMED SETUPS ONLY, and the caller enforces that. The identical bands on
-    early signals come out incoherent — +0.049, -0.070, +0.130, -0.038, -0.005,
-    -0.067, +0.083, non-monotone with no block — so printing a verdict there
-    would be inventing one. An empty string is the honest output for a signal
-    this was never measured on.
+    ONE-SIDED ON PURPOSE. The upper edge beat every one of 300 rotations of its
+    own null and held its sign in all four quarters; the lower edge cleared
+    neither test. Printing a "take" for the rest of the range would assert
+    something that failed, so the rest of the range says nothing at all.
 
-    UNPROVEN, and /legend says so in as many words: it holds in three quarters
-    of four, it is the best of six comparisons that were looked at, and the
-    circular-shift null has not been run on it. It is a weighting, not a gate,
-    and it never suppresses an alert.
+    CONFIRMED SETUPS ONLY, enforced by the caller. The same split on early
+    signals is non-monotone with no block, so there is no verdict to give.
     """
-    if riskpct <= 0:
-        return ""
-    if RISK_TAKE[0] <= riskpct <= RISK_TAKE[1]:
-        return "take"
-    if RISK_MARGINAL <= riskpct < RISK_TAKE[0]:
-        return "marginal"
-    return "skip"
+    return "skip" if riskpct > RISK_WIDE else ""
 
 
 def _levels(entry: float, stop: float, risk: float, is_long: bool,
