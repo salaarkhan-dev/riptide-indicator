@@ -120,13 +120,14 @@ activityTooltip                 = 'Two bars inside each block — buy above the 
 showOriginTooltip               = 'Tag each order block with whether a CHoCH or a BOS created it. The distinction is TFlab\'s; the base already knows which tag fired'
 alertModeTooltip                = 'ONE ALERT FOR EVERYTHING is the point of this build.\n\nCreate a single TradingView alert on this indicator and choose "Any alert() function call". Every event below then arrives through that one alert, which is what makes this usable on the free tier where only one alert is allowed.\n\nThe individual alertcondition() entries are also kept, for anyone on a paid plan who prefers one alert per event.'
 alertFormatTooltip              = 'Readable — for a phone.\nCompact — pipe-delimited, for a bot or webhook to parse: symbol|timeframe|event|price|swing bias|internal bias.'
-arrowTooltip                    = 'A proper arrow where a TRADEABLE signal fires — price RETURNING to a demand or supply zone it had already left. Up and green for bullish, down and red for bearish.\n\nNothing else gets a mark. Every other event already draws its own label — BOS, CHoCH, ✕, EQH/EQL — and those labels carry the full read-out on hover, so a second glyph beside them was noise saying the same thing twice.\n\nHover the arrow for the levels, both biases, the nearest zones and what to watch next.'
+arrowTooltip                    = 'The bold arrow: price returned to a zone it had already left and rejected from it. Up and green for demand, down and red for supply.\n\nThis is the entry. The small triangles are rejections at a zone without the entry gating, and the hollow dot is a zone still waiting for one.\n\nHover it for the candle that fired, the zone, the stop and the risk in percent.'
 tflabTooltip                    = 'Fires when price ENTERS the zone — the entry these are named for.\n\nNot the same as the "OB Breakout" alerts above, which fire when price closes BEYOND a block and the block is therefore dead. Opposite events.\n\nMain is swing structure, Sub is internal. Each fires once per block, however long price stays inside it.'
-watchTooltip                    = 'TWO MARKS, TWO DIFFERENT JOBS.\n\n○ A HOLLOW DOT where a break just cut a zone. This is NOT an entry. It says the structure moved and a demand or supply zone was left behind at the origin — go mark it and wait. Hover it for the zone\'s exact range.\n\n▲▼ AN ARROW where price came back into that zone and rejected from it. That is the entry the dot was waiting for.\n\nThe dot without a later arrow means the retest never came, or came and did not reject. That is information too: the setup did not complete and there was nothing to take.'
+watchTooltip                    = 'A hollow dot where a break cut a zone, placed clear of the origin candle — below a demand zone, above a supply one.\n\nNOT AN ENTRY. It says the structure moved and a zone was left behind: mark it and wait. The dot is deleted the moment the zone is retested or price closes through it, so what stays on the chart is only what is still pending.'
 rejectionTooltip                = 'WHAT HAS TO HAPPEN AT THE ZONE BEFORE AN ARROW PRINTS.\n\nAny touch — price traded into the zone. TFlab\'s raw behaviour: earliest, and it fires on wicks that close straight through.\n\nClose back out — the bar closed on the better side of the zone midline. One bar, no shape required.\n\nPin bar — a real rejection candle. The rejecting wick is at least N times the body and the opposite wick is smaller. A LOWER wick is bullish and an UPPER wick bearish, whatever colour the body is: hammer and hanging man are the same lower-wick shape, inverted hammer and shooting star the same upper-wick one.\n\nPin + confirm — the pin, then proof the move was real, by EITHER route: an engulfing marubozu on the next bar, or a displacement gap the bar after that. Both say the same thing — price left decisively — and a gap needs one more bar to exist, which is why the window is two.\n\nNOTE THAT ACCEPTING THE GAP LOOSENS THIS MODE rather than tightening it: it is a second way to pass, not an extra hurdle.\n\nNONE OF THIS IS MEASURED. Candlestick patterns are the most-tested and most-consistently-empty thing in this literature. They will make the arrows match what you look for by eye; whether they raise R is open and can be run over the 333-day set.'
 pinRatioTooltip                 = 'How many times the body the rejecting wick must be.\n\n2 is the textbook hammer. 3 is a proper pin and roughly a third as many signals. Below 2 you are calling almost any bar with a wick a rejection.'
 marubozuTooltip                 = 'How much of a confirmation candle\'s range must be body.\n\n0.7 is a strong candle; 0.85 is a strict marubozu with almost no wick. An engulfing of the pin\'s body also passes regardless of this, since the two say the same thing in different ways — a MARUBOZU IS NOT AN ENGULFING, one is a single-bar shape and the other a two-bar relation, and confirmation accepts either.'
 setupBoxTooltip                 = 'Outline the zone that is currently WAITING for its retest, so the live setup is separated from every other block on the chart.\n\nThe outline is removed the moment the zone is retested or price closes through it, which is what keeps the chart from filling up with dead levels.'
+zoneRejectTooltip               = 'A small triangle wherever a rejection candle prints INSIDE a live zone — below the bar for demand, above it for supply.\n\nNOT AN ENTRY, AND THE DIFFERENCE MATTERS. It has none of the entry gating: no leave-and-return test, no structure filter, no per-zone cap. It says only "the shape happened at the level". A zone\'s own formation candles will trip it, which is correct — those ARE rejections, they are just not retests.\n\nThe big arrow is the entry. This is what to read the chart by.'
 pinDebugTooltip                 = 'TURN THIS ON WHEN AN ARROW YOU EXPECTED DID NOT APPEAR. It marks EVERY pin candle on the chart, zone or no zone, so the two reasons an arrow can go missing stop looking alike.\n\n  ▲ below the bar   long LOWER wick — green is a hammer, red a hanging man\n  ▼ above the bar   long UPPER wick — green an inverted hammer, red a shooting star\n  ✕ below the bar   a pin that WAS inside a live zone and still produced no arrow\n\nThe position and colour carry the whole name, so there is no text to read.\n\nHOW TO READ IT. No triangle on a candle you consider a rejection means the SHAPE test rejected it — raise or lower Pin Wick : Body. A triangle but no arrow means the shape was found and something else vetoed it. A ✕ narrows that further: the pin was in a zone, so the veto was the structure filter, the tests-per-zone cap, the leave-and-return rule, or the zone having been pushed out of the drawn five.\n\nNo ✕ and no arrow at a zone you were watching means price never actually traded inside the block the indicator holds — which is usually the answer, and not the one people expect.'
 zoneTestsTooltip                = 'How many separate returns to the same zone may print an arrow.\n\nEach return counts once: price has to leave the zone before coming back can count again. 1 is strict SMC — the first retest is the trade. 2 allows the common case where the first touch is a shallow wick and the real test comes after.\n\nBeyond that a zone is being worn out rather than defended, which is the opposite of the setup.'
 withTrendTooltip                = 'Only signal a demand zone while swing structure is bullish, and a supply zone while it is bearish.\n\nWITHOUT THIS you get short arrows into a rally, because a supply block forms above every impulse and price walks back into it on the way up. That is the trade this whole system measured as the worst one available: counter-trend entries came out at -0.588 R against +0.038 for the same construction with the trend, the single largest separation found anywhere in the research.\n\nTurn it off to see every zone touch regardless of direction.'
@@ -227,6 +228,7 @@ rejectionModeInput              = input.string( REJ_PIN,    'Rejection Required'
 pinWickRatioInput               = input.float(  2.0,        'Pin Wick : Body',          group = ALERT_GROUP,    tooltip = pinRatioTooltip,  minval = 1.0, maxval = 6.0, step = 0.5)
 marubozuBodyInput               = input.float(  0.7,        'Confirm Body : Range',     group = ALERT_GROUP,    tooltip = marubozuTooltip,  minval = 0.4, maxval = 0.95, step = 0.05)
 showSetupBoxInput               = input(        true,       'Outline Zone Awaiting Retest', group = ALERT_GROUP, tooltip = setupBoxTooltip)
+showZoneRejectInput             = input(        true,       'Mark Rejections At Zones ▲▼', group = ALERT_GROUP,  tooltip = zoneRejectTooltip)
 showPinDebugInput               = input(        false,      'Show Every Pin Candle (debug)', group = ALERT_GROUP, tooltip = pinDebugTooltip)
 maxZoneTestsInput               = input.int(    2,          'Tests Allowed Per Zone',   group = ALERT_GROUP,    tooltip = zoneTestsTooltip, minval = 1, maxval = 5)
 showDashInput                   = input(        false,      'Show Status Read-out',     group = ALERT_GROUP,    tooltip = dashTooltip)
@@ -304,6 +306,12 @@ type alerts
     // was never recognised, or it was recognised and something downstream
     // vetoed it. They need completely different fixes.
     bool pinVetoed                  = false
+    // A rejection candle printed INSIDE a live zone. Not the same thing as the
+    // entry arrow: this says the shape happened at the level, the arrow says
+    // the whole setup completed. Kept apart because the shape is worth SEEING
+    // on the zone that formed it, and the arrow is worth ACTING on.
+    bool zoneRejectBull             = false
+    bool zoneRejectBear             = false
     // ADDED — A BREAK JUST CUT A ZONE AND THERE IS NOTHING TO DO YET. This is
     // the first half of the setup and it was never modelled: the old build
     // marked the break and marked the entry with the same weight, so a chart
@@ -632,9 +640,9 @@ zoneSummary() =>
 
     string out = ''
     if not na(supplyTop)
-        out := out + '\n  supply   ' + str.tostring(supplyBot, format.mintick) + '  –  ' + str.tostring(supplyTop, format.mintick) + (supplyTag != '' ? '   (' + supplyTag + ')' : '')
+        out := 'supply  ' + str.tostring(supplyBot, format.mintick) + ' – ' + str.tostring(supplyTop, format.mintick) + (supplyTag != '' ? '  ' + supplyTag : '')
     if not na(demandTop)
-        out := out + '\n  demand   ' + str.tostring(demandBot, format.mintick) + '  –  ' + str.tostring(demandTop, format.mintick) + (demandTag != '' ? '   (' + demandTag + ')' : '')
+        out := out + (out != '' ? '\n' : '') + 'demand  ' + str.tostring(demandBot, format.mintick) + ' – ' + str.tostring(demandTop, format.mintick) + (demandTag != '' ? '  ' + demandTag : '')
     out
 
 // @function        ADDED — the hover read-out, attached to the event's OWN label.
@@ -645,24 +653,26 @@ zoneSummary() =>
 // 30-minute chart running beside Riptide it read as clutter rather than signal.
 // The labels were always there. They just were not hoverable.
 //
-// So every event label now builds its tooltip through here and nothing extra
-// is drawn. One shape for all of them, so a BOS and a sweep read the same way
-// and the eye does not have to re-learn the layout per event.
+// So every event label builds its tooltip through here and nothing extra is
+// drawn. One shape for all of them, so a BOS and a sweep read the same way.
 //
-// `level` is the price the event happened AT — the broken level for a
-// structure break, the swept extreme for a sweep — not the close, because the
-// level is the thing a reader is about to mark on the chart.
-eventTooltip(string headline, float level, string watch) =>
-    string zones = zoneSummary()
+// SHORT, AND ONLY THINGS THAT ARE TRUE OF THIS BAR. An earlier version wrote a
+// paragraph of general advice under every mark — what a retest is, where a stop
+// goes in principle. That text was the same on every label, so it carried no
+// information about the one being hovered, and it buried the two or three
+// numbers that did. Anything that would read identically on every event belongs
+// in the settings tooltip, not on the chart.
+//
+// `level` is the price the event happened AT — the broken level for a break,
+// the swept extreme for a sweep. `detail` is whatever is specific to this event
+// and may be empty, in which case no blank line is printed for it.
+eventTooltip(string headline, float level, string detail) =>
     string sBias = swingTrend.bias    == BULLISH ? 'bull' : swingTrend.bias    == BEARISH ? 'bear' : 'flat'
     string iBias = internalTrend.bias == BULLISH ? 'bull' : internalTrend.bias == BEARISH ? 'bear' : 'flat'
     headline
-         + '\n' + syminfo.ticker + '  ·  ' + timeframe.period + '  ·  ' + str.tostring(level, format.mintick)
-         + '\n\nSTRUCTURE'
-         + '\n  swing      ' + sBias
-         + '\n  internal   ' + iBias
-         + (zones != '' ? '\n\nNEAREST ZONES' + zones : '')
-         + '\n\nWATCH FOR' + watch
+         + '\n' + str.tostring(level, format.mintick) + '  ·  ' + syminfo.ticker + ' ' + timeframe.period
+         + (detail != '' ? '\n\n' + detail : '')
+         + '\n\n' + sBias + ' swing  ·  ' + iBias + ' internal'
 
 drawLabel(int labelTime, float labelPrice, string tag, color labelColor, string labelStyle) =>
     var label l_abel = na
@@ -690,10 +700,7 @@ drawEqualHighLow(pivot p_ivot, float level, int size, bool equalHigh) =>
 
     e_qualDisplay.l_ine     := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time[size],na,level), xloc = xloc.bar_time, color = equalColor, style = line.style_dotted)
     labelPosition           = math.round(0.5*(p_ivot.barIndex + bar_index - size))
-    string watch = '\n  · two touches of the same level is a pool of resting stops, not a wall'
-         + '\n  · expect it to be swept before any real move — that sweep is the signal, this is not'
-         + '\n  · if it breaks and holds instead, the level becomes ' + (equalHigh ? 'support' : 'resistance')
-    e_qualDisplay.l_abel    := label.new(chart.point.new(na,labelPosition,level), tag, xloc.bar_index, color = color(na), textcolor = equalColor, style = labelStyle, size = equalHighsLowsSizeInput, tooltip = eventTooltip((equalHigh ? 'Equal highs' : 'Equal lows') + '  ·  liquidity pool', level, watch))
+    e_qualDisplay.l_abel    := label.new(chart.point.new(na,labelPosition,level), tag, xloc.bar_index, color = color(na), textcolor = equalColor, style = labelStyle, size = equalHighsLowsSizeInput, tooltip = eventTooltip((equalHigh ? 'Equal highs' : 'Equal lows') + '  ·  liquidity pool', level, ''))
 
 getCurrentStructure(int size,bool equalHighLow = false, bool internal = false) =>
     currentLeg              = leg(size)
@@ -759,14 +766,7 @@ drawStructure(pivot p_ivot, string tag, color structureColor, string lineStyle, 
         l_abel.delete()
 
     string scope = internal ? 'internal' : 'swing'
-    string watch = tag == CHOCH
-         ? '\n  · the trend just flipped on ' + scope + ' structure'
-             + '\n  · a ' + (bullish ? 'demand' : 'supply') + ' block was cut at the origin — that is where the retest lands'
-             + '\n  · wait for the return to it, do not chase the break bar'
-         : '\n  · continuation — the level gave way in the direction it was already going'
-             + '\n  · the pullback into the origin block is the entry, not this bar'
-             + '\n  · it is wrong if price closes back through ' + str.tostring(p_ivot.currentLevel, format.mintick)
-    string tip = eventTooltip((bullish ? 'Bullish ' : 'Bearish ') + tag + '  ·  ' + scope + ' structure', p_ivot.currentLevel, watch)
+    string tip = eventTooltip((bullish ? 'Bullish ' : 'Bearish ') + tag + '  ·  ' + scope, p_ivot.currentLevel, zoneSummary())
 
     l_ine   := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time,na,p_ivot.currentLevel), xloc.bar_time, color=structureColor, style=lineStyle)
     l_abel  := label.new(chart.point.new(na,math.round(0.5*(p_ivot.barIndex+bar_index)),p_ivot.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=structureColor, style=labelStyle, size = labelSize, tooltip = tip)
@@ -785,14 +785,11 @@ drawStructure(pivot p_ivot, string tag, color structureColor, string lineStyle, 
 // unreadable — which is the failure mode of most ported indicators.
 drawSweep(pivot p_ivot, bool high_side, color sweepColor, bool internal = false) =>
     string scope = internal ? 'internal' : 'swing'
-    string watch = '\n  · the stops beyond ' + str.tostring(p_ivot.currentLevel, format.mintick) + ' were taken and price refused to hold there'
-         + '\n  · a reclaim of that level confirms the reversal — a close back through kills it'
-         + '\n  · the ' + (high_side ? 'supply' : 'demand') + ' zone left behind is where the reaction should come from'
     label.new(chart.point.new(time, na, high_side ? high : low), '✕', xloc.bar_time,
          color = color(na), textcolor = sweepColor,
          style = high_side ? label.style_label_down : label.style_label_up,
          size = size.tiny,
-         tooltip = eventTooltip((high_side ? 'Buy-side sweep' : 'Sell-side sweep') + '  ·  ' + scope + ' level', p_ivot.currentLevel, watch))
+         tooltip = eventTooltip((high_side ? 'Buy-side sweep' : 'Sell-side sweep') + '  ·  ' + scope, p_ivot.currentLevel, ''))
 
 // @function        ADDED — accumulate buy and sell activity inside every live block.
 //
@@ -907,6 +904,18 @@ touchOrderBlocks(bool internal = false) =>
             string shapePrev = eachOrderBlock.pinAge == 2 ? (patHammer[2] ? 'hammer' : patHangingMan[2] ? 'hanging man' : patInvHammer[2] ? 'inverted hammer' : patShootingStar[2] ? 'shooting star' : '') : (patHammer[1] ? 'hammer' : patHangingMan[1] ? 'hanging man' : patInvHammer[1] ? 'inverted hammer' : patShootingStar[1] ? 'shooting star' : '')
             bool oneBarFire = rejectionModeInput == REJ_ANY ? inNow : rejectionModeInput == REJ_CLOSE ? (inNow and (bull ? (close >= mid and close > open) : (close <= mid and close < open))) : rejectionModeInput == REJ_PIN ? (inNow and pinNow and (bull ? close > eachOrderBlock.barLow : close < eachOrderBlock.barHigh)) : false
             bool fire = rejectionModeInput == REJ_CONFIRM ? twoBarFire : oneBarFire
+
+            // THE SHAPE AT THE ZONE, WITH NONE OF THE ENTRY GATING. No
+            // leave-and-return test, no trend filter, no per-zone cap — this is
+            // only "a rejection candle printed inside this block", which is the
+            // thing worth looking at whether or not it is a tradeable retest.
+            // A zone's own formation candles can trip it, and that is correct:
+            // they ARE rejections, they are just not entries.
+            if inNow and (pinNow or twoBarFire)
+                if bull
+                    currentAlerts.zoneRejectBull := true
+                else
+                    currentAlerts.zoneRejectBear := true
 
             if inNow and pinNow and not (fire and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
                 currentAlerts.pinVetoed := true
@@ -1049,21 +1058,8 @@ storeOrdeBlock(pivot p_ivot,bool internal = false,int bias, string origin = '') 
             // every break the chart had ever made, most of them long dead.
             color zoneCss = bias == BULLISH ? swingBullishColor : swingBearishColor
             float zoneMid = math.avg(o_rderBlock.barHigh, o_rderBlock.barLow)
-            string wait = '\n  · nothing to do yet — this is the WAIT half of the setup'
-                 + '\n  · mark ' + str.tostring(o_rderBlock.barLow, format.mintick) + ' – ' + str.tostring(o_rderBlock.barHigh, format.mintick) + ' and let price come back to it'
-                 + '\n  · the arrow prints only on a ' + (rejectionModeInput == REJ_ANY ? 'touch' : rejectionModeInput == REJ_CLOSE ? 'close back out of the zone' : rejectionModeInput == REJ_PIN ? (bias == BULLISH ? 'hammer or hanging man in the zone — a lower wick, either colour' : 'shooting star or inverted hammer in the zone — an upper wick, either colour') : 'pin of any of the four shapes, then either an engulfing ' + (bias == BULLISH ? 'green' : 'red') + ' marubozu on the next bar, or a displacement gap one bar after that')
-                 + '\n  · this mark disappears when the retest happens or the zone breaks'
-            string zoneTip = eventTooltip((bias == BULLISH ? 'Demand zone armed' : 'Supply zone armed') + '  ·  ' + (origin != '' ? origin + ' origin' : 'wait for the retest'), zoneMid, wait)
+            string zoneTip = eventTooltip((bias == BULLISH ? 'Demand armed' : 'Supply armed') + (origin != '' ? '  ·  ' + origin : ''), zoneMid, 'zone  ' + str.tostring(o_rderBlock.barLow, format.mintick) + ' – ' + str.tostring(o_rderBlock.barHigh, format.mintick) + '\nwaiting for a rejection in it')
 
-            // CLEAR OF THE CANDLE, NOT ON IT. Sitting the dot on the zone
-            // midline put it on top of the origin bar, which hid the candle
-            // that made the zone and made the dot fiddly to hover. It now sits
-            // off the bar on the side the trade expects to go — below a demand
-            // zone, above a supply one — which is also how the entry arrows are
-            // placed, so a chart reads the same way top to bottom.
-            //
-            // The dashed outline is what ties the mark to the zone now, so the
-            // dot does not have to sit inside it to be legible.
             if showWatchMarkInput
                 float dotAt = bias == BULLISH ? o_rderBlock.barLow - atrMeasure * 0.5 : o_rderBlock.barHigh + atrMeasure * 0.5
                 o_rderBlock.watchLabel := label.new(chart.point.new(o_rderBlock.barTime, na, dotAt), '', xloc.bar_time, color = color.new(zoneCss, 20), style = label.style_circle, size = size.tiny, tooltip = zoneTip)
@@ -1372,6 +1368,8 @@ plotcandle(parsedOpen,high,low,close,color = candleColor, wickcolor = candleColo
 // Guessing between them is how tuning goes wrong, so these make the difference
 // visible. plotshape rather than labels — there is no object budget to spend on
 // a diagnostic, and position plus colour already carry the full name.
+plotshape(showZoneRejectInput and currentAlerts.zoneRejectBull ? low  - atrMeasure * 0.35 : na, title = 'Rejection candle at a demand zone', style = shape.triangleup,   location = location.absolute, color = swingBullishColor, size = size.tiny)
+plotshape(showZoneRejectInput and currentAlerts.zoneRejectBear ? high + atrMeasure * 0.35 : na, title = 'Rejection candle at a supply zone', style = shape.triangledown, location = location.absolute, color = swingBearishColor, size = size.tiny)
 plotshape(showPinDebugInput and pinLower ? low  - atrMeasure * 0.9 : na, title = 'Pin · lower wick (hammer / hanging man)',        style = shape.triangleup,   location = location.absolute, color = candleGreen ? swingBullishColor : swingBearishColor, size = size.tiny)
 plotshape(showPinDebugInput and pinUpper ? high + atrMeasure * 0.9 : na, title = 'Pin · upper wick (inverted hammer / shooting star)', style = shape.triangledown, location = location.absolute, color = candleGreen ? swingBullishColor : swingBearishColor, size = size.tiny)
 plotshape(showPinDebugInput and currentAlerts.pinVetoed ? low - atrMeasure * 1.5 : na, title = 'Pin inside a zone that produced no arrow', style = shape.xcross, location = location.absolute, color = GRAY, size = size.tiny)
@@ -1593,21 +1591,18 @@ if ev != ''
         color css = down ? swingBearishColor : swingBullishColor
         float zTop = down ? currentAlerts.supplyTouchTop : currentAlerts.demandTouchTop
         float zBot = down ? currentAlerts.supplyTouchBot : currentAlerts.demandTouchBot
-        float mid  = math.avg(zTop, zBot)
-        string shape = down ? currentAlerts.supplyPattern : currentAlerts.demandPattern
-        string watch = (rejectionModeInput == REJ_CONFIRM ? '\n  · the pin was the PREVIOUS bar and this one engulfed it — the signal is one bar late by design' : rejectionModeInput == REJ_ANY ? '\n  · price only TOUCHED the zone — no candle test was asked for, so this is not yet a rejection' : '\n  · the retest is DONE — this bar traded into the zone and rejected from it')
-             + (na(zTop) ? '' : '\n  · zone ' + str.tostring(zBot, format.mintick) + ' – ' + str.tostring(zTop, format.mintick) + ', midline ' + str.tostring(mid, format.mintick))
-             + (na(zTop) ? '' : '\n  · stop ' + (down ? 'above ' : 'below ') + str.tostring(down ? zTop : zBot, format.mintick) + ' — the far side of the zone, not this candle\'s wick')
-             + (na(zTop) ? '' : '\n  · that is ' + str.tostring(100 * math.abs(close - (down ? zTop : zBot)) / close, '#.##') + '% of price — 1.2%-2.6% is the band that made money, over 2.6% is a skip')
-             + '\n  · it is wrong the moment a bar CLOSES through the far side'
+        string patName = down ? currentAlerts.supplyPattern : currentAlerts.demandPattern
+        float stopAt = down ? zTop : zBot
+        float riskPc = na(stopAt) ? na : 100 * math.abs(close - stopAt) / close
+        string band  = na(riskPc) ? '' : riskPc > 2.6 ? '  skip, too wide' : riskPc < 1.2 ? '  tight, fees bite' : '  take'
+        string detail = (na(zTop) ? '' : 'zone  ' + str.tostring(zBot, format.mintick) + ' – ' + str.tostring(zTop, format.mintick) + '\n')
+             + (na(stopAt) ? '' : 'stop  ' + str.tostring(stopAt, format.mintick) + '  ·  ' + str.tostring(riskPc, '#.##') + '%' + band)
         label.new(chart.point.new(time, na, at), '', xloc.bar_time,
              color = css,
              textcolor = css,
              style = down ? label.style_arrowdown : label.style_arrowup,
              size = signalArrowSizeInput,
-             tooltip = eventTooltip((down ? 'Supply zone held' : 'Demand zone held') + '  ·  '
-                  + (shape != '' ? shape : rejectionModeInput == REJ_ANY ? 'zone touched, no candle test' : 'closed back out')
-                  + (signalWithTrendInput ? ', with structure' : ''), close, watch))
+             tooltip = eventTooltip((down ? 'Supply held' : 'Demand held') + (patName != '' ? '  ·  ' + patName : ''), close, detail))
     if alertOnInput
         // TWO FIXED SHAPES, no template to fill in. Both already carry the
         // symbol, the timeframe and the price, which is the part that actually
