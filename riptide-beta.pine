@@ -408,6 +408,13 @@ cpUsePivot  = input.bool(true,  "Structure extremes (HH / LH / LL / HL)", group 
 cpPivTol    = input.float(0.35, "  how close counts (x ATR)", minval = 0.05, maxval = 2.0, step = 0.05, group = gCP)
 cpStructMin = input.float(0.0, "  smallest swing that counts (x ATR)", minval = 0.0, maxval = 10.0, step = 0.1, group = gCP,
      tooltip = "A floor on how far price has to travel between two turns for the second one to count as structure.\n\n0 takes every pivot the swing rule finds, which on a 30m chart is a lot of small noise turns. Raise it and the structure coarsens: the zigzag straightens out, small counter-swings are absorbed into the leg they interrupt, and the HH / LH / LL / HL reading is taken from what is left.\n\nIt drives the CANDLE FILTER as well as the drawing, so a pivot the zigzag has absorbed can no longer host a confirmation. What you see is what is filtered on.")
+obLuxOn     = input.bool(true,  "LuxAlgo-style order blocks", group = gCP,
+     tooltip = "A SECOND, DIFFERENT ORDER BLOCK, and the difference is the whole reason the marks were landing in the wrong places.\n\nRiptide's own block is the last candle closing AGAINST the move before the entry gap, drawn as a line at one edge — an ICT definition, and the one the confluence score on every alert counts.\n\nLuxAlgo's is the EXTREME candle of the leg from the swing to the break, drawn as a box over its whole range. Different candle, different shape, and it is the one you see as a zone on the chart.\n\nThese are what the candle filter now matches on. They are mitigated when price trades through them, so a block that has been used stops being a zone — which the line version never did.\n\nWIDE BARS ARE EXCLUDED the way LuxAlgo excludes them: on a bar whose range is more than twice the volatility measure the high and low are swapped, so it loses the max/min contest and cannot become a block. A single volatile candle is a move, not a level.")
+obLuxCount  = input.int(8, "  how many to keep", minval = 1, maxval = 20, group = gCP)
+obLuxMitig  = input.string("High/Low", "  mitigated by", options = ["High/Low", "Close"], group = gCP,
+     tooltip = "High/Low removes the block the moment any wick trades through it. Close waits for a bar to close through, which keeps blocks alive that were only spiked.")
+obLuxBull   = input.color(color.new(#3179f5, 80), "  demand", inline = "oblux", group = gCP)
+obLuxBear   = input.color(color.new(#f77c80, 80), "  supply", inline = "oblux", group = gCP)
 cpShowZig   = input.bool(false, "Show market structure (zigzag)", group = gCP,
      tooltip = "The structure the filter is actually using, drawn as a thin dotted line from turn to turn with each one tagged HH, LH, LL or HL.\n\nOff by default because it is a debug view: it answers whether a confirmation was refused because the shape failed or because the level it sat on is not a swing the structure rule kept.")
 cpShowLevels = input.bool(false, "Draw entry and stop", group = gCP,
@@ -573,6 +580,19 @@ type CpMark
 // on the high cannot match that high at the time it prints. It is held here and
 // matched when the pivot confirms, which is the only order in which those two
 // facts become available.
+// LuxAlgo's order block: the EXTREME candle of the leg between a swing and the
+// break of it, kept as its whole range rather than as a level. Not the same
+// candle as Riptide's own block, which is the last opposing close before the
+// entry gap — two different definitions of the same words, and the reason a
+// confirmation could sit on a zone the filter had never heard of.
+type CpBlock
+    float  top
+    float  bot
+    int    barIdx
+    bool   isBull
+    bool   armed = true
+    box    bx    = na
+
 type CpPend
     int    bar
     bool   isBull
@@ -839,6 +859,99 @@ if not na(ph)
     cpTurn(zig, true,  ph, bar_index - effPivotRight)
 if not na(pl)
     cpTurn(zig, false, pl, bar_index - effPivotRight)
+
+// ── LuxAlgo-style order blocks ──────────────────────────────────────────────
+// A structure break is a close through the last confirmed swing on that side.
+// The block is then the extreme bar of the leg BEHIND that break: for a bullish
+// break the lowest low between the swing high and now, for a bearish break the
+// highest high.
+//
+// parsedHigh/parsedLow carry LuxAlgo's volatility filter. On a bar whose range
+// is more than twice the volatility measure the two are SWAPPED, so that bar's
+// "low" is its high and it can never win a minimum — a single violent candle is
+// a move, not a level, and letting one become a block puts a zone in the middle
+// of an impulse.
+obVol       = ta.cum(ta.tr) / bar_index
+obWide      = (high - low) >= 2 * math.max(atr, obVol)
+parsedHigh  = obWide ? low  : high
+parsedLow   = obWide ? high : low
+
+var array<CpBlock> cpBlocks = array.new<CpBlock>()
+var float obSwHi   = na
+var int   obSwHiB  = na
+var bool  obSwHiX  = true
+var float obSwLo   = na
+var int   obSwLoB  = na
+var bool  obSwLoX  = true
+
+// A fresh swing re-arms its side: the level has moved, so it has not been
+// broken yet whatever the last one did.
+if cpPivots.size() > 0
+    CpPivot p0 = cpPivots.get(0)
+    if p0.isHigh and p0.bar != obSwHiB
+        obSwHi  := p0.price
+        obSwHiB := p0.bar
+        obSwHiX := false
+    if not p0.isHigh and p0.bar != obSwLoB
+        obSwLo  := p0.price
+        obSwLoB := p0.bar
+        obSwLoX := false
+
+obStore(bool isBull, int fromBar) =>
+    int back = math.min(bar_index - fromBar, 120)
+    if back > 0
+        float best   = na
+        int   bestOff = 0
+        for k = 0 to back
+            float v = isBull ? parsedLow[k] : parsedHigh[k]
+            if na(best) or (isBull ? v < best : v > best)
+                best    := v
+                bestOff := k
+        cpBlocks.unshift(CpBlock.new(top = parsedHigh[bestOff], bot = parsedLow[bestOff],
+             barIdx = bar_index - bestOff, isBull = isBull))
+        while cpBlocks.size() > 100
+            CpBlock old = cpBlocks.pop()
+            box.delete(old.bx)
+    true
+
+if obLuxOn and barstate.isconfirmed
+    if not na(obSwHi) and not obSwHiX and close > obSwHi
+        obSwHiX := true
+        obStore(true, obSwHiB)
+    if not na(obSwLo) and not obSwLoX and close < obSwLo
+        obSwLoX := true
+        obStore(false, obSwLoB)
+
+    // MITIGATED IS GONE. A block price has traded through is not a level any
+    // more, and leaving it on the chart — and in the filter — is what turns a
+    // zone list into a field of dead bands.
+    float obBearSrc = obLuxMitig == "Close" ? close : high
+    float obBullSrc = obLuxMitig == "Close" ? close : low
+    int bi = cpBlocks.size() - 1
+    while bi >= 0
+        CpBlock ob = cpBlocks.get(bi)
+        if (not ob.isBull and obBearSrc > ob.top) or (ob.isBull and obBullSrc < ob.bot)
+            box.delete(ob.bx)
+            cpBlocks.remove(bi)
+        bi -= 1
+
+    // Draw only the ones on show, and delete the box of anything past the cap
+    // so what is in the array and what is on the chart stay the same set.
+    int shown = math.min(obLuxCount, cpBlocks.size())
+    if cpBlocks.size() > 0
+        for j = 0 to cpBlocks.size() - 1
+            CpBlock ob = cpBlocks.get(j)
+            if j < shown
+                color oc = ob.isBull ? obLuxBull : obLuxBear
+                if na(ob.bx)
+                    ob.bx := box.new(ob.barIdx, ob.top, bar_index, ob.bot,
+                         xloc = xloc.bar_index, border_color = color.new(oc, 60),
+                         border_width = 1, bgcolor = oc)
+                else
+                    box.set_right(ob.bx, bar_index)
+            else if not na(ob.bx)
+                box.delete(ob.bx)
+                ob.bx := na
 
 while cpPivots.size() > 60
     cpPivots.pop()
@@ -1745,6 +1858,9 @@ cpRearm() =>
         float t2 = atr * cpPivTol
         if low > p.price + t2 or high < p.price - t2
             p.armed := true
+    for ob in cpBlocks
+        if low > ob.top or high < ob.bot
+            ob.armed := true
     true
 
 // Claim the first ARMED zone the pattern overlaps, and disarm it. Overlap
@@ -1763,14 +1879,17 @@ cpZoneTake(bool wantBull, float pLo, float pHi) =>
     //
     // A LOW pool is bullish and a HIGH pool bearish: sweeping a low is a raid
     // on sell-side liquidity, and the reclaim from it is up.
+    // THE BLOCKS THE CHART DRAWS, NOT THE ONES THE SETUP LAYER COUNTS. Riptide's
+    // own block is the last opposing close before the entry gap, drawn as a line
+    // — a different candle from the box on screen, which is why a confirmation
+    // could report "order block" from a level nothing was drawn at.
     if cpUseOB
-        for c in clusters
-            if zname == "" and not c.expired and (c.isHigh != wantBull)
-                if c.cpObArmed and not na(c.obTop) and pLo <= c.obTop and pHi >= c.obBot
-                    zname := "order block"
-                    ztop  := c.obTop
-                    zbot  := c.obBot
-                    c.cpObArmed := false
+        for ob in cpBlocks
+            if zname == "" and ob.armed and ob.isBull == wantBull and pLo <= ob.top and pHi >= ob.bot
+                zname := "order block"
+                ztop  := ob.top
+                zbot  := ob.bot
+                ob.armed := false
 
     if cpUseFvg and zname == ""
         for f in fvgs
