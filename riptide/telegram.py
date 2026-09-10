@@ -334,7 +334,49 @@ def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
     return f"{src} pool @ {fmt(level)}{extra}"
 
 
-def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
+# Where a CONFIRMED setup's risk-to-price puts it, measured over 333 days on
+# 628 signals. Boundaries are round numbers fixed in advance, not fitted, so
+# this is a lookup rather than a curve:
+#
+#   0.0-0.8%  32% win  -0.107      1.6-2.0%  41% win  +0.104
+#   0.8-1.2%  38% win  +0.060      2.0-2.6%  46% win  +0.330
+#   1.2-1.6%  45% win  +0.229      2.6-3.5%  25% win  -0.245
+#                                  over 3.5% 28% win  -0.194
+#
+# 1.2 to 2.6 is one contiguous block of three bands, and the sharpest edge in
+# the table sits at 2.6 where the win rate roughly halves. Both tails have a
+# mechanism: a tight stop pays a large fee as a share of R, and a very wide one
+# means the raid itself was violent, which reads as a move continuing rather
+# than exhausting.
+RISK_TAKE = (1.2, 2.6)
+RISK_MARGINAL = 0.8
+
+
+def risk_verdict(riskpct: float) -> str:
+    """take / marginal / skip, or "" when there is no evidence to offer one.
+
+    CONFIRMED SETUPS ONLY, and the caller enforces that. The identical bands on
+    early signals come out incoherent — +0.049, -0.070, +0.130, -0.038, -0.005,
+    -0.067, +0.083, non-monotone with no block — so printing a verdict there
+    would be inventing one. An empty string is the honest output for a signal
+    this was never measured on.
+
+    UNPROVEN, and /legend says so in as many words: it holds in three quarters
+    of four, it is the best of six comparisons that were looked at, and the
+    circular-shift null has not been run on it. It is a weighting, not a gate,
+    and it never suppresses an alert.
+    """
+    if riskpct <= 0:
+        return ""
+    if RISK_TAKE[0] <= riskpct <= RISK_TAKE[1]:
+        return "take"
+    if RISK_MARGINAL <= riskpct < RISK_TAKE[0]:
+        return "marginal"
+    return "skip"
+
+
+def _levels(entry: float, stop: float, risk: float, is_long: bool,
+            confirmed: bool = False) -> str:
     """
     The trade. Four plain lines, no code block.
 
@@ -347,8 +389,10 @@ def _levels(entry: float, stop: float, risk: float, is_long: bool) -> str:
     """
     sign = 1 if is_long else -1
     riskpct = risk / entry * 100 if entry else 0
+    verdict = risk_verdict(riskpct) if confirmed else ""
     out = (f"Entry  <b>{fmt(entry)}</b>\n"
-           f"Stop   <b>{fmt(stop)}</b>  <i>{riskpct:.2f}% risk</i>\n"
+           f"Stop   <b>{fmt(stop)}</b>  <i>{riskpct:.2f}% risk"
+           f"{' · ' + verdict if verdict else ''}</i>\n"
            f"2R {fmt(entry + sign * risk * 2)}  ·  "
            f"3R {fmt(entry + sign * risk * 3)}")
     # The break-even line is gone unless it is switched back on. It advised a
@@ -449,7 +493,7 @@ def setup_message(s: Setup) -> str:
         why,
         marks(s),
         "",
-        _levels(s.entry, s.stop, s.risk, s.is_long),
+        _levels(s.entry, s.stop, s.risk, s.is_long, confirmed=True),
         "",
         f"<i>sweep → shift → FVG{also} · "
         f"{_pool(s.src, s.level, s.pivots)}</i>",
