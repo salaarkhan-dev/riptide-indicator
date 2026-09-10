@@ -6125,3 +6125,83 @@ better supported: **a marginal edge whose returns arrive in bursts that cannot b
 timed from price.** The practical consequence is about sizing rather than
 filtering — constant small size and patience, not a switch that turns the
 strategy on and off.
+
+## Funding rate — the first non-price test, and the mechanism fails its own prediction
+
+`research/studies/funding.py` · 60 symbols · 540 days of funding history · 624 signals
+
+Every variable tested in this project until now was a transform of price. That
+is a closed loop: a strategy built from price, conditioned on price. Funding —
+what longs pay shorts to hold the perpetual — is the first thing available that
+measures **positioning** rather than price, and MEXC serves 540 days of it.
+
+**The mechanism was written down first and it is directional.** This strategy
+fades a raid, on the claim that a sweep of the lows is forced selling that
+exhausts itself. Funding says whether there was anything to force:
+
+> `crowd_against` = +funding for a long, −funding for a short. A raid into a
+> crowded *opposite* book is a liquidation; a raid into a flat book is just a
+> move. **Higher should pay.**
+
+### Whole window
+
+| variable | top R/bet | bottom R/bet | difference | |
+|---|---|---|---|---|
+| **crowd positioned against us** *(the mechanism)* | +0.062 | +0.047 | +0.015 | **+0.1 SE** |
+| funding extreme, either way | +0.128 | +0.036 | +0.092 | +0.6 SE |
+| raw funding percentile *(unsigned control)* | +0.128 | +0.055 | +0.073 | +0.5 SE |
+
+### The mechanism variable is the WEAKEST of the three, and that is the finding
+
+If the liquidation story were right, the **signed** variable should beat the
+unsigned control — knowing *which* side is crowded should matter more than
+knowing *that* positioning is extreme. It comes in at +0.1 SE against the
+control's +0.5 SE. Whatever trace exists in funding is about how stretched
+positioning is, **not about which side is trapped** — the opposite of the
+prediction.
+
+The long/short split says the same thing:
+
+| crowd positioned against us | difference | |
+|---|---|---|
+| LONG signals only | +0.131 | +0.6 SE |
+| SHORT signals only | −0.029 | **−0.1 SE** |
+
+The mechanism claims both sides. It appears on neither, and the short side is
+nominally reversed.
+
+### All four conditions fail
+
+| condition | crowd_against |
+|---|---|
+| 1. 2 SE on the whole window | **no** (+0.1) |
+| 2. sign in 3 of 4 quarters | **no** (2 of 4: −1.2, +1.2, −0.1, +1.6) |
+| 3. clears circular-shift null | **no** (0.10 against p95 1.69) |
+| 4. present on both sides as predicted | **no** (shorts reversed) |
+
+`funding extreme` passes condition 2 alone (3 of 4 quarters) while failing 1 and
+3 by wide margins — 0.64 against a null p95 of 1.74. One condition out of three
+is what noise produces.
+
+### What this costs the ICT premise
+
+This is the most direct test the project can run of the story the whole strategy
+rests on: **that a liquidity raid is a liquidation of a crowded book.** The best
+available positioning data, over 540 days, with the direction stated in advance,
+found nothing — and found the signed version weaker than the unsigned one.
+
+That is not proof the mechanism is absent. Funding is a coarse 4-to-8-hour
+proxy, and terciles of ~180 bets resolve to about 0.3 R, so a small effect would
+be invisible. But it is the strongest disconfirmation available, and it bears
+directly on whether more ICT-flavoured hypotheses are worth the compute.
+
+### Where the day's work leaves the system
+
+Eight tests, all negative: the pool grid, the touch-count mechanism, the 3+
+touch filter, the liquidity target, FVG continuation, the deep replication, five
+regime variables, and three funding variables.
+
+The description that survives all of it: **a marginal, unconditional edge —
++0.063 ± 0.062 R per bet over a year at R/DD 1.13 — whose returns arrive in
+bursts that nothing tested can time.** Not a losing system on the measured
+window. A small one, and an untimeable one.
