@@ -135,14 +135,14 @@ async def score(sess, candles, cfg, kind=KIND):
             if BANDS.index(grade_of(kind == "early", poi, d or 0, x.is_long,
                                     di or 0)[0]) > CUT:
                 continue                       # MIN_GRADE, as deployed
-            rows.append((when, o.r, when < mid))
+            rows.append((when, o.r, when < mid, getattr(x, "pivots", 0)))
     return rows
 
 
 def bets(rows):
     """One bet per close, averaged — the unit priority.py settled on."""
     bybar = {}
-    for t, r, held in rows:
+    for t, r, held, *_ in rows:
         bybar.setdefault(t, []).append((r, held))
     return [(t, statistics.fmean(r for r, _ in v), v[0][1])
             for t, v in bybar.items()]
@@ -299,6 +299,45 @@ async def main():
                      stat([r for r in rows if not r[2]]),
                      stat([r for r in rows if r[2]]), d15,
                      "  <-- shipped" if mp == CFG.min_pivots else "")
+
+    # ---- the test that should have come first ---------------------------
+    #
+    # THE CONFIG SWEEP ASKED THE QUESTION THE EXPENSIVE WAY. Every signal
+    # already carries the touch count of the pool that produced it — it is on
+    # the alert, as "5 swings". So the hypothesis "a level touched more times
+    # is a better level" can be read straight off the DEFAULT config's own
+    # signals, bucketed by that count.
+    #
+    # This is strictly more powerful than re-running the engine at min_pivots
+    # = 3. It uses every signal at once instead of splitting the sample per
+    # config, it holds the signal population fixed, and it shows the whole
+    # gradient rather than one threshold. If two-touch pools really are worse
+    # than three-touch pools, it is visible here with several hundred rows
+    # behind each bucket. If there is no gradient, the sweep was reading noise
+    # and no per-timeframe threshold can rescue it.
+    #
+    # It is not identical to raising min_pivots — that changes which pools
+    # FORM, so it can pick a different level and a different trade. It tests
+    # the mechanism, which is the thing in dispute.
+    print(f"\n{'=' * 100}\nDOES A MORE-TOUCHED LEVEL ACTUALLY PAY? — default "
+          f"config, bucketed by the pool's own touch count\n{'=' * 100}")
+    print(f"  {'bucket':<26}{'/day':>6}{'  FULL WINDOW':<25}"
+          f"  |{'  DISCOVERY':<25}  |  HELD OUT")
+    async with aiohttp.ClientSession() as sess:
+        for tf, cands, dd in (("Min30", candles, days), ("Min15", c15, d15)):
+            for kind in ("early", "confirmed"):
+                rows = await score(sess, cands, CFG, kind=kind)
+                print(f"\n  {tf} {kind}  ({len(rows)} signals)")
+                for lab, lo, hi in (("2 touches", 2, 2), ("3 touches", 3, 3),
+                                    ("4 touches", 4, 4), ("5+ touches", 5, 99),
+                                    ("3+ touches", 3, 99)):
+                    sub = [r for r in rows if lo <= r[3] <= hi]
+                    full = stat(sub)
+                    if not full:
+                        print(f"  {lab:<26}{len(sub):>6}   too few")
+                        continue
+                    show(lab, full, stat([r for r in sub if not r[2]]),
+                         stat([r for r in sub if r[2]]), dd)
 
     print(f"\n  ({time.time() - t0:.0f}s)")
 
