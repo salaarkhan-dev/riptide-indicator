@@ -1,0 +1,26 @@
+NEAR A US MACRO RELEASE
+608 confirmed A/B Min30 signals over 333 days · 501 bets
+39 releases in window: CPI 10  FOMC 7  NFP 11  PPI 11
+window 2025-10-15 to 2026-09-10
+
+PRIMARY  -120min .. +120min around any release
+  near release                 13 bets 31% win  -0.092 R   vs  488 bets 38% win  +0.065 R   diff  -0.158  |z| 0.44
+
+  placebo calendars (20 of 32 usable, whole-week shifts, weekday and hour preserved)
+    real |z| 0.44   placebo p95 2.39   placebo max 2.47   16 of 20 placebos beat the real   ->  does not clear
+    placebo diffs: 14 of 20 negative, median -0.273
+
+  same-clock control (is it the release or 08:30 New York?)
+  08:30 ET, no release         72 bets 31% win  -0.107 R   vs  429 bets 39% win  +0.090 R   diff  -0.196  |z| 1.14
+  14:00 ET, no release         34 bets 41% win  +0.005 R   vs  467 bets 38% win  +0.065 R   diff  -0.061  |z| 0.27
+
+  DESCRIPTIVE ONLY (not tested; each is a different question)
+  -120min .. +120min           13 bets 31% win  -0.092 R   vs  488 bets 38% win  +0.065 R   diff  -0.158  |z| 0.44
+  -60min .. +240min            13 bets 31% win  -0.142 R   vs  488 bets 38% win  +0.067 R   diff  -0.209  |z| 0.61
+  -0min .. +120min             10 bets 30% win  -0.117 R   vs  491 bets 38% win  +0.065 R   diff  -0.181  |z| 0.46
+  CPI only                   too few (10 releases)
+  PPI only                   too few (11 releases)
+  NFP only                   too few (11 releases)
+  FOMC only                  too few (7 releases)
+
+  by quarter  2025Q4  thin    2026Q1  thin    2026Q2  thin    2026Q3  thin    -> sign holds 0 of 0
