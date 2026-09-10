@@ -116,9 +116,9 @@ activityTooltip                 = 'Two bars inside each block — buy above the 
 showOriginTooltip               = 'Tag each order block with whether a CHoCH or a BOS created it. The distinction is TFlab\'s; the base already knows which tag fired'
 alertModeTooltip                = 'ONE ALERT FOR EVERYTHING is the point of this build.\n\nCreate a single TradingView alert on this indicator and choose "Any alert() function call". Every event below then arrives through that one alert, which is what makes this usable on the free tier where only one alert is allowed.\n\nThe individual alertcondition() entries are also kept, for anyone on a paid plan who prefers one alert per event.'
 alertFormatTooltip              = 'Readable — for a phone.\nCompact — pipe-delimited, for a bot or webhook to parse: symbol|timeframe|event|price|swing bias|internal bias.'
-arrowTooltip                    = 'A proper arrow where a TRADEABLE signal fires — price entering a demand or supply zone. Up and green for bullish, down and red for bearish.\n\nThese are the ones worth stopping for, so they get the arrow and everything else gets a small glyph. Two tiers rather than one, because a chart where every event looks equally important is a chart nobody scans.\n\nHover carries the same full read-out as the glyphs.'
+arrowTooltip                    = 'A proper arrow where a TRADEABLE signal fires — price RETURNING to a demand or supply zone it had already left. Up and green for bullish, down and red for bearish.\n\nNothing else gets a mark. Every other event already draws its own label — BOS, CHoCH, ✕, EQH/EQL — and those labels carry the full read-out on hover, so a second glyph beside them was noise saying the same thing twice.\n\nHover the arrow for the levels, both biases, the nearest zones and what to watch next.'
 tflabTooltip                    = 'Fires when price ENTERS the zone — the entry these are named for.\n\nNot the same as the "OB Breakout" alerts above, which fire when price closes BEYOND a block and the block is therefore dead. Opposite events.\n\nMain is swing structure, Sub is internal. Each fires once per block, however long price stays inside it.'
-markerTooltip                   = 'A single small glyph on the bar where an alert fired, colour-coded by direction. HOVER IT for the full read-out: what fired, both structure biases, the nearest demand and supply zones with their prices, and what to watch for next.\n\nOne glyph per bar however many events fired, because the point is to stay readable beside another indicator. Everything else lives in the tooltip.\n\n◆ zone entered   C CHoCH   B BOS   ✕ sweep   = equal high/low   ▪ FVG'
+withTrendTooltip                = 'Only signal a demand zone while swing structure is bullish, and a supply zone while it is bearish.\n\nWITHOUT THIS you get short arrows into a rally, because a supply block forms above every impulse and price walks back into it on the way up. That is the trade this whole system measured as the worst one available: counter-trend entries came out at -0.588 R against +0.038 for the same construction with the trend, the single largest separation found anywhere in the research.\n\nTurn it off to see every zone touch regardless of direction.'
 dashTooltip                     = 'A small read-out of the current bias and the last event, for scanning many charts quickly. OFF by default so the chart looks exactly like the base indicator.'
 
 modeInput                       = input.string( HISTORICAL, 'Mode',                     group = SMART_GROUP,    tooltip = modeTooltip, options = [HISTORICAL, PRESENT])
@@ -210,8 +210,7 @@ alertGapInput                   = input(        true,       'FVG',              
 alertFormatInput                = input.string( 'Readable', 'Message Format',           group = ALERT_GROUP,    tooltip = alertFormatTooltip, options = ['Readable','Compact'])
 showSignalArrowInput            = input(        true,       'Signal Arrows ▲▼',         group = ALERT_GROUP,    tooltip = arrowTooltip,  inline = 'ar')
 signalArrowSizeInput            = input.string( SMALL,      '',                         group = ALERT_GROUP,    inline = 'ar', options = [TINY,SMALL,NORMAL])
-showMarkerInput                 = input(        true,       'Context Glyphs',           group = ALERT_GROUP,    tooltip = markerTooltip, inline = 'mk')
-markerSizeInput                 = input.string( TINY,       '',                         group = ALERT_GROUP,    inline = 'mk', options = [TINY,SMALL,NORMAL])
+signalWithTrendInput            = input(        true,       'Signals With Structure Only', group = ALERT_GROUP, tooltip = withTrendTooltip)
 showDashInput                   = input(        false,      'Show Status Read-out',     group = ALERT_GROUP,    tooltip = dashTooltip)
 
 // TFlab's six zone-entry alerts, reproduced. Their "Main" is swing structure
@@ -322,6 +321,12 @@ type orderBlock
     float sellVolume = 0.
     string origin    = ''
     bool touched     = false
+    // A block is cut from a bar in the recent past, so on the bar it forms
+    // price is usually STILL INSIDE it. Without this the entry fires at
+    // formation rather than on a return, which is what put down-arrows in the
+    // middle of a rally. Price has to leave the zone before coming back can
+    // mean anything.
+    bool leftZone    = false
 
 var pivot swingHigh                 = pivot.new(na,na,false)
 var pivot swingLow                  = pivot.new(na,na,false)
@@ -421,6 +426,80 @@ startOfNewLeg(int leg)      => ta.change(leg) != 0
 startOfBearishLeg(int leg)  => ta.change(leg) == -1
 startOfBullishLeg(int leg)  => ta.change(leg) == +1
 
+// @function        ADDED — nearest live demand below and supply above, as text.
+//
+// THIS IS THE HALF OF THE TOOLTIP THAT DOES THE WORK. Knowing a CHoCH fired
+// tells a reader to look at the chart; knowing the nearest demand sits at
+// 0.03580-0.03604 and came from a swing CHoCH tells them WHERE to look and
+// what they would be marking. It is the difference between an alert that opens
+// a chart and an alert that starts an analysis.
+//
+// Nearest means nearest to price, not most recent: the block price would reach
+// first is the one that matters, whatever order they formed in.
+//
+// DEFINED HERE, ABOVE THE DRAWING FUNCTIONS, because the event labels
+// themselves now carry the tooltip. Pine resolves top-down, so a helper called
+// by drawStructure() has to exist before drawStructure() does.
+zoneSummary() =>
+    array<orderBlock> everyBlock = array.new<orderBlock>()
+    for eachOrderBlock in internalOrderBlocks
+        everyBlock.push(eachOrderBlock)
+    for eachOrderBlock in swingOrderBlocks
+        everyBlock.push(eachOrderBlock)
+
+    float demandTop = na
+    float demandBot = na
+    string demandTag = ''
+    float supplyTop = na
+    float supplyBot = na
+    string supplyTag = ''
+
+    for eachOrderBlock in everyBlock
+        if eachOrderBlock.bias == BULLISH and eachOrderBlock.barHigh <= close
+            if na(demandTop) or eachOrderBlock.barHigh > demandTop
+                demandTop := eachOrderBlock.barHigh
+                demandBot := eachOrderBlock.barLow
+                demandTag := eachOrderBlock.origin
+        if eachOrderBlock.bias == BEARISH and eachOrderBlock.barLow >= close
+            if na(supplyBot) or eachOrderBlock.barLow < supplyBot
+                supplyTop := eachOrderBlock.barHigh
+                supplyBot := eachOrderBlock.barLow
+                supplyTag := eachOrderBlock.origin
+
+    string out = ''
+    if not na(supplyTop)
+        out := out + '\n  supply   ' + str.tostring(supplyBot, format.mintick) + '  –  ' + str.tostring(supplyTop, format.mintick) + (supplyTag != '' ? '   (' + supplyTag + ')' : '')
+    if not na(demandTop)
+        out := out + '\n  demand   ' + str.tostring(demandBot, format.mintick) + '  –  ' + str.tostring(demandTop, format.mintick) + (demandTag != '' ? '   (' + demandTag + ')' : '')
+    out
+
+// @function        ADDED — the hover read-out, attached to the event's OWN label.
+//
+// THE GLYPH ROW IS GONE AND THIS IS WHY. A separate marker per event bar meant
+// a `B` sitting next to the BOS label that already said BOS, a `C` next to the
+// CHoCH label, an `✕` next to the ✕ — the same information twice, and on a
+// 30-minute chart running beside Riptide it read as clutter rather than signal.
+// The labels were always there. They just were not hoverable.
+//
+// So every event label now builds its tooltip through here and nothing extra
+// is drawn. One shape for all of them, so a BOS and a sweep read the same way
+// and the eye does not have to re-learn the layout per event.
+//
+// `level` is the price the event happened AT — the broken level for a
+// structure break, the swept extreme for a sweep — not the close, because the
+// level is the thing a reader is about to mark on the chart.
+eventTooltip(string headline, float level, string watch) =>
+    string zones = zoneSummary()
+    string sBias = swingTrend.bias    == BULLISH ? 'bull' : swingTrend.bias    == BEARISH ? 'bear' : 'flat'
+    string iBias = internalTrend.bias == BULLISH ? 'bull' : internalTrend.bias == BEARISH ? 'bear' : 'flat'
+    headline
+         + '\n' + syminfo.ticker + '  ·  ' + timeframe.period + '  ·  ' + str.tostring(level, format.mintick)
+         + '\n\nSTRUCTURE'
+         + '\n  swing      ' + sBias
+         + '\n  internal   ' + iBias
+         + (zones != '' ? '\n\nNEAREST ZONES' + zones : '')
+         + '\n\nWATCH FOR' + watch
+
 drawLabel(int labelTime, float labelPrice, string tag, color labelColor, string labelStyle) =>
     var label l_abel = na
 
@@ -447,7 +526,10 @@ drawEqualHighLow(pivot p_ivot, float level, int size, bool equalHigh) =>
 
     e_qualDisplay.l_ine     := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time[size],na,level), xloc = xloc.bar_time, color = equalColor, style = line.style_dotted)
     labelPosition           = math.round(0.5*(p_ivot.barIndex + bar_index - size))
-    e_qualDisplay.l_abel    := label.new(chart.point.new(na,labelPosition,level), tag, xloc.bar_index, color = color(na), textcolor = equalColor, style = labelStyle, size = equalHighsLowsSizeInput)
+    string watch = '\n  · two touches of the same level is a pool of resting stops, not a wall'
+         + '\n  · expect it to be swept before any real move — that sweep is the signal, this is not'
+         + '\n  · if it breaks and holds instead, the level becomes ' + (equalHigh ? 'support' : 'resistance')
+    e_qualDisplay.l_abel    := label.new(chart.point.new(na,labelPosition,level), tag, xloc.bar_index, color = color(na), textcolor = equalColor, style = labelStyle, size = equalHighsLowsSizeInput, tooltip = eventTooltip((equalHigh ? 'Equal highs' : 'Equal lows') + '  ·  liquidity pool', level, watch))
 
 getCurrentStructure(int size,bool equalHighLow = false, bool internal = false) =>
     currentLeg              = leg(size)
@@ -501,7 +583,10 @@ getCurrentStructure(int size,bool equalHighLow = false, bool internal = false) =
             if showSwingsInput and not internal and not equalHighLow
                 drawLabel(time[size], p_ivot.currentLevel, p_ivot.currentLevel > p_ivot.lastLevel ? 'HH' : 'LH', swingBearishColor, label.style_label_down)
 
-drawStructure(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
+// The BOS / CHoCH label is now the hover target. It was already drawn, already
+// sits on the level, and already says what fired — so a separate glyph beside
+// it was a second copy of the same word. The reading is on the label itself.
+drawStructure(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize, bool bullish, bool internal) =>
     var line l_ine      = line.new(na,na,na,na,xloc = xloc.bar_time)
     var label l_abel    = label.new(na,na)
 
@@ -509,8 +594,18 @@ drawStructure(pivot p_ivot, string tag, color structureColor, string lineStyle, 
         l_ine.delete()
         l_abel.delete()
 
+    string scope = internal ? 'internal' : 'swing'
+    string watch = tag == CHOCH
+         ? '\n  · the trend just flipped on ' + scope + ' structure'
+             + '\n  · a ' + (bullish ? 'demand' : 'supply') + ' block was cut at the origin — that is where the retest lands'
+             + '\n  · wait for the return to it, do not chase the break bar'
+         : '\n  · continuation — the level gave way in the direction it was already going'
+             + '\n  · the pullback into the origin block is the entry, not this bar'
+             + '\n  · it is wrong if price closes back through ' + str.tostring(p_ivot.currentLevel, format.mintick)
+    string tip = eventTooltip((bullish ? 'Bullish ' : 'Bearish ') + tag + '  ·  ' + scope + ' structure', p_ivot.currentLevel, watch)
+
     l_ine   := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time,na,p_ivot.currentLevel), xloc.bar_time, color=structureColor, style=lineStyle)
-    l_abel  := label.new(chart.point.new(na,math.round(0.5*(p_ivot.barIndex+bar_index)),p_ivot.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=structureColor, style=labelStyle, size = labelSize)
+    l_abel  := label.new(chart.point.new(na,math.round(0.5*(p_ivot.barIndex+bar_index)),p_ivot.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=structureColor, style=labelStyle, size = labelSize, tooltip = tip)
 
 // @function        ADDED — mark a level that price wicked through but closed back inside.
 //
@@ -524,11 +619,16 @@ drawStructure(pivot p_ivot, string tag, color structureColor, string lineStyle, 
 // The pivot's `swept` flag makes it fire ONCE. Without it a level that price
 // sits above for six bars logs six sweeps, and the alert stream becomes
 // unreadable — which is the failure mode of most ported indicators.
-drawSweep(pivot p_ivot, bool high_side, color sweepColor) =>
+drawSweep(pivot p_ivot, bool high_side, color sweepColor, bool internal = false) =>
+    string scope = internal ? 'internal' : 'swing'
+    string watch = '\n  · the stops beyond ' + str.tostring(p_ivot.currentLevel, format.mintick) + ' were taken and price refused to hold there'
+         + '\n  · a reclaim of that level confirms the reversal — a close back through kills it'
+         + '\n  · the ' + (high_side ? 'supply' : 'demand') + ' zone left behind is where the reaction should come from'
     label.new(chart.point.new(time, na, high_side ? high : low), '✕', xloc.bar_time,
          color = color(na), textcolor = sweepColor,
          style = high_side ? label.style_label_down : label.style_label_up,
-         size = size.tiny)
+         size = size.tiny,
+         tooltip = eventTooltip((high_side ? 'Buy-side sweep' : 'Sell-side sweep') + '  ·  ' + scope + ' level', p_ivot.currentLevel, watch))
 
 // @function        ADDED — accumulate buy and sell activity inside every live block.
 //
@@ -558,11 +658,21 @@ updateOrderBlockActivity(bool internal = false) =>
 // events, and wiring TFlab's message onto LuxAlgo's condition would announce a
 // long position at the moment the demand zone broke.
 //
-// `touched` makes it fire once. Price can sit inside a zone for twenty bars.
+// TWO GUARDS, AND THE SECOND ONE WAS MISSING AT FIRST. `touched` makes it fire
+// once, since price can sit inside a zone for twenty bars. `leftZone` makes it
+// fire on a RETURN: a block is cut from a bar in the recent past, so on the bar
+// it forms price is usually still inside it, and without this guard the entry
+// fired at formation. That is what put bearish arrows in the middle of a rally
+// — not a supply retest, just a supply block being born under price that was
+// still there.
+//
+// Requiring price to leave first is also simply what a retest IS.
 touchOrderBlocks(bool internal = false) =>
     array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
     for eachOrderBlock in orderBlocks
-        if not eachOrderBlock.touched and low <= eachOrderBlock.barHigh and high >= eachOrderBlock.barLow
+        if not eachOrderBlock.leftZone and (low > eachOrderBlock.barHigh or high < eachOrderBlock.barLow)
+            eachOrderBlock.leftZone := true
+        if eachOrderBlock.leftZone and not eachOrderBlock.touched and low <= eachOrderBlock.barHigh and high >= eachOrderBlock.barLow
             eachOrderBlock.touched := true
             // TFlab's own labels are explicit about this: "Demand Main Zone,
             // ChoCh Origin", "Demand Sub Zone, ChoCh Origin", "Demand ALL
@@ -624,7 +734,7 @@ storeOrdeBlock(pivot p_ivot,bool internal = false,int bias, string origin = '') 
 
         // ADDED — the origin bar's volume (BigBeluga) and what created the
         // block (TFlab's distinction), carried on the block itself.
-        orderBlock o_rderBlock          = orderBlock.new(parsedHighs.get(parsedIndex), parsedLows.get(parsedIndex), times.get(parsedIndex), bias, volumes.get(parsedIndex), 0., 0., origin, false)
+        orderBlock o_rderBlock          = orderBlock.new(parsedHighs.get(parsedIndex), parsedLows.get(parsedIndex), times.get(parsedIndex), bias, volumes.get(parsedIndex), 0., 0., origin, false, false)
         array<orderBlock> orderBlocks   = internal ? internalOrderBlocks : swingOrderBlocks
 
         if orderBlocks.size() >= 100
@@ -717,49 +827,6 @@ drawOrderBlocks(bool internal = false) =>
             else
                 l_abel.set_text('')
 
-// @function        ADDED — nearest live demand below and supply above, as text.
-//
-// THIS IS THE HALF OF THE TOOLTIP THAT DOES THE WORK. Knowing a CHoCH fired
-// tells a reader to look at the chart; knowing the nearest demand sits at
-// 0.03580-0.03604 and came from a swing CHoCH tells them WHERE to look and
-// what they would be marking. It is the difference between an alert that opens
-// a chart and an alert that starts an analysis.
-//
-// Nearest means nearest to price, not most recent: the block price would reach
-// first is the one that matters, whatever order they formed in.
-zoneSummary() =>
-    array<orderBlock> everyBlock = array.new<orderBlock>()
-    for eachOrderBlock in internalOrderBlocks
-        everyBlock.push(eachOrderBlock)
-    for eachOrderBlock in swingOrderBlocks
-        everyBlock.push(eachOrderBlock)
-
-    float demandTop = na
-    float demandBot = na
-    string demandTag = ''
-    float supplyTop = na
-    float supplyBot = na
-    string supplyTag = ''
-
-    for eachOrderBlock in everyBlock
-        if eachOrderBlock.bias == BULLISH and eachOrderBlock.barHigh <= close
-            if na(demandTop) or eachOrderBlock.barHigh > demandTop
-                demandTop := eachOrderBlock.barHigh
-                demandBot := eachOrderBlock.barLow
-                demandTag := eachOrderBlock.origin
-        if eachOrderBlock.bias == BEARISH and eachOrderBlock.barLow >= close
-            if na(supplyBot) or eachOrderBlock.barLow < supplyBot
-                supplyTop := eachOrderBlock.barHigh
-                supplyBot := eachOrderBlock.barLow
-                supplyTag := eachOrderBlock.origin
-
-    string out = ''
-    if not na(supplyTop)
-        out := out + '\n  supply   ' + str.tostring(supplyBot, format.mintick) + '  –  ' + str.tostring(supplyTop, format.mintick) + (supplyTag != '' ? '   (' + supplyTag + ')' : '')
-    if not na(demandTop)
-        out := out + '\n  demand   ' + str.tostring(demandBot, format.mintick) + '  –  ' + str.tostring(demandTop, format.mintick) + (demandTag != '' ? '   (' + demandTag + ')' : '')
-    out
-
 displayStructure(bool internal = false) =>
     var bullishBar = true
     var bearishBar = true
@@ -789,7 +856,7 @@ displayStructure(bool internal = false) =>
                 currentAlerts.internalSweepHigh := true
             else
                 currentAlerts.swingSweepHigh    := true
-            drawSweep(p_ivot, true, styleInput == MONOCHROME ? MONO_BEARISH : sweepBearColorInput)
+            drawSweep(p_ivot, true, styleInput == MONOCHROME ? MONO_BEARISH : sweepBearColorInput, internal)
 
     if ta.crossover(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
         string tag = t_rend.bias == BEARISH ? CHOCH : BOS
@@ -807,7 +874,7 @@ displayStructure(bool internal = false) =>
         displayCondition = internal ? showInternalsInput and (showInternalBullInput == ALL or (showInternalBullInput == BOS and tag != CHOCH) or (showInternalBullInput == CHOCH and tag == CHOCH)) : showStructureInput and (showSwingBullInput == ALL or (showSwingBullInput == BOS and tag != CHOCH) or (showSwingBullInput == CHOCH and tag == CHOCH))
 
         if displayCondition
-            drawStructure(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+            drawStructure(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize,true,internal)
 
         if (internal and showInternalOrderBlocksInput) or (not internal and showSwingOrderBlocksInput)
             storeOrdeBlock(p_ivot,internal,BULLISH,tag)
@@ -823,7 +890,7 @@ displayStructure(bool internal = false) =>
                 currentAlerts.internalSweepLow  := true
             else
                 currentAlerts.swingSweepLow     := true
-            drawSweep(p_ivot, false, styleInput == MONOCHROME ? MONO_BULLISH : sweepBullColorInput)
+            drawSweep(p_ivot, false, styleInput == MONOCHROME ? MONO_BULLISH : sweepBullColorInput, internal)
 
     if ta.crossunder(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
         string tag = t_rend.bias == BULLISH ? CHOCH : BOS
@@ -841,7 +908,7 @@ displayStructure(bool internal = false) =>
         displayCondition = internal ? showInternalsInput and (showInternalBearInput == ALL or (showInternalBearInput == BOS and tag != CHOCH) or (showInternalBearInput == CHOCH and tag == CHOCH)) : showStructureInput and (showSwingBearInput == ALL or (showSwingBearInput == BOS and tag != CHOCH) or (showSwingBearInput == CHOCH and tag == CHOCH))
 
         if displayCondition
-            drawStructure(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+            drawStructure(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize,false,internal)
 
         if (internal and showInternalOrderBlocksInput) or (not internal and showSwingOrderBlocksInput)
             storeOrdeBlock(p_ivot,internal,BEARISH,tag)
@@ -1136,75 +1203,54 @@ bias      = swingTrend.bias == BULLISH ? 'bull' : swingTrend.bias == BEARISH ? '
 inBias    = internalTrend.bias == BULLISH ? 'bull' : internalTrend.bias == BEARISH ? 'bear' : 'flat'
 
 // ---------------------------------------------------------------------------
-// THE CHART MARKER. One glyph, everything else on hover.
+// THE CHART MARKER. One arrow, for the one event that is a decision.
 //
-// The visible half is deliberately almost nothing: a single character, because
-// this runs beside another indicator and a second stack of labels would make
-// both unreadable. The useful half is the tooltip, and it is written to answer
-// the question actually being asked — not "what fired" but "is this worth
-// opening, and if I open it, what am I marking".
+// THE GLYPH ROW IS GONE. It printed a character on every event bar — C beside
+// the CHoCH label, B beside the BOS label, ✕ beside the ✕ — which on a
+// 30-minute chart running next to Riptide was a second stack of marks saying
+// what the first stack already said. The tooltips moved onto those labels
+// instead, so the information is still one hover away and the chart is not
+// carrying two of everything.
 //
-// So it carries the levels, both biases, and the nearest zones with prices, and
-// it ends with what to watch for. A reader can decide from the hover alone
-// whether to open the chart at all.
+// What is left is the arrow, and only for a zone entry, because that is the
+// only event here that is a decision NOW rather than something to mark and
+// wait on. A chart where every event looks equally important is a chart nobody
+// scans.
 // ---------------------------------------------------------------------------
-bullEvent = currentAlerts.swingBullishCHoCH or currentAlerts.swingBullishBOS or currentAlerts.internalBullishCHoCH or currentAlerts.internalBullishBOS or currentAlerts.swingSweepLow or currentAlerts.internalSweepLow or currentAlerts.demandMainTouch or currentAlerts.demandSubTouch or currentAlerts.demandBosTouch or currentAlerts.bullishFairValueGap or currentAlerts.equalLows
-bearEvent = currentAlerts.swingBearishCHoCH or currentAlerts.swingBearishBOS or currentAlerts.internalBearishCHoCH or currentAlerts.internalBearishBOS or currentAlerts.swingSweepHigh or currentAlerts.internalSweepHigh or currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or currentAlerts.supplyBosTouch or currentAlerts.bearishFairValueGap or currentAlerts.equalHighs
+demandEntry = currentAlerts.demandMainTouch or currentAlerts.demandSubTouch or currentAlerts.demandBosTouch
+supplyEntry = currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or currentAlerts.supplyBosTouch
 
-zoneEntry = currentAlerts.demandMainTouch or currentAlerts.demandSubTouch or currentAlerts.demandBosTouch or currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or currentAlerts.supplyBosTouch
-chochNow  = currentAlerts.swingBullishCHoCH or currentAlerts.swingBearishCHoCH or currentAlerts.internalBullishCHoCH or currentAlerts.internalBearishCHoCH
-bosNow    = currentAlerts.swingBullishBOS or currentAlerts.swingBearishBOS or currentAlerts.internalBullishBOS or currentAlerts.internalBearishBOS
-sweepNow  = currentAlerts.swingSweepHigh or currentAlerts.swingSweepLow or currentAlerts.internalSweepHigh or currentAlerts.internalSweepLow
-equalNow  = currentAlerts.equalHighs or currentAlerts.equalLows
-
-// One glyph, most actionable first. A zone entry is a decision now; a CHoCH is
-// a decision soon; an FVG is context.
-glyph = zoneEntry ? '◆' : chochNow ? 'C' : bosNow ? 'B' : sweepNow ? '✕' : equalNow ? '=' : '▪'
-
-// What the reader should be doing next, which is the whole reason for hovering.
-watch = ''
-watch := chochNow or bosNow ? watch + '\n  · mark the broken level and wait for the retest' : watch
-watch := sweepNow           ? watch + '\n  · liquidity taken — a reclaim confirms, a close back through kills it' : watch
-watch := zoneEntry          ? watch + '\n  · price is IN the zone now — react or wait for a second test' : watch
-watch := not zoneEntry and not na(close) ? watch + '\n  · the zones below are where a retest would land' : watch
+// WITH-STRUCTURE FILTER, ON BY DEFAULT, AND THIS IS THE MEASURED ONE. A supply
+// block forms above every impulse leg, so in a rally price walks back into
+// supply constantly and each of those touches used to print a down arrow in
+// the middle of an uptrend. Counter-trend entries measured -0.588 R against
+// +0.038 R for the identical construction taken with the trend — the largest
+// separation found anywhere in this research. Turning this off shows every
+// touch; it does not make those touches better.
+bullArrow = demandEntry and (not signalWithTrendInput or swingTrend.bias == BULLISH)
+bearArrow = supplyEntry and (not signalWithTrendInput or swingTrend.bias == BEARISH)
 
 if ev != ''
     lastEventText := ev
     lastEventTime := time
-    // TWO TIERS ON PURPOSE. A zone entry is a trade decision now, so it gets a
-    // real arrow; a CHoCH four levels away is context, so it gets a character.
-    // Drawing both at the same weight is how a chart stops being scannable,
-    // which matters more here than usual because this runs beside Riptide.
-    //
-    // The arrow WINS THE BAR. If a zone entry and a CHoCH fire together the
-    // arrow is drawn and the glyph is not, so one event never prints twice.
-    if showSignalArrowInput or showMarkerInput
-        string zones = zoneSummary()
-        string tip = ev
-             + '\n' + syminfo.ticker + '  ·  ' + timeframe.period + '  ·  ' + str.tostring(close, format.mintick)
-             + '\n\nSTRUCTURE'
-             + '\n  swing      ' + bias
-             + '\n  internal   ' + inBias
-             + (zones != '' ? '\n\nNEAREST ZONES' + zones : '')
-             + '\n\nWATCH FOR' + watch
-        bool down = bearEvent and not bullEvent
+    // Both directions on one bar can only happen with the filter off, since
+    // the swing bias cannot be bullish and bearish at once. When it does, the
+    // side facing the swing bias wins rather than drawing two opposing arrows
+    // on the same candle.
+    if showSignalArrowInput and (bullArrow or bearArrow)
+        bool down = bearArrow and (not bullArrow or swingTrend.bias == BEARISH)
         float at  = down ? high + atrMeasure * 0.4 : low - atrMeasure * 0.4
         color css = down ? swingBearishColor : swingBullishColor
-
-        if zoneEntry and showSignalArrowInput
-            label.new(chart.point.new(time, na, at), '', xloc.bar_time,
-                 color = css,
-                 textcolor = css,
-                 style = down ? label.style_arrowdown : label.style_arrowup,
-                 size = signalArrowSizeInput,
-                 tooltip = tip)
-        else if showMarkerInput
-            label.new(chart.point.new(time, na, at), glyph, xloc.bar_time,
-                 color = color(na),
-                 textcolor = css,
-                 style = down ? label.style_label_down : label.style_label_up,
-                 size = markerSizeInput,
-                 tooltip = tip)
+        string watch = '\n  · price is INSIDE the zone now — this is the retest, not the break'
+             + '\n  · the reaction candle is the trigger; the far side of the block is the stop'
+             + '\n  · no reaction and a close through the block means it is spent — stand down'
+        label.new(chart.point.new(time, na, at), '', xloc.bar_time,
+             color = css,
+             textcolor = css,
+             style = down ? label.style_arrowdown : label.style_arrowup,
+             size = signalArrowSizeInput,
+             tooltip = eventTooltip((down ? 'Supply zone entered' : 'Demand zone entered')
+                  + (signalWithTrendInput ? '  ·  with structure' : ''), close, watch))
     if alertOnInput
         // TWO FIXED SHAPES, no template to fill in. Both already carry the
         // symbol, the timeframe and the price, which is the part that actually
