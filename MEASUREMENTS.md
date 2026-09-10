@@ -5744,3 +5744,78 @@ worst run (10 bets to 5) and doubles the traffic, at the cost of five points of
 win rate. Neither difference clears its own error bar, which is the point —
 these two cells are not distinguishable on 42 days of data, and the choice
 between them is about how many trades a week you want, not about edge.
+
+---
+
+## The 3+ touch filter — pre-registered, and it fails
+
+`research/studies/pivot_filter.py` · 60 symbols · POI required · grade B+ · one bet per close
+
+`pivot_tune.py` found that on Min30 early, signals whose pool had three or more
+touches ran +0.206 R per bet held out at a 46% win rate, against −0.141 and 34%
+for two-touch pools. That was the strongest separation anywhere in the early
+stream. Three conditions were registered before this study ran; **all three had
+to pass.**
+
+### Condition 1 — the strict null: FAILS
+
+| | |
+|---|---|
+| real separation | **1.69 SE** |
+| circular-shift null p95 | **2.56 SE** |
+| null max over 300 rotations | 3.86 SE |
+
+Rotating each symbol's touch-count series in time — same values, same order,
+same keep rate, same autocorrelation, no link to the outcome — manufactures a
+*larger* separation than the real one more than 5% of the time. **The finding is
+smaller than what its own shape produces against a random outcome.**
+
+This is exactly why the instrument matters. Against the coin-flip null that
+`feature_batch.py` originally used, 1.69 SE would have read as nearly
+significant. A pool's touch count persists for the pool's whole life, so
+consecutive signals on a symbol share it, and only a rotation preserves that
+while breaking the link to R.
+
+### Condition 2 — holds sign on both splits: PASSES, weakly
+
+On Min30 early all four sub-panels are positive (+0.7, +1.5, +2.3, +0.5 SE). But
+the magnitude swings 5× between odd symbols (+0.483) and even (+0.094), which is
+a sign the size of the effect is not a stable quantity.
+
+### Condition 3 — reproduces on a fresh timeframe: FAILS
+
+Min60 and Hour4 had never been examined in this project, so nothing could leak
+into them.
+
+| difference, kept − dropped | full window | held out |
+|---|---|---|
+| **Min30 early** *(found here)* | **+0.248 (+1.7 SE)** | +0.345 |
+| Min15 early | +0.036 (+0.3 SE) | −0.047 |
+| Min60 early | +0.074 (+0.5 SE) | −0.000 |
+| Hour4 early | +0.029 (+0.2 SE) | −0.059 |
+
+**Three independent timeframes say zero.** Min30 early is the outlier, not the
+rule.
+
+### The whole scatter
+
+Across eight panels — four timeframes × two signal types — the difference reads
++1.7, −1.4, +0.3, −0.4, +0.5, +0.6, +0.2, +1.5 SE. **Not one clears 2 SE, the
+largest is the panel it was discovered on, and the set is centred near zero.**
+That is what no effect looks like.
+
+Confirmed is incoherent in the other direction too: Min30 confirmed says
+two-touch pools are far better (−0.470, −1.4 SE), while Min60 and Hour4
+confirmed lean the opposite way. A real property of a level would not change
+sign with the chart timeframe.
+
+**Verdict: nothing changes. The pool stays as shipped, and `min_pivots` stays
+at 2.**
+
+### One thing worth keeping
+
+Hour4 carries **333 days** of history against the 42 days every other study in
+this project runs on. It is far too slow to trade — 0.2 bets a day — but as an
+*out-of-sample window for testing a mechanism* it is eight times anything used
+here so far. Any future claim about market structure should be checked against
+it before being believed.
