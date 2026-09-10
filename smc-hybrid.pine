@@ -87,6 +87,7 @@ LEVELS_GROUP                    = 'Highs & Lows MTF'
 ZONES_GROUP                     = 'Premium & Discount Zones'
 SWEEP_GROUP                     = 'Liquidity Sweeps'
 ALERT_GROUP                     = 'Alerts'
+TFLAB_GROUP                     = 'Zone Entry Alerts (TFlab style)'
 
 modeTooltip                     = 'Allows to display historical Structure or only the recent ones'
 styleTooltip                    = 'Indicator color theme'
@@ -111,10 +112,12 @@ showPremiumDiscountZonesTooltip = 'Display premium, discount, and equilibrium zo
 showSweepsTooltip               = 'Mark levels that were wicked through but NOT closed through — a liquidity sweep. Adapted from BigBeluga, whose structure engine is the only one of the three that models this'
 sweepInternalTooltip            = 'Also mark sweeps of internal structure levels. Internal levels are swept far more often, so this is noisier'
 showOrderBlockVolumeTooltip     = 'Print the volume that traded on the order block\'s origin bar, and its share of the displayed blocks. Adapted from BigBeluga'
+activityTooltip                 = 'Two bars inside each block — buy above the mid-line, sell below — each drawn as its share of the volume since the block formed, so the longer bar is the side doing the trading.\n\nBigBeluga\'s own version advances these on a fixed cycle keyed to the origin candle\'s colour, which looks the same but carries no information. This uses the real up-close and down-close volume.'
 showOriginTooltip               = 'Tag each order block with whether a CHoCH or a BOS created it. The distinction is TFlab\'s; the base already knows which tag fired'
 alertModeTooltip                = 'ONE ALERT FOR EVERYTHING is the point of this build.\n\nCreate a single TradingView alert on this indicator and choose "Any alert() function call". Every event below then arrives through that one alert, which is what makes this usable on the free tier where only one alert is allowed.\n\nThe individual alertcondition() entries are also kept, for anyone on a paid plan who prefers one alert per event.'
 alertFormatTooltip              = 'Readable — for a phone.\nCompact — pipe-delimited, for a bot or webhook to parse.\nCustom template — your own wording, below.'
 templateTooltip                 = 'Used only when Message Format is "Custom template".\n\nPlaceholders, replaced when the alert fires:\n\n  {sym}    ticker\n  {tf}     chart timeframe\n  {event}  what happened, e.g. "🟢 CHoCH ↑ (swing)"\n  {price}  close\n  {bias}   swing structure bias\n  {ibias}  internal structure bias\n\nOne template with placeholders rather than a separate message box per event, which is how SMC TFlab does it — twenty boxes to edit, and none of them can say which symbol fired.\n\nFor a webhook into a bot, write JSON:\n{"sym":"{sym}","tf":"{tf}","event":"{event}","price":{price}}'
+tflabTooltip                    = 'Fires when price ENTERS the zone — the entry these messages describe.\n\nNot to be confused with the "OB Breakout" alerts above, which fire when price closes BEYOND a block and the block is therefore dead. Opposite events.\n\nMain is swing structure, Sub is internal. Each fires once per block, however long price stays inside it.'
 dashTooltip                     = 'A small read-out of the current bias and the last event, for scanning many charts quickly. OFF by default so the chart looks exactly like the base indicator.'
 
 modeInput                       = input.string( HISTORICAL, 'Mode',                     group = SMART_GROUP,    tooltip = modeTooltip, options = [HISTORICAL, PRESENT])
@@ -151,6 +154,10 @@ swingOrderBlocksSizeInput       = input.int(    5,          '',                 
 orderBlockFilterInput           = input.string( 'Atr',      'Order Block Filter',       group = BLOCKS_GROUP,   tooltip = orderBlockFilterTooltip,          options = [ATR, RANGE])
 orderBlockMitigationInput       = input.string( HIGHLOW,    'Order Block Mitigation',   group = BLOCKS_GROUP,   tooltip = orderBlockMitigationTooltip,      options = [CLOSE,HIGHLOW])
 showOrderBlockVolumeInput       = input(        true,       'Show Volume Metrics',      group = BLOCKS_GROUP,   tooltip = showOrderBlockVolumeTooltip)
+showOrderBlockActivityInput     = input(        true,       'Show Buy/Sell Activity',   group = BLOCKS_GROUP,   tooltip = activityTooltip,  inline = 'act')
+orderBlockActivityUpInput       = input.color(color.new(#089981, 50), '',               group = BLOCKS_GROUP,   inline = 'act')
+orderBlockActivityDnInput       = input.color(color.new(#f23645, 50), '',               group = BLOCKS_GROUP,   inline = 'act')
+showOrderBlockMidLineInput      = input(        true,       'Show Mid-Line',            group = BLOCKS_GROUP,   tooltip = 'The dashed level through the middle of a block. BigBeluga draws it because it is the level price tends to react to inside the zone, rather than either edge.')
 showOrderBlockOriginInput       = input(        true,       'Show Origin (CHoCH/BOS)',  group = BLOCKS_GROUP,   tooltip = showOriginTooltip)
 orderBlockTextSizeInput         = input.string( TINY,       'Metrics Size',             group = BLOCKS_GROUP,   options = [TINY,SMALL,NORMAL])
 internalBullishOrderBlockColor  = input.color(color.new(#3179f5, 80), 'Internal Bullish OB',    group = BLOCKS_GROUP)
@@ -203,6 +210,28 @@ alertFormatInput                = input.string( 'Readable', 'Message Format',   
 alertTemplateInput              = input.text_area('{sym} {tf}\n{event}\nprice {price}  ·  swing {bias} · internal {ibias}', 'Custom Template', group = ALERT_GROUP, tooltip = templateTooltip)
 showDashInput                   = input(        false,      'Show Status Read-out',     group = ALERT_GROUP,    tooltip = dashTooltip)
 
+// TFlab's six zone-entry alerts, reproduced. Their "Main" is swing structure
+// and their "Sub" is internal — that is the whole of the distinction — so the
+// base already had all six and only needed to name them.
+//
+// THEY FIRE ON ENTRY, NOT ON FAILURE, and that is not a detail. LuxAlgo's
+// existing OB alerts fire when price closes BEYOND a block, which is the block
+// being invalidated. TFlab's fire when price arrives INSIDE the zone, which is
+// the entry the message describes. Putting TFlab's wording on LuxAlgo's
+// condition would announce a long at the moment demand broke.
+alertDemandMainInput            = input(        true,       'Demand Main (swing, CHoCH)',   group = TFLAB_GROUP, tooltip = tflabTooltip)
+msgDemandMain                   = input.text_area('Long Position in Demand Main Zone ChoCh Origin.',  'Long Signal Message', group = TFLAB_GROUP)
+alertDemandSubInput             = input(        true,       'Demand Sub (internal, CHoCH)', group = TFLAB_GROUP)
+msgDemandSub                    = input.text_area('Long Position in Demand Sub Zone ChoCh Origin.',   'Long Signal Message', group = TFLAB_GROUP)
+alertDemandBosInput             = input(        true,       'Demand BoS',                   group = TFLAB_GROUP)
+msgDemandBos                    = input.text_area('Long Position in Demand Zone BoS Origin.',         'Long Signal Message', group = TFLAB_GROUP)
+alertSupplyMainInput            = input(        true,       'Supply Main (swing, CHoCH)',   group = TFLAB_GROUP)
+msgSupplyMain                   = input.text_area('Short Position in Supply Main Zone ChoCh Origin.', 'Short Signal Message', group = TFLAB_GROUP)
+alertSupplySubInput             = input(        true,       'Supply Sub (internal, CHoCH)', group = TFLAB_GROUP)
+msgSupplySub                    = input.text_area('Short Position in Supply Sub Zone ChoCh Origin.',  'Short Signal Message', group = TFLAB_GROUP)
+alertSupplyBosInput             = input(        true,       'Supply BoS',                   group = TFLAB_GROUP)
+msgSupplyBos                    = input.text_area('Short Position in Supply Zone BoS Origin.',        'Short Signal Message', group = TFLAB_GROUP)
+
 //---------------------------------------------------------------------------------------------------------------------}
 //DATA STRUCTURES & VARIABLES
 //---------------------------------------------------------------------------------------------------------------------{
@@ -235,6 +264,16 @@ type alerts
     // only needed to say so.
     string bullishOrderBlockOrigin  = ''
     string bearishOrderBlockOrigin  = ''
+    // ADDED — TFlab's six, on the ENTRY event rather than the failure event.
+    // Main is swing, Sub is internal; that is all their naming means.
+    bool demandMainTouch            = false
+    bool demandSubTouch             = false
+    bool demandBosTouch             = false
+    bool supplyMainTouch            = false
+    bool supplySubTouch             = false
+    bool supplyBosTouch             = false
+    string demandTouchOrigin        = ''
+    string supplyTouchOrigin        = ''
 
 type trailingExtremes
     float top
@@ -273,10 +312,18 @@ type orderBlock
     float barLow
     int barTime
     int bias
-    // ADDED — the volume on the origin bar (BigBeluga) and what created the
-    // block, CHoCH or BOS (the distinction is TFlab's).
-    float barVolume = 0.
-    string origin   = ''
+    // ADDED — everything BigBeluga's block needs to be drawn the way it draws.
+    //   barVolume  the volume on the origin bar, for the metric label
+    //   buyVolume  volume of up-closes since the block formed
+    //   sellVolume volume of down-closes since the block formed
+    //   origin     CHoCH or BOS, the distinction TFlab's taxonomy is built on
+    //   touched    price has entered the zone at least once, so the entry
+    //              alert fires ONCE rather than on every bar price sits in it
+    float barVolume  = 0.
+    float buyVolume  = 0.
+    float sellVolume = 0.
+    string origin    = ''
+    bool touched     = false
 
 var pivot swingHigh                 = pivot.new(na,na,false)
 var pivot swingLow                  = pivot.new(na,na,false)
@@ -305,6 +352,14 @@ var array<box> internalOrderBlocksBoxes     = array.new<box>()
 // ADDED — one reusable label per displayed block for the volume metric.
 var array<label> swingOrderBlocksLabels     = array.new<label>()
 var array<label> internalOrderBlocksLabels  = array.new<label>()
+// ADDED — the rest of the BigBeluga block: two activity bars and a midline per
+// displayed block. Allocated once, reused every bar, like the boxes above.
+var array<box>  swingBuyBoxes               = array.new<box>()
+var array<box>  swingSellBoxes              = array.new<box>()
+var array<line> swingMidLines               = array.new<line>()
+var array<box>  internalBuyBoxes            = array.new<box>()
+var array<box>  internalSellBoxes           = array.new<box>()
+var array<line> internalMidLines            = array.new<line>()
 var swingBullishColor               = styleInput == MONOCHROME ? MONO_BULLISH : swingBullColorInput
 var swingBearishColor               = styleInput == MONOCHROME ? MONO_BEARISH : swingBearColorInput
 var fairValueGapBullishColor        = styleInput == MONOCHROME ? color.new(MONO_BULLISH,70) : fairValueGapsBullColorInput
@@ -323,11 +378,17 @@ if barstate.isfirst
     if showSwingOrderBlocksInput
         for index = 1 to swingOrderBlocksSizeInput
             swingOrderBlocksBoxes.push(box.new(na,na,na,na,xloc = xloc.bar_time,extend = extend.right))
-            swingOrderBlocksLabels.push(label.new(na,na,xloc = xloc.bar_time,color = color(na),style = label.style_label_left))
+            swingOrderBlocksLabels.push(label.new(na,na,xloc = xloc.bar_time,color = color(na),style = label.style_label_left,size = size.tiny))
+            swingBuyBoxes.push( box.new(na,na,na,na,xloc = xloc.bar_time,border_color = na))
+            swingSellBoxes.push(box.new(na,na,na,na,xloc = xloc.bar_time,border_color = na))
+            swingMidLines.push( line.new(na,na,na,na,xloc = xloc.bar_time,style = line.style_dashed))
     if showInternalOrderBlocksInput
         for index = 1 to internalOrderBlocksSizeInput
             internalOrderBlocksBoxes.push(box.new(na,na,na,na,xloc = xloc.bar_time,extend = extend.right))
-            internalOrderBlocksLabels.push(label.new(na,na,xloc = xloc.bar_time,color = color(na),style = label.style_label_left))
+            internalOrderBlocksLabels.push(label.new(na,na,xloc = xloc.bar_time,color = color(na),style = label.style_label_left,size = size.tiny))
+            internalBuyBoxes.push( box.new(na,na,na,na,xloc = xloc.bar_time,border_color = na))
+            internalSellBoxes.push(box.new(na,na,na,na,xloc = xloc.bar_time,border_color = na))
+            internalMidLines.push( line.new(na,na,na,na,xloc = xloc.bar_time,style = line.style_dashed))
 
 bearishOrderBlockMitigationSource   = orderBlockMitigationInput == CLOSE ? close : high
 bullishOrderBlockMitigationSource   = orderBlockMitigationInput == CLOSE ? close : low
@@ -471,6 +532,62 @@ drawSweep(pivot p_ivot, bool high_side, color sweepColor) =>
          style = high_side ? label.style_label_down : label.style_label_up,
          size = size.tiny)
 
+// @function        ADDED — accumulate buy and sell activity inside every live block.
+//
+// BigBeluga draws two sub-bars inside each block, one above the midline and one
+// below, and grows them as bars pass. Its own version advances them on a fixed
+// 1-2-3 cycle keyed to the origin candle's colour, which is decorative — the
+// bar lengths carry no information about what actually traded.
+//
+// This keeps the look and makes the lengths mean something: up-close volume
+// goes to the buy bar, down-close volume to the sell bar, and each is drawn as
+// its share of the elapsed span. Same picture, and now the longer bar is the
+// side that actually did the volume.
+updateOrderBlockActivity(bool internal = false) =>
+    array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
+    for eachOrderBlock in orderBlocks
+        if close >= open
+            eachOrderBlock.buyVolume  += volume
+        else
+            eachOrderBlock.sellVolume += volume
+
+// @function        ADDED — price ENTERED the zone. Not the same event as below.
+//
+// THIS IS THE DISTINCTION THAT MATTERS AND IT IS EASY TO GET BACKWARDS.
+// deleteOrderBlocks() fires when price closes BEYOND a block — the block has
+// failed and is removed. TFlab's "mitigation" alerts fire when price arrives
+// INSIDE the zone, which is the entry they are named for. They are opposite
+// events, and wiring TFlab's message onto LuxAlgo's condition would announce a
+// long position at the moment the demand zone broke.
+//
+// `touched` makes it fire once. Price can sit inside a zone for twenty bars.
+touchOrderBlocks(bool internal = false) =>
+    array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
+    for eachOrderBlock in orderBlocks
+        if not eachOrderBlock.touched and low <= eachOrderBlock.barHigh and high >= eachOrderBlock.barLow
+            eachOrderBlock.touched := true
+            // TFlab's own labels are explicit about this: "Demand Main Zone,
+            // ChoCh Origin", "Demand Sub Zone, ChoCh Origin", "Demand ALL
+            // Zone, BoS Origin". So Main and Sub are CHoCH-origin only, and
+            // the BoS entry is its own category spanning both. Firing Main for
+            // a BOS-origin block would double-count it.
+            if eachOrderBlock.bias == BULLISH
+                currentAlerts.demandTouchOrigin := eachOrderBlock.origin
+                if eachOrderBlock.origin == BOS
+                    currentAlerts.demandBosTouch  := true
+                else if internal
+                    currentAlerts.demandSubTouch  := true
+                else
+                    currentAlerts.demandMainTouch := true
+            else
+                currentAlerts.supplyTouchOrigin := eachOrderBlock.origin
+                if eachOrderBlock.origin == BOS
+                    currentAlerts.supplyBosTouch  := true
+                else if internal
+                    currentAlerts.supplySubTouch  := true
+                else
+                    currentAlerts.supplyMainTouch := true
+
 deleteOrderBlocks(bool internal = false) =>
     array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
 
@@ -509,13 +626,30 @@ storeOrdeBlock(pivot p_ivot,bool internal = false,int bias, string origin = '') 
 
         // ADDED — the origin bar's volume (BigBeluga) and what created the
         // block (TFlab's distinction), carried on the block itself.
-        orderBlock o_rderBlock          = orderBlock.new(parsedHighs.get(parsedIndex), parsedLows.get(parsedIndex), times.get(parsedIndex), bias, volumes.get(parsedIndex), origin)
+        orderBlock o_rderBlock          = orderBlock.new(parsedHighs.get(parsedIndex), parsedLows.get(parsedIndex), times.get(parsedIndex), bias, volumes.get(parsedIndex), 0., 0., origin, false)
         array<orderBlock> orderBlocks   = internal ? internalOrderBlocks : swingOrderBlocks
 
         if orderBlocks.size() >= 100
             orderBlocks.pop()
         orderBlocks.unshift(o_rderBlock)
 
+// @function        Draw the blocks the way BigBeluga draws them.
+//
+// FOUR PARTS, and the first version of this file only had the first. A plain
+// tinted box is what LuxAlgo draws; what makes BigBeluga's read at a glance is
+// the rest of it:
+//
+//   1  the zone itself, extended right
+//   2  a dashed MIDLINE — the level price actually reacts to inside the zone
+//   3  two ACTIVITY BARS, buy above the midline and sell below, each drawn as
+//      its share of the elapsed span, so the longer one is the side doing the
+//      volume
+//   4  the METRIC — the origin bar's volume and its share of the blocks on
+//      screen, which is the number that says which zone is the heavy one
+//
+// The share is what makes the metric readable. A bare volume figure means
+// nothing without something to compare it against, which is why BigBeluga
+// prints the percentage beside it and why that is kept here.
 drawOrderBlocks(bool internal = false) =>
     array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
     orderBlocksSize = orderBlocks.size()
@@ -524,33 +658,64 @@ drawOrderBlocks(bool internal = false) =>
         maxOrderBlocks                      = internal ? internalOrderBlocksSizeInput : swingOrderBlocksSizeInput
         array<orderBlock> parsedOrdeBlocks  = orderBlocks.slice(0, math.min(maxOrderBlocks,orderBlocksSize))
         array<box> b_oxes                   = internal ? internalOrderBlocksBoxes : swingOrderBlocksBoxes
+        array<box> buyBoxes                 = internal ? internalBuyBoxes : swingBuyBoxes
+        array<box> sellBoxes                = internal ? internalSellBoxes : swingSellBoxes
+        array<line> midLines                = internal ? internalMidLines : swingMidLines
         array<label> l_abels                = internal ? internalOrderBlocksLabels : swingOrderBlocksLabels
 
-        // ADDED — total volume across the displayed blocks, so each can show
-        // its share. BigBeluga's metric: the percentage is what makes one block
-        // stand out against the others rather than being an unanchored number.
         float totalVolume = 0.
-        if showOrderBlockVolumeInput
-            for eachOrderBlock in parsedOrdeBlocks
-                totalVolume += eachOrderBlock.barVolume
+        for eachOrderBlock in parsedOrdeBlocks
+            totalVolume += eachOrderBlock.barVolume
 
         for [index,eachOrderBlock] in parsedOrdeBlocks
             orderBlockColor = styleInput == MONOCHROME ? (eachOrderBlock.bias == BEARISH ? color.new(MONO_BEARISH,80) : color.new(MONO_BULLISH,80)) : internal ? (eachOrderBlock.bias == BEARISH ? internalBearishOrderBlockColor : internalBullishOrderBlockColor) : (eachOrderBlock.bias == BEARISH ? swingBearishOrderBlockColor : swingBullishOrderBlockColor)
+            float mid       = math.avg(eachOrderBlock.barHigh, eachOrderBlock.barLow)
 
             box b_ox        = b_oxes.get(index)
             b_ox.set_top_left_point(    chart.point.new(eachOrderBlock.barTime,na,eachOrderBlock.barHigh))
             b_ox.set_bottom_right_point(chart.point.new(last_bar_time,na,eachOrderBlock.barLow))
-            b_ox.set_border_color(      internal ? na : orderBlockColor)
+            b_ox.set_border_color(      internal ? color(na) : orderBlockColor)
             b_ox.set_bgcolor(           orderBlockColor)
 
+            // --- 3. the activity bars
+            box buyBox  = buyBoxes.get(index)
+            box sellBox = sellBoxes.get(index)
+            if showOrderBlockActivityInput
+                float totalFlow = eachOrderBlock.buyVolume + eachOrderBlock.sellVolume
+                int   span      = last_bar_time - eachOrderBlock.barTime
+                int   buyRight  = totalFlow > 0 ? eachOrderBlock.barTime + int(span * eachOrderBlock.buyVolume  / totalFlow) : eachOrderBlock.barTime
+                int   sellRight = totalFlow > 0 ? eachOrderBlock.barTime + int(span * eachOrderBlock.sellVolume / totalFlow) : eachOrderBlock.barTime
+                buyBox.set_top_left_point(      chart.point.new(eachOrderBlock.barTime,na,eachOrderBlock.barHigh))
+                buyBox.set_bottom_right_point(  chart.point.new(buyRight,na,mid))
+                buyBox.set_bgcolor(             orderBlockActivityUpInput)
+                buyBox.set_border_color(        color(na))
+                sellBox.set_top_left_point(     chart.point.new(eachOrderBlock.barTime,na,mid))
+                sellBox.set_bottom_right_point( chart.point.new(sellRight,na,eachOrderBlock.barLow))
+                sellBox.set_bgcolor(            orderBlockActivityDnInput)
+                sellBox.set_border_color(       color(na))
+            else
+                buyBox.set_bgcolor(color(na))
+                sellBox.set_bgcolor(color(na))
+
+            // --- 2. the midline
+            line midLine = midLines.get(index)
+            if showOrderBlockMidLineInput
+                midLine.set_first_point(  chart.point.new(eachOrderBlock.barTime,na,mid))
+                midLine.set_second_point( chart.point.new(last_bar_time,na,mid))
+                midLine.set_color(        color.new(orderBlockColor, 0))
+            else
+                midLine.set_color(color(na))
+
+            // --- 4. the metric
             label l_abel = l_abels.get(index)
             if showOrderBlockVolumeInput or showOrderBlockOriginInput
-                string share = showOrderBlockVolumeInput and totalVolume > 0 ? str.tostring(math.round(eachOrderBlock.barVolume, 3), format.volume) + ' (' + str.tostring(math.floor(eachOrderBlock.barVolume / totalVolume * 100)) + '%)' : ''
+                string share = showOrderBlockVolumeInput and totalVolume > 0 ? str.tostring(eachOrderBlock.barVolume, format.volume) + '  (' + str.tostring(math.round(eachOrderBlock.barVolume / totalVolume * 100)) + '%)' : ''
                 string tag   = showOrderBlockOriginInput and eachOrderBlock.origin != '' ? (share == '' ? eachOrderBlock.origin : share + '  ' + eachOrderBlock.origin) : share
-                l_abel.set_point(       chart.point.new(last_bar_time,na,math.avg(eachOrderBlock.barHigh,eachOrderBlock.barLow)))
+                l_abel.set_point(       chart.point.new(last_bar_time,na,mid))
                 l_abel.set_text(        tag)
                 l_abel.set_textcolor(   color.new(orderBlockColor, 0))
                 l_abel.set_size(        orderBlockTextSizeInput)
+                l_abel.set_style(       label.style_label_left)
             else
                 l_abel.set_text('')
 
@@ -782,10 +947,17 @@ if showInternalsInput or showInternalOrderBlocksInput or showTrendInput or showS
 if showStructureInput or showSwingOrderBlocksInput or showHighLowSwingsInput or showSweepsInput
     displayStructure()
 
+// Activity and entry are accumulated BEFORE invalidation, so a block that is
+// entered and broken on the same bar still reports the entry that happened
+// first. Deleting first would silently drop it.
 if showInternalOrderBlocksInput
+    updateOrderBlockActivity(true)
+    touchOrderBlocks(true)
     deleteOrderBlocks(true)
 
 if showSwingOrderBlocksInput
+    updateOrderBlockActivity()
+    touchOrderBlocks()
     deleteOrderBlocks()
 
 if showFairValueGapsInput
@@ -844,6 +1016,15 @@ alertcondition(currentAlerts.swingSweepLow,             'Swing Sweep Low',      
 alertcondition(currentAlerts.internalSweepHigh,         'Internal Sweep High',          'Internal high swept and rejected')
 alertcondition(currentAlerts.internalSweepLow,          'Internal Sweep Low',           'Internal low swept and rejected')
 
+// TFlab's six, as their own conditions so each can be a separate TradingView
+// alert with its own message, exactly as their panel offers.
+alertcondition(currentAlerts.demandMainTouch,           'Demand Main Mitigation',       'Price entered a swing demand zone')
+alertcondition(currentAlerts.demandSubTouch,            'Demand Sub Mitigation',        'Price entered an internal demand zone')
+alertcondition(currentAlerts.demandBosTouch,            'Demand BoS Mitigation',        'Price entered a BOS-origin demand zone')
+alertcondition(currentAlerts.supplyMainTouch,           'Supply Main Mitigation',       'Price entered a swing supply zone')
+alertcondition(currentAlerts.supplySubTouch,            'Supply Sub Mitigation',        'Price entered an internal supply zone')
+alertcondition(currentAlerts.supplyBosTouch,            'Supply BoS Mitigation',        'Price entered a BOS-origin supply zone')
+
 // ---------------------------------------------------------------------------
 // THE SINGLE ALERT. One TradingView alert on "Any alert() function call"
 // delivers every event above, on every timeframe, for that symbol — which is
@@ -882,6 +1063,17 @@ if alertOrderBlockInput
 if alertGapInput
     ev := currentAlerts.bullishFairValueGap    ? ev + (ev == '' ? '' : sep) + (readable ? 'bullish FVG'          : 'FVG_BULL')      : ev
     ev := currentAlerts.bearishFairValueGap    ? ev + (ev == '' ? '' : sep) + (readable ? 'bearish FVG'          : 'FVG_BEAR')      : ev
+
+// The zone-entry events carry the READER'S OWN wording into the single alert,
+// so the text typed in the panel is what arrives on the phone. TFlab's boxes
+// can only ever say a generic sentence; here the same sentence arrives with the
+// symbol, the timeframe and the price attached.
+ev := alertDemandMainInput and currentAlerts.demandMainTouch ? ev + (ev == '' ? '' : sep) + (readable ? msgDemandMain  : 'DEMAND_MAIN')  : ev
+ev := alertDemandSubInput  and currentAlerts.demandSubTouch  ? ev + (ev == '' ? '' : sep) + (readable ? msgDemandSub   : 'DEMAND_SUB')   : ev
+ev := alertDemandBosInput  and currentAlerts.demandBosTouch  ? ev + (ev == '' ? '' : sep) + (readable ? msgDemandBos   : 'DEMAND_BOS')   : ev
+ev := alertSupplyMainInput and currentAlerts.supplyMainTouch ? ev + (ev == '' ? '' : sep) + (readable ? msgSupplyMain  : 'SUPPLY_MAIN')  : ev
+ev := alertSupplySubInput  and currentAlerts.supplySubTouch  ? ev + (ev == '' ? '' : sep) + (readable ? msgSupplySub   : 'SUPPLY_SUB')   : ev
+ev := alertSupplyBosInput  and currentAlerts.supplyBosTouch  ? ev + (ev == '' ? '' : sep) + (readable ? msgSupplyBos   : 'SUPPLY_BOS')   : ev
 
 // Internal events are appended only when the reader wants them. They fire many
 // times more often than swing events, so mixing them in by default would bury
