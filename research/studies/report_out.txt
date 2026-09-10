@@ -1,0 +1,282 @@
+RIPTIDE - FULL STRATEGY REPORT
+the deployed gates from riptide.conf: Min30 structure, POI required, grade A-B,
+entry at the gap, stop beyond the raid, target 2R, 60 symbols, 333 days.
+fees charged at measured rates; FUNDING AND SLIPPAGE ARE NOT MODELLED and the
+universe is survivorship-biased, so every level below is optimistic.
+
+
+==============================================================================
+CONFIRMED SETUPS  (grade A - the stream the risk band was fitted on)
+2025-10-14 to 2026-09-10 · 333 days · Min30 · target 2R
+
+-- PERFORMANCE --------------------------------------------------------------
+  Net profit                     +32.1 R
+  Gross profit                  +415.2 R
+  Gross loss                    -383.1 R
+  Profit factor                   1.08
+  Expectancy per trade          +0.053 R
+  Expectancy per BET            +0.070 R   +/- 0.062 SE   (1.1 SE from zero)
+
+-- TRADES -------------------------------------------------------------------
+  Signals sent                     841
+  Filled                           610   (73% of signals)
+  Never filled                     231   (27%) - costs nothing, scores 0.0
+  Independent bets (bars)          503
+  Percent profitable             37.0%
+  Winning trades                   226
+  Losing trades                    384
+    exit by target                  203   (33%)
+    exit by stop                    370   (61%)
+    exit by timeout                  37   (6%)
+
+-- RISK / REWARD ------------------------------------------------------------
+  Target R (planned)             +2.00 R
+  Average winning trade         +1.837 R
+  Average losing trade          -0.998 R
+  Realised reward/risk            1.84 : 1
+  Break-even win rate needed     35.2%   (actual 37.0%, margin +1.9%)
+  Largest winning trade         +1.999 R
+  Largest losing trade          -1.112 R
+  Average MFE (best excursion)  +1.357 R
+  Average MAE (worst)           -1.022 R
+  Median stop distance            1.65% of price
+
+-- DRAWDOWN AND RATIOS ------------------------------------------------------
+  Max drawdown                    33.3 R
+  Max drawdown vs net profit      1.04 x   ( >1 means the worst run erased more than the year made )
+  Longest time under water         565 trades of 610
+  Recovery factor                 0.96   (net profit / max drawdown)
+  Sharpe (annualised)             0.97   per-trade series, annualised by realised trade frequency;
+  Sortino (annualised)            1.71   positions overlap, so both read higher than a single-position
+                                   equity curve would give. Not comparable to TradingView's.
+  Max consecutive wins               9
+  Max consecutive losses            11
+
+-- ON A 300 USDT ACCOUNT, 1% OF BALANCE PER TRADE ---------------------------
+  unlimited        final        377 USDT       +26%   max drawdown 32.6%   0 skipped for margin
+  max 10 open      final        361 USDT       +20%   max drawdown 35.5%   3 skipped for margin
+  max 5 open       final        351 USDT       +17%   max drawdown 35.6%   18 skipped for margin
+  max 3 open       final        340 USDT       +13%   max drawdown 37.2%   62 skipped for margin
+
+-- DIRECTION ----------------------------------------------------------------
+  Long                     296 trades   264 bets   37% win   +0.080 R/trade     +23.6 R total  +0.091±0.086 R/bet
+  Short                    314 trades   239 bets   37% win   +0.027 R/trade      +8.5 R total  +0.047±0.089 R/bet
+  long minus short           +0.044 R/bet   |z| 0.36   - survivorship inflates LONGS
+                            specifically, so distrust this axis most.
+
+-- GRADE --------------------------------------------------------------------
+  Grade A                  610 trades   503 bets   37% win   +0.053 R/trade     +32.1 R total  +0.070±0.062 R/bet
+
+-- STOP DISTANCE (the one shipped filter) -----------------------------------
+  under 1.2%               163 trades   149 bets   32% win   -0.096 R/trade     -15.6 R total  -0.085±0.113 R/bet
+  1.2% - 2.6%  take        314 trades   262 bets   43% win   +0.203 R/trade     +63.9 R total  +0.226±0.087 R/bet
+  over 2.6%    skip        133 trades   122 bets   30% win   -0.121 R/trade     -16.1 R total  -0.169±0.116 R/bet
+
+-- HOLDING TIME -------------------------------------------------------------
+  Bars signal to fill                2 median      2.8 mean   (1.4 h)
+  Bars held                         11 median     16.7 mean   (8.3 h)
+
+-- BY QUARTER ---------------------------------------------------------------
+  2025Q4                   151 trades   115 bets   37% win   +0.060 R/trade      +9.0 R total  +0.129±0.133 R/bet
+  2026Q1                   163 trades   126 bets   34% win   -0.042 R/trade      -6.8 R total  -0.063±0.117 R/bet
+  2026Q2                   159 trades   140 bets   34% win   -0.028 R/trade      -4.5 R total  -0.037±0.114 R/bet
+  2026Q3                   137 trades   122 bets   45% win   +0.251 R/trade     +34.4 R total  +0.276±0.130 R/bet
+
+-- SYMBOLS ------------------------------------------------------------------
+  best   ONDO_USDT          15 trades    +13.2 R
+  best   SHIB_USDT          13 trades     +9.8 R
+  best   BTC_USDT            6 trades     +8.8 R
+  best   RAY_USDT            8 trades     +8.2 R
+  best   PUMPFUN_USDT       10 trades     +7.3 R
+  worst  BTR_USDT           12 trades     -5.5 R
+  worst  SOL_USDT           13 trades     -6.2 R
+  worst  APT_USDT            8 trades     -8.2 R
+  worst  INJ_USDT            9 trades     -9.2 R
+  worst  ASTER_USDT         10 trades    -10.2 R
+  32 of 60 symbols positive (53%).  The best 5 supply 147% of net R - remove them and the year is -15.2 R.
+
+
+==============================================================================
+EARLY SIGNALS  (grade B - the gap before the shift confirms)
+the bot sends these too, RIPTIDE_EARLY_ALERTS=1. About 15% of
+them describe the same trade as a confirmed setup and are
+collapsed into one message live; here they are counted whole.
+2025-10-14 to 2026-09-10 · 333 days · Min30 · target 2R
+
+-- PERFORMANCE --------------------------------------------------------------
+  Net profit                    +119.5 R
+  Gross profit                 +2491.3 R
+  Gross loss                   -2371.8 R
+  Profit factor                   1.05
+  Expectancy per trade          +0.032 R
+  Expectancy per BET            +0.034 R   +/- 0.028 SE   (1.2 SE from zero)
+
+-- TRADES -------------------------------------------------------------------
+  Signals sent                    4658
+  Filled                          3706   (80% of signals)
+  Never filled                     952   (20%) - costs nothing, scores 0.0
+  Independent bets (bars)         2251
+  Percent profitable             36.6%
+  Winning trades                  1357
+  Losing trades                   2349
+    exit by target                 1208   (33%)
+    exit by stop                   2284   (62%)
+    exit by timeout                 214   (6%)
+
+-- RISK / REWARD ------------------------------------------------------------
+  Target R (planned)             +2.00 R
+  Average winning trade         +1.836 R
+  Average losing trade          -1.010 R
+  Realised reward/risk            1.82 : 1
+  Break-even win rate needed     35.5%   (actual 36.6%, margin +1.1%)
+  Largest winning trade         +1.999 R
+  Largest losing trade          -1.301 R
+  Average MFE (best excursion)  +1.362 R
+  Average MAE (worst)           -1.059 R
+  Median stop distance            1.37% of price
+
+-- DRAWDOWN AND RATIOS ------------------------------------------------------
+  Max drawdown                   119.0 R
+  Max drawdown vs net profit      1.00 x   ( >1 means the worst run erased more than the year made )
+  Longest time under water        2343 trades of 3706
+  Recovery factor                 1.00   (net profit / max drawdown)
+  Sharpe (annualised)             1.47   per-trade series, annualised by realised trade frequency;
+  Sortino (annualised)            2.54   positions overlap, so both read higher than a single-position
+                                   equity curve would give. Not comparable to TradingView's.
+  Max consecutive wins              19
+  Max consecutive losses            27
+
+-- ON A 300 USDT ACCOUNT, 1% OF BALANCE PER TRADE ---------------------------
+  unlimited        final        353 USDT       +18%   max drawdown 79.9%   0 skipped for margin
+  max 10 open      final        276 USDT        -8%   max drawdown 81.9%   207 skipped for margin
+  max 5 open       final        161 USDT       -46%   max drawdown 81.5%   997 skipped for margin
+  max 3 open       final        135 USDT       -55%   max drawdown 81.1%   1756 skipped for margin
+
+-- DIRECTION ----------------------------------------------------------------
+  Long                    1718 trades  1167 bets   36% win   +0.023 R/trade     +39.5 R total  +0.013±0.039 R/bet
+  Short                   1988 trades  1101 bets   37% win   +0.040 R/trade     +80.0 R total  +0.054±0.039 R/bet
+  long minus short           -0.041 R/bet   |z| 0.73   - survivorship inflates LONGS
+                            specifically, so distrust this axis most.
+
+-- GRADE --------------------------------------------------------------------
+  Grade B                 3706 trades  2251 bets   37% win   +0.032 R/trade    +119.5 R total  +0.034±0.028 R/bet
+
+-- STOP DISTANCE (the one shipped filter) -----------------------------------
+  under 1.2%              1611 trades  1119 bets   36% win   +0.031 R/trade     +49.6 R total  +0.007±0.041 R/bet
+  1.2% - 2.6%  take       1533 trades  1057 bets   37% win   +0.037 R/trade     +57.1 R total  +0.068±0.042 R/bet
+  over 2.6%    skip        562 trades   487 bets   38% win   +0.023 R/trade     +12.7 R total  +0.023±0.059 R/bet
+
+-- HOLDING TIME -------------------------------------------------------------
+  Bars signal to fill                1 median      2.3 mean   (1.2 h)
+  Bars held                          8 median     14.8 mean   (7.4 h)
+
+-- BY QUARTER ---------------------------------------------------------------
+  2025Q4                   917 trades   522 bets   38% win   +0.077 R/trade     +70.7 R total  +0.111±0.059 R/bet
+  2026Q1                   952 trades   555 bets   37% win   +0.020 R/trade     +19.0 R total  +0.044±0.056 R/bet
+  2026Q2                   981 trades   628 bets   36% win   +0.025 R/trade     +24.7 R total  +0.002±0.053 R/bet
+  2026Q3                   856 trades   546 bets   36% win   +0.006 R/trade      +5.1 R total  -0.016±0.056 R/bet
+
+-- SYMBOLS ------------------------------------------------------------------
+  best   ONDO_USDT          62 trades    +33.5 R
+  best   EGLD_USDT          76 trades    +28.0 R
+  best   VVV_USDT           82 trades    +25.6 R
+  best   KAS_USDT           72 trades    +22.4 R
+  best   ETC_USDT           76 trades    +21.9 R
+  worst  PEPE_USDT          80 trades    -14.2 R
+  worst  DOT_USDT           59 trades    -14.8 R
+  worst  ASTER_USDT         55 trades    -16.4 R
+  worst  INJ_USDT           71 trades    -17.0 R
+  worst  XLM_USDT           77 trades    -20.6 R
+  31 of 60 symbols positive (52%).  The best 5 supply 110% of net R - remove them and the year is -11.9 R.
+
+
+==============================================================================
+BOTH STREAMS TOGETHER  (everything the bot alerts as tradeable)
+2025-10-14 to 2026-09-10 · 333 days · Min30 · target 2R
+
+-- PERFORMANCE --------------------------------------------------------------
+  Net profit                    +151.6 R
+  Gross profit                 +2906.5 R
+  Gross loss                   -2754.9 R
+  Profit factor                   1.06
+  Expectancy per trade          +0.035 R
+  Expectancy per BET            +0.034 R   +/- 0.027 SE   (1.2 SE from zero)
+
+-- TRADES -------------------------------------------------------------------
+  Signals sent                    5499
+  Filled                          4316   (78% of signals)
+  Never filled                    1183   (22%) - costs nothing, scores 0.0
+  Independent bets (bars)         2398
+  Percent profitable             36.7%
+  Winning trades                  1583
+  Losing trades                   2733
+    exit by target                 1411   (33%)
+    exit by stop                   2654   (61%)
+    exit by timeout                 251   (6%)
+
+-- RISK / REWARD ------------------------------------------------------------
+  Target R (planned)             +2.00 R
+  Average winning trade         +1.836 R
+  Average losing trade          -1.008 R
+  Realised reward/risk            1.82 : 1
+  Break-even win rate needed     35.4%   (actual 36.7%, margin +1.2%)
+  Largest winning trade         +1.999 R
+  Largest losing trade          -1.301 R
+  Average MFE (best excursion)  +1.361 R
+  Average MAE (worst)           -1.054 R
+  Median stop distance            1.42% of price
+
+-- DRAWDOWN AND RATIOS ------------------------------------------------------
+  Max drawdown                   132.4 R
+  Max drawdown vs net profit      0.87 x   ( >1 means the worst run erased more than the year made )
+  Longest time under water        2702 trades of 4316
+  Recovery factor                 1.15   (net profit / max drawdown)
+  Sharpe (annualised)             1.73   per-trade series, annualised by realised trade frequency;
+  Sortino (annualised)            3.00   positions overlap, so both read higher than a single-position
+                                   equity curve would give. Not comparable to TradingView's.
+  Max consecutive wins              20
+  Max consecutive losses            28
+
+-- ON A 300 USDT ACCOUNT, 1% OF BALANCE PER TRADE ---------------------------
+  unlimited        final        336 USDT       +12%   max drawdown 84.9%   0 skipped for margin
+  max 10 open      final        183 USDT       -39%   max drawdown 88.5%   399 skipped for margin
+  max 5 open       final        158 USDT       -47%   max drawdown 85.5%   1441 skipped for margin
+  max 3 open       final        154 USDT       -49%   max drawdown 80.9%   2312 skipped for margin
+
+-- DIRECTION ----------------------------------------------------------------
+  Long                    2014 trades  1250 bets   36% win   +0.031 R/trade     +63.1 R total  +0.020±0.038 R/bet
+  Short                   2302 trades  1169 bets   37% win   +0.038 R/trade     +88.5 R total  +0.045±0.038 R/bet
+  long minus short           -0.025 R/bet   |z| 0.46   - survivorship inflates LONGS
+                            specifically, so distrust this axis most.
+
+-- GRADE --------------------------------------------------------------------
+  Grade A                  610 trades   503 bets   37% win   +0.053 R/trade     +32.1 R total  +0.070±0.062 R/bet
+  Grade B                 3706 trades  2251 bets   37% win   +0.032 R/trade    +119.5 R total  +0.034±0.028 R/bet
+
+-- STOP DISTANCE (the one shipped filter) -----------------------------------
+  under 1.2%              1774 trades  1151 bets   36% win   +0.019 R/trade     +34.0 R total  +0.011±0.040 R/bet
+  1.2% - 2.6%  take       1847 trades  1161 bets   38% win   +0.066 R/trade    +121.0 R total  +0.071±0.040 R/bet
+  over 2.6%    skip        695 trades   551 bets   37% win   -0.005 R/trade      -3.4 R total  -0.028±0.055 R/bet
+
+-- HOLDING TIME -------------------------------------------------------------
+  Bars signal to fill                1 median      2.4 mean   (1.2 h)
+  Bars held                          9 median     15.1 mean   (7.5 h)
+
+-- BY QUARTER ---------------------------------------------------------------
+  2025Q4                  1068 trades   553 bets   38% win   +0.075 R/trade     +79.7 R total  +0.099±0.057 R/bet
+  2026Q1                  1115 trades   591 bets   36% win   +0.011 R/trade     +12.2 R total  +0.033±0.054 R/bet
+  2026Q2                  1140 trades   667 bets   36% win   +0.018 R/trade     +20.2 R total  +0.012±0.051 R/bet
+  2026Q3                   993 trades   587 bets   37% win   +0.040 R/trade     +39.5 R total  -0.003±0.054 R/bet
+
+-- SYMBOLS ------------------------------------------------------------------
+  best   ONDO_USDT          77 trades    +46.6 R
+  best   VVV_USDT          101 trades    +32.2 R
+  best   EGLD_USDT          83 trades    +29.9 R
+  best   BTC_USDT           70 trades    +29.0 R
+  best   ARB_USDT           64 trades    +24.6 R
+  worst  DOT_USDT           66 trades    -17.9 R
+  worst  ZRO_USDT           69 trades    -17.9 R
+  worst  XLM_USDT           87 trades    -19.5 R
+  worst  INJ_USDT           80 trades    -26.1 R
+  worst  ASTER_USDT         65 trades    -26.6 R
+  32 of 60 symbols positive (53%).  The best 5 supply 107% of net R - remove them and the year is -10.6 R.
