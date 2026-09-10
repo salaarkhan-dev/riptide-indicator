@@ -744,7 +744,15 @@ cpTagOf(CpZig z, bool isHigh, float px) =>
            : (na(z.lastLo) ? "swing low"  : px > z.lastLo ? "HL" : "LL")
 
 // One turn of the zigzag.
+//
+// THE TRAILING `drew` IS LOAD-BEARING. A Pine function returns its LAST
+// statement, so when that statement is an if/else chain every branch has to
+// yield the same type — and these do not: two end in an assignment and the
+// middle one ends in a bare inner `if`, which is void. Ending on an explicit
+// value puts the chain in statement position, where the branches are allowed to
+// differ. Every function below does the same for the same reason.
 cpTurn(CpZig z, bool isHigh, float px, int pbar) =>
+    bool drew = false
     if not z.started
         z.started := true
         z.bar     := pbar
@@ -787,6 +795,8 @@ cpTurn(CpZig z, bool isHigh, float px, int pbar) =>
         z.bar    := pbar
         z.px     := px
         z.isHigh := isHigh
+        drew     := true
+    drew
 
 if not na(ph)
     cpTurn(zig, true,  ph, bar_index - effPivotRight)
@@ -1672,6 +1682,7 @@ cpRearm() =>
         float t2 = atr * cpPivTol
         if low > p.price + t2 or high < p.price - t2
             p.armed := true
+    true
 
 // Claim the first ARMED zone the pattern overlaps, and disarm it. Overlap
 // rather than containment: a pin rejects a zone by reaching INTO it, and asking
@@ -2536,6 +2547,7 @@ cpTrim() =>
         label.delete(cpLabels.shift())
     while cpLines.size() > cpKeep * 2
         line.delete(cpLines.shift())
+    true
 
 cpDraw(CpMark mk, bool isBull, string nm, string kind, string zname, float ztop,
        float zbot, float entry, float stop) =>
@@ -2571,6 +2583,7 @@ cpDraw(CpMark mk, bool isBull, string nm, string kind, string zname, float ztop,
         cpLines.push(mk.ln1)
         cpLines.push(mk.ln2)
     cpTrim()
+    true
 
 // A SINGLE CANDLE CANNOT BE CLASSIFIED ON ITS OWN BAR. Whether a pin is a 1CP
 // or the first half of a 2CP is a fact about the bar AFTER it — and the old code
@@ -2594,6 +2607,7 @@ cpClearLast(CpMark mk) =>
     label.delete(mk.lbl)
     line.delete(mk.ln1)
     line.delete(mk.ln2)
+    true
 
 if cpOn and barstate.isconfirmed
     cpRearm()
