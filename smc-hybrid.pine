@@ -118,6 +118,9 @@ alertModeTooltip                = 'ONE ALERT FOR EVERYTHING is the point of this
 alertFormatTooltip              = 'Readable — for a phone.\nCompact — pipe-delimited, for a bot or webhook to parse: symbol|timeframe|event|price|swing bias|internal bias.'
 arrowTooltip                    = 'A proper arrow where a TRADEABLE signal fires — price RETURNING to a demand or supply zone it had already left. Up and green for bullish, down and red for bearish.\n\nNothing else gets a mark. Every other event already draws its own label — BOS, CHoCH, ✕, EQH/EQL — and those labels carry the full read-out on hover, so a second glyph beside them was noise saying the same thing twice.\n\nHover the arrow for the levels, both biases, the nearest zones and what to watch next.'
 tflabTooltip                    = 'Fires when price ENTERS the zone — the entry these are named for.\n\nNot the same as the "OB Breakout" alerts above, which fire when price closes BEYOND a block and the block is therefore dead. Opposite events.\n\nMain is swing structure, Sub is internal. Each fires once per block, however long price stays inside it.'
+watchTooltip                    = 'TWO MARKS, TWO DIFFERENT JOBS.\n\n○ A HOLLOW DOT where a break just cut a zone. This is NOT an entry. It says the structure moved and a demand or supply zone was left behind at the origin — go mark it and wait. Hover it for the zone\'s exact range.\n\n▲▼ AN ARROW where price came back into that zone and rejected from it. That is the entry the dot was waiting for.\n\nThe dot without a later arrow means the retest never came, or came and did not reject. That is information too: the setup did not complete and there was nothing to take.'
+rejectionTooltip                = 'Require the retest bar to actually REJECT before the entry arrow prints.\n\nA rejection is a bar that traded INTO the zone and closed back out of its better half — into demand and closed above the zone midline on an up bar, into supply and closed below it on a down bar. That is the candle you were describing: wick in, body out, price leaves.\n\nWITHOUT THIS the arrow prints the instant a wick touches the zone, which is before anything is known — half of those keep going straight through. With it you get fewer arrows and each one has a candle behind it.\n\nThe zone midline is already drawn, so the test is something you can see.'
+zoneTestsTooltip                = 'How many separate returns to the same zone may print an arrow.\n\nEach return counts once: price has to leave the zone before coming back can count again. 1 is strict SMC — the first retest is the trade. 2 allows the common case where the first touch is a shallow wick and the real test comes after.\n\nBeyond that a zone is being worn out rather than defended, which is the opposite of the setup.'
 withTrendTooltip                = 'Only signal a demand zone while swing structure is bullish, and a supply zone while it is bearish.\n\nWITHOUT THIS you get short arrows into a rally, because a supply block forms above every impulse and price walks back into it on the way up. That is the trade this whole system measured as the worst one available: counter-trend entries came out at -0.588 R against +0.038 for the same construction with the trend, the single largest separation found anywhere in the research.\n\nTurn it off to see every zone touch regardless of direction.'
 dashTooltip                     = 'A small read-out of the current bias and the last event, for scanning many charts quickly. OFF by default so the chart looks exactly like the base indicator.'
 
@@ -210,7 +213,10 @@ alertGapInput                   = input(        true,       'FVG',              
 alertFormatInput                = input.string( 'Readable', 'Message Format',           group = ALERT_GROUP,    tooltip = alertFormatTooltip, options = ['Readable','Compact'])
 showSignalArrowInput            = input(        true,       'Signal Arrows ▲▼',         group = ALERT_GROUP,    tooltip = arrowTooltip,  inline = 'ar')
 signalArrowSizeInput            = input.string( SMALL,      '',                         group = ALERT_GROUP,    inline = 'ar', options = [TINY,SMALL,NORMAL])
+showWatchMarkInput              = input(        true,       'Wait-For-Retest Dots ○',   group = ALERT_GROUP,    tooltip = watchTooltip)
 signalWithTrendInput            = input(        true,       'Signals With Structure Only', group = ALERT_GROUP, tooltip = withTrendTooltip)
+requireRejectionInput           = input(        true,       'Require Rejection Candle', group = ALERT_GROUP,    tooltip = rejectionTooltip)
+maxZoneTestsInput               = input.int(    2,          'Tests Allowed Per Zone',   group = ALERT_GROUP,    tooltip = zoneTestsTooltip, minval = 1, maxval = 5)
 showDashInput                   = input(        false,      'Show Status Read-out',     group = ALERT_GROUP,    tooltip = dashTooltip)
 
 // TFlab's six zone-entry alerts, reproduced. Their "Main" is swing structure
@@ -271,6 +277,22 @@ type alerts
     bool supplyBosTouch             = false
     string demandTouchOrigin        = ''
     string supplyTouchOrigin        = ''
+    // ADDED — the zone that was entered, so the entry arrow can name the range
+    // it is pointing at rather than making a reader guess which box it means.
+    float demandTouchTop            = na
+    float demandTouchBot            = na
+    float supplyTouchTop            = na
+    float supplyTouchBot            = na
+    // ADDED — A BREAK JUST CUT A ZONE AND THERE IS NOTHING TO DO YET. This is
+    // the first half of the setup and it was never modelled: the old build
+    // marked the break and marked the entry with the same weight, so a chart
+    // could not say "wait" and "go" differently. Armed means the zone exists
+    // and price has not come back to it.
+    bool demandArmed                = false
+    bool supplyArmed                = false
+    float armedTop                  = na
+    float armedBot                  = na
+    string armedOrigin              = ''
 
 type trailingExtremes
     float top
@@ -327,6 +349,13 @@ type orderBlock
     // middle of a rally. Price has to leave the zone before coming back can
     // mean anything.
     bool leftZone    = false
+    // HOW MANY SEPARATE RETURNS THIS ZONE HAS ALREADY PRINTED. `touched` used
+    // to latch for the block's whole life, so the FIRST brush against it — a
+    // one-tick wick on the way past — consumed the zone and the real retest
+    // days later printed nothing. `touched` now re-arms whenever price leaves,
+    // and this counter is what stops a zone price is oscillating around from
+    // printing forever.
+    int tests        = 0
 
 var pivot swingHigh                 = pivot.new(na,na,false)
 var pivot swingLow                  = pivot.new(na,na,false)
@@ -392,6 +421,20 @@ if barstate.isfirst
             internalBuyBoxes.push( box.new(na,na,na,na,xloc = xloc.bar_time,border_color = na))
             internalSellBoxes.push(box.new(na,na,na,na,xloc = xloc.bar_time,border_color = na))
             internalMidLines.push( line.new(na,na,na,na,xloc = xloc.bar_time,style = line.style_dashed))
+
+// THE MAIN SIGNALS COULD NOT FIRE, AND NOTHING SAID SO. Demand Main and Supply
+// Main are SWING blocks, but swing blocks were only ever stored when 'Swing
+// Order Blocks' was ticked — and that display option is OFF by default. So a
+// panel showing six zone signals all enabled was really running three: every
+// Main alert was silently dead, and Demand/Supply BoS only ever fired off
+// internal structure.
+//
+// Storing is now driven by whether a signal NEEDS the zone, not by whether the
+// box is painted. Drawing stays on the display inputs, so nothing new appears
+// on the chart — turn 'Swing Order Blocks' on if you want to see the zones the
+// Main arrows are pointing at.
+swingBlocksLive     = showSwingOrderBlocksInput    or alertDemandMainInput or alertSupplyMainInput or alertDemandBosInput or alertSupplyBosInput
+internalBlocksLive  = showInternalOrderBlocksInput or alertDemandSubInput  or alertSupplySubInput  or alertDemandBosInput or alertSupplyBosInput
 
 bearishOrderBlockMitigationSource   = orderBlockMitigationInput == CLOSE ? close : high
 bullishOrderBlockMitigationSource   = orderBlockMitigationInput == CLOSE ? close : low
@@ -658,43 +701,85 @@ updateOrderBlockActivity(bool internal = false) =>
 // events, and wiring TFlab's message onto LuxAlgo's condition would announce a
 // long position at the moment the demand zone broke.
 //
-// TWO GUARDS, AND THE SECOND ONE WAS MISSING AT FIRST. `touched` makes it fire
-// once, since price can sit inside a zone for twenty bars. `leftZone` makes it
-// fire on a RETURN: a block is cut from a bar in the recent past, so on the bar
-// it forms price is usually still inside it, and without this guard the entry
-// fired at formation. That is what put bearish arrows in the middle of a rally
-// — not a supply retest, just a supply block being born under price that was
-// still there.
+// THREE BUGS LIVED IN THIS FUNCTION AND EACH ONE PUT AN ARROW IN THE WRONG
+// PLACE OR LEFT THE RIGHT PLACE BARE.
 //
-// Requiring price to leave first is also simply what a retest IS.
+//   1  IT SCANNED EVERY STORED BLOCK, NOT THE DRAWN ONES. storeOrdeBlock keeps
+//      up to ONE HUNDRED blocks; drawOrderBlocks paints the newest five. The
+//      other ninety-five were invisible and still armed, so an arrow could fire
+//      off a zone from weeks earlier that is nowhere on the chart. That is the
+//      arrow sitting alone in empty space with no box near it. It is now capped
+//      to exactly the blocks being displayed: if you cannot see the zone, it
+//      cannot signal.
+//
+//   2  `touched` LATCHED FOR THE BLOCK'S ENTIRE LIFE. The first brush against a
+//      zone — a single-tick wick on the way past — consumed it permanently, so
+//      the real retest afterwards printed nothing. That is why the good setup
+//      (break, return, rejection, run) had no arrow on it. `touched` now clears
+//      every time price leaves the zone, and maxZoneTestsInput caps how many
+//      separate returns may print.
+//
+//   3  IT FIRED ON CONTACT, WHICH IS BEFORE ANYTHING IS KNOWN. A wick entering
+//      a zone is not a rejection; half of them close straight through. The
+//      trigger is now the bar CLOSING back out of the zone's better half — into
+//      demand and closing above the midline on an up bar, into supply and
+//      closing below it on a down bar. The midline is already drawn, so the
+//      test is one a reader can check by eye.
+//
+// `leftZone` is still what makes this a RETEST rather than a formation. A block
+// is cut from a bar in the recent past, so on the bar it forms price is usually
+// still inside it — without that guard the entry fires at birth, which is what
+// put bearish arrows in the middle of a rally.
 touchOrderBlocks(bool internal = false) =>
-    array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
-    for eachOrderBlock in orderBlocks
-        if not eachOrderBlock.leftZone and (low > eachOrderBlock.barHigh or high < eachOrderBlock.barLow)
-            eachOrderBlock.leftZone := true
-        if eachOrderBlock.leftZone and not eachOrderBlock.touched and low <= eachOrderBlock.barHigh and high >= eachOrderBlock.barLow
-            eachOrderBlock.touched := true
-            // TFlab's own labels are explicit about this: "Demand Main Zone,
-            // ChoCh Origin", "Demand Sub Zone, ChoCh Origin", "Demand ALL
-            // Zone, BoS Origin". So Main and Sub are CHoCH-origin only, and
-            // the BoS entry is its own category spanning both. Firing Main for
-            // a BOS-origin block would double-count it.
-            if eachOrderBlock.bias == BULLISH
-                currentAlerts.demandTouchOrigin := eachOrderBlock.origin
-                if eachOrderBlock.origin == BOS
-                    currentAlerts.demandBosTouch  := true
-                else if internal
-                    currentAlerts.demandSubTouch  := true
+    array<orderBlock> everyBlock = internal ? internalOrderBlocks : swingOrderBlocks
+    int visible = internal ? internalOrderBlocksSizeInput : swingOrderBlocksSizeInput
+
+    if everyBlock.size() > 0
+        array<orderBlock> orderBlocks = everyBlock.slice(0, math.min(visible, everyBlock.size()))
+        for eachOrderBlock in orderBlocks
+            bool outside = low > eachOrderBlock.barHigh or high < eachOrderBlock.barLow
+            bool inside  = low <= eachOrderBlock.barHigh and high >= eachOrderBlock.barLow
+            float mid    = math.avg(eachOrderBlock.barHigh, eachOrderBlock.barLow)
+
+            // Away from the zone: this return is over, arm the next one.
+            if outside
+                eachOrderBlock.leftZone := true
+                eachOrderBlock.touched  := false
+
+            // Wick in, body back out of the half that matters. Left as a plain
+            // close-versus-midline test rather than a wick-ratio rule because
+            // the midline is on the chart and a wick ratio is not — a signal a
+            // reader cannot verify by looking is a signal they cannot trust.
+            bool rejected = eachOrderBlock.bias == BULLISH ? (close >= mid and close > open) : (close <= mid and close < open)
+
+            if inside and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput and (not requireRejectionInput or rejected)
+                eachOrderBlock.touched := true
+                eachOrderBlock.tests   += 1
+                // TFlab's own labels are explicit about this: "Demand Main Zone,
+                // ChoCh Origin", "Demand Sub Zone, ChoCh Origin", "Demand ALL
+                // Zone, BoS Origin". So Main and Sub are CHoCH-origin only, and
+                // the BoS entry is its own category spanning both. Firing Main for
+                // a BOS-origin block would double-count it.
+                if eachOrderBlock.bias == BULLISH
+                    currentAlerts.demandTouchOrigin := eachOrderBlock.origin
+                    currentAlerts.demandTouchTop    := eachOrderBlock.barHigh
+                    currentAlerts.demandTouchBot    := eachOrderBlock.barLow
+                    if eachOrderBlock.origin == BOS
+                        currentAlerts.demandBosTouch  := true
+                    else if internal
+                        currentAlerts.demandSubTouch  := true
+                    else
+                        currentAlerts.demandMainTouch := true
                 else
-                    currentAlerts.demandMainTouch := true
-            else
-                currentAlerts.supplyTouchOrigin := eachOrderBlock.origin
-                if eachOrderBlock.origin == BOS
-                    currentAlerts.supplyBosTouch  := true
-                else if internal
-                    currentAlerts.supplySubTouch  := true
-                else
-                    currentAlerts.supplyMainTouch := true
+                    currentAlerts.supplyTouchOrigin := eachOrderBlock.origin
+                    currentAlerts.supplyTouchTop    := eachOrderBlock.barHigh
+                    currentAlerts.supplyTouchBot    := eachOrderBlock.barLow
+                    if eachOrderBlock.origin == BOS
+                        currentAlerts.supplyBosTouch  := true
+                    else if internal
+                        currentAlerts.supplySubTouch  := true
+                    else
+                        currentAlerts.supplyMainTouch := true
 
 deleteOrderBlocks(bool internal = false) =>
     array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
@@ -720,7 +805,7 @@ deleteOrderBlocks(bool internal = false) =>
             orderBlocks.remove(index)
 
 storeOrdeBlock(pivot p_ivot,bool internal = false,int bias, string origin = '') =>
-    if (not internal and showSwingOrderBlocksInput) or (internal and showInternalOrderBlocksInput)
+    if (not internal and swingBlocksLive) or (internal and internalBlocksLive)
 
         array<float> a_rray = na
         int parsedIndex = na
@@ -734,12 +819,33 @@ storeOrdeBlock(pivot p_ivot,bool internal = false,int bias, string origin = '') 
 
         // ADDED — the origin bar's volume (BigBeluga) and what created the
         // block (TFlab's distinction), carried on the block itself.
-        orderBlock o_rderBlock          = orderBlock.new(parsedHighs.get(parsedIndex), parsedLows.get(parsedIndex), times.get(parsedIndex), bias, volumes.get(parsedIndex), 0., 0., origin, false, false)
+        orderBlock o_rderBlock          = orderBlock.new(parsedHighs.get(parsedIndex), parsedLows.get(parsedIndex), times.get(parsedIndex), bias, volumes.get(parsedIndex), 0., 0., origin, false, false, 0)
         array<orderBlock> orderBlocks   = internal ? internalOrderBlocks : swingOrderBlocks
 
         if orderBlocks.size() >= 100
             orderBlocks.pop()
         orderBlocks.unshift(o_rderBlock)
+
+        // ARMED — the break left a zone behind and there is nothing to do yet.
+        // This is the half of the setup the old build never marked: it drew the
+        // break and drew the entry at the same weight, so the chart could not
+        // say "wait" and "go" differently.
+        //
+        // The new block is always at index 0, so it is always one of the drawn
+        // ones — which is the condition touchOrderBlocks now enforces too. A
+        // zone that arms is a zone that can later signal.
+        // Only arm a zone whose entry signal is actually switched on. A dot
+        // promising a retest that can never print an arrow is worse than no dot.
+        bool canSignal = bias == BULLISH ? (origin == BOS ? alertDemandBosInput : internal ? alertDemandSubInput : alertDemandMainInput) : (origin == BOS ? alertSupplyBosInput : internal ? alertSupplySubInput : alertSupplyMainInput)
+
+        if canSignal
+            currentAlerts.armedTop    := o_rderBlock.barHigh
+            currentAlerts.armedBot    := o_rderBlock.barLow
+            currentAlerts.armedOrigin := origin
+            if bias == BULLISH
+                currentAlerts.demandArmed := true
+            else
+                currentAlerts.supplyArmed := true
 
 // @function        Draw the blocks the way BigBeluga draws them.
 //
@@ -876,7 +982,7 @@ displayStructure(bool internal = false) =>
         if displayCondition
             drawStructure(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize,true,internal)
 
-        if (internal and showInternalOrderBlocksInput) or (not internal and showSwingOrderBlocksInput)
+        if (internal and internalBlocksLive) or (not internal and swingBlocksLive)
             storeOrdeBlock(p_ivot,internal,BULLISH,tag)
 
     p_ivot          := internal ? internalLow : swingLow
@@ -910,7 +1016,7 @@ displayStructure(bool internal = false) =>
         if displayCondition
             drawStructure(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize,false,internal)
 
-        if (internal and showInternalOrderBlocksInput) or (not internal and showSwingOrderBlocksInput)
+        if (internal and internalBlocksLive) or (not internal and swingBlocksLive)
             storeOrdeBlock(p_ivot,internal,BEARISH,tag)
 
 fairValueGapBox(leftTime,rightTime,topPrice,bottomPrice,boxColor) => box.new(chart.point.new(leftTime,na,topPrice),chart.point.new(rightTime + fairValueGapsExtendInput * (time-time[1]),na,bottomPrice), xloc=xloc.bar_time, border_color = boxColor, bgcolor = boxColor)
@@ -1049,21 +1155,21 @@ getCurrentStructure(5,false,true)
 if showEqualHighsLowsInput
     getCurrentStructure(equalHighsLowsLengthInput,true)
 
-if showInternalsInput or showInternalOrderBlocksInput or showTrendInput or showSweepsInput
+if showInternalsInput or internalBlocksLive or showTrendInput or showSweepsInput
     displayStructure(true)
 
-if showStructureInput or showSwingOrderBlocksInput or showHighLowSwingsInput or showSweepsInput
+if showStructureInput or swingBlocksLive or showHighLowSwingsInput or showSweepsInput
     displayStructure()
 
 // Activity and entry are accumulated BEFORE invalidation, so a block that is
 // entered and broken on the same bar still reports the entry that happened
 // first. Deleting first would silently drop it.
-if showInternalOrderBlocksInput
+if internalBlocksLive
     updateOrderBlockActivity(true)
     touchOrderBlocks(true)
     deleteOrderBlocks(true)
 
-if showSwingOrderBlocksInput
+if swingBlocksLive
     updateOrderBlockActivity()
     touchOrderBlocks()
     deleteOrderBlocks()
@@ -1203,19 +1309,21 @@ bias      = swingTrend.bias == BULLISH ? 'bull' : swingTrend.bias == BEARISH ? '
 inBias    = internalTrend.bias == BULLISH ? 'bull' : internalTrend.bias == BEARISH ? 'bear' : 'flat'
 
 // ---------------------------------------------------------------------------
-// THE CHART MARKER. One arrow, for the one event that is a decision.
+// TWO MARKS, AND THE DIFFERENCE BETWEEN THEM IS THE WHOLE POINT.
 //
-// THE GLYPH ROW IS GONE. It printed a character on every event bar — C beside
-// the CHoCH label, B beside the BOS label, ✕ beside the ✕ — which on a
-// 30-minute chart running next to Riptide was a second stack of marks saying
-// what the first stack already said. The tooltips moved onto those labels
-// instead, so the information is still one hover away and the chart is not
-// carrying two of everything.
+// The setup has two halves and the old build drew only one of them, at one
+// weight, so the chart could not tell "wait" from "go":
 //
-// What is left is the arrow, and only for a zone entry, because that is the
-// only event here that is a decision NOW rather than something to mark and
-// wait on. A chart where every event looks equally important is a chart nobody
-// scans.
+//   ○  A BREAK CUT A ZONE.  Structure moved and left a demand or supply zone
+//      at the origin. There is NOTHING TO DO. Mark the zone and wait for price
+//      to come back to it. A hollow dot on the zone's midline, dim.
+//
+//   ▲▼ PRICE CAME BACK AND REJECTED.  The retest happened and the bar closed
+//      back out of the zone's better half. That is the entry the dot was
+//      waiting for, and it gets the only bold mark on the chart.
+//
+// A dot with no arrow after it is a setup that did not complete — the retest
+// never came, or came and walked straight through. That is worth seeing.
 // ---------------------------------------------------------------------------
 demandEntry = currentAlerts.demandMainTouch or currentAlerts.demandSubTouch or currentAlerts.demandBosTouch
 supplyEntry = currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or currentAlerts.supplyBosTouch
@@ -1230,27 +1338,48 @@ supplyEntry = currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or c
 bullArrow = demandEntry and (not signalWithTrendInput or swingTrend.bias == BULLISH)
 bearArrow = supplyEntry and (not signalWithTrendInput or swingTrend.bias == BEARISH)
 
+// --- TIER ONE: the zone is armed, go mark it -------------------------------
+if showWatchMarkInput and (currentAlerts.demandArmed or currentAlerts.supplyArmed) and not na(currentAlerts.armedTop)
+    bool dnZone  = currentAlerts.supplyArmed and (not currentAlerts.demandArmed or swingTrend.bias == BEARISH)
+    color zoneCss = dnZone ? swingBearishColor : swingBullishColor
+    string watch = '\n  · nothing to do yet — this is the WAIT half of the setup'
+         + '\n  · mark ' + str.tostring(currentAlerts.armedBot, format.mintick) + ' – ' + str.tostring(currentAlerts.armedTop, format.mintick) + ' and let price come back to it'
+         + '\n  · the entry arrow prints only if the return bar REJECTS from the zone'
+         + '\n  · a bar that CLOSES through the zone instead kills it — no trade, move on'
+    label.new(chart.point.new(time, na, math.avg(currentAlerts.armedTop, currentAlerts.armedBot)), '', xloc.bar_time,
+         color = color.new(zoneCss, 45),
+         style = label.style_circle,
+         size = size.tiny,
+         tooltip = eventTooltip((dnZone ? 'Supply zone armed' : 'Demand zone armed') + '  ·  ' + (currentAlerts.armedOrigin != '' ? currentAlerts.armedOrigin + ' origin' : 'wait for the retest'), math.avg(currentAlerts.armedTop, currentAlerts.armedBot), watch))
+
 if ev != ''
     lastEventText := ev
     lastEventTime := time
-    // Both directions on one bar can only happen with the filter off, since
-    // the swing bias cannot be bullish and bearish at once. When it does, the
-    // side facing the swing bias wins rather than drawing two opposing arrows
-    // on the same candle.
+    // --- TIER TWO: the retest rejected, this is the entry -------------------
+    //
+    // Both directions on one bar can only happen with the structure filter
+    // off, since the swing bias cannot be bullish and bearish at once. When it
+    // does, the side facing the swing bias wins rather than drawing two
+    // opposing arrows on the same candle.
     if showSignalArrowInput and (bullArrow or bearArrow)
         bool down = bearArrow and (not bullArrow or swingTrend.bias == BEARISH)
         float at  = down ? high + atrMeasure * 0.4 : low - atrMeasure * 0.4
         color css = down ? swingBearishColor : swingBullishColor
-        string watch = '\n  · price is INSIDE the zone now — this is the retest, not the break'
-             + '\n  · the reaction candle is the trigger; the far side of the block is the stop'
-             + '\n  · no reaction and a close through the block means it is spent — stand down'
+        float zTop = down ? currentAlerts.supplyTouchTop : currentAlerts.demandTouchTop
+        float zBot = down ? currentAlerts.supplyTouchBot : currentAlerts.demandTouchBot
+        float mid  = math.avg(zTop, zBot)
+        string watch = '\n  · the retest is DONE — this bar traded into the zone and closed back out'
+             + (na(zTop) ? '' : '\n  · zone ' + str.tostring(zBot, format.mintick) + ' – ' + str.tostring(zTop, format.mintick) + ', midline ' + str.tostring(mid, format.mintick))
+             + (na(zTop) ? '' : '\n  · stop below ' + str.tostring(down ? zTop : zBot, format.mintick) + ' — the far side of the zone, not this candle\'s wick')
+             + '\n  · it is wrong the moment a bar CLOSES through the far side'
         label.new(chart.point.new(time, na, at), '', xloc.bar_time,
              color = css,
              textcolor = css,
              style = down ? label.style_arrowdown : label.style_arrowup,
              size = signalArrowSizeInput,
-             tooltip = eventTooltip((down ? 'Supply zone entered' : 'Demand zone entered')
-                  + (signalWithTrendInput ? '  ·  with structure' : ''), close, watch))
+             tooltip = eventTooltip((down ? 'Supply rejected' : 'Demand rejected') + '  ·  '
+                  + (requireRejectionInput ? 'retest confirmed' : 'zone entered')
+                  + (signalWithTrendInput ? ', with structure' : ''), close, watch))
     if alertOnInput
         // TWO FIXED SHAPES, no template to fill in. Both already carry the
         // symbol, the timeframe and the price, which is the part that actually
