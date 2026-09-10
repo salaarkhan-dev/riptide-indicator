@@ -399,6 +399,8 @@ cpUseSweep  = input.bool(true,  "Swept levels",     inline = "cpz2", group = gCP
 cpUseCtx    = input.bool(false, "Context gaps",     inline = "cpz2", group = gCP)
 cpShowLevels = input.bool(true, "Draw entry and stop", group = gCP,
      tooltip = "Two short lines on the pattern: entry at the body edge on the trade side, stop beyond its furthest wick, exactly as the reference sheet marks them.\n\nOff leaves just the arrow, which still carries both prices on hover.")
+cpMinGap    = input.int(3, "  bars between marks", minval = 1, maxval = 20, group = gCP,
+     tooltip = "A floor on how close together two confirmations may print.\n\nZones overlap — a gap sits inside a block sits inside a swept band — so a run of rejection candles can satisfy a DIFFERENT zone on each bar and print a mark on each. Every zone already fires once per visit; this catches the rest.")
 cpDebug     = input.bool(false, "Debug — mark every pattern found", group = gCP,
      tooltip = "Marks EVERY pattern the detector finds, zone or no zone, as a small grey dot below or above the bar. Hover a confirmed arrow for its name; the dots are only there to answer whether the shape engine is seeing what you are.\n\nUse it when a pattern you can see produced no arrow: a dot with no arrow means the shape was found and no zone was there, and no dot at all means the shape test rejected it — adjust wick : body.")
 
@@ -460,6 +462,8 @@ type Cluster
     // "is this rejection at the block" on any later bar.
     float  obTop        = na
     float  obBot        = na
+    bool   cpObArmed    = true   // one confirmation per visit, per zone
+    bool   cpSwArmed    = true
     array<LiqPivot> pivots
     line   liqLine
     line   mssLine
@@ -494,6 +498,11 @@ type CtxFvg
     float avg
     bool  isBull
     int   createdBar
+    // ONE CONFIRMATION PER VISIT. A gap lives for many bars and a rejection
+    // shape can print on several of them in a row, so without this the chart
+    // collects a stack of marks all describing the same touch. Re-armed when a
+    // bar trades entirely clear of the zone.
+    bool  cpArmed = true
 
 type Fvg
     int   id
@@ -504,6 +513,7 @@ type Fvg
     int   right
     int   createdBar
     bool  tested = false
+    bool  cpArmed = true          // see CtxFvg: one confirmation per visit
     box   bx
     line  mid
 
@@ -1512,43 +1522,70 @@ cpHi = cpTwo ? math.max(high, high[1]) : high
 // on one. Overlap rather than containment: a pin rejects a zone by reaching
 // INTO it, and demanding the whole candle sit inside would reject every pattern
 // whose wick is longer than the gap it is rejecting — which is most of them.
-cpZoneAt(bool wantBull, float pLo, float pHi) =>
+// Re-arm every zone a bar has traded completely clear of. Runs on every bar,
+// not only on pattern bars, because a zone becomes available again the moment
+// price leaves it and that can happen on a bar with no pattern at all.
+cpRearm() =>
+    for f in fvgs
+        if low > f.top or high < f.bottom
+            f.cpArmed := true
+    for cf in ctxFvgs
+        if low > cf.top or high < cf.bottom
+            cf.cpArmed := true
+    for c in clusters
+        if not na(c.obTop) and (low > c.obTop or high < c.obBot)
+            c.cpObArmed := true
+        if not na(c.grabHigh)
+            float st = c.isHigh ? c.grabHigh : c.level
+            float sb = c.isHigh ? c.level    : c.grabLow
+            if low > st or high < sb
+                c.cpSwArmed := true
+
+// Claim the first ARMED zone the pattern overlaps, and disarm it. Overlap
+// rather than containment: a pin rejects a zone by reaching INTO it, and asking
+// for the whole candle to sit inside would throw out every pattern whose wick is
+// longer than the gap it is rejecting, which is most of them.
+cpZoneTake(bool wantBull, float pLo, float pHi) =>
     string zname = ""
     float  ztop  = na
     float  zbot  = na
 
     if cpUseFvg
         for f in fvgs
-            if zname == "" and f.isBull == wantBull and pLo <= f.top and pHi >= f.bottom
+            if zname == "" and f.cpArmed and f.isBull == wantBull and pLo <= f.top and pHi >= f.bottom
                 zname := "fair value gap"
                 ztop  := f.top
                 zbot  := f.bottom
+                f.cpArmed := false
 
     if cpUseCtx and zname == ""
         for cf in ctxFvgs
-            if zname == "" and cf.isBull == wantBull and pLo <= cf.top and pHi >= cf.bottom
+            if zname == "" and cf.cpArmed and cf.isBull == wantBull and pLo <= cf.top and pHi >= cf.bottom
                 zname := "context gap"
                 ztop  := cf.top
                 zbot  := cf.bottom
+                cf.cpArmed := false
 
-    // A LOW pool is bullish and a HIGH pool bearish: sweeping a low is a raid on
-    // sell-side liquidity, and the reclaim is up.
+    // A LOW pool is bullish and a HIGH pool bearish: sweeping a low is a raid
+    // on sell-side liquidity, and the reclaim from it is up.
     for c in clusters
         if zname == "" and not c.expired and (c.isHigh != wantBull)
-            if cpUseOB and not na(c.obTop) and pLo <= c.obTop and pHi >= c.obBot
+            if cpUseOB and c.cpObArmed and not na(c.obTop) and pLo <= c.obTop and pHi >= c.obBot
                 zname := "order block"
                 ztop  := c.obTop
                 zbot  := c.obBot
+                c.cpObArmed := false
             // The swept level itself, from the raid extreme back to the pool.
-            // Only while the raid is live and unconfirmed — once the shift has
+            // Only while the raid is live and unconfirmed: once the shift has
             // fired, the gap and the block are the zones and this one is spent.
-            else if cpUseSweep and c.swept and not c.mssConfirmed and not na(c.grabHigh)
+            else if cpUseSweep and c.cpSwArmed and c.swept and not c.mssConfirmed and not na(c.grabHigh)
                 float st = c.isHigh ? c.grabHigh : c.level
                 float sb = c.isHigh ? c.level    : c.grabLow
                 if pLo <= st and pHi >= sb
                     zname := "swept level"
                     ztop  := st
                     zbot  := sb
+                    c.cpSwArmed := false
 
     [zname, ztop, zbot]
 
@@ -2350,7 +2387,7 @@ cpTrim() =>
 cpDraw(bool isBull, string nm, string kind, string zname, float ztop, float zbot,
        float entry, float stop) =>
     color col = isBull ? bullCol : bearCol
-    float off = atr * 0.45
+    float off = atr * 0.85          // clear of Riptide's own marks, not beside them
     float y   = isBull ? cpLo - off : cpHi + off
 
     // Risk as a share of price, because a textbook pattern at a zone is still
@@ -2364,9 +2401,14 @@ cpDraw(bool isBull, string nm, string kind, string zname, float ztop, float zbot
          + "\nentry  " + f2s(entry)
          + "\nstop   " + f2s(stop) + "  ·  " + str.tostring(rr, "#.##") + "%"
 
+    // ARROWS, NOT TRIANGLES. Riptide already draws a filled triangle for its own
+    // setups, an X for a raid and a dot for one in progress — so a triangle here
+    // was the same mark as a setup, in the same two colours, and there was no
+    // way to tell a confirmation from a signal. Arrows are the one directional
+    // glyph the indicator was not already spending.
     cpLabels.push(label.new(bar_index, y, "", xloc = xloc.bar_index, yloc = yloc.price,
          color     = col,
-         style     = isBull ? label.style_triangleup : label.style_triangledown,
+         style     = isBull ? label.style_arrowup : label.style_arrowdown,
          size      = size.tiny,
          tooltip   = tip))
     cpTrim()
@@ -2382,12 +2424,25 @@ cpDraw(bool isBull, string nm, string kind, string zname, float ztop, float zbot
         cpLines.push(line.new(x1, stop, x2, stop, xloc = xloc.bar_index,
              color = color.new(col, 55), style = line.style_dotted, width = 1))
 
-if cpOn and barstate.isconfirmed and (cpBull or cpBear)
-    [zn, zt, zb] = cpZoneAt(cpBull, cpLo, cpHi)
-    if zn != ""
-        cpDraw(cpBull, cpName, cpKind, zn, zt, zb, cpEntry, cpStop)
-        alert((cpBull ? "Bullish " : "Bearish ") + cpKind + " — " + cpName +
-              " at " + zn + " @ " + f2s(close), alert.freq_once_per_bar_close)
+// Re-arming runs unconditionally: a zone becomes available again on the bar
+// price leaves it, and that bar usually carries no pattern at all.
+var int cpLastBullBar = -9999
+var int cpLastBearBar = -9999
+
+if cpOn and barstate.isconfirmed
+    cpRearm()
+    if cpBull or cpBear
+        int since = cpBull ? bar_index - cpLastBullBar : bar_index - cpLastBearBar
+        if since >= cpMinGap
+            [zn, zt, zb] = cpZoneTake(cpBull, cpLo, cpHi)
+            if zn != ""
+                if cpBull
+                    cpLastBullBar := bar_index
+                else
+                    cpLastBearBar := bar_index
+                cpDraw(cpBull, cpName, cpKind, zn, zt, zb, cpEntry, cpStop)
+                alert((cpBull ? "Bullish " : "Bearish ") + cpKind + " — " + cpName +
+                      " at " + zn + " @ " + f2s(close), alert.freq_once_per_bar_close)
 
 // DEBUG — every pattern the detector finds, zone or no zone. Grey, because a
 // shape standing in open space has no direction: the same upper wick is a
