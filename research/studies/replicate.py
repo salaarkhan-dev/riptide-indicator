@@ -63,7 +63,11 @@ CUT = BANDS.index(MIN_GRADE)
 
 
 class Sig:
-    __slots__ = ("sym", "t", "r", "kind", "is_long", "risk")
+    # t is the SIGNAL close; t_in and t_out are when the position was actually
+    # open, which is what a concurrency question needs and a bucketing question
+    # does not. Carried here rather than in a study's private copy so every
+    # caller sees the same definition.
+    __slots__ = ("sym", "t", "r", "kind", "is_long", "risk", "t_in", "t_out")
 
 
 async def collect(sess, candles):
@@ -101,6 +105,8 @@ async def collect(sess, candles):
                 s.sym, s.t, s.r, s.kind = sym, when, o.r, kind
                 s.is_long = x.is_long
                 s.risk = 100 * abs(x.entry - x.stop) / x.entry
+                s.t_in = cs[o.fill_bar].t if o.fill_bar else when
+                s.t_out = cs[o.exit_bar].t
                 out.append(s)
     return out
 

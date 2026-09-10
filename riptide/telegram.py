@@ -400,6 +400,14 @@ def marks(x) -> str | None:
     n = getattr(x, "breadth", 0)
     if isinstance(n, int) and n >= 2:
         bits.append(f"🔗 {n} on this close, size once")
+    # The reader's OWN book, not the market's. 🔗 counts what is printing this
+    # bar; ⚖ counts what they are still holding on this side from every bar
+    # before it. A cluster that hurts usually spans several closes, so the two
+    # are different facts and only one of them was ever on the alert.
+    k = getattr(x, "open_same", 0)
+    if isinstance(k, int) and k >= 2:
+        side = "longs" if x.is_long else "shorts"
+        bits.append(f"⚖ {k} {side} already open")
     return f"<i>{' · '.join(bits)}</i>" if bits else None
 
 

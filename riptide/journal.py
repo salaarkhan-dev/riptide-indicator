@@ -176,6 +176,27 @@ def open_rows(db) -> list[dict]:
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def open_sides(db) -> tuple[int, int]:
+    """(long, short) positions currently open, from the reader's own journal.
+
+    THIS IS INFORMATION, NOT A VERDICT, and the distinction is the whole reason
+    it is a plain count. `research/studies/sizing.py` measured R per bet against
+    how many same-direction positions were already open and found it FLAT
+    across the pooled stream — -0.011, +0.015, +0.080, +0.040, +0.031, +0.051
+    from zero open through five or more. Later positions in a cluster are not
+    worse bets, so nothing here is a signal to skip one.
+
+    What does change is VARIANCE. Six correlated longs move together, so one
+    market event decides all six, and the size of a bad session scales with how
+    many are open rather than averaging out. That is arithmetic, not a
+    measurement, which is why this ships as a count for the reader to size
+    against instead of a filter that declines the alert.
+    """
+    rows = open_rows(db)
+    longs = sum(1 for r in rows if (r["side"] or "").lower() == "long")
+    return longs, len(rows) - longs
+
+
 def since(db, cutoff: int) -> list[dict]:
     """Positions opened at or after `cutoff`, newest last."""
     cur = db.execute("""SELECT * FROM journal WHERE status IN ('open','closed')

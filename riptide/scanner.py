@@ -437,6 +437,17 @@ async def cycle(sess, db, symbols):
     except Exception as e:
         log.warning("breadth tagging failed: %s", e)
 
+    # How much of the reader's own book already sits on this side. Breadth is
+    # what the MARKET is doing this bar; this is what THEY are holding across
+    # every bar still open, which the cycle cannot see and the journal can.
+    try:
+        longs, shorts = journal.open_sides(db)
+        for setups, _, early, _ in results:
+            for x in list(setups) + list(early):
+                x.open_same = longs if x.is_long else shorts
+    except Exception as e:
+        log.warning("exposure tagging failed: %s", e)
+
     bootstrap = first_run(db) and not ALERT_ON_FIRST_RUN
     # /pause records everything as usual but sends nothing, so resuming does
     # not replay the backlog.

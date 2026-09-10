@@ -6205,3 +6205,64 @@ The description that survives all of it: **a marginal, unconditional edge —
 +0.063 ± 0.062 R per bet over a year at R/DD 1.13 — whose returns arrive in
 bursts that nothing tested can time.** Not a losing system on the measured
 window. A small one, and an untimeable one.
+
+## Correlation-aware sizing — the edge story is false, the variance story is not
+
+`research/studies/sizing.py` · 333 days · same-close same-direction alerts already collapsed to one bet
+
+### The mechanism, measured directly instead of inferred from a policy
+
+R per bet against how many same-direction bets were **already open**:
+
+| already open | Min30 confirmed | | everything sent | |
+|---|---|---|---|---|
+| | bets | R/bet | bets | R/bet |
+| 0 | 329 | +0.094 | 606 | −0.011 |
+| 1 | 131 | +0.084 | 700 | +0.015 |
+| 2 | 34 | **−0.394** | 515 | +0.080 |
+| 3 | — | — | 329 | +0.040 |
+| 4 | — | — | 185 | +0.031 |
+| 5+ | — | — | 138 | +0.051 |
+
+**On the pooled stream it is flat, if anything rising.** A later position in a
+cluster is not a worse bet. The confirmed cell shows −0.394 at two already open,
+but that is **34 bets** and 7% of the stream.
+
+### So where did the policy sweep's "+100% R/DD" come from?
+
+| everything sent | total R | maxDD | R/DD | by quarter |
+|---|---|---|---|---|
+| flat (deployed) | +71.6 | 76.5 | 0.94 | — |
+| cap: skip if 3 already open | +93.0 | 49.8 | **1.87** | beats flat 3 of 4 |
+| budget 1/(1+open) | +18.2 | 46.5 | 0.39 | 1 of 4 |
+
+The cap looks excellent and **the bucket table says it should not.** The
+resolution is that a cap is **path-dependent**: skipping a bet changes what is
+open later, so "3 already open under the cap" is a different set from "3 already
+open under flat". That is the same class of artefact as the old eight-slot
+portfolio simulator which gave +20% and +11% for the same rule on two runs. Its
+Q4 cell (4.46 against flat's 1.47) carries most of the result.
+
+On **Min30 confirmed** — the cell actually traded — every policy beats flat in
+**2 of 4 quarters**, and the headline +33% R/DD for `budget 1/(1+open)` comes
+from one quarter (1.90 against 0.59) while losing in another (2.17 against 2.91).
+A coin toss.
+
+### What survives is arithmetic, not a finding
+
+The book is rarely crowded where it matters: on Min30 confirmed, **66% of bets
+arrive with nothing else open**, the median is 0 and the maximum is 4. There is
+very little for a correlation rule to act on.
+
+And since R per bet does **not** degrade with concurrency, sizing down when
+crowded buys no expected return — it buys **lower variance**, which is a
+statement about arithmetic rather than about the market. Six correlated longs
+are decided by one market move, so the size of a bad session scales with how
+many are open instead of averaging out. That is true whether or not any study
+confirms it.
+
+**Therefore: no sizing rule is deployed, and no alert is ever skipped.** What
+ships is the count — `⚖ 3 longs already open` — drawn from the reader's own
+journal, so they can hold a risk budget across the book rather than per alert.
+Information, with the measurement behind it in `/legend`, and explicitly not a
+filter, because the data says a later position is not a worse bet.

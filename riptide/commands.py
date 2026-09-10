@@ -95,6 +95,16 @@ LEGEND = (
     "+0.187 R at +2.1 SE, which failed its pre-registration and is "
     "claimed for nothing.\n\n"
 
+    "<b>⚖ N longs already open</b> — how much of YOUR book is on this side, "
+    "counting every position still open, not just this bar.\n"
+    "<b>It is a count, not a warning.</b> R per bet was measured against how "
+    "many same-direction positions were already open and came back FLAT: "
+    "-0.01, +0.02, +0.08, +0.04, +0.03, +0.05 from none open through five or "
+    "more. A later position in a cluster is not a worse bet, so this never "
+    "says skip. What it changes is how big a bad session gets — six "
+    "correlated longs are decided by one market move, and that is arithmetic "
+    "rather than a measurement. Size against the total, not the alert.\n\n"
+
     "<i>Six losses in a row at a 38% win rate happens 5.7% of the time at "
     "any given trade — several times a year, without anything being "
     "wrong.</i>"
