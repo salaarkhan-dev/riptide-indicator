@@ -323,6 +323,11 @@ type alerts
     bool zoneRejectBull             = false
     bool zoneRejectBear             = false
     string zoneRejectName           = ''
+    // HOW MANY BARS BACK THE REJECTION CANDLE IS. In the two-bar mode the
+    // verdict lands on the confirming bar, but the candle that DID the
+    // rejecting is the pin one or two bars earlier — and the pin is what a
+    // reader is looking at. The mark goes on the candle it describes.
+    int zoneRejectAge               = 0
     float zoneRejectTop             = na
     float zoneRejectBot             = na
     // ADDED — A BREAK JUST CUT A ZONE AND THERE IS NOTHING TO DO YET. This is
@@ -932,8 +937,13 @@ touchOrderBlocks(bool internal = false) =>
             // thing worth looking at whether or not it is a tradeable retest.
             // A zone's own formation candles can trip it, and that is correct:
             // they ARE rejections, they are just not entries.
-            if inNow and (pinNow or twoBarFire)
-                currentAlerts.zoneRejectName := twoBarFire ? (shapePrev == '' ? 'pin + confirm' : shapePrev + (bull ? ' + green marubozu' : ' + red marubozu')) : shapeNow
+            // twoBarFire is checked OUTSIDE inNow: on the confirming bar price
+            // has often already left the zone, which is the point of a
+            // displacement. Requiring it to still be inside dropped exactly the
+            // strongest confirmations.
+            if (inNow and pinNow) or twoBarFire
+                currentAlerts.zoneRejectAge  := pinNow ? 0 : confirmGap ? 2 : 1
+                currentAlerts.zoneRejectName := twoBarFire and not pinNow ? (shapePrev == '' ? 'pin + confirm' : shapePrev + (confirmGap ? ' + displacement gap' : bull ? ' + green marubozu' : ' + red marubozu')) : shapeNow
                 currentAlerts.zoneRejectTop  := eachOrderBlock.barHigh
                 currentAlerts.zoneRejectBot  := eachOrderBlock.barLow
                 if bull
@@ -1327,7 +1337,8 @@ touchFairValueGaps() =>
         else
             eachFairValueGap.pinAge := (inNow and pinAny and (eachFairValueGap.leftZone or not requireLeaveFirstInput) and not eachFairValueGap.touched and eachFairValueGap.tests < maxZoneTestsInput) ? 1 : eachFairValueGap.pinAge == 1 ? 2 : 0
 
-        if inNow and (pinNow or twoBarFire)
+        if (inNow and pinNow) or twoBarFire
+            currentAlerts.zoneRejectAge := pinNow ? 0 : confirmGap ? 2 : 1
             currentAlerts.zoneRejectTop := zTop
             currentAlerts.zoneRejectBot := zBot
             if bull
@@ -1742,7 +1753,22 @@ if ev != ''
 // hundreds of them and position plus colour already say everything.
 if showZoneRejectInput and (currentAlerts.zoneRejectBull or currentAlerts.zoneRejectBear)
     bool rjDown = currentAlerts.zoneRejectBear and not currentAlerts.zoneRejectBull
-    label.new(chart.point.new(time, na, rjDown ? high + atrMeasure * 0.35 : low - atrMeasure * 0.35), '', xloc.bar_time,
+    // ON THE REJECTION CANDLE, NOT ON THE BAR THAT CONFIRMED IT. In Pin +
+    // confirm the verdict cannot be reached until the next bar closes, so the
+    // triangle used to print one bar to the right of the candle it was talking
+    // about — which is the wrong candle to be looking at.
+    //
+    // The ARROW deliberately stays on the confirming bar: that is when the
+    // signal became actionable, and backdating it would claim the trade was
+    // available before it was. This mark is a description, so it goes on what
+    // it describes; the arrow is a decision, so it goes where the decision was.
+    // Spelled out over the three cases rather than indexing with a series int,
+    // which Pine accepts inconsistently depending on the series.
+    int rjAge    = currentAlerts.zoneRejectAge
+    int rjTime   = rjAge == 2 ? time[2] : rjAge == 1 ? time[1] : time
+    float rjHigh = rjAge == 2 ? high[2] : rjAge == 1 ? high[1] : high
+    float rjLow  = rjAge == 2 ? low[2]  : rjAge == 1 ? low[1]  : low
+    label.new(chart.point.new(rjTime, na, rjDown ? rjHigh + atrMeasure * 0.35 : rjLow - atrMeasure * 0.35), '', xloc.bar_time,
          color = rjDown ? swingBearishColor : swingBullishColor,
          style = rjDown ? label.style_triangledown : label.style_triangleup,
          size = size.tiny,
