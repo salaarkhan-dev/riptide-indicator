@@ -179,6 +179,12 @@ allFvgRemove   = input.string("Body close", "  mitigated when",
      tooltip = "How much of the gap price must take back before the box goes.\n\nBody close: a candle BODY closes through the far edge. Ignores wicks, so a single spike through the zone does not kill it — the steadiest reading and the default.\n\n50% (CE): consequent encroachment, the midpoint. The classic ICT reading of a mitigated gap.\n\nWick: any wick through the far edge. Strictest, and the noisiest.\n\nTouched: price merely entered the zone.\n\nNever: keep every box until the count above recycles it.")
 allFvgOverlap  = input.bool(true, "  hide overlapping", group = gLook,
      tooltip = "When a new imbalance overlaps an older one in price, drop the older box. Stacked half-transparent boxes are what turns this layer into a smear; one box per price area keeps it readable.")
+obDrawStyle    = input.string("Riptide lines", "Order block style",
+     options = ["Riptide lines", "LuxAlgo boxes"], group = gLook,
+     tooltip = "How the order block and breaker are drawn.\n\nRiptide lines — the yellow order-block line and the orange breaker line at the chosen edge of the candle, which is what the confluence score on every alert is computed from.\n\nLuxAlgo boxes — the block as a shaded box over the whole origin candle, green for demand and red for supply, in the style most SMC indicators use. THE BREAKER IS NOT DRAWN in this mode and neither is the yellow line: a box and a line marking the same candle is the same information twice, and the orange breaker beside a coloured box reads as a third zone that is not there.\n\nDetection is identical either way. This changes the drawing and nothing else — the block the alert counted is the block you see, under both.")
+obBoxBull      = input.color(#26a69a, "  box demand", inline = "obx", group = gLook)
+obBoxBear      = input.color(#ef5350, "  box supply", inline = "obx", group = gLook)
+obBoxFill      = input.int(88, "  box fill", minval = 60, maxval = 98, inline = "obx", group = gLook)
 showOB         = input.bool(true,  "Order block (yellow)",           group = gLook,
      tooltip = "The last candle closing AGAINST the move before the entry gap — where the move that made the gap was loaded. Identical rule to last_opposing() in engine.py, same 20-bar cap, so the block drawn here is the one the alert's confluence score counts.")
 showBreaker    = input.bool(true,  "Breaker block (orange)",         group = gLook,
@@ -394,7 +400,7 @@ cpBodyRatio = input.float(0.6, "  engulfing body : range", minval = 0.3, maxval 
      tooltip = "How much of the second candle's range has to be body for it to count as decisive.\n\nWicks are allowed — this is not a strict marubozu — but a bar that is mostly wick has not engulfed anything, it has been rejected itself. It must also cover the pin's body.")
 cpUseFvg    = input.bool(true,  "Fair value gaps",  inline = "cpz", group = gCP)
 cpUseOB     = input.bool(true,  "Order blocks",     inline = "cpz", group = gCP)
-cpUseSweep  = input.bool(true,  "Swept levels",     inline = "cpz2", group = gCP,
+cpUseSweep  = input.bool(false, "Swept levels",     inline = "cpz2", group = gCP,
      tooltip = "The three places a rejection is allowed to count.\n\nA swept level is included because it is the one rejection that can happen with no gap and no block anywhere near it — and it is the level with the most liquidity behind it, which is the whole premise of this indicator.")
 cpUseCtx    = input.bool(false, "Context gaps",     inline = "cpz2", group = gCP)
 cpUsePivot  = input.bool(true,  "Structure extremes (HH / LH / LL / HL)", group = gCP,
@@ -521,6 +527,13 @@ type Fvg
     int   createdBar
     bool  tested = false
     bool  cpArmed = true          // see CtxFvg: one confirmation per visit
+    // FILLED IS NOT THE SAME AS FORGOTTEN. The engine keeps an entry gap in its
+    // array until the cap pushes it off, and draws its box as a short stub near
+    // where it formed — so a gap from a hundred bars ago is still in the array
+    // while nothing of it is on screen at the current price. The candle filter
+    // was matching those, which is how a confirmation came back "at fair value
+    // gap" with no gap anywhere near it.
+    bool  cpFilled = false
     box   bx
     line  mid
 
@@ -555,6 +568,21 @@ type CpMark
     float  ztop   = na
     float  zbot   = na
 
+// A pattern that found no zone when it printed. A SWING IS CONFIRMED LATE — the
+// pivot rule needs bars AFTER the turn — so a rejection candle sitting exactly
+// on the high cannot match that high at the time it prints. It is held here and
+// matched when the pivot confirms, which is the only order in which those two
+// facts become available.
+type CpPend
+    int    bar
+    bool   isBull
+    float  lo
+    float  hi
+    float  entry
+    float  stop
+    string name
+    string kind
+
 type CpZig
     int    bar    = na
     float  px     = na
@@ -564,6 +592,12 @@ type CpZig
     float  lastLo = na
     line   ln     = na
     label  lbl    = na
+    // Set to the bar a real leg was registered on, so the candle layer further
+    // down can tell that a pivot confirmed THIS bar and go back for the pattern
+    // that was waiting on it.
+    int    pivotBar  = na
+    float  pivotPx   = na
+    bool   pivotHigh = false
 
 // One tracked setup, from FVG creation through fill to resolution.
 type Trade
@@ -792,10 +826,13 @@ cpTurn(CpZig z, bool isHigh, float px, int pbar) =>
                  color = color.new(color.gray, 100), textcolor = color.new(color.gray, 20),
                  size = size.tiny)
             cpZigLbls.push(z.lbl)
-        z.bar    := pbar
-        z.px     := px
-        z.isHigh := isHigh
-        drew     := true
+        z.bar       := pbar
+        z.px        := px
+        z.isHigh    := isHigh
+        z.pivotBar  := bar_index
+        z.pivotPx   := px
+        z.pivotHigh := isHigh
+        drew        := true
     drew
 
 if not na(ph)
@@ -1421,11 +1458,22 @@ drawBlock(LevelGroup g, int off, bool isBull, color col, string name) =>
     if off >= 0
         int   b = bar_index - off
         float y = blockPrice(off, isBull)
-        g.lns.push(line.new(b, y, b + blockBars, y,
-             xloc  = xloc.bar_index,
-             color = col,
-             style = line.style_solid,
-             width = blockWidth))
+        if obDrawStyle == "LuxAlgo boxes"
+            // The whole origin candle as a zone, coloured by side rather than by
+            // which of the two blocks it is. A box already says "this candle" —
+            // the line was saying it a second time at one edge.
+            color bc = isBull ? obBoxBull : obBoxBear
+            g.bxs.push(box.new(b, high[off], b + blockBars, low[off],
+                 xloc         = xloc.bar_index,
+                 border_color = color.new(bc, math.max(0, obBoxFill - 35)),
+                 border_width = 1,
+                 bgcolor      = color.new(bc, obBoxFill)))
+        else
+            g.lns.push(line.new(b, y, b + blockBars, y,
+                 xloc  = xloc.bar_index,
+                 color = col,
+                 style = line.style_solid,
+                 width = blockWidth))
         g.lbs.push(label.new(b, y, "",
              xloc      = xloc.bar_index,
              yloc      = yloc.price,
@@ -1512,7 +1560,9 @@ drawSetup(Cluster c) =>
                 c.obBot := low[obOff]
             if showOB
                 drawBlock(g, obOff, isLong, obCol, "Order block")
-        if showBreaker and c.mssConfirmed and c.mssBar > c.grabBar
+        // No breaker in box mode: an orange line beside a coloured block box
+        // reads as a third zone that is not there.
+        if showBreaker and obDrawStyle != "LuxAlgo boxes" and c.mssConfirmed and c.mssBar > c.grabBar
             drawBlock(g, breakerOffset(c.grabBar, c.mssBar, isLong), isLong,
                  bbCol, "Breaker block")
         if showStopLoss
@@ -1664,6 +1714,19 @@ cpRearm() =>
     for f in fvgs
         if low > f.top or high < f.bottom
             f.cpArmed := true
+        // A gap price has CLOSED through is filled, and its box goes with it —
+        // so what the filter can match and what a reader can see stay the same
+        // thing, which is the only way "at a fair value gap" means anything.
+        // Unfilled gaps are carried to the current bar for the same reason.
+        if not f.cpFilled and (f.isBull ? close < f.bottom : close > f.top)
+            f.cpFilled := true
+            if cpUseFvg
+                box.delete(f.bx)
+                line.delete(f.mid)
+        else if not f.cpFilled and cpUseFvg and not na(f.bx) and bar_index > f.right
+            box.set_right(f.bx, bar_index)
+            if not na(f.mid)
+                line.set_x2(f.mid, bar_index)
     for cf in ctxFvgs
         if low > cf.top or high < cf.bottom
             cf.cpArmed := true
@@ -1693,9 +1756,25 @@ cpZoneTake(bool wantBull, float pLo, float pHi) =>
     float  ztop  = na
     float  zbot  = na
 
-    if cpUseFvg
+    // ORDER FIRST, THEN GAP, THEN STRUCTURE, THEN THE SWEPT BAND. A block is
+    // the most specific claim of the four — it names a candle — so when several
+    // overlap it is the one worth reporting. The swept band is last and off by
+    // default: it is the widest and the least about supply and demand.
+    //
+    // A LOW pool is bullish and a HIGH pool bearish: sweeping a low is a raid
+    // on sell-side liquidity, and the reclaim from it is up.
+    if cpUseOB
+        for c in clusters
+            if zname == "" and not c.expired and (c.isHigh != wantBull)
+                if c.cpObArmed and not na(c.obTop) and pLo <= c.obTop and pHi >= c.obBot
+                    zname := "order block"
+                    ztop  := c.obTop
+                    zbot  := c.obBot
+                    c.cpObArmed := false
+
+    if cpUseFvg and zname == ""
         for f in fvgs
-            if zname == "" and f.cpArmed and f.isBull == wantBull and pLo <= f.top and pHi >= f.bottom
+            if zname == "" and f.cpArmed and not f.cpFilled and f.isBull == wantBull and pLo <= f.top and pHi >= f.bottom
                 zname := "fair value gap"
                 ztop  := f.top
                 zbot  := f.bottom
@@ -1709,31 +1788,11 @@ cpZoneTake(bool wantBull, float pLo, float pHi) =>
                 zbot  := cf.bottom
                 cf.cpArmed := false
 
-    // A LOW pool is bullish and a HIGH pool bearish: sweeping a low is a raid
-    // on sell-side liquidity, and the reclaim from it is up.
-    for c in clusters
-        if zname == "" and not c.expired and (c.isHigh != wantBull)
-            if cpUseOB and c.cpObArmed and not na(c.obTop) and pLo <= c.obTop and pHi >= c.obBot
-                zname := "order block"
-                ztop  := c.obTop
-                zbot  := c.obBot
-                c.cpObArmed := false
-            // The swept level itself, from the raid extreme back to the pool.
-            // Only while the raid is live and unconfirmed: once the shift has
-            // fired, the gap and the block are the zones and this one is spent.
-            else if cpUseSweep and c.cpSwArmed and c.swept and not c.mssConfirmed and not na(c.level)
-                float t = atr * cpPivTol
-                if pLo <= c.level + t and pHi >= c.level - t
-                    zname := "swept " + (c.isHigh ? "high" : "low")
-                    ztop  := c.level + t
-                    zbot  := c.level - t
-                    c.cpSwArmed := false
-
-    // THE PAIRING IS THE WHOLE FILTER, and it is the same rule for all three
-    // sources: a BULLISH pattern only counts at a bullish gap, a bullish (demand)
-    // block, or a structure LOW. A BEARISH one only at a bearish gap, a bearish
-    // block, or a structure HIGH. A hammer at a swing high is a hammer in the
-    // wrong place, and the same candle two hundred points lower is a trade.
+    // THE PAIRING IS THE WHOLE FILTER, and it is the same rule for every source:
+    // a BULLISH pattern only counts at a bullish gap, a demand block, or a
+    // structure LOW. A BEARISH one only at a bearish gap, a supply block, or a
+    // structure HIGH. A hammer at a swing high is a hammer in the wrong place,
+    // and the same candle two hundred points lower is a trade.
     if cpUsePivot and zname == ""
         float t3 = atr * cpPivTol
         for p in cpPivots
@@ -1744,6 +1803,17 @@ cpZoneTake(bool wantBull, float pLo, float pHi) =>
                     ztop  := p.price + t3
                     zbot  := p.price - t3
                     p.armed := false
+
+    if cpUseSweep and zname == ""
+        float t4 = atr * cpPivTol
+        for c in clusters
+            if zname == "" and not c.expired and (c.isHigh != wantBull)
+                if c.cpSwArmed and c.swept and not c.mssConfirmed and not na(c.level)
+                    if pLo <= c.level + t4 and pHi >= c.level - t4
+                        zname := "swept " + (c.isHigh ? "high" : "low")
+                        ztop  := c.level + t4
+                        zbot  := c.level - t4
+                        c.cpSwArmed := false
 
     [zname, ztop, zbot]
 
@@ -2549,11 +2619,14 @@ cpTrim() =>
         line.delete(cpLines.shift())
     true
 
-cpDraw(CpMark mk, bool isBull, string nm, string kind, string zname, float ztop,
-       float zbot, float entry, float stop) =>
+// `atBar`, `plo` and `phi` are passed rather than read off the current bar,
+// because a pattern waiting on a swing to confirm is drawn two bars after it
+// happened and belongs on the bar it happened on.
+cpDraw(CpMark mk, int atBar, bool isBull, string nm, string kind, string zname,
+       float ztop, float zbot, float entry, float stop, float plo, float phi) =>
     color col = isBull ? bullCol : bearCol
     float off = atr * 0.85          // clear of Riptide's own marks, not beside them
-    float y   = isBull ? cpLo - off : cpHi + off
+    float y   = isBull ? plo - off : phi + off
 
     // NAME AND PLACE, NOTHING ELSE. The entry and stop were on here and they are
     // the two numbers a reader already has from the setup layer; repeating them
@@ -2564,7 +2637,7 @@ cpDraw(CpMark mk, bool isBull, string nm, string kind, string zname, float ztop,
     // separate by weight rather than by shape — which is what was wanted, and
     // arrows turned out to read as a louder signal than the setup they sit next
     // to rather than a quieter one.
-    mk.lbl := label.new(bar_index, y, "", xloc = xloc.bar_index, yloc = yloc.price,
+    mk.lbl := label.new(atBar, y, "", xloc = xloc.bar_index, yloc = yloc.price,
          color   = col,
          style   = isBull ? label.style_triangleup : label.style_triangledown,
          size    = size.tiny,
@@ -2574,8 +2647,8 @@ cpDraw(CpMark mk, bool isBull, string nm, string kind, string zname, float ztop,
     mk.ln1 := na
     mk.ln2 := na
     if cpShowLevels
-        int x1 = bar_index - (cpTwo ? 1 : 0)
-        int x2 = bar_index + 3
+        int x1 = atBar - (cpTwo ? 1 : 0)
+        int x2 = atBar + 3
         mk.ln1 := line.new(x1, entry, x2, entry, xloc = xloc.bar_index,
              color = col, style = line.style_solid, width = 1)
         mk.ln2 := line.new(x1, stop, x2, stop, xloc = xloc.bar_index,
@@ -2602,6 +2675,7 @@ cpDraw(CpMark mk, bool isBull, string nm, string kind, string zname, float ztop,
 // a valid pattern at a valid level when it printed.
 var int cpLastBullBar = -9999
 var int cpLastBearBar = -9999
+var array<CpPend> cpPend = array.new<CpPend>()
 
 cpClearLast(CpMark mk) =>
     label.delete(mk.lbl)
@@ -2637,7 +2711,7 @@ if cpOn and barstate.isconfirmed
                 cpLastBullBar := bar_index
             else
                 cpLastBearBar := bar_index
-            cpDraw(mark, cpBull, cpName, "2CP", zn, zt, zb, cpEntry, cpStop)
+            cpDraw(mark, bar_index, cpBull, cpName, "2CP", zn, zt, zb, cpEntry, cpStop, cpLo, cpHi)
             alert((cpBull ? "Bullish " : "Bearish ") + "2CP — " + cpName +
                   " at " + zn + " @ " + f2s(close), alert.freq_once_per_bar_close)
 
@@ -2645,6 +2719,14 @@ if cpOn and barstate.isconfirmed
         int since = cpBull ? bar_index - cpLastBullBar : bar_index - cpLastBearBar
         if since >= cpMinGap
             [zn, zt, zb] = cpZoneTake(cpBull, cpLo, cpHi)
+            // No zone yet. It may simply not exist yet: a swing needs bars AFTER
+            // it before the pivot rule will admit it, so a rejection candle
+            // sitting on the high is always early for its own high. Hold it.
+            if zn == "" and cpUsePivot
+                cpPend.push(CpPend.new(bar = bar_index, isBull = cpBull, lo = cpLo,
+                     hi = cpHi, entry = cpEntry, stop = cpStop, name = cpName, kind = cpKind))
+                while cpPend.size() > 12
+                    cpPend.shift()
             if zn != ""
                 mark.bar    := bar_index
                 mark.kind   := cpKind
@@ -2656,9 +2738,41 @@ if cpOn and barstate.isconfirmed
                     cpLastBullBar := bar_index
                 else
                     cpLastBearBar := bar_index
-                cpDraw(mark, cpBull, cpName, cpKind, zn, zt, zb, cpEntry, cpStop)
+                cpDraw(mark, bar_index, cpBull, cpName, cpKind, zn, zt, zb, cpEntry, cpStop, cpLo, cpHi)
                 alert((cpBull ? "Bullish " : "Bearish ") + cpKind + " — " + cpName +
                       " at " + zn + " @ " + f2s(close), alert.freq_once_per_bar_close)
+
+// A PIVOT CONFIRMED THIS BAR, so go back for the pattern that was waiting on it.
+// This is the whole reason a confirmation at the very top of a move used to
+// produce nothing: the high it was rejecting did not exist yet as a swing, and
+// by the time it did the pattern had already been judged and dropped.
+//
+// The mark is drawn on the bar the PATTERN happened, not on the bar the pivot
+// confirmed — the candle is the event; the pivot is only what makes it legible.
+if cpOn and cpUsePivot and barstate.isconfirmed and zig.pivotBar == bar_index and cpPend.size() > 0
+    float ptol = atr * cpPivTol
+    bool  wantBull = not zig.pivotHigh
+    int   i = cpPend.size() - 1
+    bool  done = false
+    while i >= 0 and not done
+        CpPend q = cpPend.get(i)
+        float hit = wantBull ? q.lo : q.hi
+        if q.isBull == wantBull and bar_index - q.bar <= effPivotRight + 1
+             and math.abs(hit - zig.pivotPx) <= ptol
+            string ptag = cpPivots.size() > 0 ? cpPivots.get(0).tag : (zig.pivotHigh ? "swing high" : "swing low")
+            if cpPivots.size() > 0
+                cpPivots.get(0).armed := false
+            cpDraw(mark, q.bar, q.isBull, q.name, q.kind, ptag,
+                 zig.pivotPx + ptol, zig.pivotPx - ptol, q.entry, q.stop, q.lo, q.hi)
+            mark.bar    := q.bar
+            mark.kind   := q.kind
+            mark.isBull := q.isBull
+            mark.zone   := ptag
+            mark.ztop   := zig.pivotPx + ptol
+            mark.zbot   := zig.pivotPx - ptol
+            cpPend.remove(i)
+            done := true
+        i -= 1
 
 // DEBUG — every pattern the detector finds, zone or no zone. Grey, because a
 // shape standing in open space has no direction: the same upper wick is a
