@@ -293,6 +293,10 @@ type alerts
     float demandTouchBot            = na
     float supplyTouchTop            = na
     float supplyTouchBot            = na
+    // Which of the four actually fired, so the arrow can name it rather than
+    // listing the candidates.
+    string demandPattern            = ''
+    string supplyPattern            = ''
     // ADDED — A BREAK JUST CUT A ZONE AND THERE IS NOTHING TO DO YET. This is
     // the first half of the setup and it was never modelled: the old build
     // marked the break and marked the entry with the same weight, so a chart
@@ -464,45 +468,70 @@ atrMeasure                          = ta.atr(200)
 //---------------------------------------------------------------------------------------------------------------------}
 //CANDLE SHAPES — what a rejection actually looks like
 //---------------------------------------------------------------------------------------------------------------------{
-// FOUR NAMES, TWO SHAPES. Hammer and hanging man are the identical candle — a
-// small body with a long lower wick; the two names record only whether it
-// showed up at the bottom of a move or the top of one. Shooting star and
-// inverted hammer are likewise one shape, a small body with a long upper wick.
+// NAMED BY BODY COLOUR, NOT BY LOCATION. That is the operator's convention and
+// it is the better one here: colour is in the data, location is a judgement
+// about where a move "was", which is exactly the kind of call that cannot be
+// coded without smuggling in hindsight.
 //
-// That matters here because THE LOCATION IS ALREADY KNOWN. These are only ever
-// tested against a demand or supply zone that price has returned to, so the
-// half of the name that encodes location is information we already have and
-// the shape is the only part left to measure. Testing four patterns where
-// there are two would just be counting the same candle twice.
+//   long LOWER wick   green body -> HAMMER          red body -> HANGING MAN
+//   long UPPER wick   green body -> INVERTED HAMMER red body -> SHOOTING STAR
 //
-// WHICH WICK IS THE REJECTING ONE IS NOT INTERCHANGEABLE. A long LOWER wick in
-// demand is buyers refusing lower prices — that stands on its own. A long
-// UPPER wick in demand is the opposite, sellers refusing higher ones, and it
-// only becomes bullish if the NEXT bar closes decisively up. That is exactly
-// why an inverted hammer needs its green marubozu and a plain hammer does not.
+// AND UNDER THAT NAMING THE TWELVE-PATTERN LIST COLLAPSES TO TWO RULES. Read
+// the bullish six: hammer, hanging man, then hammer / inverted hammer /
+// hanging man / shooting star each with a green marubozu. That is "either
+// lower-wick pin on its own" plus "ALL FOUR shapes when a green marubozu
+// follows". The bearish six are the same list mirrored. So:
+//
+//   STANDALONE   the long wick decides.  Lower wick is bullish, upper wick is
+//                bearish, whatever colour the body is.
+//   CONFIRMED    the MARUBOZU decides.  Any of the four pin shapes, then a
+//                green marubozu is bullish and a red one is bearish.
+//
+// THE SECOND RULE IS THE ONE THE CODE HAD WRONG. It required the pin to already
+// point the way the trade did, so a shooting star followed by a green marubozu
+// — bullish #6 on the list — could never fire. The pin's job in the two-bar
+// case is only to mark that price was rejected AT ALL; the marubozu says which
+// way. Once something else settles direction, the pin's own colour and wick
+// stop mattering.
 candleRng   = high - low
 candleBody  = math.abs(close - open)
 candleUpper = high - math.max(close, open)
 candleLower = math.min(close, open) - low
+candleGreen = close > open
+candleRed   = close < open
 
-// A pin bar: the rejecting wick dominates the body, the opposite wick does
-// not, and the close finishes in the far third — price was pushed there and
-// stayed. The close test is what separates a rejection from a bar that merely
-// has a long wick somewhere in it.
-bullPin = candleRng > 0 and candleLower >= pinWickRatioInput * candleBody and candleUpper <= candleBody and close >= low  + candleRng * 0.6
-bearPin = candleRng > 0 and candleUpper >= pinWickRatioInput * candleBody and candleLower <= candleBody and close <= high - candleRng * 0.6
+// A pin: the rejecting wick dominates the body and the opposite wick does not.
+// No close-position test — the two ratios already force the body into the far
+// half, and an explicit close test silently threw out red hanging men, which
+// are half of the standalone bullish case.
+//
+// The opposite-wick allowance is max(body, 10% of range) rather than the body
+// alone so a doji-bodied pin, where the body is near zero, is not required to
+// have a mathematically perfect zero wick on the other side.
+pinLower = candleRng > 0 and candleLower >= pinWickRatioInput * candleBody and candleUpper <= math.max(candleBody, candleRng * 0.1)
+pinUpper = candleRng > 0 and candleUpper >= pinWickRatioInput * candleBody and candleLower <= math.max(candleBody, candleRng * 0.1)
+pinAny   = pinLower or pinUpper
 
-// CONFIRMATION, AND THE TWO WORDS FOR IT ARE NOT SYNONYMS. A marubozu is a
-// single bar that is nearly all body. An engulfing is a two-bar relation where
-// this body swallows the last one. Either is accepted, because what they have
-// in common is the part that carries the meaning: the bar after the rejection
-// closed hard in the trade's direction.
-bullMarubozu = close > open and candleRng > 0 and candleBody >= marubozuBodyInput * candleRng
-bearMarubozu = close < open and candleRng > 0 and candleBody >= marubozuBodyInput * candleRng
-bullEngulf   = close > open and close[1] < open[1] and close >= open[1] and open <= close[1]
-bearEngulf   = close < open and close[1] > open[1] and close <= open[1] and open >= close[1]
-bullConfirm  = bullMarubozu or bullEngulf
-bearConfirm  = bearMarubozu or bearEngulf
+// The four, by the naming above. Carried separately so the arrow can say which
+// one actually fired instead of offering a list of candidates.
+patHammer       = pinLower and candleGreen
+patHangingMan   = pinLower and candleRed
+patInvHammer    = pinUpper and candleGreen
+patShootingStar = pinUpper and candleRed
+
+// Standalone direction is the wick.
+bullPin = pinLower
+bearPin = pinUpper
+
+// CONFIRMATION IS AN ENGULFING MARUBOZU — BOTH CONDITIONS, NOT EITHER. Wicks
+// are allowed, but the body has to dominate its own range AND cover the pin's
+// body. A marubozu alone can be a small candle that happens to be all body; an
+// engulfing alone can be a wide bar that is mostly wick. Neither is the
+// decisive candle being described. Requiring both is.
+bodyDominant = candleRng > 0 and candleBody >= marubozuBodyInput * candleRng
+engulfsPrior = candleBody >= math.abs(close[1] - open[1]) and math.max(close, open) >= math.max(close[1], open[1]) and math.min(close, open) <= math.min(close[1], open[1])
+bullConfirm  = candleGreen and bodyDominant and engulfsPrior
+bearConfirm  = candleRed   and bodyDominant and engulfsPrior
 //---------------------------------------------------------------------------------------------------------------------}
 
 volatilityMeasure                   = orderBlockFilterInput == ATR ? atrMeasure : ta.cum(ta.tr)/bar_index
@@ -829,6 +858,11 @@ touchOrderBlocks(bool internal = false) =>
                 eachOrderBlock.touched  := false
 
             bool pinNow = bull ? bullPin : bearPin
+            // Named on the bar that carries the shape: the pin itself in the
+            // one-bar modes, the PREVIOUS bar in the two-bar mode, since that
+            // is where the pin was.
+            string shapeNow = patHammer ? 'hammer' : patHangingMan ? 'hanging man' : patInvHammer ? 'inverted hammer' : patShootingStar ? 'shooting star' : ''
+            string shapePrev = patHammer[1] ? 'hammer' : patHangingMan[1] ? 'hanging man' : patInvHammer[1] ? 'inverted hammer' : patShootingStar[1] ? 'shooting star' : ''
             bool oneBarFire = rejectionModeInput == REJ_ANY ? inNow : rejectionModeInput == REJ_CLOSE ? (inNow and (bull ? (close >= mid and close > open) : (close <= mid and close < open))) : rejectionModeInput == REJ_PIN ? (inNow and pinNow and (bull ? close > mid : close < mid)) : false
             bool fire = rejectionModeInput == REJ_CONFIRM ? twoBarFire : oneBarFire
 
@@ -852,7 +886,11 @@ touchOrderBlocks(bool internal = false) =>
                 // Zone, BoS Origin". So Main and Sub are CHoCH-origin only, and
                 // the BoS entry is its own category spanning both. Firing Main for
                 // a BOS-origin block would double-count it.
+                // In the two-bar mode the shape lives on the PREVIOUS bar and
+                // the marubozu on this one, so the label names both.
+                string firedShape = rejectionModeInput != REJ_CONFIRM ? shapeNow : shapePrev == '' ? '' : shapePrev + (bull ? ' + green marubozu' : ' + red marubozu')
                 if bull
+                    currentAlerts.demandPattern     := firedShape
                     currentAlerts.demandTouchOrigin := eachOrderBlock.origin
                     currentAlerts.demandTouchTop    := eachOrderBlock.barHigh
                     currentAlerts.demandTouchBot    := eachOrderBlock.barLow
@@ -863,6 +901,7 @@ touchOrderBlocks(bool internal = false) =>
                     else
                         currentAlerts.demandMainTouch := true
                 else
+                    currentAlerts.supplyPattern     := firedShape
                     currentAlerts.supplyTouchOrigin := eachOrderBlock.origin
                     currentAlerts.supplyTouchTop    := eachOrderBlock.barHigh
                     currentAlerts.supplyTouchBot    := eachOrderBlock.barLow
@@ -876,7 +915,11 @@ touchOrderBlocks(bool internal = false) =>
                 // Remember a pin for the next bar to rule on. Only a pin that
                 // is inside the zone and past the leave-and-return test counts,
                 // so a pin printed on the bar the block was cut cannot arm.
-                eachOrderBlock.pinPending := inNow and pinNow and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
+                // ANY of the four shapes arms the confirmation, because in the
+                // two-bar case the marubozu is what sets direction — a shooting
+                // star followed by a green marubozu is a bullish signal. Only
+                // the standalone case reads direction off the wick.
+                eachOrderBlock.pinPending := inNow and pinAny and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
 
 deleteOrderBlocks(bool internal = false) =>
     array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
@@ -959,7 +1002,7 @@ storeOrdeBlock(pivot p_ivot,bool internal = false,int bias, string origin = '') 
             float zoneMid = math.avg(o_rderBlock.barHigh, o_rderBlock.barLow)
             string wait = '\n  · nothing to do yet — this is the WAIT half of the setup'
                  + '\n  · mark ' + str.tostring(o_rderBlock.barLow, format.mintick) + ' – ' + str.tostring(o_rderBlock.barHigh, format.mintick) + ' and let price come back to it'
-                 + '\n  · the arrow prints only on a ' + (rejectionModeInput == REJ_ANY ? 'touch' : rejectionModeInput == REJ_CLOSE ? 'close back out of the zone' : rejectionModeInput == REJ_PIN ? (bias == BULLISH ? 'hammer / hanging man in the zone' : 'shooting star / inverted hammer in the zone') : 'pin plus a confirming marubozu or engulfing')
+                 + '\n  · the arrow prints only on a ' + (rejectionModeInput == REJ_ANY ? 'touch' : rejectionModeInput == REJ_CLOSE ? 'close back out of the zone' : rejectionModeInput == REJ_PIN ? (bias == BULLISH ? 'hammer or hanging man in the zone — a lower wick, either colour' : 'shooting star or inverted hammer in the zone — an upper wick, either colour') : 'pin of any of the four shapes, then an engulfing ' + (bias == BULLISH ? 'green' : 'red') + ' marubozu')
                  + '\n  · this mark disappears when the retest happens or the zone breaks'
             string zoneTip = eventTooltip((bias == BULLISH ? 'Demand zone armed' : 'Supply zone armed') + '  ·  ' + (origin != '' ? origin + ' origin' : 'wait for the retest'), zoneMid, wait)
 
@@ -1479,7 +1522,8 @@ if ev != ''
         float zTop = down ? currentAlerts.supplyTouchTop : currentAlerts.demandTouchTop
         float zBot = down ? currentAlerts.supplyTouchBot : currentAlerts.demandTouchBot
         float mid  = math.avg(zTop, zBot)
-        string watch = (rejectionModeInput == REJ_CONFIRM ? '\n  · the pin was the PREVIOUS bar — this one confirmed it, so the signal is one bar late by design' : rejectionModeInput == REJ_ANY ? '\n  · price only TOUCHED the zone — no candle test was asked for, so this is not yet a rejection' : '\n  · the retest is DONE — this bar traded into the zone and rejected from it')
+        string shape = down ? currentAlerts.supplyPattern : currentAlerts.demandPattern
+        string watch = (rejectionModeInput == REJ_CONFIRM ? '\n  · the pin was the PREVIOUS bar and this one engulfed it — the signal is one bar late by design' : rejectionModeInput == REJ_ANY ? '\n  · price only TOUCHED the zone — no candle test was asked for, so this is not yet a rejection' : '\n  · the retest is DONE — this bar traded into the zone and rejected from it')
              + (na(zTop) ? '' : '\n  · zone ' + str.tostring(zBot, format.mintick) + ' – ' + str.tostring(zTop, format.mintick) + ', midline ' + str.tostring(mid, format.mintick))
              + (na(zTop) ? '' : '\n  · stop ' + (down ? 'above ' : 'below ') + str.tostring(down ? zTop : zBot, format.mintick) + ' — the far side of the zone, not this candle\'s wick')
              + (na(zTop) ? '' : '\n  · that is ' + str.tostring(100 * math.abs(close - (down ? zTop : zBot)) / close, '#.##') + '% of price — 1.2%-2.6% is the band that made money, over 2.6% is a skip')
@@ -1490,7 +1534,7 @@ if ev != ''
              style = down ? label.style_arrowdown : label.style_arrowup,
              size = signalArrowSizeInput,
              tooltip = eventTooltip((down ? 'Supply zone held' : 'Demand zone held') + '  ·  '
-                  + (rejectionModeInput == REJ_ANY ? 'zone touched, no candle test' : rejectionModeInput == REJ_CLOSE ? 'closed back out' : rejectionModeInput == REJ_PIN ? (down ? 'shooting star / inverted hammer' : 'hammer / hanging man') : 'pin, then confirmed')
+                  + (shape != '' ? shape : rejectionModeInput == REJ_ANY ? 'zone touched, no candle test' : 'closed back out')
                   + (signalWithTrendInput ? ', with structure' : ''), close, watch))
     if alertOnInput
         // TWO FIXED SHAPES, no template to fill in. Both already carry the
