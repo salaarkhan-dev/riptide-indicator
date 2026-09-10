@@ -306,12 +306,18 @@ type alerts
     // was never recognised, or it was recognised and something downstream
     // vetoed it. They need completely different fixes.
     bool pinVetoed                  = false
+    // WHY there was no arrow, in words. A bare "something vetoed this" mark
+    // still leaves five candidates to guess between, which is most of the work.
+    string vetoReason               = ''
     // A rejection candle printed INSIDE a live zone. Not the same thing as the
     // entry arrow: this says the shape happened at the level, the arrow says
     // the whole setup completed. Kept apart because the shape is worth SEEING
     // on the zone that formed it, and the arrow is worth ACTING on.
     bool zoneRejectBull             = false
     bool zoneRejectBear             = false
+    string zoneRejectName           = ''
+    float zoneRejectTop             = na
+    float zoneRejectBot             = na
     // ADDED — A BREAK JUST CUT A ZONE AND THERE IS NOTHING TO DO YET. This is
     // the first half of the setup and it was never modelled: the old build
     // marked the break and marked the entry with the same weight, so a chart
@@ -912,13 +918,20 @@ touchOrderBlocks(bool internal = false) =>
             // A zone's own formation candles can trip it, and that is correct:
             // they ARE rejections, they are just not entries.
             if inNow and (pinNow or twoBarFire)
+                currentAlerts.zoneRejectName := twoBarFire ? (shapePrev == '' ? 'pin + confirm' : shapePrev + (bull ? ' + green marubozu' : ' + red marubozu')) : shapeNow
+                currentAlerts.zoneRejectTop  := eachOrderBlock.barHigh
+                currentAlerts.zoneRejectBot  := eachOrderBlock.barLow
                 if bull
                     currentAlerts.zoneRejectBull := true
                 else
                     currentAlerts.zoneRejectBear := true
 
+            // A rejection shape landed in this zone and produced nothing. Name
+            // the gate that stopped it, checked in the order they apply, so the
+            // answer is on the chart rather than reconstructed afterwards.
             if inNow and pinNow and not (fire and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
                 currentAlerts.pinVetoed := true
+                currentAlerts.vetoReason := not eachOrderBlock.leftZone ? 'price has not left this zone since it was cut, so there is nothing to retest yet' : eachOrderBlock.touched ? 'this return already signalled — price has to leave the zone before it can count again' : eachOrderBlock.tests >= maxZoneTestsInput ? 'zone has used all ' + str.tostring(maxZoneTestsInput) + ' of its allowed tests' : 'the shape was found but the rejection test for this mode did not pass'
 
             if fire and eachOrderBlock.leftZone and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
                 eachOrderBlock.touched    := true
@@ -1361,18 +1374,23 @@ candleColor = internalTrend.bias == BULLISH ? swingBullishColor : swingBearishCo
 plotcandle(parsedOpen,high,low,close,color = candleColor, wickcolor = candleColor, bordercolor = candleColor)
 
 //---------------------------------------------------------------------------------------------------------------------}
-//PIN DIAGNOSTIC — off by default
+//PIN DIAGNOSTIC — every pin candle on the chart, zone or no zone. Off by default
 //---------------------------------------------------------------------------------------------------------------------{
-// A MISSING ARROW HAS TWO CAUSES THAT LOOK IDENTICAL ON A CHART: the shape was
-// never recognised, or it was recognised and something downstream vetoed it.
-// Guessing between them is how tuning goes wrong, so these make the difference
-// visible. plotshape rather than labels — there is no object budget to spend on
-// a diagnostic, and position plus colour already carry the full name.
-plotshape(showZoneRejectInput and currentAlerts.zoneRejectBull ? low  - atrMeasure * 0.35 : na, title = 'Rejection candle at a demand zone', style = shape.triangleup,   location = location.absolute, color = swingBullishColor, size = size.tiny)
-plotshape(showZoneRejectInput and currentAlerts.zoneRejectBear ? high + atrMeasure * 0.35 : na, title = 'Rejection candle at a supply zone', style = shape.triangledown, location = location.absolute, color = swingBearishColor, size = size.tiny)
-plotshape(showPinDebugInput and pinLower ? low  - atrMeasure * 0.9 : na, title = 'Pin · lower wick (hammer / hanging man)',        style = shape.triangleup,   location = location.absolute, color = candleGreen ? swingBullishColor : swingBearishColor, size = size.tiny)
-plotshape(showPinDebugInput and pinUpper ? high + atrMeasure * 0.9 : na, title = 'Pin · upper wick (inverted hammer / shooting star)', style = shape.triangledown, location = location.absolute, color = candleGreen ? swingBullishColor : swingBearishColor, size = size.tiny)
-plotshape(showPinDebugInput and currentAlerts.pinVetoed ? low - atrMeasure * 1.5 : na, title = 'Pin inside a zone that produced no arrow', style = shape.xcross, location = location.absolute, color = GRAY, size = size.tiny)
+// A MISSING ARROW HAS TWO CAUSES THAT LOOK IDENTICAL: the shape was never
+// recognised, or it was recognised and something downstream vetoed it. Guessing
+// between them is how tuning goes wrong. These answer the first half; the ✕
+// drawn further down answers the second.
+//
+// COLOURED BY WHAT THE PATTERN MEANS, NOT BY THE BODY. Colouring these by
+// candle colour inverted them: a HANGING MAN is a lower-wick pin on a red body
+// and is BULLISH by the standalone rule, but it painted red — a bullish
+// rejection wearing a bearish colour, which is worse than no mark at all.
+// Direction now drives both position and colour, and the two agree.
+//
+// Which of the four shapes it was is on the arrow's hover and in the candle
+// itself; it does not belong in a channel where it contradicts the meaning.
+plotshape(showPinDebugInput and pinLower ? low  - atrMeasure * 0.9 : na, title = 'Pin · lower wick — hammer or hanging man (bullish)',            style = shape.triangleup,   location = location.absolute, color = swingBullishColor, size = size.tiny)
+plotshape(showPinDebugInput and pinUpper ? high + atrMeasure * 0.9 : na, title = 'Pin · upper wick — shooting star or inverted hammer (bearish)', style = shape.triangledown, location = location.absolute, color = swingBearishColor, size = size.tiny)
 //---------------------------------------------------------------------------------------------------------------------}
 
 if showHighLowSwingsInput or showPremiumDiscountZonesInput
@@ -1576,6 +1594,13 @@ supplyEntry = currentAlerts.supplyMainTouch or currentAlerts.supplySubTouch or c
 bullArrow = demandEntry and (not signalWithTrendInput or swingTrend.bias == BULLISH)
 bearArrow = supplyEntry and (not signalWithTrendInput or swingTrend.bias == BEARISH)
 
+// THE LAST GATE SITS OUT HERE, NOT IN touchOrderBlocks, so a setup that cleared
+// every zone test and was then killed by the structure filter would otherwise
+// leave no trace at all — the ✕ inside the loop never fires for it.
+if (demandEntry and not bullArrow) or (supplyEntry and not bearArrow)
+    currentAlerts.pinVetoed  := true
+    currentAlerts.vetoReason := 'the retest completed, but Signals With Structure Only is on and swing structure is ' + (swingTrend.bias == BULLISH ? 'bull' : swingTrend.bias == BEARISH ? 'bear' : 'flat') + ' against a ' + (demandEntry and not bullArrow ? 'demand' : 'supply') + ' entry'
+
 if ev != ''
     lastEventText := ev
     lastEventTime := time
@@ -1611,6 +1636,31 @@ if ev != ''
              ? str.format('{0} {1}\n{2}\n{3}  ·  swing {4} · internal {5}', syminfo.ticker, timeframe.period, ev, str.tostring(close, format.mintick), bias, inBias)
              : str.format('{0}|{1}|{2}|{3}|{4}|{5}',            syminfo.ticker, timeframe.period, ev, str.tostring(close, format.mintick), bias, inBias)
         alert(body, alert.freq_once_per_bar_close)
+
+//---------------------------------------------------------------------------------------------------------------------}
+//ZONE MARKS — drawn LAST, after every gate has had its say
+//---------------------------------------------------------------------------------------------------------------------{
+// THESE SIT BELOW THE ARROW BLOCK AND THAT IS DELIBERATE. The structure filter
+// runs out there, so a setup that cleared every zone test and was then killed
+// by it only becomes known at this point. Drawn any earlier, the ✕ would report
+// a stale reason and quietly omit the most common one of all.
+//
+// Labels rather than plotshape, because "which pattern was that" and "why was
+// there no arrow" are the questions these exist to answer, and a plotshape
+// cannot be hovered. The debug pin triangles stay plotshapes: there can be
+// hundreds of them and position plus colour already say everything.
+if showZoneRejectInput and (currentAlerts.zoneRejectBull or currentAlerts.zoneRejectBear)
+    bool rjDown = currentAlerts.zoneRejectBear and not currentAlerts.zoneRejectBull
+    label.new(chart.point.new(time, na, rjDown ? high + atrMeasure * 0.35 : low - atrMeasure * 0.35), '', xloc.bar_time,
+         color = rjDown ? swingBearishColor : swingBullishColor,
+         style = rjDown ? label.style_triangledown : label.style_triangleup,
+         size = size.tiny,
+         tooltip = eventTooltip((rjDown ? 'Rejection at supply' : 'Rejection at demand') + (currentAlerts.zoneRejectName != '' ? '  ·  ' + currentAlerts.zoneRejectName : ''), close, (na(currentAlerts.zoneRejectTop) ? '' : 'zone  ' + str.tostring(currentAlerts.zoneRejectBot, format.mintick) + ' – ' + str.tostring(currentAlerts.zoneRejectTop, format.mintick) + '\n') + 'shape only — not the retest entry'))
+
+if showPinDebugInput and currentAlerts.pinVetoed
+    label.new(chart.point.new(time, na, low - atrMeasure * 1.5), '', xloc.bar_time,
+         color = GRAY, style = label.style_xcross, size = size.tiny,
+         tooltip = eventTooltip('No arrow here', close, currentAlerts.vetoReason))
 
 //---------------------------------------------------------------------------------------------------------------------}
 //STATUS READ-OUT — off by default, so the chart looks exactly like the base
