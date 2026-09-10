@@ -398,11 +398,12 @@ cpWickRatio = input.float(2.0, "  wick : body", minval = 1.0, maxval = 6.0, step
      tooltip = "How many times the body the rejecting wick has to be for the candle to count as a pin.\n\n2 is the textbook hammer. 3 is a proper pin and roughly a third as many. Below 2 almost any bar with a wick qualifies.")
 cpBodyRatio = input.float(0.6, "  engulfing body : range", minval = 0.3, maxval = 0.95, step = 0.05, group = gCP,
      tooltip = "How much of the second candle's range has to be body for it to count as decisive.\n\nWicks are allowed — this is not a strict marubozu — but a bar that is mostly wick has not engulfed anything, it has been rejected itself. It must also cover the pin's body.")
-cpUseFvg    = input.bool(true,  "Fair value gaps",  inline = "cpz", group = gCP)
+cpUseFvg    = input.bool(true,  "Fair value gaps",  inline = "cpz", group = gCP,
+     tooltip = "BOTH KINDS OF GAP, and that distinction was quietly costing most of the signal. Riptide keeps two sets: the ENTRY gaps its own setups are built on, which only exist after a structure shift and are filled almost immediately, and the CONTEXT gaps — every three-bar imbalance on the chart, which is the layer you actually see. This used to match only the first set, so 'fair value gaps' meant a few dozen short-lived zones instead of the ones on screen.\n\nEither kind counts now. A gap price has closed through is dropped from both.")
 cpUseOB     = input.bool(true,  "Order blocks",     inline = "cpz", group = gCP)
 cpUseSweep  = input.bool(false, "Swept levels",     inline = "cpz2", group = gCP,
      tooltip = "The three places a rejection is allowed to count.\n\nA swept level is included because it is the one rejection that can happen with no gap and no block anywhere near it — and it is the level with the most liquidity behind it, which is the whole premise of this indicator.")
-cpUseCtx    = input.bool(false, "Context gaps",     inline = "cpz2", group = gCP)
+
 cpUsePivot  = input.bool(true,  "Structure extremes (HH / LH / LL / HL)", group = gCP,
      tooltip = "The swing highs and lows themselves, which is where most of these patterns belong and the one place the filter was not looking.\n\nCAPTURED SEPARATELY FROM THE POOLS, because a pool is a set of EQUAL pivots and most swings never join one. The filter wants every HH, LH, LL and HL, not only those that lined up with another.\n\nA point, not a band: a swing is a price, so the pattern has to land on it within the tolerance below.")
 cpPivTol    = input.float(0.35, "  how close counts (x ATR)", minval = 0.05, maxval = 2.0, step = 0.05, group = gCP)
@@ -414,6 +415,8 @@ obLuxSwingN = input.int(5, "  swing blocks to show", minval = 0, maxval = 20, in
 obLuxIntN   = input.int(5, "  internal", minval = 0, maxval = 20, inline = "obn", group = gCP)
 obLuxSwingLen = input.int(50, "  swing leg length", minval = 10, maxval = 200, group = gCP,
      tooltip = "LuxAlgo's own swing length. 50 for swing structure and a fixed 5 for internal, which is what its defaults are — the two sets of blocks come from the same rule run at two scales.")
+obLuxHideOverlap = input.bool(true, "  hide overlapping blocks", group = gCP,
+     tooltip = "When a new block covers the same prices as an older one, drop the older. Half-transparent boxes stacked on the same level smear into a band and stop reading as a level at all — and two blocks over one price area are one zone described twice, not two zones.\n\nThe NEWER one wins: it is the one price has just left behind. Checked within each set, so a swing block and an internal block over the same prices both survive — they are different claims at different scales.")
 obLuxFilter = input.string("Atr", "  volatility filter", options = ["Atr", "Cumulative mean range"], group = gCP,
      tooltip = "Which measure decides that a bar is too wide to be a block. Cumulative mean range is recommended when little history is loaded.")
 obLuxMitig  = input.string("High/Low", "  mitigated by", options = ["High/Low", "Close"], group = gCP,
@@ -960,7 +963,21 @@ lxStoreOB(LxPivot p, bool internal, bool isBull) =>
              : lxHighs.slice(p.barIndex, bar_index)
         int idx = p.barIndex + (isBull ? src.indexof(src.min()) : src.indexof(src.max()))
         array<CpBlock> blocks = internal ? lxIntOB : lxSwingOB
-        blocks.unshift(CpBlock.new(top = lxHighs.get(idx), bot = lxLows.get(idx),
+        float nTop = lxHighs.get(idx)
+        float nBot = lxLows.get(idx)
+
+        // The newer block wins its price area. Stacked half-transparent boxes
+        // smear into a band and stop reading as a level, and two blocks over the
+        // same prices are one zone described twice.
+        if obLuxHideOverlap and blocks.size() > 0
+            int k = blocks.size() - 1
+            while k >= 0
+                CpBlock o = blocks.get(k)
+                if not (nBot >= o.top or nTop <= o.bot)
+                    blocks.remove(k)
+                k -= 1
+
+        blocks.unshift(CpBlock.new(top = nTop, bot = nBot,
              barIdx = idx, barTime = lxTimes.get(idx), isBull = isBull))
         while blocks.size() > 100
             blocks.pop()
@@ -1981,7 +1998,7 @@ cpZoneTake(bool wantBull, float pLo, float pHi) =>
                 zbot  := f.bottom
                 f.cpArmed := false
 
-    if cpUseCtx and zname == ""
+    if cpUseFvg and zname == ""
         for cf in ctxFvgs
             if zname == "" and cf.cpArmed and cf.isBull == wantBull and pLo <= cf.top and pHi >= cf.bottom
                 zname := "context gap"
