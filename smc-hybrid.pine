@@ -129,7 +129,7 @@ acceptEngulfTooltip             = 'THIS IS NOT ONE OF THE TWELVE PATTERNS — it
 marubozuTooltip                 = 'How much of a confirmation candle\'s range must be body.\n\n0.7 is a strong candle; 0.85 is a strict marubozu with almost no wick. An engulfing of the pin\'s body also passes regardless of this, since the two say the same thing in different ways — a MARUBOZU IS NOT AN ENGULFING, one is a single-bar shape and the other a two-bar relation, and confirmation accepts either.'
 setupBoxTooltip                 = 'Outline the zone that is currently WAITING for its retest, so the live setup is separated from every other block on the chart.\n\nThe outline is removed the moment the zone is retested or price closes through it, which is what keeps the chart from filling up with dead levels.'
 zoneRejectTooltip               = 'A small triangle wherever a rejection candle prints INSIDE a live zone — below the bar for demand, above it for supply.\n\nNOT AN ENTRY, AND THE DIFFERENCE MATTERS. It has none of the entry gating: no leave-and-return test, no structure filter, no per-zone cap. It says only "the shape happened at the level". A zone\'s own formation candles will trip it, which is correct — those ARE rejections, they are just not retests.\n\nThe big arrow is the entry. This is what to read the chart by.'
-pinDebugTooltip                 = 'TURN THIS ON WHEN AN ARROW YOU EXPECTED DID NOT APPEAR.\n\n  ◇ below the bar   a long LOWER wick — hammer or hanging man\n  ◇ above the bar   a long UPPER wick — inverted hammer or shooting star\n  ✕                 a shape that WAS inside a live zone and produced no arrow. Hover it: it names the gate that stopped it.\n\nGREY ON PURPOSE. A pin standing in open space has no direction — the same upper wick is a rejection at supply and an inverted hammer at demand. Only the coloured triangles claim bull or bear, and they take it from the zone, not the candle.\n\nNo diamond on a candle you consider a rejection means the SHAPE test rejected it: adjust Pin Wick : Body. A diamond and no ✕ at a zone you were watching means price never traded inside the block the indicator actually holds, which is usually the answer.'
+pinDebugTooltip                 = 'TURN THIS ON WHEN AN ARROW YOU EXPECTED DID NOT APPEAR.\n\n  ◇ below / above   a pin shape — lower wick is a hammer or hanging man, upper wick an inverted hammer or shooting star. Grey because a shape alone has no direction.\n  ✕                 a shape the mode ACCEPTED that still produced no arrow. Hover it: it names the gate.\n  ·                 price in a zone, moving the right way, and no shape qualified.\n\nNo mark of any kind at a zone you were watching means price never traded inside the block the indicator actually holds, which is usually the answer.\n\nOnly the ✕ is hoverable. The other two are plotshapes on purpose — labels come out of a budget of 500 shared with the sweeps and structure tags, and spending it on a diagnostic makes the oldest of those disappear.'
 leaveFirstTooltip               = 'THE RETEST RULE, AND THE ONE MOST LIKELY TO BE HIDING A SIGNAL YOU EXPECTED.\n\nON: price must trade completely clear of the zone before coming back can count. That is what a retest IS, and it is why a freshly cut block cannot fire on the impulse that created it.\n\nOFF: a rejection candle inside the zone signals whether or not price ever left. This picks up the pattern that forms AS the zone is made — the displacement itself. Those are real rejections, but they are entries at the impulse rather than at the pullback, so the stop is further and the price is worse.\n\nIf a setup you were sure about produced no arrow, turn this off and see whether it appears. If it does, the setup was a formation, not a retest.'
 fvgZoneTooltip                  = 'Treat fair value gaps as retest zones in their own right, not only as order blocks.\n\nA gap is a zone price returns to for the same reason a block is — it is where the move left something behind. Same rejection test, same structure filter, same tests-per-zone cap.\n\nThis roughly doubles the number of zones in play, so expect more signals rather than better ones.'
 zoneTestsTooltip                = 'How many separate returns to the same zone may print an arrow.\n\nEach return counts once: price has to leave the zone before coming back can count again. 1 is strict SMC — the first retest is the trade. 2 allows the common case where the first touch is a shallow wick and the real test comes after.\n\nBeyond that a zone is being worn out rather than defended, which is the opposite of the setup.'
@@ -315,6 +315,11 @@ type alerts
     // was never recognised, or it was recognised and something downstream
     // vetoed it. They need completely different fixes.
     bool pinVetoed                  = false
+    // Price is in a zone, moving the right way, and NO shape formed. Separate
+    // from pinVetoed because there is no per-bar explanation to hover — and
+    // because it is true on far more bars, which is exactly what must not be
+    // spending labels. See the label-budget note at the draw site.
+    bool inZoneNoShape              = false
     // WHY there was no arrow, in words. A bare "something vetoed this" mark
     // still leaves five candidates to guess between, which is most of the work.
     string vetoReason               = ''
@@ -960,8 +965,15 @@ touchOrderBlocks(bool internal = false) =>
             // has often already left the zone, which is the point of a
             // displacement. Requiring it to still be inside dropped exactly the
             // strongest confirmations.
-            if (inNow and pinNow) or twoBarFire
-                currentAlerts.zoneRejectAge  := pinNow ? 0 : confirmGap ? 2 : 1
+            // THE SAME TEST THE ARROW USES. This used to accept a bare pin
+            // even in Pin + confirm mode, where a bare pin can never become an
+            // entry — so the chart filled with triangles that were structurally
+            // incapable of producing an arrow, and every one of them read as a
+            // missing signal. A triangle now means "the mode accepted this",
+            // and the only thing between it and an arrow is the three switches
+            // a reader can see.
+            if fire
+                currentAlerts.zoneRejectAge  := (rejectionModeInput == REJ_CONFIRM and not pinNow) ? (confirmGap ? 2 : 1) : 0
                 currentAlerts.zoneRejectName := twoBarFire and not pinNow ? (shapePrev == '' ? 'pin + confirm' : shapePrev + (confirmGap ? ' + displacement gap' : bull ? ' + green marubozu' : ' + red marubozu')) : shapeNow
                 currentAlerts.zoneRejectTop  := eachOrderBlock.barHigh
                 currentAlerts.zoneRejectBot  := eachOrderBlock.barLow
@@ -981,9 +993,19 @@ touchOrderBlocks(bool internal = false) =>
             //
             // Limited to bars that closed in the zone's direction, so a range
             // inside a wide zone does not print a ✕ on every bar.
-            if inNow and (bull ? close > open : close < open) and not (fire and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
+            bool blocked = not (fire and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput)
+
+            // NO SHAPE AT ALL gets a budget-free plotshape, not a label. It is
+            // true on a great many bars, and every label drawn here comes out
+            // of the same 500 the sweeps, structure tags and EQH marks share —
+            // spend them here and TradingView silently drops the OLDEST, which
+            // is why the ✕ marks at the left of the chart went missing.
+            if inNow and (bull ? close > open : close < open) and blocked and not pinNow
+                currentAlerts.inZoneNoShape := true
+
+            if inNow and pinNow and blocked
                 currentAlerts.pinVetoed := true
-                currentAlerts.vetoReason := not pinNow ? 'price is in this zone and moving the right way, but no rejection shape formed on this bar — lower Pin Wick : Body, or the move was not decisive enough to engulf' : (requireLeaveFirstInput and not eachOrderBlock.leftZone) ? 'price has not left this zone since it was cut — turn off Only After Price Leaves to signal formations too' : eachOrderBlock.touched ? 'this return already signalled — price has to leave the zone before it can count again' : eachOrderBlock.tests >= maxZoneTestsInput ? 'zone has used all ' + str.tostring(maxZoneTestsInput) + ' of its allowed tests' : 'the shape was found but the rejection test for this mode did not pass'
+                currentAlerts.vetoReason := (requireLeaveFirstInput and not eachOrderBlock.leftZone) ? 'price has not left this zone since it was cut — turn off Only After Price Leaves to signal formations too' : eachOrderBlock.touched ? 'this return already signalled — price has to leave the zone before it can count again' : eachOrderBlock.tests >= maxZoneTestsInput ? 'zone has used all ' + str.tostring(maxZoneTestsInput) + ' of its allowed tests' : 'the shape was found but the rejection test for this mode did not pass'
 
             if fire and (eachOrderBlock.leftZone or not requireLeaveFirstInput) and not eachOrderBlock.touched and eachOrderBlock.tests < maxZoneTestsInput
                 eachOrderBlock.touched    := true
@@ -1364,8 +1386,8 @@ touchFairValueGaps() =>
         else
             eachFairValueGap.pinAge := (inNow and pinAny and (eachFairValueGap.leftZone or not requireLeaveFirstInput) and not eachFairValueGap.touched and eachFairValueGap.tests < maxZoneTestsInput) ? 1 : eachFairValueGap.pinAge == 1 ? 2 : 0
 
-        if (inNow and pinNow) or twoBarFire
-            currentAlerts.zoneRejectAge  := pinNow ? 0 : confirmGap ? 2 : 1
+        if fire
+            currentAlerts.zoneRejectAge  := (rejectionModeInput == REJ_CONFIRM and not pinNow) ? (confirmGap ? 2 : 1) : 0
             // This line was simply missing, so every rejection at a gap came
             // back with no pattern name on it.
             currentAlerts.zoneRejectName := (pinNow ? pinName : confirmGap ? pinName[2] : pinName[1]) + ' at an FVG'
@@ -1517,6 +1539,7 @@ plotcandle(parsedOpen,high,low,close,color = candleColor, wickcolor = candleColo
 //
 // Diamonds rather than triangles for the same reason: a triangle points, and
 // pointing is a direction claim.
+plotshape(showPinDebugInput and currentAlerts.inZoneNoShape ? low - atrMeasure * 1.5 : na, title = 'In a zone, moving the right way, no shape formed', style = shape.circle, location = location.absolute, color = color.new(GRAY, 60), size = size.tiny)
 plotshape(showPinDebugInput and pinLower ? low  - atrMeasure * 0.9 : na, title = 'Shape · long LOWER wick (hammer / hanging man)',         style = shape.diamond, location = location.absolute, color = color.new(GRAY, 30), size = size.tiny)
 plotshape(showPinDebugInput and pinUpper ? high + atrMeasure * 0.9 : na, title = 'Shape · long UPPER wick (inverted hammer / shooting star)', style = shape.diamond, location = location.absolute, color = color.new(GRAY, 30), size = size.tiny)
 //---------------------------------------------------------------------------------------------------------------------}
