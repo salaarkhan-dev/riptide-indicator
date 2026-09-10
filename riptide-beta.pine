@@ -1482,9 +1482,12 @@ cp2Bear = cpOn and cpPin[1] and cpDecisive and cpRed
 cpBull  = cp1Bull or cp2Bull
 cpBear  = cp1Bear or cp2Bear
 
+// The wrapped lines below are indented by NINE spaces, not eight. Pine reads a
+// continuation indented by a multiple of four as the start of a local block,
+// so an eight-space wrap is a syntax error rather than a style choice.
 cpName  = cp2Bull ? cpShapeName(cpPinLo[1], cpPinUp[1], cpGreen[1], cpRed[1]) + " + green engulfing"
-        : cp2Bear ? cpShapeName(cpPinLo[1], cpPinUp[1], cpGreen[1], cpRed[1]) + " + red engulfing"
-        : cpShapeName(cpPinLo, cpPinUp, cpGreen, cpRed)
+         : cp2Bear ? cpShapeName(cpPinLo[1], cpPinUp[1], cpGreen[1], cpRed[1]) + " + red engulfing"
+         : cpShapeName(cpPinLo, cpPinUp, cpGreen, cpRed)
 cpKind  = (cp2Bull or cp2Bear) ? "2CP" : "1CP"
 
 // ENTRY AND STOP, READ OFF THE PATTERN THE WAY THE SHEET DRAWS THEM. Entry sits
