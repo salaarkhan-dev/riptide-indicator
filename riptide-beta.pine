@@ -2759,9 +2759,15 @@ if cpOn and cpUsePivot and barstate.isconfirmed and zig.pivotBar == bar_index an
         float hit = wantBull ? q.lo : q.hi
         if q.isBull == wantBull and bar_index - q.bar <= effPivotRight + 1
              and math.abs(hit - zig.pivotPx) <= ptol
-            string ptag = cpPivots.size() > 0 ? cpPivots.get(0).tag : (zig.pivotHigh ? "swing high" : "swing low")
+            // BOUND TO A NAME FIRST. Pine cannot assign to a field on the
+            // result of an expression — `array.get(...).field := x` has no
+            // object it can resolve — so the element has to be pulled out
+            // before it can be written to.
+            string ptag = zig.pivotHigh ? "swing high" : "swing low"
             if cpPivots.size() > 0
-                cpPivots.get(0).armed := false
+                CpPivot pv = cpPivots.get(0)
+                ptag     := pv.tag
+                pv.armed := false
             cpDraw(mark, q.bar, q.isBull, q.name, q.kind, ptag,
                  zig.pivotPx + ptol, zig.pivotPx - ptol, q.entry, q.stop, q.lo, q.hi)
             mark.bar    := q.bar
