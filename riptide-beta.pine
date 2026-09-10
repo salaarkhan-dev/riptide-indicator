@@ -410,11 +410,18 @@ cpStructMin = input.float(0.0, "  smallest swing that counts (x ATR)", minval = 
      tooltip = "A floor on how far price has to travel between two turns for the second one to count as structure.\n\n0 takes every pivot the swing rule finds, which on a 30m chart is a lot of small noise turns. Raise it and the structure coarsens: the zigzag straightens out, small counter-swings are absorbed into the leg they interrupt, and the HH / LH / LL / HL reading is taken from what is left.\n\nIt drives the CANDLE FILTER as well as the drawing, so a pivot the zigzag has absorbed can no longer host a confirmation. What you see is what is filtered on.")
 obLuxOn     = input.bool(true,  "LuxAlgo-style order blocks", group = gCP,
      tooltip = "A SECOND, DIFFERENT ORDER BLOCK, and the difference is the whole reason the marks were landing in the wrong places.\n\nRiptide's own block is the last candle closing AGAINST the move before the entry gap, drawn as a line at one edge — an ICT definition, and the one the confluence score on every alert counts.\n\nLuxAlgo's is the EXTREME candle of the leg from the swing to the break, drawn as a box over its whole range. Different candle, different shape, and it is the one you see as a zone on the chart.\n\nThese are what the candle filter now matches on. They are mitigated when price trades through them, so a block that has been used stops being a zone — which the line version never did.\n\nWIDE BARS ARE EXCLUDED the way LuxAlgo excludes them: on a bar whose range is more than twice the volatility measure the high and low are swapped, so it loses the max/min contest and cannot become a block. A single volatile candle is a move, not a level.")
-obLuxCount  = input.int(8, "  how many to keep", minval = 1, maxval = 20, group = gCP)
+obLuxSwingN = input.int(5, "  swing blocks to show", minval = 0, maxval = 20, inline = "obn", group = gCP)
+obLuxIntN   = input.int(5, "  internal", minval = 0, maxval = 20, inline = "obn", group = gCP)
+obLuxSwingLen = input.int(50, "  swing leg length", minval = 10, maxval = 200, group = gCP,
+     tooltip = "LuxAlgo's own swing length. 50 for swing structure and a fixed 5 for internal, which is what its defaults are — the two sets of blocks come from the same rule run at two scales.")
+obLuxFilter = input.string("Atr", "  volatility filter", options = ["Atr", "Cumulative mean range"], group = gCP,
+     tooltip = "Which measure decides that a bar is too wide to be a block. Cumulative mean range is recommended when little history is loaded.")
 obLuxMitig  = input.string("High/Low", "  mitigated by", options = ["High/Low", "Close"], group = gCP,
      tooltip = "High/Low removes the block the moment any wick trades through it. Close waits for a bar to close through, which keeps blocks alive that were only spiked.")
-obLuxBull   = input.color(color.new(#3179f5, 80), "  demand", inline = "oblux", group = gCP)
-obLuxBear   = input.color(color.new(#f77c80, 80), "  supply", inline = "oblux", group = gCP)
+obLuxBull   = input.color(color.new(#1848cc, 80), "  swing demand", inline = "oblux1", group = gCP)
+obLuxBear   = input.color(color.new(#b22833, 80), "  swing supply", inline = "oblux1", group = gCP)
+obLuxIntBull = input.color(color.new(#3179f5, 80), "  internal demand", inline = "oblux2", group = gCP)
+obLuxIntBear = input.color(color.new(#f77c80, 80), "  internal supply", inline = "oblux2", group = gCP)
 cpShowZig   = input.bool(false, "Show market structure (zigzag)", group = gCP,
      tooltip = "The structure the filter is actually using, drawn as a thin dotted line from turn to turn with each one tagged HH, LH, LL or HL.\n\nOff by default because it is a debug view: it answers whether a confirmation was refused because the shape failed or because the level it sat on is not a swing the structure rule kept.")
 cpShowLevels = input.bool(false, "Draw entry and stop", group = gCP,
@@ -585,6 +592,15 @@ type CpMark
 // candle as Riptide's own block, which is the last opposing close before the
 // entry gap — two different definitions of the same words, and the reason a
 // confirmation could sit on a zone the filter had never heard of.
+// LuxAlgo's pivot: a level plus whether price has already broken it. The
+// `crossed` flag is what makes one break produce one block instead of one per
+// bar for as long as price stays beyond the level.
+type LxPivot
+    float currentLevel
+    float lastLevel
+    bool  crossed
+    int   barIndex = bar_index
+
 type CpBlock
     float  top
     float  bot
@@ -861,97 +877,146 @@ if not na(pl)
     cpTurn(zig, false, pl, bar_index - effPivotRight)
 
 // ── LuxAlgo-style order blocks ──────────────────────────────────────────────
-// A structure break is a close through the last confirmed swing on that side.
-// The block is then the extreme bar of the leg BEHIND that break: for a bullish
-// break the lowest low between the swing high and now, for a bearish break the
-// highest high.
+// PORTED, NOT ADAPTED. The first version of this drove LuxAlgo's block rule off
+// Riptide's pivots and produced nothing on some charts — a different swing
+// engine gives different break bars, and a block is defined entirely by which
+// bar broke which swing. So the whole mechanism is carried over: its own leg
+// detector, its own pivots, its own crossed flags, its own slice-and-argmax.
 //
-// parsedHigh/parsedLow carry LuxAlgo's volatility filter. On a bar whose range
-// is more than twice the volatility measure the two are SWAPPED, so that bar's
-// "low" is its high and it can never win a minimum — a single violent candle is
-// a move, not a level, and letting one become a block puts a zone in the middle
-// of an impulse.
-obVol       = ta.cum(ta.tr) / bar_index
-obWide      = (high - low) >= 2 * math.max(atr, obVol)
-parsedHigh  = obWide ? low  : high
-parsedLow   = obWide ? high : low
+//   leg()          a bar is a new leg when it is the extreme of its own window
+//   pivot          the level, and whether price has already broken it
+//   store          on a break, the extreme bar of the leg BEHIND it becomes the
+//                  block — sliced from the pivot's bar to now, argmax or argmin
+//   delete         a block price trades through is gone
+//
+// parsedHigh/parsedLow carry the volatility filter, which is the clever part: on
+// a bar whose range exceeds twice the volatility measure the two are SWAPPED, so
+// that bar's "low" is its high and it can never win a minimum. A single violent
+// candle is a move, not a level.
+lxVol        = obLuxFilter == "Cumulative mean range" ? ta.cum(ta.tr) / bar_index : ta.atr(200)
+lxWide       = (high - low) >= 2 * lxVol
+lxParsedHigh = lxWide ? low  : high
+lxParsedLow  = lxWide ? high : low
 
-var array<CpBlock> cpBlocks = array.new<CpBlock>()
-var float obSwHi   = na
-var int   obSwHiB  = na
-var bool  obSwHiX  = true
-var float obSwLo   = na
-var int   obSwLoB  = na
-var bool  obSwLoX  = true
+var array<float> lxHighs = array.new<float>()
+var array<float> lxLows  = array.new<float>()
+lxHighs.push(lxParsedHigh)
+lxLows.push(lxParsedLow)
 
-// A fresh swing re-arms its side: the level has moved, so it has not been
-// broken yet whatever the last one did.
-if cpPivots.size() > 0
-    CpPivot p0 = cpPivots.get(0)
-    if p0.isHigh and p0.bar != obSwHiB
-        obSwHi  := p0.price
-        obSwHiB := p0.bar
-        obSwHiX := false
-    if not p0.isHigh and p0.bar != obSwLoB
-        obSwLo  := p0.price
-        obSwLoB := p0.bar
-        obSwLoX := false
+var LxPivot lxSwingHigh = LxPivot.new(na, na, false)
+var LxPivot lxSwingLow  = LxPivot.new(na, na, false)
+var LxPivot lxIntHigh   = LxPivot.new(na, na, false)
+var LxPivot lxIntLow    = LxPivot.new(na, na, false)
 
-obStore(bool isBull, int fromBar) =>
-    int back = math.min(bar_index - fromBar, 120)
-    if back > 0
-        float best   = na
-        int   bestOff = 0
-        for k = 0 to back
-            float v = isBull ? parsedLow[k] : parsedHigh[k]
-            if na(best) or (isBull ? v < best : v > best)
-                best    := v
-                bestOff := k
-        cpBlocks.unshift(CpBlock.new(top = parsedHigh[bestOff], bot = parsedLow[bestOff],
-             barIdx = bar_index - bestOff, isBull = isBull))
-        while cpBlocks.size() > 100
-            CpBlock old = cpBlocks.pop()
-            box.delete(old.bx)
+var array<CpBlock> lxSwingOB = array.new<CpBlock>()
+var array<CpBlock> lxIntOB   = array.new<CpBlock>()
+var array<box>     lxSwingBx = array.new<box>()
+var array<box>     lxIntBx   = array.new<box>()
+
+if barstate.isfirst
+    for i = 1 to obLuxSwingN
+        lxSwingBx.push(box.new(na, na, na, na, xloc = xloc.bar_index, extend = extend.right))
+    for i = 1 to obLuxIntN
+        lxIntBx.push(box.new(na, na, na, na, xloc = xloc.bar_index, extend = extend.right))
+
+// A bar is the start of a new leg when it is the extreme of the window that
+// follows it. `leg` flips between the two states and the flip is the pivot.
+lxLeg(int size) =>
+    var int lg = 0
+    bool newHigh = high[size] > ta.highest(size)
+    bool newLow  = low[size]  < ta.lowest(size)
+    if newHigh
+        lg := 0
+    else if newLow
+        lg := 1
+    lg
+
+lxTakeStructure(int size, bool internal) =>
+    int  lg    = lxLeg(size)
+    bool fresh = ta.change(lg) != 0
+    bool isLow = ta.change(lg) == +1
+    if fresh
+        LxPivot p = isLow ? (internal ? lxIntLow : lxSwingLow) : (internal ? lxIntHigh : lxSwingHigh)
+        p.lastLevel    := p.currentLevel
+        p.currentLevel := isLow ? low[size] : high[size]
+        p.crossed      := false
+        p.barIndex     := bar_index[size]
     true
 
-if obLuxOn and barstate.isconfirmed
-    if not na(obSwHi) and not obSwHiX and close > obSwHi
-        obSwHiX := true
-        obStore(true, obSwHiB)
-    if not na(obSwLo) and not obSwLoX and close < obSwLo
-        obSwLoX := true
-        obStore(false, obSwLoB)
+// The block: slice the parsed series from the pivot's bar to now and take the
+// argmin for a bullish break, the argmax for a bearish one. That single bar's
+// FULL RANGE is the zone.
+lxStoreOB(LxPivot p, bool internal, bool isBull) =>
+    if not na(p.barIndex) and p.barIndex < bar_index
+        array<float> src = isBull ? lxLows.slice(p.barIndex, bar_index)
+             : lxHighs.slice(p.barIndex, bar_index)
+        int idx = p.barIndex + (isBull ? src.indexof(src.min()) : src.indexof(src.max()))
+        array<CpBlock> blocks = internal ? lxIntOB : lxSwingOB
+        blocks.unshift(CpBlock.new(top = lxHighs.get(idx), bot = lxLows.get(idx),
+             barIdx = idx, isBull = isBull))
+        while blocks.size() > 100
+            blocks.pop()
+    true
 
-    // MITIGATED IS GONE. A block price has traded through is not a level any
-    // more, and leaving it on the chart — and in the filter — is what turns a
-    // zone list into a field of dead bands.
-    float obBearSrc = obLuxMitig == "Close" ? close : high
-    float obBullSrc = obLuxMitig == "Close" ? close : low
-    int bi = cpBlocks.size() - 1
-    while bi >= 0
-        CpBlock ob = cpBlocks.get(bi)
-        if (not ob.isBull and obBearSrc > ob.top) or (ob.isBull and obBullSrc < ob.bot)
-            box.delete(ob.bx)
-            cpBlocks.remove(bi)
-        bi -= 1
+lxRunStructure(bool internal) =>
+    LxPivot ph_ = internal ? lxIntHigh : lxSwingHigh
+    bool extraH = internal ? lxIntHigh.currentLevel != lxSwingHigh.currentLevel : true
+    if ta.crossover(close, ph_.currentLevel) and not ph_.crossed and extraH
+        ph_.crossed := true
+        lxStoreOB(ph_, internal, true)
+    LxPivot pl_ = internal ? lxIntLow : lxSwingLow
+    bool extraL = internal ? lxIntLow.currentLevel != lxSwingLow.currentLevel : true
+    if ta.crossunder(close, pl_.currentLevel) and not pl_.crossed and extraL
+        pl_.crossed := true
+        lxStoreOB(pl_, internal, false)
+    true
 
-    // Draw only the ones on show, and delete the box of anything past the cap
-    // so what is in the array and what is on the chart stay the same set.
-    int shown = math.min(obLuxCount, cpBlocks.size())
-    if cpBlocks.size() > 0
-        for j = 0 to cpBlocks.size() - 1
-            CpBlock ob = cpBlocks.get(j)
-            if j < shown
-                color oc = ob.isBull ? obLuxBull : obLuxBear
-                if na(ob.bx)
-                    ob.bx := box.new(ob.barIdx, ob.top, bar_index, ob.bot,
-                         xloc = xloc.bar_index, border_color = color.new(oc, 60),
-                         border_width = 1, bgcolor = oc)
-                else
-                    box.set_right(ob.bx, bar_index)
-            else if not na(ob.bx)
-                box.delete(ob.bx)
-                ob.bx := na
+lxMitigate(bool internal) =>
+    array<CpBlock> blocks = internal ? lxIntOB : lxSwingOB
+    float bearSrc = obLuxMitig == "Close" ? close : high
+    float bullSrc = obLuxMitig == "Close" ? close : low
+    int i = blocks.size() - 1
+    while i >= 0
+        CpBlock ob = blocks.get(i)
+        if (not ob.isBull and bearSrc > ob.top) or (ob.isBull and bullSrc < ob.bot)
+            blocks.remove(i)
+        i -= 1
+    true
+
+lxDrawOB(bool internal) =>
+    array<CpBlock> blocks = internal ? lxIntOB : lxSwingOB
+    array<box>     boxes  = internal ? lxIntBx : lxSwingBx
+    int shown = math.min(boxes.size(), blocks.size())
+    if boxes.size() > 0
+        for i = 0 to boxes.size() - 1
+            box b = boxes.get(i)
+            if i < shown
+                CpBlock ob = blocks.get(i)
+                color oc = internal ? (ob.isBull ? obLuxIntBull : obLuxIntBear)
+                     : (ob.isBull ? obLuxBull : obLuxBear)
+                b.set_lefttop(ob.barIdx, ob.top)
+                b.set_rightbottom(bar_index, ob.bot)
+                b.set_bgcolor(oc)
+                b.set_border_color(internal ? color(na) : oc)
+            else
+                b.set_bgcolor(color(na))
+                b.set_border_color(color(na))
+    true
+
+// ta.* calls carry state and must run every bar, so the structure walk is
+// unconditional and only the drawing is gated.
+lxTakeStructure(obLuxSwingLen, false)
+lxTakeStructure(5, true)
+lxRunStructure(false)
+lxRunStructure(true)
+lxMitigate(false)
+lxMitigate(true)
+
+if barstate.islastconfirmedhistory or barstate.islast
+    if obLuxOn and obLuxSwingN > 0
+        lxDrawOB(false)
+    if obLuxOn and obLuxIntN > 0
+        lxDrawOB(true)
 
 while cpPivots.size() > 60
     cpPivots.pop()
@@ -1858,7 +1923,10 @@ cpRearm() =>
         float t2 = atr * cpPivTol
         if low > p.price + t2 or high < p.price - t2
             p.armed := true
-    for ob in cpBlocks
+    for ob in lxSwingOB
+        if low > ob.top or high < ob.bot
+            ob.armed := true
+    for ob in lxIntOB
         if low > ob.top or high < ob.bot
             ob.armed := true
     true
@@ -1884,7 +1952,13 @@ cpZoneTake(bool wantBull, float pLo, float pHi) =>
     // — a different candle from the box on screen, which is why a confirmation
     // could report "order block" from a level nothing was drawn at.
     if cpUseOB
-        for ob in cpBlocks
+        for ob in lxSwingOB
+            if zname == "" and ob.armed and ob.isBull == wantBull and pLo <= ob.top and pHi >= ob.bot
+                zname := "swing order block"
+                ztop  := ob.top
+                zbot  := ob.bot
+                ob.armed := false
+        for ob in lxIntOB
             if zname == "" and ob.armed and ob.isBull == wantBull and pLo <= ob.top and pHi >= ob.bot
                 zname := "order block"
                 ztop  := ob.top
