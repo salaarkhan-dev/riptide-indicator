@@ -65,6 +65,7 @@ gAlert = "7. Alerts"
 gStats = "8. Performance stats"
 gAdv   = "9. Advanced tuning"
 gEng   = "10. Engine and debug"
+gCP    = "11. Candle confirmations"
 
 // ── Preset ──────────────────────────────────────────────────────────────────
 // Declared before everything else so TradingView floats it to the top of the
@@ -366,6 +367,42 @@ debugMode            = input.bool(false, "Debug mode", group = gEng,
 debugJoins           = input.bool(true, "Debug: label every swing point", group = gEng,
      tooltip = "With debug mode on, each swing is labelled with the pool it joined or the precise reason it was rejected. This is how you tell 'the swing was never detected' apart from 'it was detected and refused'.")
 
+// ── 11. Candle confirmations ────────────────────────────────────────────────
+// The twelve MMC confirmation patterns, filtered to the places a rejection can
+// mean something: a fair value gap, an order block, or the level a raid just
+// swept. A rejection candle in open space is a candle; the same candle at a
+// zone is a reason.
+//
+// TWELVE, AND THEY ARE FOUR SHAPES IN TWO ARRANGEMENTS.
+//
+//   1CP   one candle. A long wick doing the rejecting, small body. Which wick
+//         decides the direction — LOWER is bullish, UPPER is bearish — and the
+//         body colour only decides the name:
+//
+//           lower wick   green  hammer            red  hanging man
+//           upper wick   green  inverted hammer   red  shooting star
+//
+//   2CP   two candles. Any of those four, then a decisive candle that engulfs
+//         it. Here the SECOND candle decides the direction and the first only
+//         has to be a pin: green engulfing is bullish, red engulfing bearish.
+//         Four shapes x two directions is the other eight.
+cpOn        = input.bool(true, "Mark candle confirmations", group = gCP,
+     tooltip = "The twelve MMC confirmation patterns, drawn only where they land on a fair value gap, an order block, or a freshly swept level.\n\nA 1CP is one candle: a long wick, a small body. The wick that did the rejecting sets the direction and the body colour only sets the name — a hammer and a hanging man are the same bullish shape in different colours, as are the inverted hammer and the shooting star on the bearish side.\n\nA 2CP is that same pin followed by a decisive candle that engulfs it, and there the SECOND candle sets the direction: any pin plus a green engulfing is bullish, any pin plus a red engulfing is bearish.\n\nEntry and stop are read off the pattern the way the reference sheet draws them: entry at the body edge on the trade side, stop beyond the pattern's furthest wick.")
+cpWickRatio = input.float(2.0, "  wick : body", minval = 1.0, maxval = 6.0, step = 0.25, group = gCP,
+     tooltip = "How many times the body the rejecting wick has to be for the candle to count as a pin.\n\n2 is the textbook hammer. 3 is a proper pin and roughly a third as many. Below 2 almost any bar with a wick qualifies.")
+cpBodyRatio = input.float(0.6, "  engulfing body : range", minval = 0.3, maxval = 0.95, step = 0.05, group = gCP,
+     tooltip = "How much of the second candle's range has to be body for it to count as decisive.\n\nWicks are allowed — this is not a strict marubozu — but a bar that is mostly wick has not engulfed anything, it has been rejected itself. It must also cover the pin's body.")
+cpUseFvg    = input.bool(true,  "Fair value gaps",  inline = "cpz", group = gCP)
+cpUseOB     = input.bool(true,  "Order blocks",     inline = "cpz", group = gCP)
+cpUseSweep  = input.bool(true,  "Swept levels",     inline = "cpz2", group = gCP,
+     tooltip = "The three places a rejection is allowed to count.\n\nA swept level is included because it is the one rejection that can happen with no gap and no block anywhere near it — and it is the level with the most liquidity behind it, which is the whole premise of this indicator.")
+cpUseCtx    = input.bool(false, "Context gaps",     inline = "cpz2", group = gCP)
+cpShowLevels = input.bool(true, "Draw entry and stop", group = gCP,
+     tooltip = "Two short lines on the pattern: entry at the body edge on the trade side, stop beyond its furthest wick, exactly as the reference sheet marks them.\n\nOff leaves just the arrow, which still carries both prices on hover.")
+cpDebug     = input.bool(false, "Debug — mark every pattern found", group = gCP,
+     tooltip = "Marks EVERY pattern the detector finds, zone or no zone, as a small grey dot below or above the bar. Hover a confirmed arrow for its name; the dots are only there to answer whether the shape engine is seeing what you are.\n\nUse it when a pattern you can see produced no arrow: a dot with no arrow means the shape was found and no zone was there, and no dot at all means the shape test rejected it — adjust wick : body.")
+
+
 deferred = drawMode == "On MSS confirmation"
 
 // ═════════════════════════════ 2. TYPES ═════════════════════════════════════
@@ -416,6 +453,13 @@ type Cluster
     int    lastFvgBar   = na    // bar the entry gap closed on. The order block
                                 // is the last opposing candle BEFORE it, so
                                 // this is what locates it.
+    // The order block's own candle range, stored when the setup draws it. The
+    // block is derived from a history OFFSET counted back from the bar it was
+    // computed on, so it cannot be re-derived later — by the next bar the same
+    // offset points somewhere else. Kept here so the candle filter can ask
+    // "is this rejection at the block" on any later bar.
+    float  obTop        = na
+    float  obBot        = na
     array<LiqPivot> pivots
     line   liqLine
     line   mssLine
@@ -1313,9 +1357,16 @@ drawSetup(Cluster c) =>
                  xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left,
                  color = color.new(col, 75), textcolor = col, size = size.tiny))
         // The two blocks behind this setup's confluence score.
-        if showOB and not na(c.lastFvgBar)
+        if not na(c.lastFvgBar)
             int obOff = lastOpposingOffset(bar_index - c.lastFvgBar + 1, isLong, 20)
-            drawBlock(g, obOff, isLong, obCol, "Order block")
+            // Recorded whether or not it is DRAWN, because the candle filter
+            // needs the level either way and this is the only bar the offset
+            // still resolves to the right candle.
+            if obOff >= 0
+                c.obTop := high[obOff]
+                c.obBot := low[obOff]
+            if showOB
+                drawBlock(g, obOff, isLong, obCol, "Order block")
         if showBreaker and c.mssConfirmed and c.mssBar > c.grabBar
             drawBlock(g, breakerOffset(c.grabBar, c.mssBar, isLong), isLong,
                  bbCol, "Breaker block")
@@ -1380,6 +1431,123 @@ openTrade(Cluster c) =>
                      str.tostring(m) + "R",
                      xloc = xloc.bar_index, yloc = yloc.price, style = label.style_none,
                      textcolor = color.new(col, 30), size = size.tiny))
+
+// ── candle confirmations: the twelve shapes ─────────────────────────────────
+// Geometry first, names second, and the two are kept apart on purpose. The
+// direction of a pattern is a fact about which wick is long; the NAME is a fact
+// about which wick is long AND what colour the body is. Deriving direction from
+// the name is how a hanging man ends up drawn as a bearish signal.
+cpRng   = high - low
+cpBody  = math.abs(close - open)
+cpUpper = high - math.max(close, open)
+cpLower = math.min(close, open) - low
+cpGreen = close > open
+cpRed   = close < open
+
+// A pin: the rejecting wick dominates the body and the opposite wick does not.
+// The allowance on the opposite side is max(body, 10% of range) rather than the
+// body alone, so a doji-bodied pin — where the body is near zero and the shape
+// is at its purest — is not asked for a mathematically perfect zero wick.
+cpPinLo = cpRng > 0 and cpLower >= cpWickRatio * cpBody and cpUpper <= math.max(cpBody, cpRng * 0.1)
+cpPinUp = cpRng > 0 and cpUpper >= cpWickRatio * cpBody and cpLower <= math.max(cpBody, cpRng * 0.1)
+cpPin   = cpPinLo or cpPinUp
+
+// The engulfing candle of a 2CP. Wicks are allowed — this is not a strict
+// marubozu — but a bar that is mostly wick has not engulfed anything, it has
+// been rejected itself. It must also cover the previous body.
+cpDecisive = cpRng > 0 and cpBody >= cpBodyRatio * cpRng
+             and cpBody >= math.abs(close[1] - open[1])
+             and math.max(close, open) >= math.max(close[1], open[1])
+             and math.min(close, open) <= math.min(close[1], open[1])
+
+// The four names. Body colour picks between the two that share a shape, and a
+// body that closes exactly on its open is neither — which is the purest form of
+// the shape, and has its own pair of names.
+cpShapeName(bool lo, bool up, bool grn, bool red) =>
+    lo ? (grn ? "hammer" : red ? "hanging man" : "dragonfly doji")
+       : up ? (grn ? "inverted hammer" : red ? "shooting star" : "gravestone doji")
+       : ""
+
+// ── the twelve ──────────────────────────────────────────────────────────────
+//   1CP  the long wick decides.  Lower is bullish, upper is bearish.
+//   2CP  the engulfing candle decides.  Any pin, then green is bullish and red
+//        is bearish — so a shooting star followed by a green engulfing is a
+//        BULLISH pattern, which is only strange until you notice that the pin's
+//        job in a 2CP is to mark that price was rejected at all, not which way.
+cp1Bull = cpOn and cpPinLo
+cp1Bear = cpOn and cpPinUp
+cp2Bull = cpOn and cpPin[1] and cpDecisive and cpGreen
+cp2Bear = cpOn and cpPin[1] and cpDecisive and cpRed
+
+cpBull  = cp1Bull or cp2Bull
+cpBear  = cp1Bear or cp2Bear
+
+cpName  = cp2Bull ? cpShapeName(cpPinLo[1], cpPinUp[1], cpGreen[1], cpRed[1]) + " + green engulfing"
+        : cp2Bear ? cpShapeName(cpPinLo[1], cpPinUp[1], cpGreen[1], cpRed[1]) + " + red engulfing"
+        : cpShapeName(cpPinLo, cpPinUp, cpGreen, cpRed)
+cpKind  = (cp2Bull or cp2Bear) ? "2CP" : "1CP"
+
+// ENTRY AND STOP, READ OFF THE PATTERN THE WAY THE SHEET DRAWS THEM. Entry sits
+// at the BODY edge on the trade side — not the wick tip, which is the price the
+// rejection already refused — and the stop sits beyond the pattern's furthest
+// wick. For a 2CP the pattern is both bars, so the stop looks across the pair.
+cpTwo   = cp2Bull or cp2Bear
+cpEntry = cpBull ? math.max(close, open) : math.min(close, open)
+cpStop  = cpBull ? (cpTwo ? math.min(low, low[1]) : low)
+                 : (cpTwo ? math.max(high, high[1]) : high)
+
+// The price span the pattern occupies, which is what has to overlap a zone.
+cpLo = cpTwo ? math.min(low, low[1])   : low
+cpHi = cpTwo ? math.max(high, high[1]) : high
+
+// ── where a rejection is allowed to mean something ──────────────────────────
+// A rejection candle in open space is a candle. The same candle at a gap, a
+// block or a level a raid just took is a reason, and these are the only three
+// places this looks.
+//
+// Returns the zone's name and range, or an empty name when the pattern is not
+// on one. Overlap rather than containment: a pin rejects a zone by reaching
+// INTO it, and demanding the whole candle sit inside would reject every pattern
+// whose wick is longer than the gap it is rejecting — which is most of them.
+cpZoneAt(bool wantBull, float pLo, float pHi) =>
+    string zname = ""
+    float  ztop  = na
+    float  zbot  = na
+
+    if cpUseFvg
+        for f in fvgs
+            if zname == "" and f.isBull == wantBull and pLo <= f.top and pHi >= f.bottom
+                zname := "fair value gap"
+                ztop  := f.top
+                zbot  := f.bottom
+
+    if cpUseCtx and zname == ""
+        for cf in ctxFvgs
+            if zname == "" and cf.isBull == wantBull and pLo <= cf.top and pHi >= cf.bottom
+                zname := "context gap"
+                ztop  := cf.top
+                zbot  := cf.bottom
+
+    // A LOW pool is bullish and a HIGH pool bearish: sweeping a low is a raid on
+    // sell-side liquidity, and the reclaim is up.
+    for c in clusters
+        if zname == "" and not c.expired and (c.isHigh != wantBull)
+            if cpUseOB and not na(c.obTop) and pLo <= c.obTop and pHi >= c.obBot
+                zname := "order block"
+                ztop  := c.obTop
+                zbot  := c.obBot
+            // The swept level itself, from the raid extreme back to the pool.
+            // Only while the raid is live and unconfirmed — once the shift has
+            // fired, the gap and the block are the zones and this one is spent.
+            else if cpUseSweep and c.swept and not c.mssConfirmed and not na(c.grabHigh)
+                float st = c.isHigh ? c.grabHigh : c.level
+                float sb = c.isHigh ? c.level    : c.grabLow
+                if pLo <= st and pHi >= sb
+                    zname := "swept level"
+                    ztop  := st
+                    zbot  := sb
+
+    [zname, ztop, zbot]
 
 // ── period trackers ─────────────────────────────────────────────────────────
 trackerReset(Tracker t) =>
@@ -2153,6 +2321,80 @@ if barstate.islast and showTrendTag and tagOk
              : trendTagSize == "Large" ? size.large
              : trendTagSize == "Huge" ? size.huge : size.normal,
          tooltip    = "Reading " + tagSrc)
+
+// ── candle confirmations: the marks ─────────────────────────────────────────
+// One arrow per confirmed pattern, in the indicator's own two colours, set off
+// the candle by a fraction of ATR so it never sits on the wick it is describing.
+// The two short level lines are the pattern's own entry and stop, drawn the way
+// the reference sheet draws them, and they are the reason to look twice — an
+// arrow says something happened, a level says what to do about it.
+//
+// Everything else lives on the hover. Nothing is written on the chart.
+var array<line>  cpLines  = array.new<line>()
+var array<label> cpLabels = array.new<label>()
+
+// Held so the oldest can be retired deliberately. Labels are capped at 500
+// across the whole script and TradingView drops the oldest silently when the
+// cap is hit — which would take the raid X's and pool lines with it, not the
+// confirmations. Trimming here means this layer pays for itself.
+cpKeep = 60
+cpTrim() =>
+    while cpLabels.size() > cpKeep
+        label.delete(cpLabels.shift())
+    while cpLines.size() > cpKeep * 2
+        line.delete(cpLines.shift())
+
+cpDraw(bool isBull, string nm, string kind, string zname, float ztop, float zbot,
+       float entry, float stop) =>
+    color col = isBull ? bullCol : bearCol
+    float off = atr * 0.45
+    float y   = isBull ? cpLo - off : cpHi + off
+
+    // Risk as a share of price, because a textbook pattern at a zone is still
+    // a bad trade if the stop is a long way off, and that is not visible from
+    // the shape.
+    float rr  = entry > 0 ? 100 * math.abs(entry - stop) / entry : na
+
+    string tip = kind + "  ·  " + nm
+         + "\n" + f2s(close) + "  ·  " + syminfo.ticker + " " + timeframe.period
+         + "\n\nat " + zname + "  " + f2s(zbot) + " – " + f2s(ztop)
+         + "\nentry  " + f2s(entry)
+         + "\nstop   " + f2s(stop) + "  ·  " + str.tostring(rr, "#.##") + "%"
+
+    cpLabels.push(label.new(bar_index, y, "", xloc = xloc.bar_index, yloc = yloc.price,
+         color     = col,
+         style     = isBull ? label.style_triangleup : label.style_triangledown,
+         size      = size.tiny,
+         tooltip   = tip))
+    cpTrim()
+
+    if cpShowLevels
+        // Short and thin. These are levels to read, not zones to fill — drawn
+        // long or solid they would compete with the setup's own entry and stop,
+        // which are the ones the engine actually alerts on.
+        int x1 = bar_index - (cpTwo ? 1 : 0)
+        int x2 = bar_index + 3
+        cpLines.push(line.new(x1, entry, x2, entry, xloc = xloc.bar_index,
+             color = col, style = line.style_solid, width = 1))
+        cpLines.push(line.new(x1, stop, x2, stop, xloc = xloc.bar_index,
+             color = color.new(col, 55), style = line.style_dotted, width = 1))
+
+if cpOn and barstate.isconfirmed and (cpBull or cpBear)
+    [zn, zt, zb] = cpZoneAt(cpBull, cpLo, cpHi)
+    if zn != ""
+        cpDraw(cpBull, cpName, cpKind, zn, zt, zb, cpEntry, cpStop)
+        alert((cpBull ? "Bullish " : "Bearish ") + cpKind + " — " + cpName +
+              " at " + zn + " @ " + f2s(close), alert.freq_once_per_bar_close)
+
+// DEBUG — every pattern the detector finds, zone or no zone. Grey, because a
+// shape standing in open space has no direction: the same upper wick is a
+// rejection at supply and an inverted hammer at demand, and only the zone
+// settles which. plotshape rather than a label so a diagnostic cannot spend the
+// object budget the real marks need.
+plotshape(cpDebug and cpBull ? low  - atr * 0.9 : na, title = "CP found · bullish shape",
+     style = shape.circle, location = location.absolute, color = color.new(color.gray, 45), size = size.tiny)
+plotshape(cpDebug and cpBear ? high + atr * 0.9 : na, title = "CP found · bearish shape",
+     style = shape.circle, location = location.absolute, color = color.new(color.gray, 45), size = size.tiny)
 
 // ── the "Riptide + ICT" comparison layer ────────────────────────────────────
 // Drawn with plotshape rather than labels on purpose: TradingView's 500-object
