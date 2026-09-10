@@ -5645,10 +5645,23 @@ applied uniformly and both views agree on the split that matters.
 | Min30 **early** only | 152 | 7.3 | 34% | **−0.072** | 0.107 | **−11.0** | 17.5 | −0.63 | 10 |
 | Min15 early only | 150 | 7.2 | 39% | +0.055 | 0.108 | +8.3 | 23.9 | 0.35 | 11 |
 
-**The confirmed stream made +24.2 R held out. The early stream lost 16.7 R of
-it back.** Early signals are 88% of everything that reaches the phone and they
-are worth approximately nothing out of sample — Min30 early is outright
-negative on both the per-signal and the per-bet view.
+**The confirmed stream made +24.2 R held out. The early stream, five times the
+traffic, made −2.7 R.** Early signals are 88% of everything that reaches the
+phone and they are worth approximately nothing out of sample — Min30 early is
+outright negative on both the per-signal and the per-bet view.
+
+A first draft of this section said the early stream "lost 16.7 R of it back",
+by subtracting the confirmed total from the all-in total. **That subtraction is
+invalid** and the correction is worth keeping visible: clustering by close
+merges an early and a confirmed alert that share a candle into one averaged
+bet, so the three rows are not disjoint and do not add. Per signal — where the
+rows *are* disjoint — the held-out early stream is **−6.6 R over 515 signals**
+against confirmed's **+17.4 R over 69**. Same conclusion, reached without
+subtracting incomparable things.
+
+The gap between +24.2 (confirmed alone) and +7.5 (everything) is then mostly
+**dilution**: on the closes where both kinds fire, averaging the early alerts
+in drags the confirmed bet's R down.
 
 Taking confirmed only also cuts the worst losing run from **11 to 4**.
 

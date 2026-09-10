@@ -372,23 +372,72 @@ def grade_letter(x, early: bool = False) -> str:
 
 
 def breadth_note(x) -> str | None:
-    """"8 longs on this close" — a fact about the market, not a verdict.
+    """"8 longs on this close — one bet between them" — sizing, not a verdict.
 
     Deliberately a plain count and not a glyph or a grade. Breadth is a SIZING
     input: eight symbols printing the same direction at once are one bet, not
     eight, and that is the fact the portfolio study found was behind 27% of
     confirmed losses. It is worth saying whether or not the mean R differs.
 
-    It does appear to differ — +0.187 R over a lone signal at +2.1 SE held out
-    — but that failed its pre-registration on monotonicity, so the message
-    reports the count and claims nothing about it.
+    IT SAYS "SIZE IT ONCE" AT EVERY COUNT NOW, not only at eight. That used to
+    be reserved for the 8+ bundle because that was where the RETURN measurably
+    stepped up. `priority.py` then measured something different and much more
+    direct: the deployed stream's worst losing run is forty trades inside
+    TWELVE HOURS, twenty-four inside 3.8 hours on the held-out half. A run like
+    that is not two dozen bets going wrong, it is one market move taking out
+    everything open at once — and that happens at two symbols exactly as it
+    does at eight. The correlation is what the count is warning about, so the
+    warning belongs at every count where there is a second symbol at all.
+
+    The 8+ return finding is still real and still unproven — +0.187 R over a
+    lone signal at +2.1 SE held out, failed its pre-registration on
+    monotonicity — so it is named on the line without being claimed.
     """
     n = getattr(x, "breadth", 0)
     if not isinstance(n, int) or n < 2:
         return None
     side = "longs" if x.is_long else "shorts"
-    return (f"<i>🔗 {n} {side} on this close — size them as one bet</i>"
-            if n >= 8 else f"<i>🔗 {n} {side} on this close</i>")
+    extra = " · the 8+ bundle measured stronger, unproven" if n >= 8 else ""
+    return (f"<i>🔗 {n} {side} on this close — one bet between them, "
+            f"size it once{extra}</i>")
+
+
+def priority_note(x, early: bool) -> str | None:
+    """Which of the two streams this alert belongs to, with the number behind it.
+
+    THE ONE THING THE ALERT COULD NOT PREVIOUSLY SAY. Both kinds have always
+    been labelled — ⚡ EARLY and 🎯 CONFIRMED — but the label described the
+    setup's construction, not its worth, and a reader with no reason to prefer
+    one took whichever arrived. Since early signals outnumber confirmed ones
+    roughly five to one, that means almost every trade came from the stream
+    that does not pay.
+
+    Held out, counting same-close alerts as one bet (`priority.py`, 60 symbols,
+    42 days, POI required, grade B+):
+
+        confirmed, both timeframes    59 bets   49% win   +0.411 R  (SE 0.193)
+        early, both timeframes       302 bets   37% win   -0.009 R  (SE 0.076)
+
+    The confirmed stream made +24.2 R over the held-out half. The early
+    stream, five times the traffic, made -2.7 R — it is not a losing bet so
+    much as a free one, and it is the reason a reader taking whatever arrives
+    ends up flat. Taking confirmed only also cut the worst losing run from
+    eleven to four.
+
+    WHAT THE NOTE MUST NOT DO IS OVERSELL THAT. Fifty-nine bets at +0.411 with
+    an SE of 0.193 is roughly two standard errors — suggestive, not settled —
+    and the sample carries an unusually mild drawdown that will get worse. So
+    the line quotes its own n and SE rather than asserting an edge, exactly as
+    the grade line does, and the early note says "not measured to pay" rather
+    than "do not take": the early stream is a heads-up on a level, and it is
+    still the earliest warning the bot has.
+    """
+    if early:
+        return ("<i>⚡ the early stream measures ~0 R held out — a heads-up "
+                "on the level, not a take</i>")
+    return ("<i>★ the confirmed stream is the one that paid held out: "
+            "+0.41 R per bet over 59 bets, SE 0.19 — suggestive, not "
+            "settled</i>")
 
 
 def tl_mark(x) -> str:
@@ -454,9 +503,10 @@ def setup_message(s: Setup) -> str:
             if s.also_early else "")
     why = _grade(s)
     return "\n".join(x for x in (
-        _headline(f"🎯 CONFIRMED{tl_mark(s)}", s.is_long, s.symbol, tf,
+        _headline(f"★ 🎯 CONFIRMED{tl_mark(s)}", s.is_long, s.symbol, tf,
                   grade=grade_chip(s)),
         why,
+        priority_note(s, False),
         tl_note(s),
         breadth_note(s),
         "",
@@ -482,6 +532,7 @@ def early_message(s: Early) -> str:
         _headline(f"⚡ EARLY{tl_mark(s)}", s.is_long, s.symbol,
                   tf_label(s.tf or INTERVAL), grade=grade_chip(s, True)),
         why,
+        priority_note(s, True),
         tl_note(s),
         breadth_note(s),
         "",
