@@ -119,9 +119,10 @@ class Outcome:
     mfe: float                # best excursion in R, from the fill
     mae: float                # worst, from the fill
     exit_bar: int | None
-    # WHY the trade ended: "stop", "target", "timeout", or "" when it never
-    # filled. Trailing with a default so every positional construction in the
-    # existing studies keeps working untouched.
+    # WHY the trade ended: "stop", "target", "timeout", "stale" (the staleness
+    # exit, only when stale_bars is set), or "" when it never filled. Trailing
+    # with a default so every positional construction in the existing studies
+    # keeps working untouched.
     #
     # Added because "win rate" alone cannot answer the question that actually
     # gets asked — how many were stopped, how many timed out, how many never
@@ -137,6 +138,7 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
              be_arm_r: float = 0.0, be_lock_r: float = 0.0,
              part_at_r: float = 0.0, part_to_r: float = 0.0,
              trail: list | None = None,
+             stale_bars: int = 0, stale_r: float = 0.0,
              fee_pct: float | None = None,
              fee_maker: float = FEE_MAKER,
              fee_taker: float = FEE_TAKER) -> Outcome:
@@ -225,6 +227,19 @@ def simulate(cs, signal_bar: int, entry: float, stop: float, is_long: bool, *,
         if be_arm_r and not armed:
             if (c.c >= lvl(be_arm_r)) if is_long else (c.c <= lvl(be_arm_r)):
                 cur_stop, armed = lvl(be_lock_r), True
+
+        # THE STALENESS EXIT. "If the trade has not reached stale_r after
+        # stale_bars bars from the fill, leave at the close." It lives here
+        # rather than in a study's own loop for the reason the docstring gives
+        # about private scorers, and it is inert at the default of 0.
+        #
+        # Measured on the CLOSE, like the break-even arm and for the same
+        # reason: an intrabar poke through stale_r that closes back under it is
+        # not progress, and a bar's high cannot be ordered against its low.
+        if stale_bars and k - fill >= stale_bars and mfe < stale_r:
+            r = banked + size * sgn * (c.c - entry) / risk
+            return Outcome(r - fee_lose * to_r, True, fill, mfe, mae, k,
+                           "stale")
 
     last = min(fill + horizon_bars, len(cs)) - 1
     r = banked + size * sgn * (cs[last].c - entry) / risk
