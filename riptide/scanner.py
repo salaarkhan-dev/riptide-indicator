@@ -16,9 +16,10 @@ from . import telegram as tg
 from . import tracker
 from . import trend
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
-                     EARLY_ALERTS, ENTRY_INTERVAL, FRESH_BARS, INTERVAL,
-                     INTERVALS, LOG_MARKET, MIN_GRADE, MTF_GRACE_BARS,
-                     POI_REQUIRED, POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS,
+                     EARLY_ALERTS, ENTRY_INTERVAL, EVENT_PICK, FRESH_BARS,
+                     INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE,
+                     MTF_GRACE_BARS, POI_REQUIRED, POI_SWEEPS, SCAN_INTERVAL,
+                     SWEEP_ALERTS,
                      SWEEP_FRESH_BARS, SWEEP_INTERVALS, SWEEP_SRC,
                      SWEEP_WATCH_ONLY, TREND_FILTER, TREND_INTERVAL, log)
 from .engine import (Early, Sweep, atr_series, grade_of, run_engine,
@@ -287,6 +288,91 @@ def tag_breadth(results) -> None:
         x.breadth = c[key(x)]
 
 
+def event_rank(x):
+    """Sort key inside one market event. Lower is taken first.
+
+    THE CRITERIA ARE ORDERED BY HOW WELL EACH IS EVIDENCED, not by how much
+    sense each makes.
+
+      1. INSIDE THE RISK BAND FIRST. 1.2%-2.6% stop distance is the only
+         signal-quality measure that has survived anything on this project:
+         +0.214 R/bet against -0.192 beyond 2.6% and -0.051 under 1.2%, with a
+         symbol bootstrap clear of zero in both directions and four quarters of
+         four, replicated independently on Min15. It is also the criterion the
+         event measurement itself used.
+
+      2. CONFIRMED BEFORE EARLY. The confirmed stream runs +0.070 R/bet against
+         early's +0.034 over the same 333 days. A weaker separation than the
+         band and it only ever breaks a tie.
+
+      3. SYMBOL, ALPHABETICALLY. Not a quality claim at all — it is there so
+         the pick is DETERMINISTIC, which matters because a re-scan of the same
+         bar must name the same symbol. research/studies/portfolio_v2.py found
+         that an arbitrary choice already lifts the recovery factor from 1.33
+         to 1.43, so the tiebreak being meaningless does not make it harmful.
+
+    WHAT IS DELIBERATELY NOT IN HERE: last year's per-symbol returns. Ranking
+    symbols on past R does not persist — a leaderboard built on the first half
+    of the window is worth -0.004 R per trade in the second — so using it to
+    pick inside an event would be the overfit this whole rule is meant to
+    avoid. See research/studies/symbols.py.
+    """
+    risk_pct = 100 * x.risk / x.entry if x.entry else 0.0
+    return (0 if tg.RISK_TIGHT <= risk_pct <= tg.RISK_WIDE else 1,
+            1 if isinstance(x, Early) else 0,
+            x.symbol)
+
+
+def tag_event_pick(results) -> None:
+    """Name ONE signal per market event, and mark the rest as its siblings.
+
+    A simultaneous cluster of raids across sixty perpetuals is one market
+    event, not sixty opportunities, and `tag_breadth` above already says so
+    with its "size once" chip. What it never said is WHICH one to take.
+
+    Measured on 4263 filled trades in 2445 same-bar same-direction events
+    (research/studies/portfolio_v2.py), scoring the whole year each way:
+
+        take every trade          +180.7 R   drawdown 135.9   recovery 1.33
+        spread 1 unit over event   +89.6 R   drawdown  65.8   recovery 1.36
+        one arbitrary symbol       +98.7 R   drawdown  69.2   recovery 1.43
+        one chosen by risk band   +112.7 R   drawdown  61.4   recovery 1.84
+
+    READ THE RECOVERY COLUMN, NOT THE DRAWDOWN. Any rule that simply trades
+    smaller shrinks return and drawdown together and is worth nothing — capping
+    risk per event does exactly that, 1.14 to 1.13, and is not this. Picking
+    one moves the ratio, and it halves time under water from 60% of the series
+    to 32%.
+
+    TOTAL R FALLS AND THAT IS NOT THE OBJECTION IT LOOKS LIKE. +112.7 against
+    +180.7 would matter on an account that could hold twenty positions at once.
+    The deployed one cannot: at 1% risk a 300 USDT account capped at five open
+    positions already skipped 1441 signals for margin, and at ten open it
+    returned -39% with an 88% drawdown. The choice is not "six trades or one",
+    it is "which three of the six", and this names the first one.
+
+    IT SUPPRESSES NOTHING. Every alert still sends in full, with its own entry,
+    stop and targets. The rule is a label on a message, not a gate, because the
+    evidence for the band-based ordering is strong enough to print and not
+    strong enough to silence a signal with.
+    """
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for setups, _, early, _ in results:
+        for x in list(setups) + list(early):
+            step = BAR_SECONDS[getattr(x, "tf", "") or INTERVAL]
+            t = (getattr(x, "fvg_time", 0) or getattr(x, "mss_time", 0)
+                 or getattr(x, "sweep_time", 0))
+            groups[(getattr(x, "tf", ""), t - (t % step), x.is_long)].append(x)
+
+    for members in groups.values():
+        best = min(members, key=event_rank)
+        for x in members:
+            x.event_size = len(members)
+            x.event_pick = x is best
+            x.event_of = best.symbol
+
+
 def _same_trade(e: Early, s) -> bool:
     """Whether an Early and a Setup are the identical trade, not merely the
     same idea. Both are computed by the same formulas from the same candles,
@@ -436,6 +522,15 @@ async def cycle(sess, db, symbols):
         tag_breadth(results)
     except Exception as e:
         log.warning("breadth tagging failed: %s", e)
+
+    # Which one of a cluster to take. Same cross-symbol reasoning as breadth,
+    # and separately wrapped so a failure to rank an event cannot also cost the
+    # "size once" chip that comes from the call above.
+    if EVENT_PICK:
+        try:
+            tag_event_pick(results)
+        except Exception as e:
+            log.warning("event pick tagging failed: %s", e)
 
     # How much of the reader's own book already sits on this side. Breadth is
     # what the MARKET is doing this bar; this is what THEY are holding across

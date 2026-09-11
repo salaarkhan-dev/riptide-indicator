@@ -270,6 +270,12 @@ EARLY_ALERTS = os.getenv("RIPTIDE_EARLY_ALERTS", "1") == "1"
 
 # Heads-up alerts on the liquidity grab itself, ahead of the structure shift.
 SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
+
+# Name one signal per market event and mark the rest as its siblings. A label,
+# never a gate — every alert still sends in full. See scanner.tag_event_pick
+# for the measurement (recovery factor 1.33 taking everything, 1.84 taking the
+# one whose stop sits in the risk band) and riptide/telegram.py for the chip.
+EVENT_PICK = os.getenv("RIPTIDE_EVENT_PICK", "1") == "1"
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
 # closed is already one full step old, and the scan wakes another 10s after
 # that. A window of 1 * step can never contain the sweep that just confirmed,

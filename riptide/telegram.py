@@ -459,6 +459,12 @@ def grade_letter(x, early: bool = False) -> str:
     return grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[0]
 
 
+def _short(symbol: str) -> str:
+    """APT_USDT -> APT. The quote is the same on all sixty and costs five
+    characters on a line that has to fit a phone."""
+    return symbol.split("_")[0] if symbol else "?"
+
+
 def marks(x) -> str | None:
     """The one meta line under the grade: compact chips, no prose.
 
@@ -488,6 +494,15 @@ def marks(x) -> str | None:
     n = getattr(x, "breadth", 0)
     if isinstance(n, int) and n >= 2:
         bits.append(f"🔗 {n} on this close, size once")
+        # WHICH ONE OF THE CLUSTER. "Size once" told the reader a bundle is one
+        # bet and then left them to guess which expression of it to take.
+        # Scored over 2445 events, taking one rather than all of them lifts the
+        # recovery factor from 1.33 to 1.84 and halves time under water; see
+        # scanner.tag_event_pick. Only ever a label — the alert still sends.
+        size = getattr(x, "event_size", 0)
+        if isinstance(size, int) and size >= 2:
+            bits.append("🎯 the pick" if getattr(x, "event_pick", False)
+                        else f"pick is {_short(getattr(x, 'event_of', '') or '?')}")
     # The reader's OWN book, not the market's. 🔗 counts what is printing this
     # bar; ⚖ counts what they are still holding on this side from every bar
     # before it. A cluster that hurts usually spans several closes, so the two
