@@ -1,0 +1,5 @@
+MIN15 CONFIRMED — 791 filled trades, 60 symbols
+
+  under 1.2%   436 tr  383 bets  33% win  -0.021+/-0.071  boot [-0.111, +0.051]       -25.6 R   quarters  +0.11  -0.09  +0.10  -0.23
+  1.2-2.6%     291 tr  256 bets  41% win  +0.129+/-0.088  boot [+0.028, +0.238]  OK   +47.2 R   quarters  +0.07  +0.27  -0.02  +0.21
+  over 2.6%     64 tr   63 bets  31% win  -0.154+/-0.162  boot [-0.462, +0.058]        -9.2 R   quarters  -0.47  +0.10  -0.41  +0.24

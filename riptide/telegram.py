@@ -374,12 +374,32 @@ def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
 RISK_TIGHT = 1.2
 RISK_WIDE = 2.6
 
-# THE BAND WAS MEASURED ON Min30 AND THE BOT ALSO ALERTS ON Min15. Printing a
-# Min30 verdict on a Min15 alert would be quietly asserting that the number
-# transfers, which is the kind of assumption this project keeps finding to be
-# wrong. So the verdict is gated on the timeframe it was actually measured on
-# and every other timeframe gets silence until it has its own measurement.
-RISK_MEASURED_ON = {"Min30"}
+# THE BAND WAS MEASURED ON Min30 AND THE BOT ALSO ALERTS ON Min15, so Min15 was
+# measured too rather than assumed. 791 confirmed Min15 setups over the same 333
+# days. It replicates, but NOT EVENLY, and the uneven part is worth stating:
+#
+#   1.2-2.6%    +0.129 R/bet, 41% win, resampling [+0.028, +0.238], entirely
+#               above zero, positive in 3 quarters of 4 and flat in the fourth.
+#               An independent timeframe agreeing is the strongest thing said
+#               about this band anywhere in the project.
+#
+#   under 1.2%  -0.021 R/bet, resampling [-0.111, +0.051], straddling zero,
+#               quarters alternating. Same answer as Min30: "flat".
+#
+#   over 2.6%   -0.154 R/bet, resampling [-0.462, +0.058] — STRADDLES ZERO.
+#
+# THE WIDE ARM ON Min15 IS UNDERPOWERED, NOT CONTRADICTORY, and the difference
+# matters. 63 bets at a standard error of 0.162: if Min30's -0.192 were exactly
+# true here it would score |z| 1.2 and still fail to clear. The point estimate
+# agrees in sign and is within a quarter of an R of Min30's. So "skip" on Min15
+# is CARRIED OVER from Min30 on the strength of the mechanism and the matching
+# sign — it is not independently evidenced on this timeframe, and that judgment
+# is recorded here rather than buried. A gap of 15m alerts with a 3% stop and no
+# warning at all looked like the worse failure, since the label suppresses
+# nothing and the reader decides.
+#
+# Everything else stays silent until it has its own measurement.
+RISK_MEASURED_ON = {"Min30", "Min15"}
 
 
 def risk_verdict(riskpct: float, interval: str | None = None) -> str:

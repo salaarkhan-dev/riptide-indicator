@@ -55,22 +55,29 @@ check(risk_verdict(RISK_TIGHT, "Min30") == "take",
 check(risk_verdict(RISK_WIDE, "Min30") == "take",
       f"exactly {RISK_WIDE}% is inside the band, not skipped")
 
+print("\nMin15 was measured too, so it speaks")
+for pct, want in ((0.90, "flat"), (2.34, "take"), (3.12, "skip")):
+    check(risk_verdict(pct, "Min15") == want,
+          f"Min15 {pct:>4.2f}% -> {want!r}")
+
 print("\nno verdict on a timeframe the band was never measured on")
-for tf in ("Min15", "Min5", "Hour1", "Hour4"):
+for tf in ("Min5", "Min1", "Hour1", "Hour4", "Day1"):
     check(risk_verdict(2.34, tf) == "",
-          f"{tf} stays silent rather than borrowing the 30m number")
+          f"{tf} stays silent rather than borrowing a measured number")
 check(risk_verdict(2.34) == "",
       "a caller that passes no timeframe gets nothing, so a new call site "
       "cannot acquire a verdict by accident")
-check(risk_verdict(9.0, "Min15") == "",
+check(risk_verdict(9.0, "Hour4") == "",
       "even 'skip' is withheld off-timeframe — the gate is not one-sided")
 
 print("\nthe rendered alert")
 check("2.34% risk · take" in plain(setup_message(setup(2.34)), "Stop"),
       "a 30m confirmed setup inside the band prints the verdict")
-check(plain(setup_message(setup(2.34, "Min15")), "Stop").strip()
+check("2.34% risk · take" in plain(setup_message(setup(2.34, "Min15")), "Stop"),
+      "a 15m confirmed setup prints it too — 15m was measured, not assumed")
+check(plain(setup_message(setup(2.34, "Hour4")), "Stop").strip()
       == "Stop   0.9766  2.34% risk",
-      "the same setup on 15m prints the risk and no verdict")
+      "an unmeasured timeframe prints the risk and no verdict")
 check("· skip" in plain(setup_message(setup(3.12)), "Stop"),
       "a wide stop still prints skip")
 check("· flat" in plain(setup_message(setup(0.90)), "Stop"),
