@@ -1,0 +1,224 @@
+THE FULL CROSS: TIMEFRAME x STREAM x RISK BAND x POI
+59 symbols, 333 days, identical set on every row, no POI filter applied.
+band boundaries 1.2/2.6 are survivor.py's, fitted on Min30 confirmed and NOT
+refitted. the live POI is Hour8; 'daily' is the alternative, not the status quo.
+  15m  17104 filled trades, 8022 bets, sd 1.30, cell-vs-cell MDE at 200 bets 0.364
+  30m   9198 filled trades, 4097 bets, sd 1.31, cell-vs-cell MDE at 200 bets 0.366
+  1h    4723 filled trades, 2037 bets, sd 1.31, cell-vs-cell MDE at 200 bets 0.366
+
+== THE MONEY TABLE =========================================================
+  tf   stream     zone     bets       NET R/bet   GROSS   total  maxDD  recov
+  15m  confirmed  tight     971  +0.058±0.045  +0.099    +5.9   52.6   0.11
+  15m  confirmed  band      658  +0.064±0.054  +0.081   +62.5   33.7   1.85
+  15m  confirmed  wide      161  -0.063±0.104  -0.055   -19.4   34.1  -0.57
+  15m  confirmed  ALL      1684  +0.057±0.034  +0.086   +49.0   77.7   0.63
+  15m  early      tight    5374  +0.032±0.018  +0.079  +108.9  251.6   0.43
+  15m  early      band     2747  +0.034±0.025  +0.051   +47.1  153.9   0.31
+  15m  early      wide      774  +0.044±0.046  +0.052   +41.9   38.2   1.10
+  15m  early      ALL      7567  +0.030±0.015  +0.067  +197.9  272.6   0.73
+  15m  both       tight    5633  +0.038±0.018  +0.085  +114.8  286.9   0.40
+  15m  both       band     2996  +0.047±0.024  +0.065  +109.6  177.4   0.62
+  15m  both       wide      856  +0.031±0.044  +0.039   +22.5   49.0   0.46
+  15m  both       ALL      8022  +0.036±0.015  +0.072  +246.9  321.3   0.77
+
+  30m  confirmed  tight     317  +0.037±0.079  +0.073    +0.9   40.2   0.02
+  30m  confirmed  band      462  +0.167±0.065  +0.184   +96.6   29.9   3.24
+  30m  confirmed  wide      228  -0.084±0.085  -0.076    -3.7   31.8  -0.12
+  30m  confirmed  ALL       909  +0.071±0.045  +0.092   +93.8   55.1   1.70
+  30m  early      tight    2051  +0.078±0.030  +0.117  +177.8  116.3   1.53
+  30m  early      band     1909  +0.095±0.031  +0.111  +166.3  109.6   1.52
+  30m  early      wide      862  +0.071±0.044  +0.079   +59.4   55.3   1.08
+  30m  early      ALL      3865  +0.094±0.021  +0.119  +403.6  189.1   2.13
+  30m  both       tight    2123  +0.082±0.030  +0.120  +178.7  150.6   1.19
+  30m  both       band     2071  +0.092±0.030  +0.109  +262.9  106.3   2.47
+  30m  both       wide      971  +0.036±0.041  +0.044   +55.8   72.2   0.77
+  30m  both       ALL      4097  +0.089±0.020  +0.114  +497.4  222.3   2.24
+
+  1h   confirmed  tight     101  +0.018±0.139  +0.050    +4.0    8.5   0.48
+  1h   confirmed  band      268  +0.235±0.085  +0.250   +78.0   19.0   4.10
+  1h   confirmed  wide      257  +0.006±0.084  +0.013    +2.1   42.8   0.05
+  1h   confirmed  ALL       549  +0.122±0.058  +0.136   +84.2   36.1   2.33
+  1h   early      tight     601  +0.164±0.057  +0.196  +139.1   39.8   3.49
+  1h   early      band     1059  +0.180±0.042  +0.196  +202.1   53.9   3.75
+  1h   early      wide      794  +0.000±0.046  +0.008   -52.9  101.2  -0.52
+  1h   early      ALL      1925  +0.121±0.030  +0.138  +288.3  125.6   2.30
+  1h   both       tight     619  +0.153±0.056  +0.185  +143.2   41.9   3.42
+  1h   both       band     1130  +0.188±0.041  +0.203  +280.1   55.3   5.07
+  1h   both       wide      875  -0.005±0.044  +0.003   -50.7  141.9  -0.36
+  1h   both       ALL      2037  +0.125±0.029  +0.141  +372.5  150.0   2.48
+
+== THE SHAPE TABLE =========================================================
+  tf   stream     zone    trades   /day    win     RR    ±BE
+  15m  confirmed  tight     1168    7.1    36%   1.80   +0.2
+  15m  confirmed  band       782    4.8    38%   1.84   +2.8
+  15m  confirmed  wide       179    1.1    33%   1.70   -4.1
+  15m  confirmed  ALL       2129   13.0    36%   1.81   +0.8
+  15m  early      tight     9807   59.9    36%   1.82   +0.4
+  15m  early      band      4297   26.2    37%   1.75   +0.4
+  15m  early      wide       871    5.3    39%   1.66   +1.9
+  15m  early      ALL      14975   91.5    36%   1.79   +0.5
+  15m  both       tight    10975   67.0    36%   1.82   +0.4
+  15m  both       band      5079   31.0    37%   1.76   +0.8
+  15m  both       wide      1050    6.4    38%   1.66   +0.8
+  15m  both       ALL      17104  104.5    36%   1.79   +0.5
+
+  30m  confirmed  tight      380    2.3    35%   1.84   +0.1
+  30m  confirmed  band       626    3.8    41%   1.84   +5.4
+  30m  confirmed  wide       261    1.6    35%   1.79   -0.5
+  30m  confirmed  ALL       1267    7.7    38%   1.83   +2.6
+  30m  early      tight     3490   21.3    37%   1.87   +1.7
+  30m  early      band      3327   20.3    37%   1.82   +1.8
+  30m  early      wide      1114    6.8    40%   1.62   +2.2
+  30m  early      ALL       7931   48.4    37%   1.81   +1.8
+  30m  both       tight     3870   23.6    36%   1.86   +1.6
+  30m  both       band      3953   24.1    38%   1.82   +2.4
+  30m  both       wide      1375    8.4    39%   1.65   +1.6
+  30m  both       ALL       9198   56.2    37%   1.81   +1.9
+
+  1h   confirmed  tight      112    0.7    36%   1.90   +1.2
+  1h   confirmed  band       361    2.2    42%   1.89   +7.5
+  1h   confirmed  wide       322    2.0    36%   1.79   +0.2
+  1h   confirmed  ALL        795    4.9    39%   1.85   +3.7
+  1h   early      tight      897    5.5    40%   1.91   +5.2
+  1h   early      band      1854   11.3    38%   1.90   +3.7
+  1h   early      wide      1177    7.2    35%   1.70   -1.7
+  1h   early      ALL       3928   24.0    38%   1.85   +2.6
+  1h   both       tight     1009    6.2    39%   1.91   +4.7
+  1h   both       band      2215   13.5    39%   1.90   +4.3
+  1h   both       wide      1499    9.2    35%   1.72   -1.3
+  1h   both       ALL       4723   28.8    38%   1.85   +2.8
+
+== DOES IT REPLICATE ACROSS RESOLUTIONS ====================================
+  the same two-arm question asked six times. sign stability is the
+  evidence; significance on any one row is not, see rules 1 and 5.
+
+  THE RISK BAND: in band vs outside it   [pre-registered]
+      15m  confirmed                           +0.064 vs  +0.037  diff +0.026  |z|  0.4  MDE 0.213
+      30m  confirmed                           +0.167 vs  -0.016  diff +0.184  |z|  2.1  MDE 0.253  SEPARATES
+      1h   confirmed                           +0.235 vs  +0.009  diff +0.226  |z|  2.0  MDE 0.332  SEPARATES
+      15m  early                               +0.034 vs  +0.031  diff +0.002  |z|  0.1  MDE 0.100
+      30m  early                               +0.095 vs  +0.075  diff +0.020  |z|  0.5  MDE 0.121
+      1h   early                               +0.180 vs  +0.072  diff +0.108  |z|  1.9  MDE 0.164
+    -> 6/6 positive, 2 clear 2 SE. median diff +0.067
+
+  THE LIVE POI: in an 8h zone vs not in one   [pre-registered]
+      15m  confirmed                           +0.017 vs  +0.072  diff -0.055  |z|  0.8  MDE 0.209
+      30m  confirmed                           +0.066 vs  +0.060  diff +0.006  |z|  0.1  MDE 0.244
+      1h   confirmed                           +0.106 vs  +0.100  diff +0.006  |z|  0.1  MDE 0.309
+      15m  early                               +0.011 vs  +0.045  diff -0.034  |z|  1.2  MDE 0.083
+      30m  early                               +0.032 vs  +0.117  diff -0.085  |z|  2.2  MDE 0.111  SEPARATES
+      1h   early                               +0.088 vs  +0.126  diff -0.038  |z|  0.7  MDE 0.156
+    -> 2/6 positive, 1 clear 2 SE. median diff -0.036
+
+  THE ALTERNATIVE POI: in a daily zone vs not   [pre-registered]
+      15m  confirmed                           -0.010 vs  +0.055  diff -0.065  |z|  0.9  MDE 0.256
+      30m  confirmed                           +0.174 vs  +0.014  diff +0.160  |z|  1.6  MDE 0.324
+      1h   confirmed                           +0.132 vs  +0.086  diff +0.046  |z|  0.4  MDE 0.363
+      15m  early                               +0.004 vs  +0.032  diff -0.028  |z|  0.9  MDE 0.096
+      30m  early                               +0.047 vs  +0.105  diff -0.058  |z|  1.4  MDE 0.129
+      1h   early                               +0.079 vs  +0.129  diff -0.051  |z|  0.9  MDE 0.178
+    -> 2/6 positive, 0 clear 2 SE. median diff -0.040
+
+  BOTH CONTEXTS vs NEITHER   [descriptive]
+      15m  confirmed                           -0.054 vs  +0.068  diff -0.122  |z|  1.3  MDE 0.331
+      30m  confirmed                           +0.193 vs  +0.040  diff +0.153  |z|  1.3  MDE 0.398
+      1h   confirmed                           +0.054 vs  +0.045  diff +0.009  |z|  0.1  MDE 0.459
+      15m  early                               -0.009 vs  +0.052  diff -0.061  |z|  1.6  MDE 0.124
+      30m  early                               +0.002 vs  +0.116  diff -0.114  |z|  2.3  MDE 0.160  SEPARATES
+      1h   early                               +0.022 vs  +0.113  diff -0.091  |z|  1.3  MDE 0.218
+    -> 2/6 positive, 1 clear 2 SE. median diff -0.076
+
+  INSIDE THE BAND ONLY: 8h zone vs not   [descriptive]
+      15m  confirmed                           +0.115 vs  +0.036  diff +0.079  |z|  0.7  MDE 0.337
+      30m  confirmed                           +0.212 vs  +0.095  diff +0.116  |z|  0.9  MDE 0.353
+      1h   confirmed                           +0.244 vs  +0.166  diff +0.078  |z|  0.5  MDE 0.463
+      15m  early                               +0.008 vs  +0.041  diff -0.033  |z|  0.7  MDE 0.139
+      30m  early                               +0.055 vs  +0.114  diff -0.059  |z|  1.0  MDE 0.166
+      1h   early                               +0.141 vs  +0.188  diff -0.047  |z|  0.6  MDE 0.222
+    -> 3/6 positive, 0 clear 2 SE. median diff +0.023
+
+== CONFIRMED AGAINST EARLY, PER TIMEFRAME   [pre-registered] ===============
+      15m  all signals                         +0.057 vs  +0.030  diff +0.027  |z|  0.7  MDE 0.127
+      30m  all signals                         +0.071 vs  +0.094  diff -0.022  |z|  0.4  MDE 0.173
+      1h   all signals                         +0.122 vs  +0.121  diff +0.000  |z|  0.0  MDE 0.224
+      15m  inside the band                     +0.064 vs  +0.034  diff +0.030  |z|  0.5  MDE 0.204
+      30m  inside the band                     +0.167 vs  +0.095  diff +0.073  |z|  1.0  MDE 0.250
+      1h   inside the band                     +0.235 vs  +0.180  diff +0.055  |z|  0.6  MDE 0.332
+
+== WHO WINS, CELL BY CELL   [descriptive, rule 2] =========================
+  the best timeframe in each cell, and whether it beats the worst
+  by more than the MDE. it almost never does.
+  stream     zone         15m      30m       1h   best  spread    MDE
+  confirmed  tight     +0.058   +0.037   +0.018    15m   0.040  0.550
+  confirmed  band      +0.064   +0.167   +0.235     1h   0.171  0.336
+  confirmed  wide      -0.063   -0.084   +0.006     1h   0.090  0.410
+  confirmed  ALL       +0.057   +0.071   +0.122     1h   0.065  0.231
+  early      tight     +0.032   +0.078   +0.164     1h   0.132  0.220
+  early      band      +0.034   +0.095   +0.180     1h   0.146  0.163
+  early      wide      +0.044   +0.071   +0.000    30m   0.071  0.184
+  early      ALL       +0.030   +0.094   +0.121     1h   0.091  0.118
+  both       tight     +0.038   +0.082   +0.153     1h   0.115  0.217
+  both       band      +0.047   +0.092   +0.188     1h   0.140  0.158
+  both       wide      +0.031   +0.036   -0.005    30m   0.041  0.174
+  both       ALL       +0.036   +0.089   +0.125     1h   0.088  0.115
+
+== THE POLICY TABLE, PER TIMEFRAME =========================================
+  300 USDT at 1% risk, at most 10 open. /day per 120 symbols.
+  acct is a RANKING, never a forecast — see rule 4.
+
+  * IS NOT A POLICY YOU CAN SELECT. Grades here hold poi=True so
+  the A/B floor is constant across arms. Production grades on the
+  REAL poi and the table is asymmetric: a CONFIRMED signal with no
+  zone falls A->B and still sends, an EARLY one falls B->C and is
+  muted at MIN_GRADE=B. So POI_REQUIRED=0 does not release the
+  starred row — it releases the confirmed-with-no-zone signals and
+  nothing else. That achievable stream is the 'regraded' row, and
+  it is the one to compare against 'POI on'.
+
+  policy                      /day           R/bet   total  maxDD  recov   win    RR     acct accDD
+  15m  everything*           104.5  +0.036±0.015  +246.9  321.3   0.77   36%  1.79     +20%   86%
+  15m  POI off, regraded      52.2  +0.031±0.019   +34.3  231.4   0.15   36%  1.80     -68%   90%
+  15m  POI on (live)          44.1  +0.018±0.020    -7.3  214.8  -0.03   36%  1.80     -77%   93%
+  15m  band only*             31.0  +0.047±0.024  +109.6  177.4   0.62   37%  1.76     +51%   77%
+  15m  band, POI off regr.    16.5  +0.028±0.031   +70.6   99.0   0.71   37%  1.79     +13%   65%
+  15m  band + POI on          13.6  +0.028±0.034   +54.7   80.7   0.68   37%  1.77     +14%   57%
+  15m  band, confirmed         4.8  +0.064±0.054   +62.5   33.7   1.85   38%  1.84     +61%   30%
+
+  30m  everything*            56.2  +0.089±0.020  +497.4  222.3   2.24   37%  1.81    +308%   78%
+  30m  POI off, regraded      30.4  +0.040±0.025  +208.3  159.3   1.31   37%  1.82      +5%   87%
+  30m  POI on (live)          26.4  +0.030±0.027  +147.2  133.4   1.10   37%  1.82     -44%   86%
+  30m  band only*             24.1  +0.092±0.030  +262.9  106.3   2.47   38%  1.82    +405%   57%
+  30m  band, POI off regr.    13.1  +0.071±0.037  +146.6   73.8   1.99   38%  1.83     +88%   48%
+  30m  band + POI on          11.2  +0.058±0.040  +113.4   64.8   1.75   38%  1.82     +68%   47%
+  30m  band, confirmed         3.8  +0.167±0.065   +96.6   29.9   3.24   41%  1.84    +123%   27%
+
+  1h  everything*             28.8  +0.125±0.029  +372.5  150.0   2.48   38%  1.85    +204%   55%
+  1h  POI off, regraded       16.9  +0.092±0.035  +197.2   96.4   2.05   38%  1.85     +79%   53%
+  1h  POI on (live)           14.6  +0.088±0.037  +158.1   91.2   1.73   37%  1.85    +140%   52%
+  1h  band only*              13.5  +0.188±0.041  +280.1   55.3   5.07   39%  1.90    +446%   42%
+  1h  band, POI off regr.      8.0  +0.167±0.050  +130.6   39.6   3.30   38%  1.90    +132%   31%
+  1h  band + POI on            6.9  +0.159±0.053   +98.5   40.4   2.44   37%  1.91     +99%   32%
+  1h  band, confirmed          2.2  +0.235±0.085   +78.0   19.0   4.10   42%  1.89    +103%   18%
+
+== THE COMBINED STREAM =====================================================
+  what the bot would actually send with all three timeframes on.
+  CLUSTERING ACROSS TIMEFRAMES IS REAL and the raw timestamps do
+  not capture it — a 15m signal at 10:15 and the 1h signal at
+  10:00 containing it are one raid with two times. Bets below are
+  therefore keyed on the floored HOUR, so a duplicate counts once
+  and the standard errors do not borrow independence that is not
+  there. Rows marked * are not selectable; see the note above.
+
+  policy                      /day           R/bet   total  maxDD  recov   win    RR     acct accDD
+  15m+30m+1h everything*     189.5  +0.076±0.014 +1116.8  559.0   2.00   37%  1.81     +59%   92%
+  15m+30m+1h POI off regr.    99.6  +0.055±0.017  +439.9  418.2   1.05   36%  1.81     -88%   96%
+  15m+30m+1h POI on (LIVE)    85.1  +0.039±0.018  +298.0  373.5   0.80   36%  1.81     -88%   97%
+  15m+30m+1h band only*       68.7  +0.104±0.020  +652.6  245.4   2.66   38%  1.81    +925%   78%
+  15m+30m+1h band POI off     37.6  +0.070±0.024  +347.8  163.5   2.13   37%  1.83     +83%   71%
+  15m+30m+1h band + POI       31.7  +0.062±0.026  +266.5  139.9   1.90   37%  1.82    +158%   69%
+  15m+30m+1h band, confd      10.8  +0.137±0.040  +237.1   44.2   5.37   40%  1.85    +420%   33%
+
+  30m+1h band, POI off        21.1  +0.110±0.032  +277.2  102.4   2.71   38%  1.86    +301%   59%
+  30m+1h band + POI on        18.1  +0.098±0.034  +211.8   92.2   2.30   38%  1.86    +261%   59%
+  1h band + POI on             6.9  +0.159±0.053   +98.5   40.4   2.44   37%  1.91     +99%   32%
+  1h band, confirmed           2.2  +0.235±0.085   +78.0   19.0   4.10   42%  1.89    +103%   18%

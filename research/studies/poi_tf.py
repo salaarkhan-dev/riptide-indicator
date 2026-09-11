@@ -227,8 +227,8 @@ SHIP = {
 
 
 class T:
-    __slots__ = ("sym", "t", "r", "filled", "fill_t", "exit_t", "risk_pct",
-                 "kind", "day", "h8", "h8long")
+    __slots__ = ("sym", "t", "r", "gross", "tf", "filled", "fill_t",
+                 "exit_t", "risk_pct", "kind", "day", "h8", "h8long")
 
 
 def zone_hit(zones, when, price, is_long, step, max_age_bars):
@@ -262,7 +262,15 @@ async def context(sess, symbols, interval):
     return out
 
 
-async def collect(sess, candles, zday, z8h):
+async def collect(sess, candles, zday, z8h, interval=INTERVAL):
+    """One pool of A/B signals with every POI applied as a LABEL, not a filter.
+
+    `interval` is a parameter rather than the module constant so that
+    matrix.py can run the identical pipeline on Min15 and Min30 — one code
+    path, three timeframes, which is the same argument the frozen-control test
+    makes about research never forking the engine.
+    """
+    bar = BAR_SECONDS[interval]
     rows = []
     for sym, cs in candles.items():
         early = []
@@ -288,15 +296,21 @@ async def collect(sess, candles, zday, z8h):
                     continue
                 o = simulate(cs, i, x.entry, x.stop, x.is_long,
                              target_r=TRACK_TARGET_R)
+                # The same trade with the fee switched off. Fee in R is
+                # fee_pct / risk_pct, and risk_pct doubles from Min15 to
+                # Min60, so any gradient across timeframes could be nothing
+                # but cost. This is how to tell.
+                g = simulate(cs, i, x.entry, x.stop, x.is_long,
+                             target_r=TRACK_TARGET_R, fee_pct=0.0)
                 z = T()
-                z.sym, z.t, z.kind = sym, w, kind
-                z.r, z.filled = o.r, o.filled
+                z.sym, z.t, z.kind, z.tf = sym, w, kind, interval
+                z.r, z.filled, z.gross = o.r, o.filled, g.r
                 z.risk_pct = 100 * abs(x.entry - x.stop) / x.entry
                 # Wall-clock fill and exit, so report.compound can replay the
                 # account in time with several positions open at once.
-                z.fill_t = (w + BAR_SECONDS[INTERVAL] * (o.fill_bar - i)
+                z.fill_t = (w + bar * (o.fill_bar - i)
                             if o.filled and o.fill_bar is not None else None)
-                z.exit_t = (w + BAR_SECONDS[INTERVAL] * (o.exit_bar - i)
+                z.exit_t = (w + bar * (o.exit_bar - i)
                             if o.filled and o.exit_bar else None)
                 z.day = zone_hit(zd, w, x.stop, x.is_long,
                                  BAR_SECONDS[DAY], 30)
