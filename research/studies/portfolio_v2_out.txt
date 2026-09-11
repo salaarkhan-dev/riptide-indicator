@@ -1,0 +1,36 @@
+PORTFOLIO POLICIES
+4263 filled trades in 2445 same-bar same-direction events · 333 days
+read RECOVERY and UNDER WATER, not drawdown: a rule that trades smaller
+shrinks drawdown and return together and is worth nothing.
+
+  policy                             units           total                        
+
+-- ITEM 22, MARKET-EVENT POLICIES -------------------------------------------
+  A  take all (1 unit per trade)      4263 units   +180.7 R    135.9 dd    1.33 rec    60% uw   34 loss run  
+  D  allocate 1 unit across event     2445 units    +89.6 R     65.8 dd    1.36 rec    32% uw   14 loss run  
+  E  first symbol only                2445 units    +98.7 R     69.2 dd    1.43 rec    32% uw   14 loss run  
+  C  best by risk band only           2445 units   +112.7 R     61.4 dd    1.84 rec    32% uw   14 loss run  
+  B  majors only, when present         208 units    +18.4 R     21.4 dd    0.86 rec    55% uw   15 loss run  (208 events contain one)
+
+-- ITEM 20, POSITION SIZING -------------------------------------------------
+  R is already risk-normalised, so sizing by 1/stop is what the R
+  unit MEANS and cannot show up here. What can is weighting the
+  units by a quality score, which is a real choice.
+  flat 1 unit, confirmed only          594 units    +45.5 R     29.5 dd    1.54 rec    56% uw   10 loss run  
+  band x1.25 / outside x0.75           594 units    +69.5 R     26.5 dd    2.62 rec    33% uw   10 loss run  
+  band x1.5 / outside x0.5             594 units    +93.6 R     23.6 dd    3.96 rec    32% uw   10 loss run  
+  band x2 / outside x0                 594 units   +141.7 R     23.9 dd    5.93 rec    17% uw    4 loss run  
+  (the band is 302 of 594 confirmed trades; x2/x0 is the hard filter the user declined,
+   shown for scale only)
+
+-- ITEM 24, REGIME FROM THE STRATEGY'S OWN BEHAVIOUR ------------------------
+  classified per WEEK, on what the scanner itself saw that week:
+  signal-rate terciles: quiet <= 80 a week, busy > 95
+    quiet weeks      17 weeks  1133 trades   737 bets  40% win  +0.077±0.050
+    normal weeks     16 weeks  1388 trades   858 bets  37% win  -0.033±0.045
+    busy weeks       15 weeks  1742 trades   827 bets  41% win  +0.070±0.046
+
+  and by how wide the market was moving that week (median stop%):
+    calm weeks                 1344 trades   876 bets  40% win  +0.060±0.045
+    normal weeks               1575 trades   855 bets  39% win  +0.004±0.045
+    wild weeks                 1344 trades   691 bets  38% win  +0.046±0.050
