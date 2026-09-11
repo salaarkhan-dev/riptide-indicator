@@ -499,10 +499,18 @@ def marks(x) -> str | None:
         # Scored over 2445 events, taking one rather than all of them lifts the
         # recovery factor from 1.33 to 1.84 and halves time under water; see
         # scanner.tag_event_pick. Only ever a label — the alert still sends.
+        # AND NOTHING AT ALL WHEN THE CLUSTER HAS NO PICK. tag_event_pick
+        # withholds one when every member's stop is beyond 2.6%, where the
+        # bootstrap is entirely below zero — naming a best-of-a-bad-lot would
+        # read as an endorsement. An empty event_of is that case, not a missing
+        # value, so it must not fall back to a placeholder.
         size = getattr(x, "event_size", 0)
+        of = getattr(x, "event_of", "")
         if isinstance(size, int) and size >= 2:
-            bits.append("🎯 the pick" if getattr(x, "event_pick", False)
-                        else f"pick is {_short(getattr(x, 'event_of', '') or '?')}")
+            if getattr(x, "event_pick", False):
+                bits.append("🎯 the pick")
+            elif of:
+                bits.append(f"pick is {_short(of)}")
     # The reader's OWN book, not the market's. 🔗 counts what is printing this
     # bar; ⚖ counts what they are still holding on this side from every bar
     # before it. A cluster that hurts usually spans several closes, so the two

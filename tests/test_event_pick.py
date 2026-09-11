@@ -71,6 +71,24 @@ check(min([a, b], key=event_rank) is a,
       "an in-band EARLY beats an out-of-band CONFIRMED: the band outranks "
       "the stream, which is the order of the evidence")
 
+print("\noutside the band is not one thing")
+a, b = setup("ZZZ_USDT", 0.6), setup("AAA_USDT", 3.4)
+check(min([a, b], key=event_rank) is a,
+      "a tight 'flat' beats a wide 'skip' — the skip bootstrap is entirely "
+      "below zero, the flat one straddles it")
+
+grp = [setup("AAA_USDT", 3.4), setup("BBB_USDT", 4.1), setup("CCC_USDT", 5.0)]
+for x in grp:
+    x.breadth = 3
+tag_event_pick([(grp, [], [], [])])
+check(not any(x.event_pick for x in grp),
+      "when EVERY member is a skip there is no pick at all")
+check(all(x.event_of == "" for x in grp), "and no sibling names one")
+check("pick" not in (marks(grp[0]) or ""),
+      "the chip says nothing rather than endorsing a best-of-a-bad-lot")
+check("🔗 3 on this close" in (marks(grp[0]) or ""),
+      "but size-once still warns about the cluster")
+
 print("\nthe pick is deterministic")
 rows = [setup(s, 2.0) for s in ("MMM_USDT", "AAA_USDT", "ZZZ_USDT")]
 first = min(rows, key=event_rank).symbol

@@ -294,12 +294,18 @@ def event_rank(x):
     THE CRITERIA ARE ORDERED BY HOW WELL EACH IS EVIDENCED, not by how much
     sense each makes.
 
-      1. INSIDE THE RISK BAND FIRST. 1.2%-2.6% stop distance is the only
-         signal-quality measure that has survived anything on this project:
-         +0.214 R/bet against -0.192 beyond 2.6% and -0.051 under 1.2%, with a
-         symbol bootstrap clear of zero in both directions and four quarters of
-         four, replicated independently on Min15. It is also the criterion the
-         event measurement itself used.
+      1. THE RISK BAND, IN THREE STEPS RATHER THAN TWO. 1.2%-2.6% stop
+         distance is the only signal-quality measure that has survived anything
+         on this project: +0.214 R/bet, symbol bootstrap clear of zero, four
+         quarters of four, replicated independently on Min15.
+
+         But "outside the band" is not one thing and ranking it as one was a
+         bug. Beyond 2.6% the bootstrap is ENTIRELY BELOW ZERO ([-0.338,
+         -0.032]) and the alert already prints "skip"; under 1.2% it STRADDLES
+         zero ([-0.193, +0.075]) and the alert prints "flat", meaning measured
+         and indistinguishable from nothing. Collapsing those two into one
+         bucket let a 3.40% "skip" beat a 0.60% "flat" on nothing but
+         alphabetical order. So: take, then flat, then skip.
 
       2. CONFIRMED BEFORE EARLY. The confirmed stream runs +0.070 R/bet against
          early's +0.034 over the same 333 days. A weaker separation than the
@@ -318,9 +324,13 @@ def event_rank(x):
     avoid. See research/studies/symbols.py.
     """
     risk_pct = 100 * x.risk / x.entry if x.entry else 0.0
-    return (0 if tg.RISK_TIGHT <= risk_pct <= tg.RISK_WIDE else 1,
-            1 if isinstance(x, Early) else 0,
-            x.symbol)
+    if tg.RISK_TIGHT <= risk_pct <= tg.RISK_WIDE:
+        band = 0                              # "take"
+    elif risk_pct < tg.RISK_TIGHT:
+        band = 1                              # "flat"
+    else:
+        band = 2                              # "skip"
+    return (band, 1 if isinstance(x, Early) else 0, x.symbol)
 
 
 def tag_event_pick(results) -> None:
@@ -367,10 +377,16 @@ def tag_event_pick(results) -> None:
 
     for members in groups.values():
         best = min(members, key=event_rank)
+        # NO PICK WHEN THE BEST AVAILABLE IS A "SKIP". Every member being
+        # beyond 2.6% is the one case where the evidence points at the whole
+        # cluster rather than at one of them, and naming a best-of-a-bad-lot
+        # "the pick" would read as an endorsement the measurement does not
+        # support. The alerts still send; they simply say nothing about which.
+        none_worth_it = event_rank(best)[0] == 2
         for x in members:
             x.event_size = len(members)
-            x.event_pick = x is best
-            x.event_of = best.symbol
+            x.event_pick = (not none_worth_it) and x is best
+            x.event_of = "" if none_worth_it else best.symbol
 
 
 def _same_trade(e: Early, s) -> bool:
