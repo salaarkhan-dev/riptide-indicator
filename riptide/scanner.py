@@ -309,6 +309,73 @@ event_rank = decide.rank_key
 tag_event_pick = decide.decide
 
 
+def will_send(db, x, early: bool, now: int, mute: bool, paired: set) -> bool:
+    """Will this signal actually reach Telegram in this cycle?
+
+    THE TAGGERS USED TO RANK SIGNALS THAT WERE NEVER SENT, AND IT SHOWED UP IN
+    THE CHAT. A live alert read:
+
+        ⚡ EARLY B 🟢 LONG SOL_USDT 15m
+        🔗 5 on this close, size once · 1000BONK took this move 7m ago
+
+    and no 1000BONK alert ever arrived. It could not have: the scanner had
+    restarted seven minutes earlier, rescanned its 600 bars of history, and
+    rediscovered every signal in it — almost all of them already in `seen` from
+    before the restart. tag_event_pick ran over that whole rediscovered backlog
+    and handed the 120-minute window to a message that had gone out hours ago,
+    or had been recorded and never sent at all. Every sibling for the next two
+    hours then deferred to a symbol the reader had no way to look up.
+
+    Six different gates sit between "the engine found it" and "you received
+    it", and the pick was computed in front of all six:
+
+        dupe    already in seen / seen_early — the restart case above
+        paired  an early the confirmed setup on the same gap will carry
+        stale   outside the freshness window
+        poi     POI_REQUIRED and it is not in a zone
+        grade   below MIN_GRADE
+        mute    /pause, or the first run, or EARLY_ALERTS off
+
+    So the predicate is pulled out and run BEFORE the taggers, and they see
+    only what will be sent. That makes three claims true that were not: the
+    pick names an alert you have, "N symbols" counts messages you received,
+    and "also 30m" points at one that exists.
+
+    Nothing about SENDING changed — the send loop below still makes its own
+    decision, with its own per-reason counters. This is the same question asked
+    earlier, not a new gate. It is deliberately NOT cached onto the signal:
+    the loop's chain also drives `gate` and `_arm`, and two copies of a
+    condition that must agree are worse than one cheap primary-key lookup run
+    twice.
+    """
+    if mute:
+        return False
+    if early and not EARLY_ALERTS:
+        return False
+    sid = early_sig(x) if early else sig_id(x)
+    if early_already_sent(db, sid) if early else already_sent(db, sid):
+        return False
+    if early and (x.symbol, x.tf, x.fvg_time, x.is_long) in paired:
+        return False
+    step = BAR_SECONDS[getattr(x, "tf", "") or INTERVAL]
+    if (now - x.detected_time) > FRESH_BARS * step:
+        return False
+    return poi_ok(x) and grade_ok(x, early)
+
+
+def sendable(results, db, now: int, mute: bool, paired: set) -> list:
+    """`results` in the same shape, holding only the signals that will be sent.
+
+    Sweeps and candles pass through untouched — the taggers ignore both, and
+    keeping the tuple shape means they need no knowledge that this happened.
+    """
+    return [([s for s in setups if will_send(db, s, False, now, mute, paired)],
+             sweeps,
+             [e for e in early if will_send(db, e, True, now, mute, paired)],
+             cs)
+            for setups, sweeps, early, cs in results]
+
+
 def tag_cross_tf(results) -> None:
     """Mark a signal that the SAME raid also produced on another timeframe.
 
@@ -499,43 +566,6 @@ async def cycle(sess, db, symbols):
     results = await asyncio.gather(
         *(scan_symbol(sess, sem, s, tf_on, tf) for s, tf in jobs))
 
-    # Cross-symbol, so it cannot live in scan_symbol: breadth is a property of
-    # the cycle, not of a chart. Wrapped for the same reason as everything else
-    # decorative here — it must never be able to cost an alert.
-    try:
-        tag_breadth(results)
-    except Exception as e:
-        log.warning("breadth tagging failed: %s", e)
-
-    # Which one of a cluster to take. Same cross-symbol reasoning as breadth,
-    # and separately wrapped so a failure to rank an event cannot also cost the
-    # "size once" chip that comes from the call above.
-    if EVENT_PICK:
-        try:
-            tag_event_pick(results)
-        except Exception as e:
-            log.warning("event pick tagging failed: %s", e)
-
-    # The same raid seen on another timeframe. Separate from the two calls
-    # above because it is the only one that reaches ACROSS timeframes, and
-    # separately wrapped so it cannot cost either of them.
-    if len(INTERVALS) > 1:
-        try:
-            tag_cross_tf(results)
-        except Exception as e:
-            log.warning("cross-timeframe tagging failed: %s", e)
-
-    # How much of the reader's own book already sits on this side. Breadth is
-    # what the MARKET is doing this bar; this is what THEY are holding across
-    # every bar still open, which the cycle cannot see and the journal can.
-    try:
-        longs, shorts = journal.open_sides(db)
-        for setups, _, early, _ in results:
-            for x in list(setups) + list(early):
-                x.open_same = longs if x.is_long else shorts
-    except Exception as e:
-        log.warning("exposure tagging failed: %s", e)
-
     bootstrap = first_run(db) and not ALERT_ON_FIRST_RUN
     # /pause records everything as usual but sends nothing, so resuming does
     # not replay the backlog.
@@ -546,6 +576,66 @@ async def cycle(sess, db, symbols):
     step_of = lambda x: BAR_SECONDS[getattr(x, "tf", "") or INTERVAL]
     now = int(time.time())
     sent = 0
+
+    # WHAT THE TAGGERS ARE ALLOWED TO SEE. Not `results` — every signal the
+    # engine found, most of which will not be sent — but only the ones that
+    # will actually arrive in the chat. See will_send for the alert that
+    # exposed this: a pick was named on a symbol whose message never went out.
+    #
+    # Run here rather than inside each tagger so the six gates are asked once,
+    # and so a failure computing the view degrades to tagging nothing rather
+    # than to tagging the wrong thing.
+    #
+    # pair_early has a side effect the send loop depends on — it stamps
+    # `also_early` on the setup that will carry a suppressed early — so it is
+    # called once, here, and the result is reused below.
+    paired = pair_early(results)
+    try:
+        live = sendable(results, db, now, mute, paired)
+    except Exception as e:
+        log.warning("sendable view failed, tagging nothing: %s", e)
+        live = [([], sweeps, [], cs) for _, sweeps, _, cs in results]
+
+    # Cross-symbol, so it cannot live in scan_symbol: breadth is a property of
+    # the cycle, not of a chart. Wrapped for the same reason as everything else
+    # decorative here — it must never be able to cost an alert.
+    try:
+        tag_breadth(live)
+    except Exception as e:
+        log.warning("breadth tagging failed: %s", e)
+
+    # Which one of a cluster to take. Same cross-symbol reasoning as breadth,
+    # and separately wrapped so a failure to rank an event cannot also cost the
+    # cluster count that comes from the call above.
+    if EVENT_PICK:
+        try:
+            tag_event_pick(live)
+        except Exception as e:
+            log.warning("event pick tagging failed: %s", e)
+
+    # The same raid seen on another timeframe. Separate from the two calls
+    # above because it is the only one that reaches ACROSS timeframes, and
+    # separately wrapped so it cannot cost either of them.
+    if len(INTERVALS) > 1:
+        try:
+            tag_cross_tf(live)
+        except Exception as e:
+            log.warning("cross-timeframe tagging failed: %s", e)
+
+    # How much of the reader's own book already sits on this side. Breadth is
+    # what the MARKET is doing this bar; this is what THEY are holding across
+    # every bar still open, which the cycle cannot see and the journal can.
+    #
+    # Over `results`, not `live`: this one is a property of the READER, not of
+    # the alert stream, so it is true of a signal whether or not it is sent —
+    # and it costs nothing to stamp on all of them.
+    try:
+        longs, shorts = journal.open_sides(db)
+        for setups, _, early, _ in results:
+            for x in list(setups) + list(early):
+                x.open_same = longs if x.is_long else shorts
+    except Exception as e:
+        log.warning("exposure tagging failed: %s", e)
     # Why an alert did not arrive. Every signal falls into exactly one of
     # these, so "I got no alerts" stops being a mystery that needs a
     # reproduction — the answer is in the log line at the end of the cycle.
@@ -632,7 +722,8 @@ async def cycle(sess, db, symbols):
     # lands before the confirmed setup on the same sweep — often bars before,
     # sometimes instead of, since most sweeps never produce a shift at all.
     quick = 0
-    paired = pair_early(results)
+    # `paired` was computed before the taggers ran — the same set, and
+    # pair_early's `also_early` stamp has already been applied.
     for _, _, early, _ in results:
         for e in early:
             g = gate["early"]
