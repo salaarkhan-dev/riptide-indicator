@@ -1,0 +1,248 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root{
+    --bg:#0d141c; --card:#18242f; --card2:#121c26; --line:#2a3a49;
+    --ink:#eaf2f8; --dim:#93a7b8; --dimmer:#6b8194;
+    --gold:#ffc94d; --green:#4ade80; --red:#f87171; --blue:#6fb7ff;
+    --amber:#fbbf24;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    width:1080px; background:var(--bg); color:var(--ink);
+    font-family:"DejaVu Sans","Noto Color Emoji",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheet{padding:34px 38px 40px;}
+  mono,.mono{font-family:"DejaVu Sans Mono","Noto Color Emoji",monospace;}
+
+  /* ---- masthead ---- */
+  .top{display:flex; align-items:baseline; gap:16px; margin-bottom:6px;}
+  .top h1{font-size:44px; letter-spacing:-.5px;}
+  .top .sub{font-size:22px; color:var(--dim);}
+  .rule{height:4px; background:linear-gradient(90deg,var(--gold),#ffc94d00);
+        border-radius:3px; margin:14px 0 26px;}
+
+  /* ---- generic blocks ---- */
+  .sec{margin-bottom:26px;}
+  .sech{font-size:20px; letter-spacing:2.4px; color:var(--dimmer);
+        text-transform:uppercase; margin-bottom:12px; font-weight:bold;}
+  .card{background:var(--card); border:2px solid var(--line);
+        border-radius:16px; padding:22px 24px;}
+
+  /* ---- the one rule ---- */
+  .rulebox{background:linear-gradient(135deg,#221a06,#18242f 60%);
+           border:3px solid var(--gold); border-radius:18px; padding:24px 28px;}
+  .rulebox .big{font-size:38px; line-height:1.25; font-weight:bold;}
+  .rulebox .big .g{color:var(--gold);}
+  .rulebox .small{font-size:24px; color:var(--dim); margin-top:12px; line-height:1.4;}
+  .counts{display:flex; gap:14px; margin-top:20px;}
+  .cbox{flex:1; background:#0d141c88; border:2px solid var(--line);
+        border-radius:12px; padding:14px 16px; text-align:center;}
+  .cbox .n{font-size:40px; font-weight:bold;}
+  .cbox .l{font-size:19px; color:var(--dim); margin-top:4px; line-height:1.25;}
+
+  /* ---- anatomy ---- */
+  .anat{display:flex; gap:18px; align-items:flex-start;}
+  .alert{flex:0 0 648px; background:var(--card2); border:2px solid var(--line);
+         border-radius:14px; padding:20px 22px; font-size:24px; line-height:1.55;}
+  .alert .hd{font-size:23px; font-weight:bold; line-height:1.35;}
+  .alert .lab{font-family:"DejaVu Sans Mono",monospace; color:var(--dimmer);
+              display:inline-block; width:150px;}
+  .alert .val{font-family:"DejaVu Sans Mono",monospace;}
+  .alert .dimtxt{color:var(--dim);}
+  .notes{flex:1; display:flex; flex-direction:column; justify-content:space-between;
+         gap:10px; padding:4px 0;}
+  .note{font-size:21px; line-height:1.35; color:var(--dim);
+        border-left:4px solid var(--gold); padding-left:14px;}
+  .note b{color:var(--ink);}
+
+  /* ---- header table ---- */
+  table{width:100%; border-collapse:collapse;}
+  td{padding:14px 10px; border-top:2px solid var(--line); vertical-align:top;}
+  tr:first-child td{border-top:none;}
+  .tag{font-size:25px; font-weight:bold; white-space:nowrap;}
+  .do{font-size:25px; font-weight:bold; white-space:nowrap; text-align:right;}
+  .exp{font-size:20px; color:var(--dim); line-height:1.35;}
+
+  /* ---- width chips ---- */
+  .chips{display:flex; gap:14px;}
+  .chip{flex:1; border-radius:14px; padding:18px 18px; border:3px solid;}
+  .chip .w{font-size:34px; font-weight:bold; font-family:"DejaVu Sans Mono",monospace;}
+  .chip .r{font-size:21px; color:var(--dim); margin-top:2px;}
+  .chip .v{font-size:20px; margin-top:10px; line-height:1.35;}
+
+  /* ---- ranking ---- */
+  .steps{display:flex; align-items:stretch; gap:12px;}
+  .step{flex:1; background:var(--card2); border:2px solid var(--line);
+        border-radius:14px; padding:16px 18px;}
+  .step .k{font-size:18px; color:var(--dimmer); letter-spacing:2px;}
+  .step .t{font-size:28px; font-weight:bold; margin-top:4px;}
+  .step .d{font-size:19px; color:var(--dim); margin-top:6px; line-height:1.3;}
+  .arrow{align-self:center; font-size:34px; color:var(--dimmer);}
+
+  .two{display:flex; gap:16px;}
+  .half{flex:1;}
+  .li{font-size:21px; line-height:1.5; color:var(--dim); margin-top:10px;
+      padding-left:28px; text-indent:-28px;}
+  .li b{color:var(--ink);}
+  .li .bul{color:var(--gold); font-weight:bold;}
+
+  .foot{margin-top:26px; font-size:19px; color:var(--dimmer); line-height:1.5;
+        border-top:2px solid var(--line); padding-top:16px;}
+</style>
+
+<div class="sheet">
+
+  <div class="top">
+    <h1>RIPTIDE</h1><div class="sub">how to read an alert — one page</div>
+  </div>
+  <div class="rule"></div>
+
+  <!-- ============ THE ONE RULE ============ -->
+  <div class="sec">
+    <div class="rulebox">
+      <div class="big"><span class="g">🎯 THE PICK</span> = the one to take.<br>
+        Everything else is information.</div>
+      <div class="small">One 🎯 per direction per rolling <b>120 minutes</b>, across all
+        timeframes. If the first line doesn't say 🎯, you are not being asked to do anything.</div>
+      <div class="counts">
+        <div class="cbox"><div class="n">~85</div><div class="l">alerts<br>arrive a day</div></div>
+        <div class="cbox"><div class="n" style="color:var(--gold)">~18</div><div class="l">carry<br>a 🎯</div></div>
+        <div class="cbox"><div class="n" style="color:var(--green)">6.66</div><div class="l">recovery<br>taking only 🎯</div></div>
+        <div class="cbox"><div class="n" style="color:var(--red)">0.13</div><div class="l">recovery<br>taking everything</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ANATOMY ============ -->
+  <div class="sec">
+    <div class="sech">every alert is these six rows</div>
+    <div class="anat">
+      <div class="alert">
+        <div class="hd"><span style="color:var(--gold)">🎯 THE PICK</span> — confirmed 🟢 long · <b>SOL</b> · 1h · grade <b>A</b></div>
+        <div style="height:14px"></div>
+        <div><span class="lab">Entry</span><span class="val">145.8</span></div>
+        <div><span class="lab">Stop</span><span class="val">142.6</span>
+          <span class="dimtxt" style="margin-left:18px">2.19% · normal</span></div>
+        <div><span class="lab">Target</span><span class="val">152.2</span>
+          <span class="dimtxt" style="margin-left:18px">2R</span></div>
+        <div style="height:14px"></div>
+        <div><span class="lab">move</span><span class="dimtxt">3 symbols · also 30m</span></div>
+        <div><span class="lab">context</span><span class="dimtxt">daily POI · 8h trend · Pivot pool</span></div>
+        <div><span class="lab">when</span><span class="dimtxt">19:02 · last 145.8 · chart</span></div>
+      </div>
+      <div class="notes">
+        <div class="note"><b>first line</b> — the only instruction. 🎯 or not.</div>
+        <div class="note"><b>grade A–D</b> — POI + trend. A is best.</div>
+        <div class="note"><b>three numbers</b> — entry, stop, 2R target. That's the trade.</div>
+        <div class="note"><b>move</b> — how many charts are firing the same idea. One bet, not three.</div>
+        <div class="note"><b>context</b> — why it graded that way. Skim it.</div>
+        <div class="note"><b>when</b> — tap <b>chart</b> to open TradingView on the right timeframe.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HEADERS ============ -->
+  <div class="sec">
+    <div class="sech">the first line, and what to do about it</div>
+    <div class="card"><table>
+      <tr>
+        <td class="tag" style="color:var(--gold)">🎯 THE PICK</td>
+        <td class="exp">Best signal in this 120-minute window. Confirmed or early — <b>86% are early</b>.</td>
+        <td class="do" style="color:var(--green)">TAKE IT</td>
+      </tr>
+      <tr>
+        <td class="tag" style="color:var(--gold)">🎯 THE PICK<br><span style="font-size:19px;font-weight:normal;color:var(--amber)">best of a wide cluster</span></td>
+        <td class="exp">Still the pick, but every candidate had a wide stop. Named anyway — withholding it measured worse.</td>
+        <td class="do" style="color:var(--amber)">TAKE<br>SMALLER</td>
+      </tr>
+      <tr>
+        <td class="tag">👀 WATCH</td>
+        <td class="exp">Real signal. Something else already claimed the window — line 2 names it.</td>
+        <td class="do" style="color:var(--dim)">LOOK<br>ONLY</td>
+      </tr>
+      <tr>
+        <td class="tag">👀 SWEEP</td>
+        <td class="exp">Liquidity grabbed. No entry, no stop — the shift may never come.</td>
+        <td class="do" style="color:var(--dim)">OPEN THE<br>CHART</td>
+      </tr>
+      <tr>
+        <td class="tag">📐 TRENDLINE</td>
+        <td class="exp">A list of charts that broke a line. Measured at <b>no edge</b>. It is a to-look list.</td>
+        <td class="do" style="color:var(--dimmer)">NEVER<br>A TRADE</td>
+      </tr>
+    </table></div>
+  </div>
+
+  <!-- ============ STOP WIDTH ============ -->
+  <div class="sec">
+    <div class="sech">the word next to the stop — it describes the stop, not the trade</div>
+    <div class="chips">
+      <div class="chip" style="border-color:#3a4a5a">
+        <div class="w" style="color:var(--blue)">tight</div>
+        <div class="r">under 1.2%</div>
+        <div class="v">−0.05 R · straddles zero.<br>Measured, and indistinguishable from nothing.</div>
+      </div>
+      <div class="chip" style="border-color:var(--green)">
+        <div class="w" style="color:var(--green)">normal</div>
+        <div class="r">1.2% – 2.6%</div>
+        <div class="v"><b>+0.21 R</b> · 42% win.<br>Positive in 4 quarters of 4. The best-evidenced zone.</div>
+      </div>
+      <div class="chip" style="border-color:var(--red)">
+        <div class="w" style="color:var(--red)">wide</div>
+        <div class="r">over 2.6%</div>
+        <div class="v"><b>−0.19 R</b> · 30% win.<br>On 1h, <b>141.9 of the 150 R drawdown</b> lives here.</div>
+      </div>
+    </div>
+    <div class="li"><span class="bul">•</span> Confirmed 30m/15m/1h figures. On <b>early</b> signals the band measures +0.002 — so on an early alert the word is a size cue, not a reason.</div>
+  </div>
+
+  <!-- ============ RANKING ============ -->
+  <div class="sec">
+    <div class="sech">how the 🎯 is chosen, when several fire at once</div>
+    <div class="steps">
+      <div class="step"><div class="k">1st</div><div class="t">slowest TF</div>
+        <div class="d">1h beats 30m beats 15m</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="k">2nd</div><div class="t">stop width</div>
+        <div class="d">normal, then tight, then wide</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="k">3rd</div><div class="t">confirmed</div>
+        <div class="d">beats early on a tie</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="k">4th</div><div class="t">A–Z</div>
+        <div class="d">so a re-scan names the same symbol</div></div>
+    </div>
+  </div>
+
+  <!-- ============ THE DAY ============ -->
+  <div class="sec">
+    <div class="two">
+      <div class="half">
+        <div class="sech">your day, in four lines</div>
+        <div class="card" style="padding:18px 22px">
+          <div class="li"><span class="bul">1</span> Let the stream run. Do not read every alert.</div>
+          <div class="li"><span class="bul">2</span> When a 🎯 lands, open the chart from the <b>when</b> row.</div>
+          <div class="li"><span class="bul">3</span> Place entry and stop <b>exactly as printed</b>. Target 2R.</div>
+          <div class="li"><span class="bul">4</span> Wait for the next 🎯 — at most one long and one short per 2 hours.</div>
+        </div>
+      </div>
+      <div class="half">
+        <div class="sech">the three ways to lose here</div>
+        <div class="card" style="padding:18px 22px">
+          <div class="li"><span class="bul" style="color:var(--red)">✕</span> Taking the 👀 WATCH alerts too. That is the 0.13 column.</div>
+          <div class="li"><span class="bul" style="color:var(--red)">✕</span> Holding more than <b>~5 positions</b> at 1% risk. Ten open returned <b>−39%</b> over the same year.</div>
+          <div class="li"><span class="bul" style="color:var(--red)">✕</span> Waiting for a better entry. The edge decays <b>0.06 R every 15 minutes</b> — ten times the whole per-trade edge.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Every number here is measured over 333 days across ~60 perpetuals and reported split across both halves of the window.
+    Full evidence, with the confidence intervals: <b class="mono">/legend</b>. Live forward scoring: <b class="mono">/stats</b>.
+    Nothing is ever suppressed — a 👀 WATCH is a complete alert, not a rejected one.
+  </div>
+
+</div>
