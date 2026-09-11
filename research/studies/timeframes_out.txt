@@ -1,0 +1,37 @@
+THE SAME STRATEGY ON FOUR TIMEFRAMES
+62 symbols, 333 days, identical set on every row.
+engine, config, POI gate, A/B floor, near-edge entry, raid stop and 2R all unchanged —
+only the candle series differs.
+
+  tf       signals  filled   bets   fill   win           R/bet   total     PF  maxDD  recov    stop  hold         
+  (59 symbols clear the history floor on ALL four; every row below uses exactly those)
+
+  Min15       9286    7227   4279    78%   36%  +0.018±0.020    -7.3   1.00  214.8  -0.03   0.97%     9       2h
+  Min30       5517    4322   2422    78%   37%  +0.030±0.027  +147.2   1.05  133.4   1.10   1.39%     9       4h
+  Min60       3057    2385   1279    78%   37%  +0.088±0.037  +158.1   1.11   91.2   1.73   1.97%     8       8h
+  Hour4       1247     977    398    78%   35%  +0.126±0.067    -7.5   0.99   87.9  -0.09   4.12%     9      36h
+
+  hold is shown in BARS then HOURS. the windows are fixed in bars, so a
+  4h trade is given sixteen times the wall clock a 15m trade gets.
+
+-- CONFIRMED ONLY -----------------------------------------------------------
+  tf       signals  filled   bets   fill   win           R/bet   total     PF  maxDD  recov    stop  hold         
+  Min15       1176     804    689    68%   36%  +0.017±0.052    +7.4   1.01   60.0   0.12   1.10%    10       3h
+  Min30        845     606    498    72%   37%  +0.066±0.062   +32.7   1.09   36.6   0.89   1.62%    11       6h
+  Min60        582     410    318    70%   39%  +0.106±0.077   +45.1   1.18   21.6   2.09   2.33%     9       9h
+  Hour4        426     310    204    73%   36%  +0.017±0.093    +7.0   1.04   39.9   0.18   4.37%    11      44h
+
+-- IS THE GRADIENT JUST THE FEE? --------------------------------------------
+  fee in R is fee_pct / risk_pct, and risk_pct quadruples across these rows.
+  tf          stop  fee in R   net R/bet   GROSS R/bet   fee share
+  Min15      0.97%     0.036       0.018         0.054        67%
+  Min30      1.39%     0.025       0.030         0.055        45%
+  Min60      1.97%     0.017       0.088         0.105        16%
+  Hour4      4.12%     0.007       0.126         0.133         6%
+
+-- THE RISK BAND, PER TIMEFRAME ---------------------------------------------
+  does the one surviving filter hold at every scale?
+  Min15   in  +0.115±0.086 ( 302 tr)   out  -0.046±0.065 ( 502 tr)   diff +0.160 |z|  1.5   boot5th +0.021
+  Min30   in  +0.212±0.088 ( 311 tr)   out  -0.108±0.082 ( 295 tr)   diff +0.320 |z|  2.7   boot5th +0.085
+  Min60   in  +0.244±0.117 ( 181 tr)   out  -0.016±0.095 ( 229 tr)   diff +0.260 |z|  1.7   boot5th +0.141
+  Hour4   in  +0.355±0.257 (  38 tr)   out  -0.038±0.096 ( 272 tr)   diff +0.392 |z|  1.4   boot5th +0.129

@@ -126,6 +126,33 @@ Quarterly (confirmed): +0.129, −0.063, −0.037, +0.276 — but SEs are ±0.11
 ±0.133, so this spread is entirely consistent with a constant +0.07 plus noise.
 It is **not** evidence of regime dependence (see item 24).
 
+**Why Min30 and not another timeframe** (`timeframes.py`, same 59 symbols, same
+333 days, only the candle series changed):
+
+| tf | bets | R/bet (all) | R/bet (confirmed) | total R | median stop | fee in R |
+|---|---|---|---|---|---|---|
+| Min15 | 4,279 | +0.018 ± 0.020 | +0.017 ± 0.052 | −7.3 | 0.97% | 0.036 |
+| Min30 | 2,422 | +0.030 ± 0.027 | +0.066 ± 0.062 | +147.2 | 1.39% | 0.025 |
+| Min60 | 1,279 | +0.088 ± 0.037 | +0.106 ± 0.077 | +158.1 | 1.97% | 0.017 |
+| Hour4 | 398 | +0.126 ± 0.067 | +0.017 ± 0.093 | −7.5 | 4.12% | 0.007 |
+
+No adjacent pair separates at even 1 SE, so this table picks no winner. Three
+things in it are worth carrying:
+
+1. **Switch the fee off and Min15 and Min30 are identical** — gross +0.054 vs
+   +0.055 per bet. The 15m deficit is entirely cost: fee in R is
+   `fee_pct / risk_pct` and a 0.97% stop makes the taker fee eat two thirds of
+   the gross edge. The Min60/Hour4 advantage is *not* cost — gross still rises
+   to +0.105 and +0.133 — but it does not clear 2 SE either.
+2. **R/bet and total R disagree in sign on Min15 and Hour4** (positive per bet,
+   negative in total). A bet averages every symbol firing on one bar, so the
+   large simultaneous clusters count once there and forty times in the trade
+   sum. The sign flip says the big clusters are the losers — the clearest
+   evidence in this repo for the event-pick rule.
+3. **The four rows are not four independent samples.** Same coins, same year,
+   same regimes; a 15m signal and the 1h signal straddling it are often the
+   same raid read twice.
+
 ---
 
 ## 4. The one survivor: stop distance
@@ -157,6 +184,21 @@ partly a restatement of that — though deleting those five still leaves +11.5 R
 which no other cell manages; (b) the 1.2 and 2.6 boundaries were **chosen by
 looking at data** (the test was pre-registered, the boundaries were not), so some
 separation is selection.
+
+**Also positive on Min60 and Hour4**, but read the caveat before counting them:
+
+| tf | in band | out of band | diff | \|z\| |
+|---|---|---|---|---|
+| Min15 | +0.115 ± 0.086 (302 tr) | −0.046 ± 0.065 | +0.160 | 1.5 |
+| Min30 | +0.212 ± 0.088 (311 tr) | −0.108 ± 0.082 | +0.320 | 2.7 |
+| Min60 | +0.244 ± 0.117 (181 tr) | −0.016 ± 0.095 | +0.260 | 1.7 |
+| Hour4 | +0.355 ± 0.257 (38 tr) | −0.038 ± 0.096 | +0.392 | 1.4 |
+
+The 1.2/2.6 boundaries were fitted on Min30 and reused verbatim. Median stop on
+4h is 4.12%, so the "band" there keeps 38 of 310 fills (12%, against 51% on
+Min30) — it is a thin-stop tail, not the same filter, and the Hour4 row should
+be treated as absent rather than as a fourth confirmation. The four timeframes
+are also not independent samples of the same market.
 
 **Deployed as an advisory label, not a filter** — the alert prints `2.34% risk ·
 take`, `0.9% risk · flat`, `3.12% risk · skip`. Nothing is suppressed. The label
@@ -451,7 +493,10 @@ Min15 transfer test) · `exits.py` (items 14–18 + MFE ladder) ·
 `symbols.py` (item 23) · `news.py` (macro releases) · `risk_band.py` (the
 original pre-registration) · `stop_atr.py` + `PREREG_stop_atr.md` (the
 pre-registered stop÷ATR test and its failure) · `universe_size.py` (3M against
-1M floor).
+1M floor) · `entry_deep.py` (entry geometry, 333 days, paired) · `stop_deep.py`
+(stop geometry, 333 days, paired) · `path_exit.py` (break-even, partials,
+trails, staleness — all paired) · `timeframes.py` (the same strategy on 15m,
+30m, 1h and 4h, same 59 symbols).
 
 Shared scorer: `research/harness.py`. Deep history loader:
 `research/deep.py`. Prior negative results: `MEASUREMENTS.md`.
