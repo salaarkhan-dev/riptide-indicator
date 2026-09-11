@@ -387,9 +387,19 @@ table in section 5. Most cannot.
    tracker. The only action that creates new *bets* rather than new *columns*.
 2. **Event concentration (item 22).** The only new positive result.
    **SHIPPED 11 Sep** — see section 11.
-3. **Stop-distance ÷ ATR ratio.** The one unmeasured lead with a coherent
-   mechanism and out-of-sample support in both halves. Needs pre-registration
-   before it is tested, not after. **Does not require forward data.**
+3. ~~**Stop-distance ÷ ATR ratio.**~~ **TESTED 11 Sep — DOES NOT SURVIVE.**
+   Pre-registered at `e2f16b0` (low beats high), run on a 60-symbol discovery
+   set and 60 held-out symbols never fitted on. Discovery LOW-HIGH +0.044
+   against an MDE of 0.350, and the shape came back HUMPED rather than
+   monotone — the middle tercile won, which contradicts the hypothesis rather
+   than weakly confirming it. The one criterion that passed was the held-out
+   sign, on a set whose median turnover is 1.7M against discovery's 10.6M,
+   which is the liquidity confound the pre-registration named in advance. The
+   variable was worth testing — it correlates only +0.231 with plain
+   stop-percent — and it is now answered. See `research/studies/stop_atr.py`
+   and `PREREG_stop_atr.md`.
+
+   **This was the last lead on the list.**
 
 ### How fast more statistical power is actually obtainable
 

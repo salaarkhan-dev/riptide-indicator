@@ -35,6 +35,54 @@ and liquidity is a live alternative explanation if that arm disagrees.
 
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/stop_atr.py
+
+RESULT, 11 Sep 2026 — DOES NOT SURVIVE. 1 of 3 criteria, and the wrong one.
+
+  Discovery 60 symbols / 594 trades / 492 bets, MDE 0.350.
+  Held-out 60 symbols / 521 trades / 462 bets, MDE 0.355.
+  Frozen boundaries: stop/ATR of 1.676 and 2.108.
+
+    DISCOVERY      LOW  +0.022   mid  +0.195 (boot 5th +0.076)   HIGH -0.023
+    HELD-OUT       LOW  +0.096   mid  -0.057                     HIGH -0.035
+
+    1. discovery LOW-HIGH  +0.044 against MDE 0.350        FAIL
+    2. LOW tercile bootstrap 5th  -0.104                   FAIL
+    3. held-out LOW-HIGH  +0.131 vs half of discovery      pass
+
+  THE PREDICTION WAS WRONG IN SHAPE, NOT JUST IN SIZE. Low was supposed to beat
+  high. On discovery the MIDDLE tercile is the best one and the two ends are
+  indistinguishable from each other and from zero. A monotone hypothesis that
+  comes back humped has not been weakly confirmed; it has been contradicted.
+
+  AND THE ONE CRITERION THAT PASSED IS THE ONE THE PREREG WARNED ABOUT. The
+  held-out set is the only arm showing the predicted direction — and its median
+  24h turnover is 1.7M against the discovery set's 10.6M, six times thinner,
+  exactly the confound written down in advance. On symbols that thin, "a stop
+  that is tight relative to ATR" and "a coin whose ATR is inflated by gappy,
+  illiquid trading" are not separable. Criterion 3 was also contingent on
+  criterion 1 by construction: half of a discovery spread that is itself noise
+  is a bar set at nothing.
+
+  WHAT THE TEST DID ESTABLISH, and it is not nothing: R_ATR correlates only
+  +0.231 with plain stop-percent, so it IS a distinct variable and this was a
+  real question rather than a restatement of the risk band. It has now been
+  asked and answered.
+
+  THE SECONDARY CELL IS NOT A CONSOLATION PRIZE. Inside the 1.2-2.6% band, LOW
+  and mid come in at +0.357 and +0.362 against HIGH's +0.021, both bootstraps
+  clear of zero — which is the original wild-volatility finding showing up
+  again in the variable built to express it. Its MDE is 0.497 and it was
+  declared underpowered and non-decisive BEFORE the run, precisely so that it
+  could not be promoted to the headline afterwards. It stays where it was: a
+  shape visible in a cell too small to resolve it.
+
+  THIRD TIME A MIDDLE BUCKET HAS WON. The risk band, sweep-to-MSS speed at 4-6
+  bars, and now this. Under a null with three buckets the middle wins a third
+  of the time, so three from three is p about 0.04 before any correction for
+  the number of features tried — interesting enough to write down, nowhere near
+  enough to build on, and not a hypothesis this sample could test anyway.
+
+  Filed: hypothesis 14, not supported. This was the last lead on the list.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 

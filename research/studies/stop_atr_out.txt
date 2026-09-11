@@ -1,0 +1,36 @@
+STOP DISTANCE IN ATR — the pre-registered test
+discovery 60 symbols, 594 trades, 492 bets, MDE 0.350
+held-out  60 symbols, 521 trades, 462 bets, MDE 0.355
+predicted before the data: LOW beats HIGH
+
+-- THE TWO CHECKS THE PREREG DEMANDED IN ADVANCE ----------------------------
+  correlation of R_ATR with plain stop-% : +0.231   (distinct enough to be worth testing)
+  median 24h turnover  discovery   10.6M   held-out    1.7M
+
+  frozen tercile boundaries from discovery: 1.676 and 2.108 (stop / ATR)
+
+-- DISCOVERY ----------------------------------------------------------------
+
+  all confirmed A/B
+    LOW  (tight vs ATR)     199 tr  175 bets  36% win  +0.022±0.107  boot5th -0.104
+    mid                     198 tr  181 bets  41% win  +0.195±0.104  boot5th +0.076  OK
+    HIGH (wide vs ATR)      197 tr  182 bets  36% win  -0.023±0.101  boot5th -0.134
+
+  secondary: stop 1.2-2.6% only (MDE 0.497, underpowered by design)
+    LOW  (tight vs ATR)      79 tr   69 bets  48% win  +0.357±0.177  boot5th +0.151  OK
+    mid                     112 tr   99 bets  46% win  +0.362±0.144  boot5th +0.150  OK
+    HIGH (wide vs ATR)      111 tr  104 bets  37% win  +0.021±0.136  boot5th -0.150
+
+-- HELD-OUT (frozen boundaries, symbols never fitted on) --------------------
+
+  all confirmed A/B
+    LOW  (tight vs ATR)     180 tr  167 bets  38% win  +0.096±0.111  boot5th -0.015
+    mid                     160 tr  147 bets  32% win  -0.057±0.111  boot5th -0.194
+    HIGH (wide vs ATR)      181 tr  172 bets  34% win  -0.035±0.101  boot5th -0.174
+
+-- VERDICT AGAINST THE THREE PRE-REGISTERED CRITERIA ------------------------
+  1. discovery LOW-HIGH  +0.044 vs MDE 0.350          [FAIL]
+  2. LOW tercile bootstrap 5th  -0.104 above zero          [FAIL]
+  3. held-out LOW-HIGH  +0.131 vs half of discovery +0.022   [PASS]
+
+  -> DOES NOT SURVIVE  (all three were required; see PREREG_stop_atr.md)
