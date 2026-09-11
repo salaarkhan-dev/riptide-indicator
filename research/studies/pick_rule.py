@@ -126,6 +126,62 @@ THREE THINGS THAT SOUND RIGHT AND MEASURE WRONG.
   for the mixed pick. Ten times less return for half the pain and a sixth of
   the messages. That is a product decision, not a measurement.
 
+TF-FIRST ALSO WINS INSIDE EACH STREAM SEPARATELY, which the mixed table could
+not show. In a mixed event the confirmed/early axis is doing work, so "tf beats
+band" there might be tf standing in for something else. Held constant:
+
+    EARLY  take all    48.8/day  recov -0.02   acct  -44%
+    EARLY  at random   24.5/day  recov  2.50   acct +190%
+    EARLY  band only   24.5/day  recov  2.45   acct +271%
+    EARLY  band -> tf  24.5/day  recov  3.76   acct +403%
+    EARLY  tf -> band  24.5/day  recov  4.71   acct +655%   1st half 1.45
+    CONFD  take all     6.7/day  recov  0.96   acct  +48%
+    CONFD  at random    5.2/day  recov  1.20   acct  +73%
+    CONFD  band only    5.2/day  recov  1.12   acct  +65%
+    CONFD  band -> tf   5.2/day  recov  1.17   acct  +68%
+    CONFD  tf -> band   5.2/day  recov  1.33   acct  +82%
+    CONFD  band->tf, no skip  4.1/day  recov 2.70  acct +86%
+
+TF-first wins in both streams and in both halves of each. So the ordering
+result is not an artefact of mixing streams.
+
+THE EARLY STREAM IS WORTH -44% TAKEN WHOLE AND +655% TAKEN ONE PER HOUR. That
+single pair of numbers is the clearest statement in this repository of what the
+pick rule is for. Early signals are not bad signals; they arrive in crowds, and
+a crowd taken whole is a correlated bet with no diversification in it at all.
+
+AND HERE IS THE UNCOMFORTABLE PART, WHICH EXPLAINS WHY TF BEATS BAND. R per
+TRADE by timeframe and band, on the deployed stream:
+
+    stream     tf     take     flat     skip
+    early      15m  -0.038   -0.025   +0.058
+    early      30m  -0.023   +0.011   +0.150
+    early      1h   +0.066   +0.066   -0.027
+    confirmed  15m  +0.183   -0.127   -0.198
+    confirmed  30m  +0.241   -0.049   +0.103
+    confirmed  1h   +0.095        -   +0.059
+
+THE RISK BAND IS A CONFIRMED-SIGNAL FILTER. On confirmed it orders the cells
+the way it is supposed to — take best on all three timeframes, and on Min15 the
+spread is +0.183 against -0.198. On EARLY at 15m and 30m it is INVERTED: the
+"skip" cell is the best one, +0.058 and +0.150. Only on 1h early does it point
+the right way.
+
+That is not a contradiction of matrix.py, which measured the band on early at
++0.002 (15m) and +0.020 (30m) per bet — near zero, with the real effect only on
+1h at +0.108. Near-zero and inverted-on-a-subsample are the same statement made
+twice. It does mean the band carries little information inside the early
+stream, which is exactly why ordering by TF beats ordering by band there: the
+band is close to a coin toss on 83% of the pick candidates, while the fee
+argument for the slower timeframe holds everywhere.
+
+DO NOT READ THE INVERSION AS "TAKE WIDE-STOP EARLY SIGNALS". These are cells of
+a 18-cell table on 40 to 2576 trades each, scored per trade rather than per
+bet, so the same clustering that ruins the raw stream inflates their apparent
+precision. What is safe to conclude is the negative: the band does not order
+early signals, so it should not be the first key when early signals are in the
+pool.
+
 WHAT THE PICK CHOOSES under band -> confirmed -> tf: 49% Min15, 30% Min30, 20%
 Min60; 17% confirmed, 83% early; 47% take band, 41% flat, 12% skip. Under
 tf-first the timeframe mix inverts, which is the whole mechanism.
@@ -368,13 +424,47 @@ async def main():
 
     confd = [t for t in rows if t.kind == "confirmed"]
     early = [t for t in rows if t.kind == "early"]
-    ce = by_event(confd)
-    score("CONFIRMED only, take all", confd, len(ce))
-    score("CONFIRMED only, band -> tf",
-          pick(confd, key_band_tf), len(ce))
-    score("CONFIRMED only, band->tf, no skip",
+    ce, ee = by_event(confd), by_event(early)
+
+    # DOES THE ORDERING THAT WON ON THE MIXED STREAM ALSO WIN INSIDE EARLY?
+    # The mixed result cannot answer that: in a mixed event the confirmed/early
+    # axis is doing work, so "tf beats band" there could be tf standing in for
+    # something else. Scored inside each stream separately, the confirmed/early
+    # axis is constant and only band and tf remain.
+    print("  -- EARLY ONLY, every ordering " + "-" * 45)
+    score("EARLY take all", early, len(ee))
+    score("EARLY one at random", rand_pick(early, 20260912), len(ee))
+    score("EARLY band only", pick(early, key_bandonly), len(ee))
+    score("EARLY band -> tf", pick(early, key_band_tf), len(ee))
+    score("EARLY tf -> band", pick(early, key_tf_first), len(ee))
+    score("EARLY band -> tf, no skip",
+          pick(early, key_band_tf, drop_skip=True), len(ee))
+    print()
+    print("  -- CONFIRMED ONLY, every ordering " + "-" * 41)
+    score("CONFD take all", confd, len(ce))
+    score("CONFD one at random", rand_pick(confd, 20260912), len(ce))
+    score("CONFD band only", pick(confd, key_bandonly), len(ce))
+    score("CONFD band -> tf", pick(confd, key_band_tf), len(ce))
+    score("CONFD tf -> band", pick(confd, key_tf_first), len(ce))
+    score("CONFD band -> tf, no skip",
           pick(confd, key_band_tf, drop_skip=True), len(ce))
-    score("EARLY only, band -> tf", pick(early, key_band_tf), len(ev))
+
+    print("\n-- EARLY, BY TIMEFRAME AND BAND " + "-" * 44)
+    print("  where the early stream is strong, so the mix is taken with eyes")
+    print("  open rather than because the pooled number came out fine.")
+    print(f"  {'stream':<10}{'tf':<6}{'band':<8}{'trades':>7}{'R/trade':>10}"
+          f"{'total':>9}{'win':>7}")
+    for label, pool in (("early", early), ("confirmed", confd)):
+        for tf in TFS:
+            for bi, bname in enumerate(("take", "flat", "skip")):
+                g = [t for t in pool if t.tf == tf and band_of(t) == bi]
+                if len(g) < 40:
+                    continue
+                r = [t.r for t in g]
+                print(f"  {label:<10}{tf:<6}{bname:<8}{len(g):>7}"
+                      f"{statistics.fmean(r):>+10.3f}{sum(r):>9.1f}"
+                      f"{sum(1 for x in r if x > 0) / len(r):>7.0%}")
+        print()
 
     print("\n-- WHAT THE PICK ACTUALLY CHOOSES " + "-" * 42)
     chosen = pick(rows, key_band)
