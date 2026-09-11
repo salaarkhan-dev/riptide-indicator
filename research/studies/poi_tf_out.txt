@@ -1,0 +1,66 @@
+WHICH TIMEFRAME SHOULD THE POI BE READ ON, FOR A 1h SETUP
+6015 Min60 A/B signals, 59 symbols, 333 days, NO POI filter applied.
+each row below is a LABEL on that one pool, not a separate backtest.
+zones/day are per 120 symbols — the deployed universe, not the 59 measured here.
+
+  POWER. 2037 bets, sd 1.31. A filter keeping a third is scored
+  against the other two thirds: MDE 0.199 R. Anything smaller than that is unreadable
+  here however tidy it looks.
+
+  label                                   signals   kept   /day   bets   win           R/bet   total     PF  recov
+  no POI, A/B by trend                       6015   100%   36.7   2037   38%  +0.125±0.029  +372.5   1.13   2.48
+  8h/30 bars — DEPLOYED                      3057    51%   18.7   1279   37%  +0.088±0.037  +158.1   1.11   1.73
+  8h/90 bars (30d life)                      3714    62%   22.7   1473   37%  +0.095±0.035  +194.0   1.11   1.89
+  daily/30 bars (30d)                        2154    36%   13.2    962   37%  +0.092±0.044   +79.6   1.08   0.89
+  8h AND daily                               1315    22%    8.0    655   35%  +0.030±0.053    -2.5   1.00  -0.03
+  8h only, not daily                         1742    29%   10.6    836   39%  +0.129±0.047  +160.6   1.19   2.54
+  daily only, not 8h                          839    14%    5.1    448   39%  +0.153±0.066   +82.0   1.21   2.03
+  NO 8h zone                                 2958    49%   18.1   1247   38%  +0.132±0.038  +214.4   1.15   2.03
+  NO daily zone                              3861    64%   23.6   1513   39%  +0.125±0.034  +292.9   1.15   3.21
+
+-- CONFIRMED ONLY -----------------------------------------------------------
+  label                                   signals   kept   /day   bets   win           R/bet   total     PF  recov
+  no POI, A/B by trend                       1118   100%    6.8    549   39%  +0.122±0.058   +84.2   1.17   2.33
+  8h/30 bars — DEPLOYED                       582    52%    3.6    318   39%  +0.106±0.077   +45.1   1.18   2.09
+  8h/90 bars (30d life)                       698    62%    4.3    374   39%  +0.110±0.071   +52.7   1.18   2.31
+  daily/30 bars (30d)                         403    36%    2.5    224   38%  +0.132±0.094   +29.6   1.17   1.27
+  8h AND daily                                242    22%    1.5    139   36%  +0.054±0.117    +6.0   1.06   0.29
+  8h only, not daily                          340    30%    2.1    204   41%  +0.139±0.097   +39.1   1.27   2.89
+  daily only, not 8h                          161    14%    1.0    103   41%  +0.182±0.143   +23.6   1.35   2.37
+  NO 8h zone                                  536    48%    3.3    310   38%  +0.100±0.079   +39.1   1.16   1.80
+  NO daily zone                               715    64%    4.4    385   39%  +0.086±0.069   +54.6   1.17   2.30
+
+-- WHAT THE CONFIG SWITCH WOULD ACTUALLY SEND --------------------------------
+  grades above hold poi=True so the A/B floor is constant. here the grade
+  table reads the REAL poi, which is what production would do.
+                                          signals   kept   /day   bets   win           R/bet   total     PF  recov
+  POI on   (deployed today)                  3057    51%   18.7   1279   37%  +0.088±0.037  +158.1   1.11   1.73
+  POI off  (regraded at B)                   3593    60%   21.9   1440   38%  +0.092±0.035  +197.2   1.11   2.05
+    the difference: confirmed, no 8h zone     536     9%    3.3    310   38%  +0.100±0.079   +39.1   1.16   1.80
+
+-- HOW MUCH DO THE TWO LABELS EVEN DISAGREE ---------------------------------
+  daily 2154 (36%)   8h 3057 (51%)   both 1315   either 3896
+  of the daily-POI signals, 61% are also in an 8h zone.
+  the two labels are far from independent, which caps how much new
+  information the second one can carry.
+
+-- THE COMPARISONS THAT WERE PRE-REGISTERED ----------------------------------
+  PRIMARY  8h at 30d life vs daily             +0.095  vs  +0.092   diff +0.003  |z|  0.1
+           8h at 10d life (DEPLOYED) vs daily  +0.088  vs  +0.092   diff -0.004  |z|  0.1
+           8h at 30d life vs 8h at 10d life    +0.095  vs  +0.088   diff +0.007  |z|  0.1
+           in a daily zone vs NOT in one       +0.092  vs  +0.125   diff -0.033  |z|  0.6
+  SECONDARY within daily POI: 8h too vs 8h not +0.030  vs  +0.153   diff -0.124  |z|  1.5
+  post hoc  in the DEPLOYED 8h zone vs NOT in one +0.088  vs  +0.132   diff -0.044  |z|  0.8
+  post hoc  what POI off would add vs what it keeps +0.100  vs  +0.088   diff +0.011  |z|  0.1
+
+-- SYMBOL BOOTSTRAP, 2000 draws ---------------------------------------------
+  a level is only worth reading if it survives resampling the universe.
+  no POI, A/B by trend      [ +0.086,  +0.153]   all above zero
+  8h/30 bars — DEPLOYED     [ +0.041,  +0.132]   all above zero
+  8h/90 bars (30d life)     [ +0.057,  +0.132]   all above zero
+  daily/30 bars (30d)       [ +0.016,  +0.134]   all above zero
+  8h AND daily              [ -0.058,  +0.097]
+  8h only, not daily        [ +0.082,  +0.181]   all above zero
+  daily only, not 8h        [ +0.054,  +0.229]   all above zero
+  NO 8h zone                [ +0.080,  +0.169]   all above zero
+  NO daily zone             [ +0.091,  +0.165]   all above zero
