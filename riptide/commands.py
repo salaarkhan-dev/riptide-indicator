@@ -347,6 +347,26 @@ def _tl_block(s) -> str:
         out.append("<i>offline: +0.187 R at +2.1 SE held out, but the gradient "
                    "is a STEP at 8 rather than a slope, which failed its "
                    "pre-registration. On trial.</i>")
+    pk, sib = s.get("pick_yes") or {}, s.get("pick_no") or {}
+    if pk.get("setups") or sib.get("setups"):
+        out += ["", "<b>🎯 the event pick</b>  <i>measured, not filtered</i>"]
+        # Picks against SIBLINGS, never against everything. Most signals are
+        # solo and were never a choice; including them would measure "was
+        # there a cluster" rather than "was the ranking right".
+        out.append(_bucket_line("the pick", pk) if pk.get("setups")
+                   else "the pick   —")
+        out.append(_bucket_line("siblings", sib) if sib.get("setups")
+                   else "siblings   —")
+        if pk.get("setups", 0) >= 10 and sib.get("setups", 0) >= 10:
+            d = pk["r_setup"] - sib["r_setup"]
+            dse = (pk["se_setup"] ** 2 + sib["se_setup"] ** 2) ** 0.5
+            out.append(f"{'difference':<12}{d:+.3f} ± {dse:.3f}"
+                       f"   {d / dse if dse else 0:+.1f} SE")
+        out.append("<i>offline: taking one signal per cluster rather than all "
+                   "of them lifted the recovery factor from 1.33 to 1.84 and "
+                   "halved time under water. This is the forward test of that, "
+                   "and it is the first row on /stats that was never fitted on "
+                   "past data.</i>")
     return "\n".join(out)
 
 

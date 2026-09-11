@@ -52,7 +52,8 @@ RESOLVED = (WON, LOST, TIMEOUT)
 _COLUMNS = ("sig, symbol, side, src, entry, stop, risk, trend_dir, "
             "mss_time, armed_time, armed_at, status, fill_time, exit_time, "
             "r, mfe_r, mae_r, last_bar, updated_at, kind, confluence, "
-            "di_dir, rsi_ext, poi, regraded, tf, trend_tf, tl_break, breadth")
+            "di_dir, rsi_ext, poi, regraded, tf, trend_tf, tl_break, breadth, "
+            "event_pick")
 
 CONFIRMED, EARLY = "setup", "early"      # which strategy produced the signal
 
@@ -137,6 +138,27 @@ def init(db) -> None:
         # rows armed before the column existed; a real value is always >= 1
         # because a signal counts itself. Measured forward, gates nothing.
         ("breadth", "INT DEFAULT 0", "cycle breadth, measured forward"),
+        # WHICH SIGNAL OF A MARKET EVENT THIS WAS. The event rule shipped on
+        # 11 Sep on the strength of a backtest — recovery factor 1.33 taking
+        # every trade against 1.84 taking one per cluster — and without this
+        # column /stats could never say whether that reproduced forward, which
+        # is the only evidence on this project that is neither survivorship-
+        # biased nor fitted. Measured forward, gates nothing.
+        #
+        #   -1  armed before the column existed, or EVENT_PICK switched off
+        #    0  solo signal; there was no choice to make
+        #    1  the pick of a cluster
+        #    2  a sibling of a cluster, not the pick
+        #    3  in a cluster the rule DECLINED to pick from, because every
+        #       member's stop sat beyond 2.6% where the bootstrap is entirely
+        #       below zero
+        #
+        # Solo is separated from pick deliberately: a solo signal is trivially
+        # "the only one", and folding it in would swamp the pick population
+        # with rows that were never a choice and make "pick against sibling"
+        # meaningless. 3 is separated from 2 because those rows carry no
+        # endorsement at all, which is a different claim from "not this one".
+        ("event_pick", "INT DEFAULT -1", "event pick, measured forward"),
     ):
         if col not in have:
             db.execute(f"ALTER TABLE outcomes ADD COLUMN {col} {decl}")
@@ -151,6 +173,26 @@ def last_closed_bar(now: int | None = None, interval: str = "") -> int:
     now = int(time.time()) if now is None else now
     step = BAR_SECONDS[interval or INTERVAL]
     return now - (now % step) - step
+
+
+def _event_state(s) -> int:
+    """The event_pick code for one signal. See init() for what each value is.
+
+    Reads only attributes the scanner stamps, and defaults to -1 whenever they
+    are absent — which covers EVENT_PICK being switched off, a tagging pass
+    that raised and was swallowed, and any caller that arms a signal without
+    going through a scan cycle at all. An unrecorded row must look unrecorded
+    rather than look like a solo signal, because "there was no cluster" and
+    "nobody asked" are different facts and only one of them is evidence.
+    """
+    size = getattr(s, "event_size", 0)
+    if not isinstance(size, int) or size < 1:
+        return -1
+    if size == 1:
+        return 0
+    if getattr(s, "event_pick", False):
+        return 1
+    return 2 if getattr(s, "event_of", "") else 3
 
 
 def arm(db, sid: str, s, from_bar: int | None = None,
@@ -187,7 +229,7 @@ def arm(db, sid: str, s, from_bar: int | None = None,
     start = from_bar if from_bar is not None \
         else max(detected, last_closed_bar(now, getattr(s, "tf", "")))
     db.execute(f"INSERT OR IGNORE INTO outcomes({_COLUMNS}) "
-               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (sid, s.symbol, "long" if s.is_long else "short", s.src,
                 s.entry, s.stop, s.risk, s.trend_dir,
                 # Early has no shift; its sweep bar is the comparable anchor.
@@ -198,7 +240,8 @@ def arm(db, sid: str, s, from_bar: int | None = None,
                 int(getattr(s, "poi", False)), 1,
                 getattr(s, "tf", "") or INTERVAL, TREND_INTERVAL,
                 int(getattr(s, "tl_break", -1)),
-                int(getattr(s, "breadth", 0))))
+                int(getattr(s, "breadth", 0)),
+                _event_state(s)))
     db.commit()
 
 
@@ -387,7 +430,7 @@ def summary(db, kind: str | None = None) -> dict:
     """Pass a kind to describe one strategy alone; omit it for both together."""
     sql = ("SELECT status, r, trend_dir, side, mfe_r, mae_r, armed_at, kind, "
            "confluence, di_dir, rsi_ext, poi, regraded, trend_tf, tl_break, "
-           "breadth FROM outcomes")
+           "breadth, event_pick FROM outcomes")
     rows = (db.execute(sql + " WHERE kind=?", (kind,)).fetchall() if kind
             else db.execute(sql).fetchall())
     if not rows:
@@ -444,6 +487,14 @@ def summary(db, kind: str | None = None) -> dict:
                          if r[15] is not None and r[15] >= 8]),
         "narrow": _bucket([(r[0], r[1]) for r in rows
                            if r[15] is not None and 1 <= r[15] < 8]),
+        # The event pick against its own siblings, which is the ONLY honest
+        # comparison for it. Measuring picks against every other signal would
+        # mostly be measuring solo signals, which were never a choice — so
+        # both sides here are drawn from clusters of two or more, states 1 and
+        # 2. State 0 (solo), 3 (no pick offered) and -1 (unrecorded) are left
+        # out of both. See init() for the encoding.
+        "pick_yes": _bucket([(r[0], r[1]) for r in rows if r[16] == 1]),
+        "pick_no": _bucket([(r[0], r[1]) for r in rows if r[16] == 2]),
         # By grade. Computed from the stored poi and trend_dir columns rather
         # than a saved letter, so a change to the ladder re-grades history
         # instead of stranding it. Rows armed before the POI column existed
