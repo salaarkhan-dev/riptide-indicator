@@ -334,45 +334,73 @@ def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
     return f"{src} pool @ {fmt(level)}{extra}"
 
 
-# ONLY THE UPPER EDGE SURVIVED, so only the upper edge is printed.
+# THREE ZONES, THREE DIFFERENT STRENGTHS OF EVIDENCE, SO THREE DIFFERENT WORDS.
 #
-# The band shipped for a few hours as take / marginal / skip on 1.2%-2.6%, and
-# then risk_band.py tested its two halves separately against a circular-shift
-# null. They came apart completely:
+# For months only "skip" printed and everything at or under 2.6% said nothing.
+# That was right at the time: risk_band.py had tested the two edges separately
+# against a circular-shift null and only the upper one cleared, so asserting a
+# "take" would have asserted something that failed. The cost was that the most
+# common alert carried no verdict at all and read as though the band had not
+# been measured.
 #
-#   over 2.6%   real |z| 2.84 against a null p95 of 1.38 and a null MAX of
-#               1.95 over 300 rotations — larger than every rotation, so
-#               p < 1/300 — and the sign holds in 4 quarters of 4.
-#               26% win against 41%, -0.226 R against +0.141.
+# Re-measured 10-11 Sep on the 333-day window with the SYMBOL BOOTSTRAP from
+# research/studies/survivor.py, which is the stricter instrument: it resamples
+# the sixty perpetuals with replacement, so a number carried by a handful of
+# coins falls apart and one spread across the universe does not. 595 confirmed
+# Min30 setups:
 #
-#   under 1.2%  real |z| 0.77 against a p95 of 1.74. Does not clear, sign holds
-#               in 2 quarters of 4, and it still does not clear with fees
-#               switched off (0.60). The lower boundary was not supported and
-#               has been withdrawn rather than left on the alert.
+#   over 2.6%   -0.192 R/bet, 30% win, bootstrap [-0.338, -0.032] ENTIRELY
+#               BELOW ZERO, negative in 4 quarters of 4, and the sign holds in
+#               both halves of the window (-0.273 then -0.536 against the
+#               band). This was always the strong one and it got stronger.
 #
-# The surviving half is also the one with no arithmetic explanation: fees are
-# negligible on a wide stop, so nothing about cost accounts for a 26% win rate
-# there. The reading is behavioural — a raid that large was a violent move, and
-# a violent move continues rather than exhausts.
+#   1.2-2.6%    +0.214 R/bet, 42% win, bootstrap [+0.082, +0.329] ENTIRELY
+#               ABOVE ZERO, positive in 4 quarters of 4 (+0.209 +0.260 +0.132
+#               +0.207) and in both halves. That is a claim about the BAND
+#               standing on its own, which is what "take" now says. It is not
+#               a claim that a narrow stop is bad.
+#
+#   under 1.2%  -0.051 R/bet, bootstrap [-0.193, +0.075] STRADDLING ZERO, and
+#               Q3 flips positive (+0.13) after three negative quarters. Still
+#               not supported, exactly as risk_band.py found. It gets "flat",
+#               which says measured and indistinguishable from zero — NOT
+#               "unmeasured" and NOT "bad".
+#
+# TWO THINGS THIS LABEL DOES NOT SAY. It is not a filter: nothing is suppressed
+# by it and a "skip" alert is still sent, because the decision is the reader's.
+# And the 1.2 and the 2.6 were chosen by looking at data — risk_band.py
+# pre-registered the test, not the boundaries — so some of the separation is
+# selection and no amount of re-slicing the same 333 days removes it.
+RISK_TIGHT = 1.2
 RISK_WIDE = 2.6
 
+# THE BAND WAS MEASURED ON Min30 AND THE BOT ALSO ALERTS ON Min15. Printing a
+# Min30 verdict on a Min15 alert would be quietly asserting that the number
+# transfers, which is the kind of assumption this project keeps finding to be
+# wrong. So the verdict is gated on the timeframe it was actually measured on
+# and every other timeframe gets silence until it has its own measurement.
+RISK_MEASURED_ON = {"Min30"}
 
-def risk_verdict(riskpct: float) -> str:
-    """"skip" when the stop is wider than 2.6% of price, otherwise nothing.
 
-    ONE-SIDED ON PURPOSE. The upper edge beat every one of 300 rotations of its
-    own null and held its sign in all four quarters; the lower edge cleared
-    neither test. Printing a "take" for the rest of the range would assert
-    something that failed, so the rest of the range says nothing at all.
+def risk_verdict(riskpct: float, interval: str | None = None) -> str:
+    """"skip" over 2.6%, "take" in 1.2-2.6%, "flat" under 1.2%.
+
+    Blank on any timeframe the band has not been measured on, and blank when
+    the caller passes no timeframe at all, so a new call site cannot acquire a
+    verdict by accident.
 
     CONFIRMED SETUPS ONLY, enforced by the caller. The same split on early
     signals is non-monotone with no block, so there is no verdict to give.
     """
-    return "skip" if riskpct > RISK_WIDE else ""
+    if interval not in RISK_MEASURED_ON:
+        return ""
+    if riskpct > RISK_WIDE:
+        return "skip"
+    return "take" if riskpct >= RISK_TIGHT else "flat"
 
 
 def _levels(entry: float, stop: float, risk: float, is_long: bool,
-            confirmed: bool = False) -> str:
+            confirmed: bool = False, interval: str | None = None) -> str:
     """
     The trade. Four plain lines, no code block.
 
@@ -385,7 +413,7 @@ def _levels(entry: float, stop: float, risk: float, is_long: bool,
     """
     sign = 1 if is_long else -1
     riskpct = risk / entry * 100 if entry else 0
-    verdict = risk_verdict(riskpct) if confirmed else ""
+    verdict = risk_verdict(riskpct, interval) if confirmed else ""
     out = (f"Entry  <b>{fmt(entry)}</b>\n"
            f"Stop   <b>{fmt(stop)}</b>  <i>{riskpct:.2f}% risk"
            f"{' · ' + verdict if verdict else ''}</i>\n"
@@ -489,7 +517,8 @@ def setup_message(s: Setup) -> str:
         why,
         marks(s),
         "",
-        _levels(s.entry, s.stop, s.risk, s.is_long, confirmed=True),
+        _levels(s.entry, s.stop, s.risk, s.is_long, confirmed=True,
+                interval=s.tf or INTERVAL),
         "",
         f"<i>sweep → shift → FVG{also} · "
         f"{_pool(s.src, s.level, s.pivots)}</i>",
