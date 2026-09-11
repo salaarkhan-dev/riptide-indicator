@@ -197,6 +197,37 @@ on two or more timeframes, 11%. So the 🔁 chip shipped today marks about one
 alert in nine, and the cross-timeframe half of the pick rule matters much less
 than the cross-SYMBOL half, which is most of the mean event size of 2.2.
 
+WHAT A BOT CAN ACTUALLY DO, AND WHY 5.46 IS NOT IT. Every row above keys on
+the signal's own bar time, which quietly uses hindsight: a Min60 setup on the
+10:00 bar is not knowable until 11:00, while a Min15 setup on the 10:15 bar is
+knowable at 10:30. Both floor into the 10:00 hour, so an hour-keyed grouping
+puts them in one event — but they arrive in different scan cycles, and the
+earlier one's message has already been sent by the time the later one exists.
+
+    per bar per tf (before 11 Sep)       36.0/day  recov 1.39  acct +104%
+    AS SHIPPED 11 Sep (scan+hour key)    33.8/day  recov 2.46  acct +396%
+    per SCAN cycle, across tfs           33.8/day  recov 2.46  acct +396%
+    per hour, first arrival claims it    25.7/day  recov 3.60  acct +394%
+    per hour, WITH hindsight              25.7/day  recov 5.46  acct +860%
+
+THE SHIPPED RULE SCORES 2.46, NOT 5.46, and the gap is mine to own: decide()
+groups on the hour but only ever sees ONE scan cycle, because the scanner hands
+it that cycle's signals and keeps no memory. Its effective key is (scan, hour,
+direction) — identical to keying on the scan alone, to every decimal, since
+nothing merges beyond a cycle. Still a large win over the 1.39 it replaced, and
+still not what the hindsight row promised.
+
+THE REACHABLE VERSION IS 3.60 AND IT NEEDS ONE HOUR OF MEMORY. If a pick has
+already been named this hour, a later signal in the same hour defers to it
+rather than claiming its own; the ranking then only orders signals that arrived
+in the same cycle. That is causal, needs no unsend, and recovers 1.14 of the
+1.86 lost to hindsight. Note the account column barely moves (+394% against
++396%) while recovery goes 2.46 to 3.60 — fewer, less correlated trades at the
+same compounded return, which is exactly the trade portfolio_v2.py described.
+
+BAND-FIRST IS WORSE HERE TOO: per scan it scores 2.16 against 2.46, so the
+tf-first ordering survives the move from hindsight to causal.
+
 THE EVENT WINDOW MATTERS MORE THAN THE RANKING, and this was the open question
 until it was measured. The deployed tag_event_pick groups by one BAR of one
 timeframe, four times finer than an hour on Min15 and blind across timeframes:
@@ -307,6 +338,79 @@ def by_bar(rows):
     return g
 
 
+SCAN = 900          # SCAN_INTERVAL: the bot wakes on every Min15 close
+
+
+def arrival(t):
+    """When the SCANNER first sees a signal, not when its bar opened.
+
+    THIS IS THE DIFFERENCE BETWEEN A BACKTEST AND A BOT AND IT IS EASY TO MISS.
+    A Min60 setup completing on the 10:00 bar is not knowable until 11:00, and
+    the bot notices it on the next scan after that. A Min15 setup on the 10:15
+    bar is knowable at 10:30. Both floor into the 10:00 HOUR, so an hour-keyed
+    grouping puts them in one event — but they arrive 30 minutes apart, in
+    different scan cycles, and the earlier one has already been SENT by the
+    time the later one exists.
+
+    So "one pick per hour" as scored above quietly uses hindsight. These rows
+    price what a bot can actually do.
+    """
+    return -(-t // SCAN) * SCAN
+
+
+def by_arrival(rows):
+    """Fully causal: one pick per SCAN CYCLE, across symbols and timeframes.
+
+    No memory, no hindsight, no retroactive edit to a message already sent.
+    This is the cheapest correct implementation of the rule.
+    """
+    g = defaultdict(list)
+    for t in rows:
+        seen = arrival(t.t + BAR_SECONDS[t.tf])
+        g[(seen, t.is_long)].append(t)
+    return g
+
+
+def by_scan_and_hour(rows):
+    """EXACTLY WHAT decide.py SHIPPED ON 11 SEP, and it is not what was scored.
+
+    decide() groups on the hour — but it only ever sees ONE scan cycle's
+    results, because the scanner hands it the signals found in that cycle and
+    keeps no memory. Two signals in the same hour that arrive in different
+    scans therefore never meet, and the earlier one's message has already been
+    sent by the time the later one exists.
+
+    The effective key is (scan, hour, direction), which merges nothing beyond
+    the scan and can still SPLIT inside it when a fresh-but-older signal floors
+    into the previous hour. This row prices that honestly instead of letting
+    the hindsight row stand in for it.
+    """
+    g = defaultdict(list)
+    for t in rows:
+        seen = arrival(t.t + BAR_SECONDS[t.tf])
+        g[(seen, t.t - (t.t % 3600), t.is_long)].append(t)
+    return g
+
+
+def pick_first_in_hour(rows, key):
+    """Hour-keyed, but the EARLIEST-ARRIVING member claims the pick.
+
+    What a bot with one hour of memory and no ability to unsend could do. The
+    key still ranks, but only among signals that arrived in the same scan as
+    the claimant; anything later in the hour defers to a pick already sent.
+    """
+    g = defaultdict(list)
+    for t in rows:
+        g[(t.t - (t.t % 3600), t.is_long)].append(t)
+    out = []
+    for members in g.values():
+        first = min(arrival(t.t + BAR_SECONDS[t.tf]) for t in members)
+        same = [t for t in members
+                if arrival(t.t + BAR_SECONDS[t.tf]) == first]
+        out.append(min(same, key=key))
+    return out
+
+
 def by_slow_bar(rows):
     """One bar of the SLOWEST scanned timeframe, across timeframes. Same
     coarseness as the hour here, kept separate so the grouping and the window
@@ -415,6 +519,17 @@ async def main():
     score("per hour, across tfs", pick(rows, key_band), len(ev))
     score("per bar per tf, tf-first",
           pick(rows, key_tf_first, group=by_bar), len(ev))
+    print("  -- WHAT A BOT CAN ACTUALLY DO (no hindsight) " + "-" * 31)
+    score("AS SHIPPED 11 Sep (scan+hour key)",
+          pick(rows, key_tf_first, group=by_scan_and_hour), len(ev))
+    score("per SCAN cycle, across tfs",
+          pick(rows, key_tf_first, group=by_arrival), len(ev))
+    score("per scan, band-first",
+          pick(rows, key_band, group=by_arrival), len(ev))
+    score("per hour, first arrival claims it",
+          pick_first_in_hour(rows, key_tf_first), len(ev))
+    score("per hour, WITH hindsight (scored above)",
+          pick(rows, key_tf_first), len(ev))
     print()
     score("band->confd->tf, skip dropped",
           pick(rows, key_band, drop_skip=True), len(ev))
