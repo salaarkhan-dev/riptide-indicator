@@ -229,7 +229,7 @@ SHIP = {
 class T:
     __slots__ = ("sym", "t", "r", "gross", "tf", "filled", "fill_t",
                  "exit_t", "risk_pct", "kind", "day", "h8", "h8long",
-                 "trend_ok", "is_long")
+                 "trend_ok", "is_long", "rd")
 
 
 def zone_hit(zones, when, price, is_long, step, max_age_bars):
@@ -264,13 +264,21 @@ async def context(sess, symbols, interval):
 
 
 async def collect(sess, candles, zday, z8h, interval=INTERVAL,
-                  require_ab=True):
+                  require_ab=True, delays=()):
     """One pool of A/B signals with every POI applied as a LABEL, not a filter.
 
     `interval` is a parameter rather than the module constant so that
     matrix.py can run the identical pipeline on Min15 and Min30 — one code
     path, three timeframes, which is the same argument the frozen-control test
     makes about research never forking the engine.
+
+    `delays` prices WAITING. Each entry is a wall-clock delay in seconds, and
+    the trade is re-simulated as if the limit order were not placed until that
+    much later — rounded UP to whole bars of the signal's own timeframe, since
+    that is the unit the fill and horizon windows are counted in. Fills that
+    happened during the wait are therefore missed, which is the real cost of
+    holding a decision back to see what else arrives. Empty by default, so no
+    existing study pays for simulations it does not read.
 
     `require_ab=False` keeps the trend-DISAGREEING signals too, recording the
     answer on each row instead of dropping it. poi_recheck.py needs them: the
@@ -315,6 +323,16 @@ async def collect(sess, candles, zday, z8h, interval=INTERVAL,
                 z.sym, z.t, z.kind, z.tf = sym, w, kind, interval
                 z.trend_ok, z.is_long = ok, bool(x.is_long)
                 z.r, z.filled, z.gross = o.r, o.filled, g.r
+                z.rd = {}
+                for d in delays:
+                    step = -(-d // bar)          # ceil, in bars of THIS tf
+                    j = i + step
+                    if j >= len(cs) - 2:
+                        z.rd[d] = None
+                        continue
+                    od = simulate(cs, j, x.entry, x.stop, x.is_long,
+                                  target_r=TRACK_TARGET_R)
+                    z.rd[d] = od.r if od.filled else None
                 z.risk_pct = 100 * abs(x.entry - x.stop) / x.entry
                 # Wall-clock fill and exit, so report.compound can replay the
                 # account in time with several positions open at once.
