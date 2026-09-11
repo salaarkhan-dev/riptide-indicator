@@ -1,0 +1,35 @@
+WHICH ONE TO TAKE, ACROSS SYMBOLS AND TIMEFRAMES
+59 symbols, 333 days, 15m+30m+1h, the stream the bot
+actually sends: in a daily POI, 8h trend agreeing, grade A or B.
+
+  9071 filled trades in 4200 market events
+  (one hour, one direction, any symbol, any timeframe)
+  event size: median 1, mean 2.2, largest 27, 54% are singletons
+
+  rule                                 /day trades    total   maxDD   recov   1st½   2nd½    win      acct accDD
+  take everything                      55.4   9071     52.9   410.7    0.13  -0.48   1.31    36%      -51%   95%
+  one at random                        25.7   4200    180.6    80.3    2.25   0.45   2.03    37%     +234%   56%
+
+  band only                            25.7   4200    228.9    78.1    2.93   0.72   2.26    38%     +367%   58%
+  band -> confirmed -> tf              25.7   4200    288.8    59.6    4.85   1.27   3.64    38%     +580%   50%
+  band -> tf -> confirmed              25.7   4200    291.8    60.7    4.80   1.18   3.69    38%     +593%   51%
+  confirmed -> band -> tf              25.7   4200    280.5    61.5    4.56   1.32   3.35    38%     +545%   49%
+  tf -> band -> confirmed              25.7   4200    318.6    58.4    5.46   1.68   3.87    38%     +860%   49%
+  POI -> band -> confirmed -> tf       25.7   4200    288.8    59.6    4.85   1.27   3.64    38%     +580%   50%
+
+  band->confd->tf, skip dropped        22.5   3685    259.8    63.7    4.08   0.84   3.73    38%     +502%   52%
+  top 2 per event                      37.4   6118    248.3   141.5    1.75  -0.12   2.51    37%     +188%   81%
+  top 3 per event                      43.5   7123    188.7   236.6    0.80  -0.51   2.71    37%      +75%   90%
+
+  CONFIRMED only, take all              6.7   1089     61.7    64.4    0.96  -0.27   2.00    37%      +48%   53%
+  CONFIRMED only, band -> tf            5.2    850     62.8    53.4    1.17  -0.40   4.04    38%      +68%   44%
+  CONFIRMED only, band->tf, no skip     4.1    678     70.8    26.3    2.70   0.10   3.20    39%      +86%   24%
+  EARLY only, band -> tf               24.5   4018    250.7    66.7    3.76   0.93   3.44    38%     +403%   55%
+
+-- WHAT THE PICK ACTUALLY CHOOSES ------------------------------------------
+  timeframe  Min15 49%  Min30 30%  Min60 20%
+  stream     confirmed 17%  early 83%
+  band       flat 41%  skip 12%  take 47%
+
+-- HOW OFTEN A RAID SHOWS UP ON 2+ TIMEFRAMES -------------------------------
+  845 of 7547 symbol-events print on 2+ timeframes (11%)

@@ -229,7 +229,7 @@ SHIP = {
 class T:
     __slots__ = ("sym", "t", "r", "gross", "tf", "filled", "fill_t",
                  "exit_t", "risk_pct", "kind", "day", "h8", "h8long",
-                 "trend_ok")
+                 "trend_ok", "is_long")
 
 
 def zone_hit(zones, when, price, is_long, step, max_age_bars):
@@ -313,7 +313,7 @@ async def collect(sess, candles, zday, z8h, interval=INTERVAL,
                              target_r=TRACK_TARGET_R, fee_pct=0.0)
                 z = T()
                 z.sym, z.t, z.kind, z.tf = sym, w, kind, interval
-                z.trend_ok = ok
+                z.trend_ok, z.is_long = ok, bool(x.is_long)
                 z.r, z.filled, z.gross = o.r, o.filled, g.r
                 z.risk_pct = 100 * abs(x.entry - x.stop) / x.entry
                 # Wall-clock fill and exit, so report.compound can replay the
