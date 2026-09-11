@@ -1,40 +1,46 @@
-"""Did widening the universe from 60 symbols to 120 help or dilute?
+"""Did lowering the turnover floor from 3M to 1M help or dilute?
 
 ASKED BECAUSE THE ANSWER WAS ASSUMED RATHER THAN MEASURED. The floor was
-lowered from 3M to 1M of 24h turnover on 11 Sep on a power argument: bets scale
-as symbols^0.905, so 69 to 120 takes the minimum detectable effect from about
-0.32 to 0.25 and nearly doubles the forward observation rate. The liquidity
-bands had been checked for a PENALTY and none was detectable — +0.036, -0.026
-and -0.002 R per bet across ranks 1-60, 61-90 and 91-120, every one inside its
-own standard error of zero and of the others.
+lowered on a power argument: bets scale as symbols^0.905, so 69 symbols to 120
+takes the minimum detectable effect from about 0.32 to 0.25 and nearly doubles
+the forward observation rate. The admitted bands had been checked for a
+PENALTY and none was detectable.
 
 "No detectable penalty" is not the same claim as "the combination is better",
 and this file asks the second question, which is the one that matters to
 somebody actually reading the alerts.
 
-IT HAS THREE ANSWERS, BECAUSE IT DEPENDS ENTIRELY ON WHAT THE READER DOES.
-That is the finding, and collapsing it to one number would be the mistake:
+IT HAS DIFFERENT ANSWERS FOR DIFFERENT READERS, AND THAT IS THE FINDING:
 
-    take every alert            60: +0.036 R/bet     120: +0.016 R/bet
-    one per cluster, any band   60: recovery 3.01    120: recovery 2.09
-    one per cluster, in band    60: recovery 1.85    120: recovery 2.94
+    take every alert              3M: +0.032 R/bet     1M: +0.016 R/bet
+    one per cluster, any band     3M: recovery 3.11    1M: recovery 2.09
+    one per cluster, in band      3M: recovery 1.75    1M: recovery 2.94
+    confirmed-only band picks     3M: +0.151 / 2.32    1M: +0.149 / 2.90
 
 The wider universe DILUTES a reader who takes everything and HELPS one who
 filters to the risk band, because the extra symbols add far more mediocre
-signals than good ones — and the band is what separates them. The mechanism
-that was hoped for is NOT the one that operated: bigger clusters were supposed
-to be likelier to contain an in-band member, and that barely moved (63% to
-66%, median cluster size 1 either way). What actually happened is simpler —
-twice the symbols produce roughly twice the in-band opportunities, 3.5 a day
-against 6.0, and the band's quality holds up across them.
+signals than good ones and the band is what separates them.
 
-EVERY DIFFERENCE HERE IS INSIDE ITS OWN NOISE. On 254 picks the standard error
-of R per pick is about 0.088, so +0.197 against +0.149 is a difference of
-0.048 with an error bar twice its size. Recovery factors are worse still: a
-maximum drawdown is an extreme-value statistic read off ONE path, and it has no
-usable error bar at all. Read the direction of these rows, never the magnitude,
-and do not let the fact that they point different ways in different slices
-become a story about which slice is right.
+THE MECHANISM THAT WAS HOPED FOR IS NOT THE ONE THAT OPERATED. Bigger clusters
+were supposed to be likelier to contain an in-band member; that barely moved,
+64% to 66%, with a median cluster size of 1 either way. What actually happens
+is simply MORE in-band opportunities — 3.8 a day against 6.0 — with the band
+holding its quality across them.
+
+AND HERE IS THE REASON TO DISTRUST ALL OF IT. An earlier version of this file
+split the universe at RANK 60 rather than at the 3M turnover floor, which is
+69 symbols. Nine symbols. On that split the confirmed-only row read +0.197 and
+recovery 3.30 for the small universe against +0.149 and 2.90 for the large —
+the opposite verdict to the row above. Nine symbols out of 120 flipped the
+conclusion, which is as clean a demonstration as this project has that these
+differences are noise being read as signal.
+
+On 286 picks the standard error of R per pick is about 0.085, so +0.151
+against +0.149 is a difference of 0.002 with an error bar forty times its size.
+Recovery factors are worse still: a maximum drawdown is an extreme-value
+statistic read off ONE path and has no usable error bar at all. Read the
+direction of these rows, never the magnitude, and do not let slices pointing
+different ways become a story about which slice is right.
 
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/universe_size.py
@@ -93,21 +99,28 @@ def line(lab, rs):
 
 
 async def main():
-    ranked = json.load(open(RANKED))["ranked"]
+    meta = json.load(open(RANKED))
+    ranked, turn = meta["ranked"], meta["turnover"]
     have = {f.split(".")[0] for f in
             os.listdir(os.environ["RIPTIDE_DEEP_CACHE"]) if ".Min30." in f}
-    syms = [x for x in ranked[:120] if x in have]
+    syms = [x for x in ranked if x in have]
     async with aiohttp.ClientSession() as sess:
         cs = await load_universe(sess, syms, INTERVAL, DAYS)
         allt = [t for t in await collect(sess, cs)
                 if t.filled and t.exit_t is not None]
-    top60 = set(ranked[:60])
-    sets = (("60 symbols", lambda t: t.sym in top60),
-            ("120 symbols", lambda t: True))
 
-    print(f"UNIVERSE SIZE\n{len(syms)} symbols cached, {len(allt)} filled "
-          f"trades, {DAYS} days.\nevery difference below is inside its own "
-          f"noise. read direction, not magnitude.\n")
+    # THE TWO ACTUAL SETTINGS, not two round numbers. RIPTIDE_MIN_VOL is a
+    # turnover floor, so the comparison has to be drawn on turnover — an
+    # earlier version of this file split on rank 60 against rank 120 and was
+    # therefore answering a question nobody had configured.
+    old = {x for x in syms if turn[x] >= 3e6}
+    sets = ((f"3M floor  ({len(old)} syms)", lambda t: t.sym in old),
+            (f"1M floor  ({len(syms)} syms)", lambda t: True))
+
+    print(f"UNIVERSE SIZE — THE TWO DEPLOYED SETTINGS\n"
+          f"{len(syms)} symbols cached, {len(allt)} filled trades, {DAYS} "
+          f"days.\nevery difference below is inside its own noise. read "
+          f"direction, not magnitude.\n")
     print(f"  {'':<26}{'n':>7}{'/day':>7}{'win':>6}{'R each':>16}"
           f"{'total':>9}{'maxDD':>8}{'recovery':>10}")
 
@@ -139,7 +152,7 @@ async def main():
         multi = [v for v in ev.values() if len(v) > 1]
         inband = sum(1 for v in multi
                      if any(LO <= t.risk_pct <= HI for t in v))
-        print(f"  {lab:<14} clusters of 2+ {len(multi):>5}   with an in-band "
+        print(f"  {lab:<20} clusters of 2+ {len(multi):>5}   in-band "
               f"member {inband / len(multi):>4.0%}   median cluster size "
               f"{statistics.median(len(v) for v in ev.values()):.0f}")
     print("  bigger clusters were supposed to be likelier to hold an in-band")
