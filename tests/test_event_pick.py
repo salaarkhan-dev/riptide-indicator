@@ -43,7 +43,7 @@ from riptide.decide import decide as decide_decide     # noqa: E402
 from riptide.decide import reset as decide_reset       # noqa: E402
 from riptide.engine import Early, Setup                 # noqa: E402
 from riptide.scanner import event_rank, tag_event_pick  # noqa: E402
-from riptide.telegram import marks, setup_message       # noqa: E402
+from riptide.telegram import move_row, setup_message    # noqa: E402
 
 fails = []
 
@@ -89,9 +89,8 @@ def early(sym, risk_pct, t=1789000000, is_long=True, tf="Min30"):
     return e
 
 
-def plain(msg, needle):
-    line = [x for x in msg.split("\n") if needle in x]
-    return re.sub(r"<[^>]+>", "", line[0]) if line else ""
+def strip(msg):
+    return re.sub(r"<[^>]+>", "", msg)
 
 
 print("the band beats everything else")
@@ -128,13 +127,11 @@ check(sum(1 for x in grp if x.event_pick) == 1,
 check(all(x.event_of == "AAA_USDT" for x in grp),
       "and every sibling names it")
 check(all(x.event_weak for x in grp), "the cluster is flagged weak")
-check("best of a wide cluster" in (marks(grp[0]) or ""),
-      "the chip names it WITHOUT a bare target — the endorsement worry is "
+check("best of a wide cluster" in strip(setup_message(grp[0])),
+      "the alert names it WITHOUT a bare target — the endorsement worry is "
       "answered by wording, not by silence")
-check("🎯 the pick" not in (marks(grp[0]) or ""),
-      "and the confident chip is reserved for clusters that have one")
-check("🔗 3 on this close" in (marks(grp[0]) or ""),
-      "size-once still warns about the cluster")
+check("3 symbols" in move_row(grp[0]),
+      "and the move row still says how wide the cluster is")
 
 print("\na cluster with one good member gets the confident chip")
 mix = [setup("AAA_USDT", 4.0), setup("BBB_USDT", 2.0)]
@@ -143,7 +140,9 @@ for x in mix:
 tag_event_pick([(mix, [], [], [])])
 check(mix[1].event_pick and not mix[1].event_weak,
       "the in-band member is the pick and the cluster is not weak")
-check("🎯 the pick" in (marks(mix[1]) or ""), "so the chip is the plain one")
+check("🎯 THE PICK" in strip(setup_message(mix[1]))
+      and "best of a wide cluster" not in strip(setup_message(mix[1])),
+      "so the header is the plain one")
 
 print("\nthe pick is deterministic")
 rows = [setup(s, 2.0) for s in ("MMM_USDT", "AAA_USDT", "ZZZ_USDT")]
@@ -208,8 +207,8 @@ check(later.event_of == "AAA_USDT",
       "it names the pick already sent, so nothing is contradicted")
 check(later.event_age == span // 2,
       "and carries its age, so the chip can say how long ago")
-check(f"{span // 120}m ago" in (marks(later) or "") or later.event_age < 300,
-      "which the chip renders as an age, not as a live instruction")
+check(f"{span // 120}m ago" in move_row(later) or later.event_age < 300,
+      "which the move row renders as an age, not as a live instruction")
 
 after = setup("CCC_USDT", 2.0)
 decide_decide([([after], [], [], [])], now=now + span + 60)
@@ -229,17 +228,20 @@ for x in grp:
 tag_event_pick([(grp, [], [], [])])
 check(f"{event_span() // 60}m" in describe() and "tf" in describe(),
       f"/status can state the live rule: {describe()}")
-check("🎯 the pick" in (marks(grp[1]) or ""), "the pick says so")
-check("pick is BBB" in (marks(grp[0]) or ""),
+check("🎯 THE PICK" in strip(setup_message(grp[1])), "the pick says so")
+check("BBB is the pick" in move_row(grp[0]),
       "a sibling names the pick, without the quote currency")
-check("🔗 2 on this close" in (marks(grp[0]) or ""),
-      "the existing size-once chip is untouched")
+check("👀 WATCH" in strip(setup_message(grp[0])),
+      "and its header is the one that says not to act on it")
+check("2 symbols" in move_row(grp[0]),
+      "the cluster size is still on the move row")
 
 lone = setup("AAA_USDT", 2.0)
 lone.breadth = 1
 tag_event_pick([([lone], [], [], [])])
-check("pick" not in (marks(lone) or ""),
-      "a solo signal gets no pick chip — no clutter when there is no choice")
+check(move_row(lone) == "alone this close",
+      "a solo signal says exactly that — a blank row would read as a missing "
+      "one, and 'nothing else is firing' is itself a fact about the move")
 
 print("\nRIPTIDE_PICK_ORDER=band flips the first key and nothing else")
 import importlib                                        # noqa: E402

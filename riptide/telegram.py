@@ -29,9 +29,9 @@ def keyboard(*rows) -> dict:
     carries a database row id rather than the trade it refers to.
     """
     out = []
-    for row in rows:
+    for r in rows:
         line = []
-        for label, data in row:
+        for label, data in r:
             key = "url" if str(data).startswith("http") else "callback_data"
             line.append({"text": label, key: str(data)})
         if line:
@@ -253,27 +253,81 @@ def bar_label(t: int) -> str:
 
 
 def _headline(tag: str, is_long: bool, symbol: str, tf: str,
-              suffix: str = "", grade: str = "") -> str:
+              kind: str = "", suffix: str = "", grade: str = "",
+              note: str = "") -> str:
     """
     First line of every alert, and the only line Telegram shows in the
     notification preview — so it carries everything needed to triage without
-    opening the chat: which strategy, how good, which way, which symbol.
+    opening the chat: what to do about it, which strategy, how good, which way,
+    which symbol.
 
-    The GRADE goes here, in the preview, because it is the one thing that
-    decides whether to open the message at all. It used to sit seven lines
-    down, below the entry and stop — which meant reading the numbers of a
-    trade before finding out it was a D.
+    THE TAG IS NOW THE INSTRUCTION, AND THERE IS EXACTLY ONE PER MESSAGE.
+    It used to name the strategy (★ CONFIRMED / ⚡ EARLY) and leave the
+    instruction to a 🎯 chip three lines down, next to a risk label that said
+    "take" or "skip" — so a single alert could carry a 🎯 and the word "skip"
+    and contradict itself on the reader's behalf. There is one decision in this
+    bot and it is the pick; everything else describes. So the pick owns the
+    first two words and the strategy moved to the middle of the line, where it
+    is a fact like the timeframe rather than a call to action.
+
+    The GRADE stays here, in the preview, because it is the one thing that
+    decides whether to open the message at all.
 
     suffix qualifies the direction ("bias" on a sweep, where nothing is
     tradeable yet) and belongs beside it, not after the timeframe.
     """
-    side = "LONG" if is_long else "SHORT"
+    side = "long" if is_long else "short"
     # The grade is a bare bold letter, not a coloured dot. The direction
     # already owns the green/red dot on this line and a second coloured circle
     # beside it reads as noise rather than as a second signal.
-    return (f"{tag}{f' <b>{grade}</b>' if grade else ''}"
-            f"  {'🟢' if is_long else '🔴'} <b>{side}</b>"
-            f"{f' <i>{suffix}</i>' if suffix else ''}  <b>{symbol}</b>  {tf}")
+    return (f"{tag} — {f'{kind} ' if kind else ''}"
+            f"{'🟢' if is_long else '🔴'} {side}"
+            f"{f' <i>{suffix}</i>' if suffix else ''} · "
+            f"<b>{_short(symbol)}</b> · {tf}"
+            f"{f' · grade <b>{grade}</b>' if grade else ''}"
+            f"{f' · <i>{note}</i>' if note else ''}")
+
+
+def _tag(x, kind: str) -> tuple[str, str]:
+    """(tag, strategy word) for the headline.
+
+    Three outcomes, and the third is not a fallback nobody sees: with
+    RIPTIDE_EVENT_PICK=0, or on a signal the grouper could not place (no
+    usable signal time), there is no pick to report and the alert names its
+    strategy instead. Inventing a 🎯 there would be a claim nothing measured.
+    """
+    if getattr(x, "event_pick", False):
+        return "🎯 <b>THE PICK</b>", kind
+    if getattr(x, "event_of", ""):
+        return "👀 <b>WATCH</b>", kind
+    return (("★ <b>CONFIRMED</b>" if kind == "confirmed"
+             else "⚡ <b>EARLY</b>"), "")
+
+
+def _lead(x) -> str | None:
+    """The optional second line. Present only when the header alone would
+    mislead, which is two cases and no others.
+
+    A plain 🎯 THE PICK gets NOTHING here. A restating line ("this is the one")
+    is the kind of filler that teaches a reader to skip the line, and then the
+    two lines that matter get skipped with it.
+    """
+    if getattr(x, "event_pick", False):
+        # Best of a bad lot is still named — withholding the pick in an
+        # all-wide cluster measured 4.08 recovery against 4.85 — but it is not
+        # named in the same words as a pick that had a good candidate.
+        return ("<i>best of a wide cluster</i>"
+                if getattr(x, "event_weak", False) else None)
+    of = getattr(x, "event_of", "")
+    if not of:
+        return None
+    # "pick is SOL" reads as a live instruction. If SOL went out forty minutes
+    # ago the reader is being pointed BACKWARDS, at a message they have already
+    # seen and either took or did not, so past tense from five minutes.
+    age = getattr(x, "event_age", 0)
+    if isinstance(age, int) and age >= 300:
+        return f"<i>{_short(of)} took this move {age // 60}m ago</i>"
+    return f"<i>pick is {_short(of)}</i>"
 
 
 # MEXC's interval names to TradingView's, for the chart link.
@@ -299,16 +353,65 @@ def tv_link(tv_symbol: str, interval: str = "") -> str:
             f"{tv_symbol.replace('_', '')}.P" + (f"&interval={tf}" if tf else ""))
 
 
-def _footer(when: int, price: float, tv_symbol: str,
-            interval: str = "") -> str:
-    """Time, age and the price as of the scan, so a stale alert is obvious."""
-    px = f" · {fmt(price)}" if price else ""
-    return (f"<i>{signal_age(when)}{px}</i>\n"
-            f"<a href='{tv_link(tv_symbol, interval)}'>chart</a>")
+# EVERY ALERT IS THE SAME SHAPE, AND THE SHAPE IS A LABELLED TABLE.
+#
+# What it replaced: a headline, a grade sentence, a line of chips, a block of
+# levels, a line of provenance, and a footer — six different layouts across
+# three alert types, with the same fact appearing in two of them depending on
+# which type it was. A reader had to learn where each message put things.
+#
+# Now there are exactly three rows under the numbers and they never move:
+#
+#   move     what else is firing, and whether someone already took this
+#   context  why it graded the way it did, and where the pool was
+#   when     the clock, the last price, the chart
+#
+# The labels are wrapped in <code> and padded to a fixed width. That is not
+# decoration — Telegram's body font is proportional, so plain-text padding does
+# not align, and <code> is the only inline monospace it offers. <pre> would
+# align the whole block but draws a heavy grey panel with a copy button, which
+# on a phone dominates the message; that was tried and reverted once already
+# (see _levels' old docstring, now gone with it).
+LABEL_W = 8
+
+# The price column, padded so the annotation beside it starts in the same place
+# on every row. <code> rather than <b> and the two are not combined: Telegram
+# does not allow other entities inside a code span, and monospace already
+# stands out from the proportional body font as strongly as bold does. 13 fits
+# the widest thing fmt() produces — "1.224958e-05".
+PRICE_W = 13
 
 
-def _grade(x, early: bool = False) -> str:
-    """The one-line reason for the letter in the headline.
+def row(label: str, rest: str) -> str:
+    return f"<code>{label:<{LABEL_W}}</code>{rest}"
+
+
+def price_cell(v: float, note: str = "") -> str:
+    return (f"<code>{fmt(v):<{PRICE_W}}</code><i>{note}</i>" if note
+            else f"<code>{fmt(v)}</code>")
+
+
+def _when(when: int, price: float, tv_symbol: str, interval: str = "") -> str:
+    """The `when` row: clock, last price, chart. Age ONLY when it is news.
+
+    signal_age always appended "· 0s ago", which on a fresh alert is a
+    duplicate of the clock two characters to its left and cost a glance on
+    every message. The age exists to catch a STALE send, so it prints from five
+    minutes — the same threshold the deferral chip uses to decide whether it is
+    pointing forwards or backwards.
+    """
+    clock, _, ago = signal_age(when).partition(" · ")
+    bits = [clock]
+    if int(time.time()) - when >= 300:
+        bits.append(ago)
+    if price:
+        bits.append(f"last {fmt(price)}")
+    bits.append(f"<a href='{tv_link(tv_symbol, interval)}'>chart</a>")
+    return " · ".join(bits)
+
+
+def _why(x, early: bool = False) -> str:
+    """The reason for the letter in the headline, as the head of `context`.
 
     THE BAND'S HISTORICAL RATE USED TO BE PRINTED HERE AND IS NOT ANY MORE.
     "76% of fills reached 2R, 67% filled, 43 backtest" was the least
@@ -322,17 +425,28 @@ def _grade(x, early: bool = False) -> str:
     are forward, out of sample, and can be looked at deliberately rather than
     glanced at while deciding.
     """
-    return f"<i>{grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[1]}</i>"
+    return grade_of(early, x.poi, x.trend_dir, x.is_long, x.di_dir)[1]
 
 
-def _pool(src: str, level: float, pivots: int, pools: int = 0) -> str:
+def _pool(src: str, pivots: int, pools: int = 0, level: float = 0.0) -> str:
     """`pools` > 1 means several separate pools were raided into the same gap
     — worth saying, since it is why one alert stands for what the engine saw
-    as several clusters."""
-    extra = f" · {pivots} swings" if src == "Pivot" else ""
+    as several clusters.
+
+    THE POOL'S PRICE IS GONE FROM TRADE ALERTS and stays on sweeps. On a setup
+    the message already carries an entry, a stop and a target; a fourth price
+    that is not an order level is three characters of provenance competing with
+    the three the reader acts on. On a sweep there are no order levels at all
+    and the pool is the whole subject, so it is passed explicitly there.
+    """
+    out = f"{src} pool"
+    if level:
+        out += f" @ {fmt(level)}"
+    if src == "Pivot" and pivots:
+        out += f", {pivots} swings"
     if pools > 1:
-        extra += f" · {pools} pools taken"
-    return f"{src} pool @ {fmt(level)}{extra}"
+        out += f", {pools} pools taken"
+    return out
 
 
 # THREE ZONES, THREE DIFFERENT STRENGTHS OF EVIDENCE, SO THREE DIFFERENT WORDS.
@@ -430,60 +544,77 @@ RISK_WIDE = 2.6
 # widening the label and adding a timeframe in the same change would leave
 # nothing to read forward.
 #
-# Everything else stays silent until it has its own measurement.
-RISK_MEASURED_ON = {"Min30", "Min15", "Min60"}
+# THE THREE WORDS CHANGED ON 11 SEP FROM take/flat/skip TO tight/normal/wide,
+# AND THE GATING CAME OFF WITH THEM. Everything measured above is unchanged;
+# what changed is that the label stopped pretending to be a decision.
+#
+# Two facts forced it. First, the bot now names ONE pick per rolling 120
+# minutes (riptide/decide.py), and 61% of the picks it actually makes are not
+# in the middle band — 39% normal, 47% tight, 13% wide. A message headed
+# "🎯 THE PICK" three lines above a word reading "skip" is a contradiction the
+# reader has to resolve, on every sixth alert. Second, 86% of the picks are
+# EARLY signals, and on early the band measures +0.002: the word "take" was
+# never available there anyway, which is why early alerts printed no label at
+# all and looked like the measurement had been forgotten.
+#
+# tight / normal / wide is a description of the stop and it is TRUE ON EVERY
+# TIMEFRAME AND ON BOTH STREAMS, because it is arithmetic on the stop distance
+# rather than a claim about returns. So RISK_MEASURED_ON is gone: the gate
+# existed to stop a VERDICT travelling to a timeframe it was not measured on,
+# and there is no verdict to travel any more. A 15m early signal with a 4% stop
+# now says "wide", which is a fact, where before it said nothing.
+#
+# What was lost: the alert no longer states the direction of the evidence. That
+# moved to /legend and to the reference card, where it can carry the bootstrap
+# intervals instead of compressing them into one word. The ordering the numbers
+# above establish — wide is where the drawdown lives — is exactly why "wide" is
+# still worth a word beside the percentage.
+RISK_TIGHT_LABEL, RISK_NORMAL_LABEL, RISK_WIDE_LABEL = "tight", "normal", "wide"
 
 
-def risk_verdict(riskpct: float, interval: str | None = None) -> str:
-    """"skip" over 2.6%, "take" in 1.2-2.6%, "flat" under 1.2%.
+def stop_width(riskpct: float) -> str:
+    """"wide" over 2.6%, "normal" in 1.2-2.6%, "tight" under 1.2%.
 
-    Blank on any timeframe the band has not been measured on, and blank when
-    the caller passes no timeframe at all, so a new call site cannot acquire a
-    verdict by accident.
-
-    CONFIRMED SETUPS ONLY, enforced by the caller. The same split on early
-    signals is non-monotone with no block, so there is no verdict to give.
+    A description of the stop, not a verdict on the trade, so it is never
+    blank: there is no timeframe and no stream on which a stop fails to have a
+    width. See the block above for what the three zones measured, and for why
+    that measurement is no longer stated in the word itself.
     """
-    if interval not in RISK_MEASURED_ON:
-        return ""
     if riskpct > RISK_WIDE:
-        return "skip"
-    return "take" if riskpct >= RISK_TIGHT else "flat"
+        return RISK_WIDE_LABEL
+    return RISK_NORMAL_LABEL if riskpct >= RISK_TIGHT else RISK_TIGHT_LABEL
 
 
-def _levels(entry: float, stop: float, risk: float, is_long: bool,
-            confirmed: bool = False, interval: str | None = None) -> str:
-    """
-    The trade. Four plain lines, no code block.
+def _numbers(entry: float, stop: float, risk: float, is_long: bool) -> list:
+    """The three rows you act on: entry, stop, target.
 
-    A <pre> block buys column alignment and costs a heavy grey panel with a
-    copy button, which on a phone dominates the message. Without it the
-    columns cannot align anyway — Telegram's body font is proportional — so
-    the layout leans on line breaks and weight instead: entry and stop get a
-    line each because they are what you act on, the targets share one, and
-    break-even reads as an instruction rather than a column.
+    3R IS GONE. It was printed beside 2R for months and was never measured:
+    every study in research/ targets 2R and every band figure quoted anywhere
+    in this codebase is a 2R figure. A second target with no evidence behind it
+    sitting next to one with all of it is the kind of line a reader splits the
+    difference on.
+
+    THE ONE TARGET LEFT IS THE ONE THE TRACKER SCORES, read from the same
+    TRACK_TARGET_R the tracker uses rather than from a literal 2. They were two
+    independent constants that happened to agree; moving the key would have
+    left /stats grading against a level no alert ever named.
     """
     sign = 1 if is_long else -1
     riskpct = risk / entry * 100 if entry else 0
-    verdict = risk_verdict(riskpct, interval) if confirmed else ""
-    out = (f"Entry  <b>{fmt(entry)}</b>\n"
-           f"Stop   <b>{fmt(stop)}</b>  <i>{riskpct:.2f}% risk"
-           f"{' · ' + verdict if verdict else ''}</i>\n"
-           f"2R {fmt(entry + sign * risk * 2)}  ·  "
-           f"3R {fmt(entry + sign * risk * 3)}")
-    # The break-even line is gone unless it is switched back on. It advised a
+    rows = [row("Entry", price_cell(entry)),
+            row("Stop", price_cell(stop,
+                                   f"{riskpct:.2f}%  ·  {stop_width(riskpct)}")),
+            row("Target", price_cell(entry + sign * risk * TRACK_TARGET_R,
+                                     f"{TRACK_TARGET_R:g}R"))]
+    # The break-even row is gone unless it is switched back on. It advised a
     # stop move for months without ever having been measured, and it loses
     # money at every arm level on both signal types — see be_arm_r in
     # config.py. Advice on an alert should have cleared a bar.
     if CFG.be_arm_r > 0:
-        out += (f"\n<i>BE at {fmt(entry + sign * risk * CFG.be_arm_r)} → stop "
-                f"{fmt(entry + sign * risk * CFG.be_lock_r)}</i>")
-    return out
-
-
-def grade_chip(x, early: bool = False) -> str:
-    """The grade as it appears in the headline."""
-    return grade_letter(x, early)
+        rows.append(row("BE", price_cell(
+            entry + sign * risk * CFG.be_arm_r,
+            f"arm → stop {fmt(entry + sign * risk * CFG.be_lock_r)}")))
+    return rows
 
 
 def grade_letter(x, early: bool = False) -> str:
@@ -497,93 +628,88 @@ def _short(symbol: str) -> str:
     return symbol.split("_")[0] if symbol else "?"
 
 
-def marks(x) -> str | None:
-    """The one meta line under the grade: compact chips, no prose.
+def move_row(x) -> str:
+    """The `move` row: everything about the CLUSTER this signal belongs to.
 
-    THIS REPLACED THREE SENTENCES AND THAT WAS THE POINT. Each mark had its own
-    line explaining what it meant and how well it was evidenced — honest, and
-    unreadable at thirty alerts a day. An alert is glanced at on a phone while
-    something is moving; the reader needs the direction, the levels and the
-    handful of facts that change the size, and prose crowds all three off the
-    screen.
+    ONE ROW, NOT FOUR CHIPS. The facts here used to be four separate glyphs —
+    🔗 for other symbols on this close, 🎯 for the pick, 🔁 for the same raid
+    on another timeframe, ⚖ for the reader's open book — and every one of them
+    answers the same question: how many different ways is this one market move
+    reaching me right now. Four glyphs made it look like four questions.
 
-    So the CLAIM stays on the alert as a glyph and the EVIDENCE moves to
-    /legend, where it can be as long as it needs to be and is read once. That
-    keeps this project's rule that no mark is a bare assertion — the assertion
-    is still backed, just not re-typed into every message.
+    "SIZE ONCE" IS NO LONGER WRITTEN, AND THE ADVICE DID NOT GO ANYWHERE. It
+    was there because the deployed stream's worst losing run is forty trades
+    inside twelve hours — one move taking out everything open. The pick rule
+    now enforces exactly that: one 🎯 per rolling 120 minutes, so a reader
+    following the header sizes once by construction. Repeating it as text on a
+    message that already says WATCH is the contradiction the rename was for.
 
-    🔗 SAYS "SIZE ONCE" AT EVERY COUNT. Eight was where the return measurably
-    stepped up; the correlation of outcomes does not wait for eight. The
-    deployed stream's worst losing run is forty trades inside twelve hours —
-    one market move taking out everything open, which happens at two symbols
-    as readily as at eight.
+    Never empty: a lone signal says so, because "nothing else is firing" is
+    itself a fact about the move and a blank row would read as a missing one.
     """
     bits = []
-    if tl_agrees(x):
-        b = x.tl_break
-        bits.append(f"📐 {'up' if _tl_up(x) else 'down'} "
-                    f"{'this bar' if b == 0 else f'{b}b ago'}")
-    size = getattr(x, "event_size", 0)
-    of = getattr(x, "event_of", "")
-    weak = getattr(x, "event_weak", False)
-    n = getattr(x, "breadth", 0)
-    if isinstance(n, int) and n >= 2:
-        bits.append(f"🔗 {n} on this close, size once")
-        # WHICH ONE OF THE CLUSTER. "Size once" told the reader a bundle is one
-        # bet and then left them to guess which expression of it to take.
-        # Scored over 2445 events, taking one rather than all of them lifts the
-        # recovery factor from 1.33 to 1.84 and halves time under water; see
-        # scanner.tag_event_pick. Only ever a label — the alert still sends.
-        # A PICK IS NOW ALWAYS NAMED, INCLUDING IN AN ALL-SKIP CLUSTER, and the
-        # reversal is measured rather than stylistic. Withholding it — the old
-        # behaviour, on the reasoning that a best-of-a-bad-lot reads as an
-        # endorsement — scores 4.08 recovery against 4.85, and the whole gap
-        # comes from those clusters: withholding means contributing nothing
-        # where best-of-a-bad-lot still carries edge. See
-        # research/studies/pick_rule.py.
-        #
-        # The endorsement worry was right, so the chip changes WORDS instead of
-        # disappearing. "best of a wide cluster" names the pick without showing
-        # a bare target, and the risk line two rows down still says "skip".
-        if isinstance(size, int) and size >= 2:
-            if getattr(x, "event_pick", False):
-                bits.append("🎯 best of a wide cluster" if weak
-                            else "🎯 the pick")
-    # A DEFERRAL IS NOT GATED ON CLUSTER SIZE, and it used to be. The pick now
+    # How wide the move is. event_size counts the whole rolling group across
+    # every scanned timeframe; breadth counts one close on one timeframe, and
+    # is the fallback for a signal the grouper could not place.
+    size = getattr(x, "event_size", 0) or getattr(x, "breadth", 0)
+    if isinstance(size, int) and size >= 2:
+        bits.append(f"{size} symbols")
+    # A DEFERRAL IS NOT GATED ON CLUSTER SIZE, and it used to be. The pick
     # holds for a cooldown that outlives the scan cycle, so a signal can be the
     # ONLY one in its cycle and still be deferring to a pick sent an hour ago.
     # Under the old size >= 2 gate that alert said nothing at all, which is the
     # one case where the reader most needs telling: it looks like a fresh
     # opportunity and it is not.
-    #
-    # AGE MATTERS TOO. "pick is SOL" reads as a live instruction; if SOL's
-    # alert went out forty minutes ago the reader is being pointed BACKWARDS,
-    # at a message they have already seen and either took or did not.
+    of = getattr(x, "event_of", "")
     if of and not getattr(x, "event_pick", False):
         age = getattr(x, "event_age", 0)
-        if isinstance(age, int) and age >= 300:
-            bits.append(f"{_short(of)} took this move {age // 60}m ago")
-        else:
-            bits.append(f"pick is {_short(of)}")
-    # THE SAME RAID ON ANOTHER TIMEFRAME. 🔗 above counts other SYMBOLS on this
-    # close; this counts the same symbol and the same direction printing again
-    # on a different resolution, which is one idea arriving as two or three
-    # messages. No pick between them — timeframes.py finds no timeframe
-    # measurably better than another, so there is nothing to rank on and the
-    # chip only says the duplication is there.
+        bits.append(f"{_short(of)} took it {age // 60}m ago"
+                    if isinstance(age, int) and age >= 300
+                    else f"{_short(of)} is the pick")
+    # THE SAME RAID ON ANOTHER TIMEFRAME. The count above is other SYMBOLS;
+    # this is the same symbol and the same direction printing again on a
+    # different resolution, which is one idea arriving as two or three
+    # messages. No preference between them — timeframes.py finds no timeframe
+    # measurably better than another, so there is nothing to rank on and this
+    # only says the duplication is there.
     also = getattr(x, "also_tf", ())
     if also:
-        bits.append("🔁 same raid on " + "+".join(tf_label(i) for i in also))
-
-    # The reader's OWN book, not the market's. 🔗 counts what is printing this
-    # bar; ⚖ counts what they are still holding on this side from every bar
-    # before it. A cluster that hurts usually spans several closes, so the two
-    # are different facts and only one of them was ever on the alert.
+        bits.append("also " + "+".join(tf_label(i) for i in also))
+    # The reader's OWN book, not the market's. The count above is what is
+    # printing now; this is what they are still holding on this side from every
+    # bar before it. A cluster that hurts usually spans several closes, so the
+    # two are different facts and only one of them was ever on the alert.
     k = getattr(x, "open_same", 0)
     if isinstance(k, int) and k >= 2:
-        side = "longs" if x.is_long else "shorts"
-        bits.append(f"⚖ {k} {side} already open")
-    return f"<i>{' · '.join(bits)}</i>" if bits else None
+        bits.append(f"you hold {k} {'longs' if x.is_long else 'shorts'}")
+    return " · ".join(bits) or "alone this close"
+
+
+def context_row(x, early: bool, pool: str) -> str:
+    """The `context` row: why it graded the way it did, and where the pool was.
+
+    Everything here is provenance. Nothing on this row changes what to do —
+    the header does that — so it is the row to skim past when the chart is
+    already open, and the row to read when deciding whether to open it.
+    """
+    bits = [_why(x, early), pool]
+    if tl_agrees(x):
+        b = x.tl_break
+        bits.append(f"📐 {'up' if _tl_up(x) else 'down'} "
+                    f"{'this bar' if b == 0 else f'{b}b ago'}")
+    return " · ".join(b for b in bits if b)
+
+
+def _card(head: str, lead: str | None, numbers: list, move: str,
+          context: str, when: str) -> str:
+    """Assemble the fixed layout. The three labelled rows are ALWAYS all three
+    and always in this order, so the eye can go straight to one of them."""
+    parts = [head] + ([lead] if lead else []) + [""] + numbers + [
+        "",
+        row("move", move),
+        row("context", context),
+        row("when", when)]
+    return "\n".join(parts)
 
 
 def tl_agrees(x) -> bool:
@@ -605,32 +731,34 @@ def _tl_up(x) -> bool:
 
 
 def setup_message(s: Setup) -> str:
+    """The confirmed setup: sweep, structure shift, entry gap.
+
+    "sweep → shift → FVG" USED TO BE PRINTED HERE AND IS NOT ANY MORE. It was
+    a restatement of the word CONFIRMED on the first line — that sequence is
+    exactly what confirmed MEANS in this bot, and the early alert's own line
+    said "no shift" to distinguish itself. One of the two had to go, and the
+    header is the one that is read.
+    """
     tf = (f"{tf_label(s.tf or INTERVAL)}→{tf_label(ENTRY_INTERVAL)}"
           if s.entry_tf == "LTF" else tf_label(s.tf or INTERVAL))
     # The gap sits on whichever timeframe produced the entry.
     gap_step = BAR_SECONDS[ENTRY_INTERVAL] if s.entry_tf == "LTF" \
         else BAR_SECONDS[s.tf or INTERVAL]
+    context = context_row(s, False, _pool(s.src, s.pivots))
     # When the same gap also produced an early signal, this one message stands
     # for both — the scanner suppressed the duplicate rather than sending the
     # identical entry and stop twice. Saying so keeps the early strategy
     # visible instead of silently swallowing it.
-    also = (f" · ⚡ also early, gap {s.also_early} "
-            f"bar{'' if s.also_early == 1 else 's'} after the raid"
-            if s.also_early else "")
-    why = _grade(s)
-    return "\n".join(x for x in (
-        _headline(f"★ 🎯 CONFIRMED", s.is_long, s.symbol, tf,
-                  grade=grade_chip(s)),
-        why,
-        marks(s),
-        "",
-        _levels(s.entry, s.stop, s.risk, s.is_long, confirmed=True,
-                interval=s.tf or INTERVAL),
-        "",
-        f"<i>sweep → shift → FVG{also} · "
-        f"{_pool(s.src, s.level, s.pivots)}</i>",
-        _footer(s.detected_time + gap_step, s.last_price, s.symbol, s.tf),
-    ) if x is not None)
+    if s.also_early:
+        context += f" · also early, gap {s.also_early}b"
+    tag, kind = _tag(s, "confirmed")
+    return _card(
+        _headline(tag, s.is_long, s.symbol, tf, kind=kind,
+                  grade=grade_letter(s)),
+        _lead(s),
+        _numbers(s.entry, s.stop, s.risk, s.is_long),
+        move_row(s), context,
+        _when(s.detected_time + gap_step, s.last_price, s.symbol, s.tf))
 
 
 def early_message(s: Early) -> str:
@@ -642,21 +770,17 @@ def early_message(s: Early) -> str:
     rather than a whole leg back.
     """
     bars = s.bars_from_sweep
-    why = _grade(s, early=True)
-    return "\n".join(x for x in (
-        _headline(f"⚡ EARLY", s.is_long, s.symbol,
-                  tf_label(s.tf or INTERVAL), grade=grade_chip(s, True)),
-        why,
-        marks(s),
-        "",
-        _levels(s.entry, s.stop, s.risk, s.is_long),
-        "",
-        f"<i>sweep → FVG · no shift · gap {bars} bar"
-        f"{'' if bars == 1 else 's'} after the raid · "
-        f"{_pool(s.src, s.level, s.pivots, s.pools)}</i>",
-        _footer(s.fvg_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
-                s.symbol, s.tf),
-    ) if x is not None)
+    context = context_row(s, True, _pool(s.src, s.pivots, s.pools))
+    context += f" · gap {bars}b after the raid"
+    tag, kind = _tag(s, "early")
+    return _card(
+        _headline(tag, s.is_long, s.symbol, tf_label(s.tf or INTERVAL),
+                  kind=kind, grade=grade_letter(s, True)),
+        _lead(s),
+        _numbers(s.entry, s.stop, s.risk, s.is_long),
+        move_row(s), context,
+        _when(s.fvg_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
+              s.symbol, s.tf))
 
 
 def _shift_distance(extreme: float, struct_level: float) -> str:
@@ -698,8 +822,17 @@ def sweep_message(s: Sweep) -> str:
     # "the {word} POI", never "a daily POI". The literal word was correct
     # only while POI_INTERVAL never moved, and on 9 Sep it moved to Hour8 and
     # this line spent two days naming a timeframe the bot was not reading.
-    where = (f" in the {tf_word(POI_INTERVAL)} POI" if s.poi
-             else "" if s.poi_known else " · POI unknown")
+    poi_word = (f"{tf_word(POI_INTERVAL)} POI" if s.poi
+                else "POI unknown" if not s.poi_known
+                else f"no {tf_word(POI_INTERVAL)} POI")
+    # THE SAME VOCABULARY AS A SETUP'S GRADE, built by hand because a sweep has
+    # no grade to take it from: nothing has confirmed, so engine.grade_of would
+    # be scoring a trade that does not exist yet. The words match on purpose —
+    # this is the same test any setup born from this raid will face, and a
+    # reader should recognise it when it arrives on the setup an hour later.
+    trend_ok = bool(s.trend_dir) and (s.trend_dir > 0) == is_long
+    trend_word = (f"{tf_word(TREND_INTERVAL)} trend agrees" if trend_ok
+                  else f"against the {tf_word(TREND_INTERVAL)} trend")
     # No "WATCH" on a watchable sweep. With SWEEP_WATCH_ONLY on, every sweep
     # that arrives is one, so the word said nothing — the same reason the
     # band's historical rate came off the trade alerts. What stays is the
@@ -707,17 +840,25 @@ def sweep_message(s: Sweep) -> str:
     # different icon and a lowercase tag, because eyes on a raid the bot is
     # telling you to ignore is a contradiction the reader has to look past.
     watch = sweep_worth(s.sweep_extreme, s.struct_level, s.poi, s.rvol)
-    return "\n".join(x for x in (
+    # Level / Needs, not Entry / Stop / Target, and the labels are deliberately
+    # not tradeable words: there is no order to place here. What replaces the
+    # number block keeps the same two-column shape so the eye lands in the same
+    # place, and says what has happened and what would have to happen next.
+    numbers = [
+        row("Level", price_cell(
+            s.sweep_extreme,
+            f"took the {_pool(s.src, s.pivots, s.pools, s.level)}")),
+        row("Needs", price_cell(
+            s.struct_level, f"shift {direction}"
+            f"{_shift_distance(s.sweep_extreme, s.struct_level)}"))]
+    move = (f"{s.rvol:.1f}x volume on the raid" if s.rvol > 0
+            else "volume not measurable")
+    return _card(
         _headline("👀 <b>SWEEP</b>" if watch else "💤 <b>sweep</b>",
                   is_long, s.symbol, tf_label(s.tf or INTERVAL),
-                  suffix="bias", grade="" if watch else "skip"),
-        f"<i>liquidity taken{where} · no entry yet</i>",
-        "",
-        f"Sweep {took}   <code>{fmt(s.sweep_extreme)}</code>"
-        + (f"   <i>{s.rvol:.1f}x volume</i>" if s.rvol > 0 else ""),
-        f"Shift confirms {direction} <code>{fmt(s.struct_level)}</code>"
-        f"{_shift_distance(s.sweep_extreme, s.struct_level)}",
-        _pool(s.src, s.level, s.pivots, s.pools),
-        _footer(s.sweep_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
-                s.symbol, s.tf),
-    ) if x is not None)
+                  kind=f"{took} taken", suffix="bias",
+                  note="" if watch else "below the watch filter"),
+        "<i>no entry yet — the shift may never come</i>",
+        numbers, move, f"{poi_word} · {trend_word}",
+        _when(s.sweep_time + BAR_SECONDS[s.tf or INTERVAL], s.last_price,
+              s.symbol, s.tf))

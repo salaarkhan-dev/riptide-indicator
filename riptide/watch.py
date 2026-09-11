@@ -200,9 +200,15 @@ async def scan_symbol(sess, sem, symbol: str, tf: str,
     return out, flat
 
 
-def _line(b: Break) -> str:
+def _line(b: Break, label: str = "") -> str:
     """One symbol in the digest: where it broke, how steep the line was,
     clickable.
+
+    THE LABEL COLUMN IS THE DIRECTION, and it carries only on the first row of
+    each group — the rows under it indent into the same column, which is what
+    a list looks like when the header has already been read. It replaced a
+    bold "break UP through resistance" header line plus a coloured dot on every
+    row: two ways of saying the same thing, one of them costing a line.
 
     THE TIMEFRAME IS ON EVERY LINE, always, even when the whole digest is one
     timeframe. It used to appear only when a digest mixed two, on the reasoning
@@ -219,9 +225,10 @@ def _line(b: Break) -> str:
     ordinary thing a chart does. The gap is how far past the line it closed.
     """
     gap = 100 * abs(b.price - b.line_y) / b.line_y if b.line_y else 0.0
-    return (f"{'🟢' if b.is_long else '🔴'} <a href='"
-            f"{tg.tv_link(b.symbol, b.tf)}'><b>{b.symbol.replace('_USDT', '')}"
-            f"</b></a> <code>{tg.tf_label(b.tf)}</code>  "
+    return (f"<code>{label:<{tg.LABEL_W}}</code>"
+            f"<a href='{tg.tv_link(b.symbol, b.tf)}'>"
+            f"<b>{b.symbol.replace('_USDT', '')}</b></a> "
+            f"<code>{tg.tf_label(b.tf)}</code>  "
             f"<code>{tg.fmt(b.price)}</code>  "
             f"<i>slope {b.slope_atr:.2f} · {gap:.2f}% past</i>")
 
@@ -258,7 +265,19 @@ def collapse(breaks: list[Break]) -> list[Break]:
 # characters more than XRP. Twenty-five of those is over the cap, and the way
 # Telegram says so is by refusing the message: the digest that fails is the
 # market-wide one, which is the only digest anybody urgently wanted.
-MAX_CHARS = 3800
+#
+# RAISED FROM 3800 TO 3950 ON 11 SEP, when the direction dot on each row was
+# replaced by the fixed-width label column the rest of the alerts use. That
+# costs about 18 characters a row in TAGS — <code></code> plus the padding —
+# and on a 40-break close the budget started binding before the line cap, so a
+# full digest silently lost its last row.
+#
+# The margin is larger than it looks: this counts RAW HTML, and Telegram's 4096
+# applies to the message after entity parsing, where every tag and every href
+# has become an entity and costs nothing. A row's ~180 raw characters are about
+# 50 of text. 3950 is therefore still conservative by a wide margin, and is
+# kept below 4096 anyway so the arithmetic never has to be trusted.
+MAX_CHARS = 3950
 
 
 def digest(breaks: list[Break], tfs, when: int) -> str:
@@ -276,28 +295,32 @@ def digest(breaks: list[Break], tfs, when: int) -> str:
     dns = [b for b in breaks if not b.is_long]
     clock = tg.local_clock()
     label_tf = "+".join(tg.tf_label(t) for t in tfs)
-    head = (f"📐 <b>TRENDLINE BREAKS</b>  {label_tf}  ·  "
-            f"{len(breaks)} symbol{'s' if len(breaks) != 1 else ''}"
-            + (f"  ·  {clock}" if clock else ""))
-    foot = f"\n<i>{tg.signal_age(when)}</i>"
-    parts = [head, "<i>a heads-up, not a trade — no entry, no stop, "
-                   "no edge measured. Go look.</i>"]
-    used = len(head) + len(parts[1]) + len(foot) + 40   # 40: the "+N more" line
+    head = (f"📐 <b>TRENDLINE</b> — {len(breaks)} "
+            f"break{'s' if len(breaks) != 1 else ''} · {label_tf}"
+            + (f" · {clock}" if clock else ""))
+    sub = ("<i>a heads-up, not a trade — no entry, no stop, "
+           "no edge measured. Go look.</i>")
+    # The same `when` row every other alert ends on, so the digest is not the
+    # one message in the bot with its own footer shape.
+    foot = "\n" + tg.row("when", f"<i>{tg.signal_age(when)}</i>")
+    parts = [head, sub]
+    used = len(head) + len(sub) + len(foot) + 40   # 40: the "+N more" line
     shown = 0
-    for label, group in (("break UP through resistance", ups),
-                         ("break DOWN through support", dns)):
+    for label, group in (("up", ups), ("down", dns)):
         if not group or shown >= TRENDLINE_MAX_LINES:
             continue
-        header = f"<b>{label}</b>"
-        parts += ["", header]
-        used += len(header) + 2
+        first = True
         for b in group:
-            row = _line(b)
+            row = _line(b, label if first else "")
             if shown >= TRENDLINE_MAX_LINES or used + len(row) > MAX_CHARS:
                 break
+            if first:
+                parts.append("")
+                used += 1
             parts.append(row)
             used += len(row) + 1
             shown += 1
+            first = False
     left = len(breaks) - shown
     if left > 0:
         parts.append(f"<i>+{left} more this close</i>")

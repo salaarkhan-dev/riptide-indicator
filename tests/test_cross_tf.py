@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from riptide.config import BAR_SECONDS, INTERVALS         # noqa: E402
 from riptide.scanner import tag_cross_tf                  # noqa: E402
-from riptide.telegram import marks                        # noqa: E402
+from riptide.telegram import move_row                     # noqa: E402
 
 
 class Sig:
@@ -112,8 +112,8 @@ def test_it_reaches_the_alert():
     b = Sig("BTC_USDT", True, "Min60", 10_000)
     tag_cross_tf(wrap([a, b]))
     a.tl_break = -1
-    out = marks(a) or ""
-    assert "🔁 same raid on 1h" in out, out
+    out = move_row(a)
+    assert "also 1h" in out, out
 
 
 def test_it_suppresses_nothing():

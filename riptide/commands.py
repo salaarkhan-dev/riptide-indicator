@@ -61,47 +61,78 @@ HELP = (
 
 
 LEGEND = (
-    "<b>What the marks mean</b>\n\n"
+    "<b>How to read an alert</b>\n\n"
 
-    "<b>★ 🎯 CONFIRMED</b> — the stream that paid.\n"
+    "Every alert is the same six rows. The FIRST LINE is the only "
+    "instruction; everything under it describes.\n\n"
+
+    "<b>🎯 THE PICK</b> — take this one, if you are taking anything.\n"
+    "One pick per rolling <b>120 minutes</b>, across every timeframe. Scored "
+    "over the full 333 days in arrival order, so the rule only ever knows "
+    "what a scan at that minute knew: taking every alert is <b>recovery "
+    "0.13</b>, taking one per 120-minute window is <b>6.66</b>. That is the "
+    "largest measured effect in this bot. About <b>18</b> of the ~85 alerts a "
+    "day carry it.\n"
+    "The pick is ranked <b>slowest timeframe → stop width → confirmed before "
+    "early</b>, then alphabetically so a re-scan names the same symbol. Last "
+    "year's per-symbol returns are deliberately NOT used: a leaderboard built "
+    "on the first half of the window is worth -0.004 R a trade in the "
+    "second.\n"
+    "<b>Most picks are early signals and most are not in the middle band</b> "
+    "— 86% early, and 39% normal / 47% tight / 13% wide. That is the rule "
+    "working, not misfiring: the mix is what was measured.\n\n"
+
+    "<b>👀 WATCH</b> — a real signal, but something else already claimed the "
+    "window. The second line names it. Open the chart if you like; the alert "
+    "is not a take.\n"
+    "<b>It suppresses nothing</b> — every alert still arrives in full, and a "
+    "WATCH is a normal signal, not a rejected one.\n\n"
+
+    "<b>best of a wide cluster</b> — the pick, in a window where every "
+    "candidate had a wide stop. Named anyway: withholding it scores "
+    "<b>4.08</b> recovery against <b>4.85</b>, and the whole gap comes from "
+    "exactly these windows.\n\n"
+
+    "<b>confirmed</b> — the stream that paid.\n"
     "Held out, counting same-close alerts as one bet: <b>+0.41 R per bet "
     "over 59 bets, SE 0.19</b>, 49% of them winners. Two standard errors "
     "from zero, so suggestive rather than settled — and the drawdown in "
     "that sample was unusually mild, which will not last.\n\n"
 
-    "<b>⚡ EARLY</b> — no star, and that is the message.\n"
+    "<b>early</b> — the same raid without the structure shift.\n"
     "The early stream measures <b>-0.01 R per bet over 302 bets</b> held "
     "out: not a losing bet, a free one. It is five times the traffic of "
     "the confirmed stream, so taking whatever arrives means almost every "
     "trade comes from the half that does not pay. Kept because it is the "
-    "earliest warning the bot has — a heads-up on a level, not a take.\n\n"
+    "earliest warning the bot has. <b>Take the early signals that carry a "
+    "🎯 and leave the rest</b> — that is what the pick rule is for, and it is "
+    "how 86% of its picks come to be early ones.\n\n"
 
     f"<b>A B C D</b> — the grade, from the {tf_word(POI_INTERVAL)} POI and "
     f"the {tf_word(TREND_INTERVAL)} trend.\n"
     "Its live rate per band is in /book and /stats. With a POI required, "
     "every confirmed alert that clears the floor is already an A.\n\n"
 
-    "<b>📐 up/down Nb ago</b> — a trendline break agreeing with the trade.\n"
+    "<b>context · 📐 up/down Nb ago</b> — a trendline break agreeing with "
+    "the trade.\n"
     "<b>UNPROVEN.</b> Offline it came out +0.206 R over 3773 early signals "
     "and cleared a placebo floor in all five panels, but only +0.7 SE on "
     "the held-out half. It gates nothing and is being measured forward in "
     "/stats.\n\n"
 
-    "<b>🔗 N on this close, size once</b> — N symbols fired the same "
-    "direction on the same candle.\n"
-    "<b>This is a sizing instruction, not a quality mark.</b> The worst "
+    "<b>move · N symbols</b> — how many charts fired the same direction in "
+    "this window.\n"
+    "<b>This is about size, not quality.</b> The worst "
     "losing run in the deployed stream is 40 trades inside 12 hours, 24 "
     "inside 3.8 hours held out. A run like that is one market move taking "
     "out everything open, not two dozen independent bets — so N alerts on "
     "one close are one bet, and five or six of them taken together is one "
-    "bet placed five or six times. The 8+ bundle separately measured "
-    "+0.187 R at +2.1 SE, which failed its pre-registration and is "
-    "claimed for nothing.\n\n"
-
-    "<b>🎯 the pick</b> / <b>pick is ARB</b> — which one of that cluster to "
-    "take, when you are not taking all of them.\n"
-    "Scored over <b>2445</b> same-bar same-direction events across 4263 "
-    "filled trades, running the whole year each way:\n"
+    "bet placed five or six times. Following the 🎯 sizes once by "
+    "construction, which is why the alert no longer says so in words. The 8+ "
+    "bundle separately measured +0.187 R at +2.1 SE, which failed its "
+    "pre-registration and is claimed for nothing.\n"
+    "An earlier scoring over <b>2445</b> same-bar events across 4263 filled "
+    "trades, one scan cycle at a time:\n"
     "• take every trade — +180.7 R, drawdown 135.9, <b>recovery 1.33</b>\n"
     "• spread one unit across the event — +89.6 R, <b>recovery 1.36</b>\n"
     "• one symbol, chosen arbitrarily — +98.7 R, <b>recovery 1.43</b>\n"
@@ -117,53 +148,59 @@ LEGEND = (
     "signals were already skipped for margin, and at ten open the same year "
     "returned -39%. The choice is not 'six trades or one', it is 'which three "
     "of the six' — this names the first.\n"
-    "The pick is the one whose stop sits in the 1.2-2.6% band, confirmed "
-    "before early, then alphabetical so a re-scan names the same symbol. "
-    "Last year's per-symbol returns are deliberately NOT used: a leaderboard "
-    "built on the first half of the window is worth -0.004 R a trade in the "
-    "second. <b>It suppresses nothing</b> — every alert still arrives in "
-    "full, and the sibling that is not the pick is a normal signal, not a "
-    "rejected one.\n\n"
+    "of the six' — this names the first.\n\n"
 
-    "<b>2.34% risk · take / skip / flat</b> — how far the stop sits from the "
+    "<b>Stop · 2.34% · tight / normal / wide</b> — how far the stop sits "
+    "from the "
     "entry, and what 595 confirmed 30m setups over 333 days say about that "
     "distance. Three zones, three different strengths of evidence, so three "
     "different words.\n"
-    "<b>skip</b>, over 2.6% — <b>30%</b> win, <b>-0.192 R</b> per bet. "
+    "<b>wide</b>, over 2.6% — <b>30%</b> win, <b>-0.192 R</b> per bet. "
     "Resampling the sixty symbols with replacement 4000 times puts it between "
     "<b>-0.338 and -0.032</b>, entirely below zero, and it is negative in "
     "<b>4 quarters of 4</b> and in both halves of the window. Fees are "
     "negligible on a wide stop so nothing arithmetic explains it; the reading "
     "is that a raid that large was a violent move, and a violent move "
     "continues rather than exhausts.\n"
-    "<b>take</b>, 1.2% to 2.6% — <b>42%</b> win, <b>+0.214 R</b> per bet, "
+    "<b>normal</b>, 1.2% to 2.6% — <b>42%</b> win, <b>+0.214 R</b> per bet, "
     "resampling between <b>+0.082 and +0.329</b>, entirely above zero, "
     "positive in <b>4 quarters of 4</b>. This says the band stands up on its "
     "own. It does <i>not</i> say a tighter stop is bad.\n"
-    "<b>flat</b>, under 1.2% — <b>-0.051 R</b> per bet, resampling "
+    "<b>tight</b>, under 1.2% — <b>-0.051 R</b> per bet, resampling "
     "<b>-0.193 to +0.075</b>, straddling zero, and the last quarter turns "
-    "positive. Measured and indistinguishable from zero. Flat means exactly "
-    "that: not bad, and not unmeasured.\n"
-    "<b>It is not a filter.</b> A 'skip' alert is still sent in full, because "
+    "positive. Measured and indistinguishable from zero — not bad, and not "
+    "unmeasured.\n"
+    "<b>THE THREE WORDS DESCRIBE THE STOP, NOT THE TRADE, and that is why "
+    "they changed.</b> They used to read take / flat / skip, which is a "
+    "verdict — and a message headed 🎯 THE PICK three lines above the word "
+    "'skip' contradicts itself. 61% of picks are not in the middle band and "
+    "86% are early, where the band measures <b>+0.002</b>. One instruction "
+    "per alert: the 🎯. The width is a fact you size against.\n"
+    "<b>It is not a filter.</b> A wide alert is still sent in full, because "
     "the decision is yours and a label that suppressed signals would stop you "
     "ever seeing whether it was right.\n"
     "<b>15m was measured too, not assumed.</b> Across 791 confirmed 15m setups "
     "the band replicates on its own — <b>+0.129 R</b>, 41% win, resampling "
     "<b>+0.028 to +0.238</b>, positive in 3 quarters of 4 — and an independent "
-    "timeframe agreeing is the strongest thing said about it anywhere. 'flat' "
-    "replicates too. <b>'skip' does not, on 15m</b>: only 63 bets land beyond "
-    "2.6% there, and at that standard error the 30m effect could be exactly "
-    "true and still fail to show. Its sign and size agree with 30m, so skip is "
-    "<i>carried over</i> on 15m rather than independently evidenced — said "
-    "plainly here because a 15m alert with a 3% stop and no warning looked "
-    "like the worse mistake. Every other timeframe stays silent.\n"
+    "timeframe agreeing is the strongest thing said about it anywhere. The "
+    "tight bucket replicates too. <b>The wide one does not, on 15m</b>: only "
+    "63 bets land beyond 2.6% there, and at that standard error the 30m "
+    "effect could be exactly true and still fail to show. Its sign and size "
+    "agree with 30m.\n"
+    "<b>1h is the best-evidenced after 30m.</b> 4723 filled 1h trades, the "
+    "band asked against outside inside six POI arms and two streams — "
+    "<b>eighteen tests, eighteen positive differences</b>, +0.068 to +0.313, "
+    "three clearing 2 SE, with nothing refitted. And it is where the drawdown "
+    "lives: of the 1h stream's 150.0 R maximum drawdown, <b>141.9 sits in the "
+    "wide bucket</b>, which makes no money.\n"
     "Two limits that do not go away: the 1.2 and the 2.6 were chosen by "
     "looking at data, so some of the separation is selection; and levels carry "
     "survivorship, so trust the gap between the zones more than the numbers "
-    "themselves. Confirmed setups only — the same split on early signals is "
-    "non-monotone with no block, so there is nothing to say.\n\n"
+    "themselves. Every figure above is a CONFIRMED figure — on early signals "
+    "the same split is non-monotone, which is why the word describes the stop "
+    "rather than claiming a return.\n\n"
 
-    "<b>⚖ N longs already open</b> — how much of YOUR book is on this side, "
+    "<b>move · you hold N longs</b> — how much of YOUR book is on this side, "
     "counting every position still open, not just this bar.\n"
     "<b>It is a count, not a warning.</b> R per bet was measured against how "
     "many same-direction positions were already open and came back FLAT: "
@@ -173,10 +210,40 @@ LEGEND = (
     "correlated longs are decided by one market move, and that is arithmetic "
     "rather than a measurement. Size against the total, not the alert.\n\n"
 
+    "<b>move · also 30m+1h</b> — the same symbol, the same direction, "
+    "printing again on another resolution. One idea arriving as two or three "
+    "messages, and no preference between them: no pair of timeframes "
+    "separates at even 1 SE, so there is nothing to rank on.\n\n"
+
     "<i>Six losses in a row at a 38% win rate happens 5.7% of the time at "
     "any given trade — several times a year, without anything being "
     "wrong.</i>"
 )
+
+
+# TELEGRAM REJECTS A MESSAGE OVER 4096 CHARACTERS, AND /legend HAS BEEN OVER IT.
+# The text was 6559 characters before the 11 Sep rewrite and 8647 after, so
+# every /legend since the evidence sections were added has come back 400 and
+# sent NOTHING — a silent failure of exactly the kind this file's own comments
+# warn about, found only when the rewrite made the number worth measuring.
+#
+# Split on blank lines, greedily, so a section is never cut in half. The cap is
+# well under 4096 because Telegram counts UTF-16 code units and the bold tags
+# parse away to entities — the margin costs one extra message at worst.
+LEGEND_CHUNK = 3500
+
+
+def legend_parts(text: str = "") -> list:
+    """/legend as one or more sendable messages, split between sections."""
+    out, cur = [], ""
+    for block in (text or LEGEND).split("\n\n"):
+        if cur and len(cur) + len(block) + 2 > LEGEND_CHUNK:
+            out.append(cur)
+            cur = ""
+        cur = f"{cur}\n\n{block}" if cur else block
+    if cur:
+        out.append(cur)
+    return out
 
 
 def _fmt_ago(seconds: float) -> str:
@@ -592,7 +659,8 @@ async def handle_command(sess, db, state, text: str) -> None:
         await tg.tg_send(sess, status_text(db, state))
 
     elif cmd == "legend":
-        await tg.tg_send(sess, LEGEND)
+        for part in legend_parts():
+            await tg.tg_send(sess, part)
 
     elif cmd == "stats":
         await tg.tg_send(sess, stats_text(db))
