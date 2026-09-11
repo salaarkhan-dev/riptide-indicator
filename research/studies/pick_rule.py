@@ -228,6 +228,43 @@ same compounded return, which is exactly the trade portfolio_v2.py described.
 BAND-FIRST IS WORSE HERE TOO: per scan it scores 2.16 against 2.46, so the
 tf-first ordering survives the move from hindsight to causal.
 
+A ROLLING COOLDOWN BEATS THE CLOCK-ALIGNED HOUR, AND IT IS ALSO THE RULE A
+READER MEANS. Flooring onto the clock has an edge: a pick at 11:59 and another
+at 12:01 are two minutes apart and in two different hours. "After a pick is
+named, name no other for N minutes" has no boundary to fall the wrong side of.
+Strictly causal, processed in arrival order, longs and shorts on separate
+cooldowns:
+
+    cooldown  30m  29.8/day  recov 3.04  1st half 0.49  acct +410%  accDD 61%
+    cooldown  60m  23.6/day  recov 3.71  1st half 1.21  acct +375%  accDD 45%
+    cooldown 120m  17.7/day  recov 6.66  1st half 3.31  acct +501%  accDD 28%
+    cooldown 240m  12.5/day  recov 7.68  1st half 3.46  acct +282%  accDD 20%
+
+60m edges the clock-aligned hour (3.71 against 3.60) on fewer alerts, which is
+the expected direction: the boundary artefact only ever splits one move into
+two picks.
+
+THE 120m ROW IS THE STRIKING ONE AND IT NEEDS READING SLOWLY. Recovery 6.66
+beats even the hindsight row, on 17.7 alerts a day and a 28% account drawdown
+against 49%. It is not hindsight — it is causal. What it says is that this
+strategy's events are longer than an hour: two raids ninety minutes apart on
+the same side are usually the same market move, and treating them as two costs
+more than the second trade is worth. 240m extends the pattern on recovery
+(7.68) while the compounded account falls to +282%, so the trade turns from
+"strictly better" into "smoother but smaller" somewhere between the two.
+
+DO NOT SHIP 120m OFF THIS TABLE. Four cooldowns were tried and the best two are
+the longest two, which is the shape a length parameter takes when it is being
+fitted rather than tested — and the first-half column, the closest thing here
+to an out-of-sample check, rises monotonically with the parameter, which is
+what a genuine effect AND an overfit both look like. 60m is what the reader
+asked for, is within noise of the best on the account column, and is the
+conservative choice; 120m is the pre-registered question for the next study
+rather than a setting to turn today.
+
+BAND-FIRST LOSES HERE TOO: 3.34 against 3.71 at the same cooldown. tf-first has
+now won under hindsight, per scan, and under a rolling cooldown.
+
 THE EVENT WINDOW MATTERS MORE THAN THE RANKING, and this was the open question
 until it was measured. The deployed tag_event_pick groups by one BAR of one
 timeframe, four times finer than an hour on Min15 and blind across timeframes:
@@ -369,6 +406,35 @@ def by_arrival(rows):
         seen = arrival(t.t + BAR_SECONDS[t.tf])
         g[(seen, t.is_long)].append(t)
     return g
+
+
+def pick_rolling(rows, key, cooldown=3600):
+    """A ROLLING COOLDOWN instead of a clock-aligned bucket.
+
+    The hour rows above floor onto the clock, which has an edge a reader will
+    hit: a pick at 11:59 and another at 12:01 are two minutes apart and in two
+    different hours. This instead says "after a pick is named, name no other
+    for `cooldown` seconds", which is what a reader actually means by one trade
+    per move and has no boundary to fall the wrong side of.
+
+    Strictly causal, processed in ARRIVAL order. A scan that arrives inside the
+    cooldown contributes nothing — no message is ever unsent or overridden, so
+    a pick you acted on at 11:30 is never contradicted at 12:00.
+
+    Longs and shorts hold separate cooldowns, for the same reason they are
+    separate events everywhere else here: an up-raid and a down-raid in the
+    same hour are two market moves, not one.
+    """
+    byscan = defaultdict(list)
+    for t in rows:
+        byscan[(arrival(t.t + BAR_SECONDS[t.tf]), t.is_long)].append(t)
+    last, out = {}, []
+    for seen, up in sorted(byscan):
+        if seen - last.get(up, -(1 << 40)) < cooldown:
+            continue
+        out.append(min(byscan[(seen, up)], key=key))
+        last[up] = seen
+    return out
 
 
 def by_scan_and_hour(rows):
@@ -530,6 +596,12 @@ async def main():
           pick_first_in_hour(rows, key_tf_first), len(ev))
     score("per hour, WITH hindsight (scored above)",
           pick(rows, key_tf_first), len(ev))
+    print("  -- ROLLING COOLDOWN: no new pick for N minutes " + "-" * 30)
+    for mins in (30, 60, 120, 240):
+        score(f"cooldown {mins}m, tf-first",
+              pick_rolling(rows, key_tf_first, mins * 60), len(ev))
+    score("cooldown 60m, band-first",
+          pick_rolling(rows, key_band, 3600), len(ev))
     print()
     score("band->confd->tf, skip dropped",
           pick(rows, key_band, drop_skip=True), len(ev))
