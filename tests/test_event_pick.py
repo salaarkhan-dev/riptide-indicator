@@ -1,12 +1,35 @@
-"""One signal per market event: the ranking, the grouping, and the promise
+"""One signal per market event: the grouping, the ranking, and the promise
 that nothing is suppressed.
 
-WHY THIS IS TESTED RATHER THAN EYEBALLED. The rule is the only positive
-portfolio result this project has, and every way it can break is silent. A
-ranking that is not deterministic names a different symbol on a re-scan of the
-same bar. A grouping keyed wrongly blends a 30m bundle with a 15m one and
-picks across timeframes. And a label that accidentally becomes a gate would
-suppress alerts the evidence is nowhere near strong enough to suppress.
+WHY THIS IS TESTED RATHER THAN EYEBALLED. The rule is the largest measured
+effect in the bot — recovery 0.13 taking every alert against 5.46 taking one
+per event — and every way it can break is silent. A ranking that is not
+deterministic names a different symbol on a re-scan of the same hour. A
+grouping keyed wrongly names three picks for one market move. And a label that
+accidentally becomes a gate would suppress alerts the evidence is nowhere near
+strong enough to suppress.
+
+REWRITTEN 11 SEP, AND THREE OF ITS OLD ASSERTIONS NOW ASSERT THE OPPOSITE.
+That is the point of the rewrite rather than an embarrassment, so the three are
+named here and each is tested in its new direction below:
+
+  "a 30m close is also a 15m close — the timeframes stay separate" is now
+  FALSE. They are one event. Keeping them separate is what produced a target
+  chip on three messages for one raid, and grouping them is worth +3.46
+  recovery (research/studies/pick_rule.py).
+
+  "different bars are different events" is now FALSE for bars inside the same
+  window. The window is one bar of the SLOWEST scanned timeframe, so two Min30
+  signals half an hour apart are one event.
+
+  "when EVERY member is a skip there is no pick at all" is now FALSE. A pick is
+  always named. Withholding it scores 4.08 against 4.85, and the entire gap
+  comes from those clusters. The endorsement worry that motivated the old
+  behaviour is handled by changing the chip's WORDS, which is tested.
+
+The band is still the first key WHEN THE TIMEFRAMES MATCH, which is what most
+of the ranking assertions below exercise; the timeframe only outranks it when
+two different charts are in the same event.
 
     PYTHONPATH=. python3 tests/test_event_pick.py     # exit 1 on any failure
 """
@@ -15,6 +38,7 @@ import sys
 
 sys.path.insert(0, ".")
 
+from riptide.decide import describe, event_span         # noqa: E402
 from riptide.engine import Early, Setup                 # noqa: E402
 from riptide.scanner import event_rank, tag_event_pick  # noqa: E402
 from riptide.telegram import marks, setup_message       # noqa: E402
@@ -77,17 +101,33 @@ check(min([a, b], key=event_rank) is a,
       "a tight 'flat' beats a wide 'skip' — the skip bootstrap is entirely "
       "below zero, the flat one straddles it")
 
+print("\nan all-skip cluster still gets a pick, in different words")
 grp = [setup("AAA_USDT", 3.4), setup("BBB_USDT", 4.1), setup("CCC_USDT", 5.0)]
 for x in grp:
     x.breadth = 3
 tag_event_pick([(grp, [], [], [])])
-check(not any(x.event_pick for x in grp),
-      "when EVERY member is a skip there is no pick at all")
-check(all(x.event_of == "" for x in grp), "and no sibling names one")
-check("pick" not in (marks(grp[0]) or ""),
-      "the chip says nothing rather than endorsing a best-of-a-bad-lot")
+check(sum(1 for x in grp if x.event_pick) == 1,
+      "one pick even when every member is a skip — withholding it measured "
+      "4.08 recovery against 4.85")
+check(all(x.event_of == "AAA_USDT" for x in grp),
+      "and every sibling names it")
+check(all(x.event_weak for x in grp), "the cluster is flagged weak")
+check("best of a wide cluster" in (marks(grp[0]) or ""),
+      "the chip names it WITHOUT a bare target — the endorsement worry is "
+      "answered by wording, not by silence")
+check("🎯 the pick" not in (marks(grp[0]) or ""),
+      "and the confident chip is reserved for clusters that have one")
 check("🔗 3 on this close" in (marks(grp[0]) or ""),
-      "but size-once still warns about the cluster")
+      "size-once still warns about the cluster")
+
+print("\na cluster with one good member gets the confident chip")
+mix = [setup("AAA_USDT", 4.0), setup("BBB_USDT", 2.0)]
+for x in mix:
+    x.breadth = 2
+tag_event_pick([(mix, [], [], [])])
+check(mix[1].event_pick and not mix[1].event_weak,
+      "the in-band member is the pick and the cluster is not weak")
+check("🎯 the pick" in (marks(mix[1]) or ""), "so the chip is the plain one")
 
 print("\nthe pick is deterministic")
 rows = [setup(s, 2.0) for s in ("MMM_USDT", "AAA_USDT", "ZZZ_USDT")]
@@ -110,20 +150,43 @@ check(all(x.event_size == 1 for x in opp),
 
 tfs = [setup("AAA_USDT", 2.0, tf="Min30"), setup("BBB_USDT", 2.0, tf="Min15")]
 tag_event_pick([(tfs, [], [], [])])
-check(all(x.event_size == 1 for x in tfs),
-      "a 30m close is also a 15m close — the timeframes stay separate")
+check(all(x.event_size == 2 for x in tfs),
+      "timeframes are now ONE event — a 30m raid and the 15m read of it are "
+      "the same market move")
 
-apart = [setup("AAA_USDT", 2.0, t=1789000000),
-         setup("BBB_USDT", 2.0, t=1789000000 + 1800)]
+tfs = [setup("SLOW_USDT", 2.4, tf="Min60"), setup("AAA_USDT", 2.0, tf="Min15")]
+tag_event_pick([(tfs, [], [], [])])
+check(tfs[0].event_pick,
+      "and the SLOWER timeframe wins even against an alphabetically earlier "
+      "symbol in the same band")
+
+tfs = [setup("SLOW_USDT", 3.9, tf="Min60"), setup("AAA_USDT", 2.0, tf="Min15")]
+tag_event_pick([(tfs, [], [], [])])
+check(tfs[0].event_pick,
+      "the timeframe outranks the band: a 1h skip beats a 15m take. this is "
+      "the measured ordering and the one with the weakest evidence — "
+      "RIPTIDE_PICK_ORDER=band flips it")
+
+span = event_span()
+near = [setup("AAA_USDT", 2.0, t=1789002000),
+        setup("BBB_USDT", 2.0, t=1789002000 + span // 2)]
+tag_event_pick([(near, [], [], [])])
+check(all(x.event_size == 2 for x in near),
+      f"two signals inside one {span}s window are one event, not two")
+
+apart = [setup("AAA_USDT", 2.0, t=1789002000),
+         setup("BBB_USDT", 2.0, t=1789002000 + span * 2)]
 tag_event_pick([(apart, [], [], [])])
 check(all(x.event_size == 1 for x in apart),
-      "different bars are different events")
+      "and two windows apart is two events")
 
 print("\nthe rendered chip")
 grp = [setup("AAA_USDT", 4.0), setup("BBB_USDT", 2.0)]
 for x in grp:
     x.breadth = 2
 tag_event_pick([(grp, [], [], [])])
+check("60m" in describe() and "tf" in describe(),
+      f"/status can state the live rule: {describe()}")
 check("🎯 the pick" in (marks(grp[1]) or ""), "the pick says so")
 check("pick is BBB" in (marks(grp[0]) or ""),
       "a sibling names the pick, without the quote currency")
@@ -135,6 +198,29 @@ lone.breadth = 1
 tag_event_pick([([lone], [], [], [])])
 check("pick" not in (marks(lone) or ""),
       "a solo signal gets no pick chip — no clutter when there is no choice")
+
+print("\nRIPTIDE_PICK_ORDER=band flips the first key and nothing else")
+import importlib                                        # noqa: E402
+import os                                               # noqa: E402
+os.environ["RIPTIDE_PICK_ORDER"] = "band"
+# config reads the key at IMPORT time, so reloading decide alone would keep the
+# old value — the same trap test_poi_interval documents.
+for m in ("riptide.scanner", "riptide.decide", "riptide.telegram",
+          "riptide.config"):
+    sys.modules.pop(m, None)
+band_first = importlib.import_module("riptide.decide")
+flip = [setup("SLOW_USDT", 3.9, tf="Min60"),
+        setup("AAA_USDT", 2.0, tf="Min15")]
+band_first.decide([(flip, [], [], [])])
+check(flip[1].event_pick,
+      "under 'band' the 15m take beats the 1h skip — the exact case that "
+      "inverts under 'tf'")
+check("band" in band_first.describe(),
+      f"and /status says so: {band_first.describe()}")
+os.environ.pop("RIPTIDE_PICK_ORDER", None)
+for m in ("riptide.scanner", "riptide.decide", "riptide.telegram",
+          "riptide.config"):
+    sys.modules.pop(m, None)
 
 print("\nIT LABELS, IT DOES NOT GATE")
 for x in grp:

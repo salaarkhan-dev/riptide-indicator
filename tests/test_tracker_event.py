@@ -1,4 +1,4 @@
-"""The event_pick column: the migration, the five states, and the INSERT.
+"""The event_pick column: the migration, the six states, and the INSERT.
 
 WHY A REAL DATABASE AND A REAL MIGRATION. `riptide/tracker.py` carries a long
 comment about the day two migrations shared a guard, `tf` was never added to
@@ -52,15 +52,25 @@ def fresh_db():
     return db
 
 
-print("the five states")
+# 3 AND 4 CHANGED MEANING ON 11 SEP. 3 used to mark a cluster the rule
+# declined to pick from; decide.py now always names a pick, because withholding
+# measured 4.08 recovery against 4.85 (research/studies/pick_rule.py). The two
+# codes now carry the WEAK flag — the cluster whose best member is still a
+# "skip" — so the forward data can answer whether best-of-a-wide-cluster is
+# worth taking. Rows written either side of 11 Sep mean different things and
+# any analysis crossing it must filter on armed_time.
+print("the six states")
 for label, build, want in (
         ("solo signal -> 0", lambda: [setup("AAA_USDT", 2.0)], 0),
         ("the pick -> 1", lambda: [setup("AAA_USDT", 2.0),
                                    setup("BBB_USDT", 4.0)], 1),
         ("a sibling -> 2", lambda: [setup("AAA_USDT", 4.0),
                                     setup("BBB_USDT", 2.0)], 2),
-        ("cluster with no pick -> 3", lambda: [setup("AAA_USDT", 3.4),
-                                               setup("BBB_USDT", 4.1)], 3)):
+        ("pick of a WEAK cluster -> 3", lambda: [setup("AAA_USDT", 3.4),
+                                                 setup("BBB_USDT", 4.1)], 3),
+        ("sibling of a weak cluster -> 4", lambda: [setup("BBB_USDT", 4.1),
+                                                    setup("AAA_USDT", 3.4)],
+         4)):
     g = build()
     tag_event_pick([(g, [], [], [])])
     check(tracker._event_state(g[0]) == want,

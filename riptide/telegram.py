@@ -531,16 +531,24 @@ def marks(x) -> str | None:
         # Scored over 2445 events, taking one rather than all of them lifts the
         # recovery factor from 1.33 to 1.84 and halves time under water; see
         # scanner.tag_event_pick. Only ever a label — the alert still sends.
-        # AND NOTHING AT ALL WHEN THE CLUSTER HAS NO PICK. tag_event_pick
-        # withholds one when every member's stop is beyond 2.6%, where the
-        # bootstrap is entirely below zero — naming a best-of-a-bad-lot would
-        # read as an endorsement. An empty event_of is that case, not a missing
-        # value, so it must not fall back to a placeholder.
+        # A PICK IS NOW ALWAYS NAMED, INCLUDING IN AN ALL-SKIP CLUSTER, and the
+        # reversal is measured rather than stylistic. Withholding it — the old
+        # behaviour, on the reasoning that a best-of-a-bad-lot reads as an
+        # endorsement — scores 4.08 recovery against 4.85, and the whole gap
+        # comes from those clusters: withholding means contributing nothing
+        # where best-of-a-bad-lot still carries edge. See
+        # research/studies/pick_rule.py.
+        #
+        # The endorsement worry was right, so the chip changes WORDS instead of
+        # disappearing. "best of a wide cluster" names the pick without showing
+        # a bare target, and the risk line two rows down still says "skip".
         size = getattr(x, "event_size", 0)
         of = getattr(x, "event_of", "")
+        weak = getattr(x, "event_weak", False)
         if isinstance(size, int) and size >= 2:
             if getattr(x, "event_pick", False):
-                bits.append("🎯 the pick")
+                bits.append("🎯 best of a wide cluster" if weak
+                            else "🎯 the pick")
             elif of:
                 bits.append(f"pick is {_short(of)}")
     # THE SAME RAID ON ANOTHER TIMEFRAME. 🔗 above counts other SYMBOLS on this

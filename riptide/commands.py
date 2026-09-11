@@ -26,6 +26,7 @@ from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
                      TG_CHAT, TG_TOKEN, TRACK, TRACK_FILL_BARS,
                      TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_FACTOR,
                      TREND_FILTER, TREND_INTERVAL, TREND_LEN, build_id, log)
+from . import decide
 from .engine import band_stats, tf_word
 from .scanner import cycle, seconds_to_next_close, trend_on
 from .scanner import state_gate as _gate
@@ -233,7 +234,8 @@ def status_text(db, state) -> str:
     trend_line = ((f"ON · {TREND_INTERVAL} ST({TREND_LEN},{TREND_FACTOR:g})"
                    if live else "off") + src
                   + f" · grade POI on {POI_INTERVAL}"
-                  + f" · trend on {TREND_INTERVAL}/{DI_INTERVAL}")
+                  + f" · trend on {TREND_INTERVAL}/{DI_INTERVAL}"
+                  + f"\n<b>pick</b>       {decide.describe()}")
     # Why the last cycle was quiet, if it was. Costs nothing when everything
     # is flowing and answers the only question that matters when it is not.
     gate_line = ""

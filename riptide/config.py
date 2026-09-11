@@ -363,6 +363,24 @@ SWEEP_ALERTS = os.getenv("RIPTIDE_SWEEP_ALERTS", "1") == "1"
 # for the measurement (recovery factor 1.33 taking everything, 1.84 taking the
 # one whose stop sits in the risk band) and riptide/telegram.py for the chip.
 EVENT_PICK = os.getenv("RIPTIDE_EVENT_PICK", "1") == "1"
+
+# Which key the event pick sorts on FIRST. "tf" prefers the slowest timeframe,
+# "band" prefers the best stop distance. Both then fall through the other keys
+# in the same order; see riptide/decide.py for the evidence behind each.
+#
+# "tf" is the default because it measured better and did so everywhere it could
+# be checked: 5.46 recovery against 4.85 on the mixed stream, in BOTH halves of
+# the window, and inside BOTH streams on their own (early 4.71 vs 3.76,
+# confirmed 1.33 vs 1.17). research/studies/pick_rule.py.
+#
+# It is also the key with the WEAKEST statistical support, and that is not a
+# contradiction. No pair of timeframes separates at even 1 SE, so "1h beats
+# 30m" is not a claim. What preferring the slower chart rests on is arithmetic:
+# fee in R is fee_pct/risk_pct, the median stop doubles from 15m to 1h, so the
+# fee takes 67% of the gross edge on 15m and 16% on 1h. Set to "band" to lead
+# with the better-evidenced axis instead and give up 0.61 recovery; nothing
+# else changes, and neither setting suppresses a single alert.
+PICK_ORDER = os.getenv("RIPTIDE_PICK_ORDER", "tf").strip().lower() or "tf"
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
 # closed is already one full step old, and the scan wakes another 10s after
 # that. A window of 1 * step can never contain the sweep that just confirmed,

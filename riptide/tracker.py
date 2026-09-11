@@ -149,15 +149,22 @@ def init(db) -> None:
         #    0  solo signal; there was no choice to make
         #    1  the pick of a cluster
         #    2  a sibling of a cluster, not the pick
-        #    3  in a cluster the rule DECLINED to pick from, because every
-        #       member's stop sat beyond 2.6% where the bootstrap is entirely
-        #       below zero
+        #    3  the pick of a WEAK cluster — one whose best member is still a
+        #       "skip" band, beyond 2.6%
+        #    4  a sibling of a weak cluster
         #
         # Solo is separated from pick deliberately: a solo signal is trivially
         # "the only one", and folding it in would swamp the pick population
         # with rows that were never a choice and make "pick against sibling"
-        # meaningless. 3 is separated from 2 because those rows carry no
-        # endorsement at all, which is a different claim from "not this one".
+        # meaningless.
+        #
+        # 3 MEANT SOMETHING ELSE BEFORE 11 SEP. It marked a cluster the rule
+        # DECLINED to pick from, because withholding was the behaviour then.
+        # research/studies/pick_rule.py measured withholding at 4.08 recovery
+        # against 4.85 and it was dropped, which made the old 3 unreachable; it
+        # now carries the weak flag instead, and 4 was added for the siblings.
+        # Any analysis crossing 11 Sep must filter on armed_time, because the
+        # same integer means two different things either side of it.
         ("event_pick", "INT DEFAULT -1", "event pick, measured forward"),
     ):
         if col not in have:
@@ -190,9 +197,18 @@ def _event_state(s) -> int:
         return -1
     if size == 1:
         return 0
-    if getattr(s, "event_pick", False):
-        return 1
-    return 2 if getattr(s, "event_of", "") else 3
+    # 3 USED TO MEAN "cluster with no pick", which became unreachable on 11 Sep
+    # when decide.py started naming a pick in every cluster. Rather than leave
+    # a dead code and lose the distinction, 3 and 4 now carry the WEAK flag —
+    # the cluster whose best member is still a "skip" band. Forward rows can
+    # then answer the question that change raises: is best-of-a-wide-cluster
+    # worth taking? Rows written before 11 Sep used 3 for the old meaning, so
+    # any analysis crossing that date must filter on armed_time.
+    pick = bool(getattr(s, "event_pick", False))
+    weak = bool(getattr(s, "event_weak", False))
+    if not weak:
+        return 1 if pick else 2
+    return 3 if pick else 4
 
 
 def arm(db, sid: str, s, from_bar: int | None = None,
@@ -493,8 +509,13 @@ def summary(db, kind: str | None = None) -> dict:
         # both sides here are drawn from clusters of two or more, states 1 and
         # 2. State 0 (solo), 3 (no pick offered) and -1 (unrecorded) are left
         # out of both. See init() for the encoding.
+        # The pick and its siblings, strong clusters only. The weak-cluster
+        # codes (3 and 4) are deliberately NOT folded in: they are the arm of
+        # the 11 Sep change that has no forward evidence yet, and pooling them
+        # here would hide exactly the rows that need watching.
         "pick_yes": _bucket([(r[0], r[1]) for r in rows if r[16] == 1]),
         "pick_no": _bucket([(r[0], r[1]) for r in rows if r[16] == 2]),
+        "pick_weak": _bucket([(r[0], r[1]) for r in rows if r[16] == 3]),
         # By grade. Computed from the stored poi and trend_dir columns rather
         # than a saved letter, so a change to the ladder re-grades history
         # instead of stranding it. Rows armed before the POI column existed

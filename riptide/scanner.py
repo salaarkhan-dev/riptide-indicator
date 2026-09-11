@@ -15,6 +15,7 @@ from . import mtf
 from . import telegram as tg
 from . import tracker
 from . import trend
+from . import decide
 from .config import (ALERT_ON_FIRST_RUN, BAR_SECONDS, CFG, CONCURRENCY,
                      EARLY_ALERTS, ENTRY_INTERVAL, EVENT_PICK, FRESH_BARS,
                      INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE,
@@ -288,105 +289,24 @@ def tag_breadth(results) -> None:
         x.breadth = c[key(x)]
 
 
-def event_rank(x):
-    """Sort key inside one market event. Lower is taken first.
-
-    THE CRITERIA ARE ORDERED BY HOW WELL EACH IS EVIDENCED, not by how much
-    sense each makes.
-
-      1. THE RISK BAND, IN THREE STEPS RATHER THAN TWO. 1.2%-2.6% stop
-         distance is the only signal-quality measure that has survived anything
-         on this project: +0.214 R/bet, symbol bootstrap clear of zero, four
-         quarters of four, replicated independently on Min15.
-
-         But "outside the band" is not one thing and ranking it as one was a
-         bug. Beyond 2.6% the bootstrap is ENTIRELY BELOW ZERO ([-0.338,
-         -0.032]) and the alert already prints "skip"; under 1.2% it STRADDLES
-         zero ([-0.193, +0.075]) and the alert prints "flat", meaning measured
-         and indistinguishable from nothing. Collapsing those two into one
-         bucket let a 3.40% "skip" beat a 0.60% "flat" on nothing but
-         alphabetical order. So: take, then flat, then skip.
-
-      2. CONFIRMED BEFORE EARLY. The confirmed stream runs +0.070 R/bet against
-         early's +0.034 over the same 333 days. A weaker separation than the
-         band and it only ever breaks a tie.
-
-      3. SYMBOL, ALPHABETICALLY. Not a quality claim at all — it is there so
-         the pick is DETERMINISTIC, which matters because a re-scan of the same
-         bar must name the same symbol. research/studies/portfolio_v2.py found
-         that an arbitrary choice already lifts the recovery factor from 1.33
-         to 1.43, so the tiebreak being meaningless does not make it harmful.
-
-    WHAT IS DELIBERATELY NOT IN HERE: last year's per-symbol returns. Ranking
-    symbols on past R does not persist — a leaderboard built on the first half
-    of the window is worth -0.004 R per trade in the second — so using it to
-    pick inside an event would be the overfit this whole rule is meant to
-    avoid. See research/studies/symbols.py.
-    """
-    risk_pct = 100 * x.risk / x.entry if x.entry else 0.0
-    if tg.RISK_TIGHT <= risk_pct <= tg.RISK_WIDE:
-        band = 0                              # "take"
-    elif risk_pct < tg.RISK_TIGHT:
-        band = 1                              # "flat"
-    else:
-        band = 2                              # "skip"
-    return (band, 1 if isinstance(x, Early) else 0, x.symbol)
-
-
-def tag_event_pick(results) -> None:
-    """Name ONE signal per market event, and mark the rest as its siblings.
-
-    A simultaneous cluster of raids across sixty perpetuals is one market
-    event, not sixty opportunities, and `tag_breadth` above already says so
-    with its "size once" chip. What it never said is WHICH one to take.
-
-    Measured on 4263 filled trades in 2445 same-bar same-direction events
-    (research/studies/portfolio_v2.py), scoring the whole year each way:
-
-        take every trade          +180.7 R   drawdown 135.9   recovery 1.33
-        spread 1 unit over event   +89.6 R   drawdown  65.8   recovery 1.36
-        one arbitrary symbol       +98.7 R   drawdown  69.2   recovery 1.43
-        one chosen by risk band   +112.7 R   drawdown  61.4   recovery 1.84
-
-    READ THE RECOVERY COLUMN, NOT THE DRAWDOWN. Any rule that simply trades
-    smaller shrinks return and drawdown together and is worth nothing — capping
-    risk per event does exactly that, 1.14 to 1.13, and is not this. Picking
-    one moves the ratio, and it halves time under water from 60% of the series
-    to 32%.
-
-    TOTAL R FALLS AND THAT IS NOT THE OBJECTION IT LOOKS LIKE. +112.7 against
-    +180.7 would matter on an account that could hold twenty positions at once.
-    The deployed one cannot: at 1% risk a 300 USDT account capped at five open
-    positions already skipped 1441 signals for margin, and at ten open it
-    returned -39% with an 88% drawdown. The choice is not "six trades or one",
-    it is "which three of the six", and this names the first one.
-
-    IT SUPPRESSES NOTHING. Every alert still sends in full, with its own entry,
-    stop and targets. The rule is a label on a message, not a gate, because the
-    evidence for the band-based ordering is strong enough to print and not
-    strong enough to silence a signal with.
-    """
-    from collections import defaultdict
-    groups = defaultdict(list)
-    for setups, _, early, _ in results:
-        for x in list(setups) + list(early):
-            step = BAR_SECONDS[getattr(x, "tf", "") or INTERVAL]
-            t = (getattr(x, "fvg_time", 0) or getattr(x, "mss_time", 0)
-                 or getattr(x, "sweep_time", 0))
-            groups[(getattr(x, "tf", ""), t - (t % step), x.is_long)].append(x)
-
-    for members in groups.values():
-        best = min(members, key=event_rank)
-        # NO PICK WHEN THE BEST AVAILABLE IS A "SKIP". Every member being
-        # beyond 2.6% is the one case where the evidence points at the whole
-        # cluster rather than at one of them, and naming a best-of-a-bad-lot
-        # "the pick" would read as an endorsement the measurement does not
-        # support. The alerts still send; they simply say nothing about which.
-        none_worth_it = event_rank(best)[0] == 2
-        for x in members:
-            x.event_size = len(members)
-            x.event_pick = (not none_worth_it) and x is best
-            x.event_of = "" if none_worth_it else best.symbol
+# THE PICK RULE MOVED TO riptide/decide.py ON 11 SEP, and both halves of it
+# changed. It used to group on (timeframe, bar, direction) and rank on the risk
+# band first; it now groups on one bar of the SLOWEST scanned timeframe across
+# every symbol and every timeframe, and ranks on the timeframe first.
+#
+# research/studies/pick_rule.py, 9071 filled trades in 4200 market events:
+#
+#     take every alert                      55.4/day   recovery 0.13   -51%
+#     per bar per timeframe (the old rule)  36.0/day   recovery 1.39  +104%
+#     per slowest bar, across timeframes    25.7/day   recovery 4.85  +580%
+#     the same, ranked timeframe-first      25.7/day   recovery 5.46  +860%
+#
+# The grouping is worth +3.46 recovery and the re-ordering +0.61, so the window
+# was the bug and the tiebreak was the polish. The evidence for every key, and
+# for the keys deliberately left out, is in decide.py's docstring rather than
+# duplicated here.
+event_rank = decide.rank_key
+tag_event_pick = decide.decide
 
 
 def tag_cross_tf(results) -> None:
