@@ -523,6 +523,9 @@ def marks(x) -> str | None:
         b = x.tl_break
         bits.append(f"📐 {'up' if _tl_up(x) else 'down'} "
                     f"{'this bar' if b == 0 else f'{b}b ago'}")
+    size = getattr(x, "event_size", 0)
+    of = getattr(x, "event_of", "")
+    weak = getattr(x, "event_weak", False)
     n = getattr(x, "breadth", 0)
     if isinstance(n, int) and n >= 2:
         bits.append(f"🔗 {n} on this close, size once")
@@ -542,15 +545,26 @@ def marks(x) -> str | None:
         # The endorsement worry was right, so the chip changes WORDS instead of
         # disappearing. "best of a wide cluster" names the pick without showing
         # a bare target, and the risk line two rows down still says "skip".
-        size = getattr(x, "event_size", 0)
-        of = getattr(x, "event_of", "")
-        weak = getattr(x, "event_weak", False)
         if isinstance(size, int) and size >= 2:
             if getattr(x, "event_pick", False):
                 bits.append("🎯 best of a wide cluster" if weak
                             else "🎯 the pick")
-            elif of:
-                bits.append(f"pick is {_short(of)}")
+    # A DEFERRAL IS NOT GATED ON CLUSTER SIZE, and it used to be. The pick now
+    # holds for a cooldown that outlives the scan cycle, so a signal can be the
+    # ONLY one in its cycle and still be deferring to a pick sent an hour ago.
+    # Under the old size >= 2 gate that alert said nothing at all, which is the
+    # one case where the reader most needs telling: it looks like a fresh
+    # opportunity and it is not.
+    #
+    # AGE MATTERS TOO. "pick is SOL" reads as a live instruction; if SOL's
+    # alert went out forty minutes ago the reader is being pointed BACKWARDS,
+    # at a message they have already seen and either took or did not.
+    if of and not getattr(x, "event_pick", False):
+        age = getattr(x, "event_age", 0)
+        if isinstance(age, int) and age >= 300:
+            bits.append(f"{_short(of)} took this move {age // 60}m ago")
+        else:
+            bits.append(f"pick is {_short(of)}")
     # THE SAME RAID ON ANOTHER TIMEFRAME. 🔗 above counts other SYMBOLS on this
     # close; this counts the same symbol and the same direction printing again
     # on a different resolution, which is one idea arriving as two or three

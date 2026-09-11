@@ -39,11 +39,27 @@ import sys
 sys.path.insert(0, ".")
 
 from riptide.decide import describe, event_span         # noqa: E402
+from riptide.decide import decide as decide_decide     # noqa: E402
+from riptide.decide import reset as decide_reset       # noqa: E402
 from riptide.engine import Early, Setup                 # noqa: E402
 from riptide.scanner import event_rank, tag_event_pick  # noqa: E402
 from riptide.telegram import marks, setup_message       # noqa: E402
 
 fails = []
+
+# EACH SCENARIO BELOW IS INDEPENDENT, so the standing pick from the previous one
+# must not leak into it. Live that memory is the entire point — decide._LAST is
+# what lets a 1h signal at 12:00 defer to a 15m pick sent at 11:30 — but a test
+# that shared it would be testing the order its own cases happen to be written
+# in rather than the rule.
+_raw_tag = tag_event_pick
+
+
+def tag_event_pick(results, *a, **k):                   # noqa: F811
+    decide_reset()
+    return _raw_tag(results, *a, **k)
+
+
 
 
 def check(ok, what):
@@ -172,20 +188,46 @@ near = [setup("AAA_USDT", 2.0, t=1789002000),
         setup("BBB_USDT", 2.0, t=1789002000 + span // 2)]
 tag_event_pick([(near, [], [], [])])
 check(all(x.event_size == 2 for x in near),
-      f"two signals inside one {span}s window are one event, not two")
+      "everything of one direction in one scan is one event")
 
-apart = [setup("AAA_USDT", 2.0, t=1789002000),
-         setup("BBB_USDT", 2.0, t=1789002000 + span * 2)]
-tag_event_pick([(apart, [], [], [])])
-check(all(x.event_size == 1 for x in apart),
-      "and two windows apart is two events")
+print("\nthe cooldown is a ROLLING window, held across scan cycles")
+now = 1789002000
+first = setup("AAA_USDT", 2.0)
+tag_event_pick([([first], [], [], [])], now=now)
+check(first.event_pick, "the first signal claims the window")
+
+# The case the whole cooldown exists for: a 1h setup is not knowable until its
+# bar closes, so it arrives in a LATER scan than the 15m read of the same move.
+# Without memory it would claim a second pick and contradict a message already
+# sent; with it, it points back.
+later = setup("BBB_USDT", 2.0, tf="Min60")
+decide_decide([([later], [], [], [])], now=now + span // 2)
+check(not later.event_pick,
+      "a signal arriving mid-window does NOT claim a second pick")
+check(later.event_of == "AAA_USDT",
+      "it names the pick already sent, so nothing is contradicted")
+check(later.event_age == span // 2,
+      "and carries its age, so the chip can say how long ago")
+check(f"{span // 120}m ago" in (marks(later) or "") or later.event_age < 300,
+      "which the chip renders as an age, not as a live instruction")
+
+after = setup("CCC_USDT", 2.0)
+decide_decide([([after], [], [], [])], now=now + span + 60)
+check(after.event_pick, "once the window passes, a new pick is named")
+
+decide_reset()
+fresh = setup("DDD_USDT", 2.0)
+decide_decide([([fresh], [], [], [])], now=now + 1)
+check(fresh.event_pick,
+      "reset() forgets the standing pick — a restart costs one extra chip, "
+      "which decide.py documents rather than hides")
 
 print("\nthe rendered chip")
 grp = [setup("AAA_USDT", 4.0), setup("BBB_USDT", 2.0)]
 for x in grp:
     x.breadth = 2
 tag_event_pick([(grp, [], [], [])])
-check("60m" in describe() and "tf" in describe(),
+check(f"{event_span() // 60}m" in describe() and "tf" in describe(),
       f"/status can state the live rule: {describe()}")
 check("🎯 the pick" in (marks(grp[1]) or ""), "the pick says so")
 check("pick is BBB" in (marks(grp[0]) or ""),

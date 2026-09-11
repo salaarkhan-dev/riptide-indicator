@@ -381,6 +381,37 @@ EVENT_PICK = os.getenv("RIPTIDE_EVENT_PICK", "1") == "1"
 # with the better-evidenced axis instead and give up 0.61 recovery; nothing
 # else changes, and neither setting suppresses a single alert.
 PICK_ORDER = os.getenv("RIPTIDE_PICK_ORDER", "tf").strip().lower() or "tf"
+
+# Minutes before the pick rule will name a NEW pick, counted from the last one
+# rather than from a clock boundary. 0 falls back to one bar of the slowest
+# scanned timeframe.
+#
+# A ROLLING WINDOW, NOT AN HOUR BUCKET, and the difference is the whole reason
+# this key exists. A bucket floors onto the clock, so a pick at 11:59 and
+# another at 12:01 are two minutes apart and in two different hours. A rolling
+# window has no boundary to fall the wrong side of: once a pick is named,
+# nothing else is named until the window has passed, so a signal you acted on
+# at 11:30 is never contradicted at 12:00.
+#
+# 120 MINUTES, chosen from four lengths scored causally on 333 days
+# (research/studies/pick_rule.py):
+#
+#     cooldown   alerts/day   total R   maxDD   recovery   1st half   account
+#       30m         29.8        253.7    83.5     3.04       0.49      +410%
+#       60m         23.6        212.6    57.2     3.71       1.21      +375%
+#      120m         17.7        209.7    31.5     6.66       3.31      +501%
+#      240m         12.5        154.2    20.1     7.68       3.46      +282%
+#
+# 120 beats 60 on every column and in BOTH halves of the window, and it is not
+# winning by trading less: total R is flat from 60 to 120 (212.6 to 209.7)
+# while the drawdown nearly halves. 240 has the better ratio and gives up a
+# quarter of the return to get it, which the compounded account — the column
+# that carries the ten-position constraint — prices at +282% against +501%.
+#
+# The honest caution: four values on one window, and recovery rises
+# monotonically across all four, so this is a choice from a trend rather than a
+# spike. Longer is the safer direction to be wrong in.
+PICK_COOLDOWN_MIN = int(os.getenv("RIPTIDE_PICK_COOLDOWN_MIN", "120"))
 # Must be at least 2. Candle.t is the bar's OPEN time, so a bar that has just
 # closed is already one full step old, and the scan wakes another 10s after
 # that. A window of 1 * step can never contain the sweep that just confirmed,

@@ -33,11 +33,24 @@ chip exists to prevent, arriving through a door that chip does not watch.
 Widening the window is worth +3.46 recovery. Re-ordering inside the wide window
 is worth +0.61. The grouping is the change; the tiebreak is the polish.
 
-The window is one bar of the SLOWEST SCANNED timeframe, which is an hour while
-INTERVALS ends at Min60 and would become four hours if Hour4 were added. Tying
-it to the configuration rather than hardcoding 3600 is deliberate: the whole
-point is "one market move", and what counts as one move scales with the slowest
-chart being watched.
+THE WINDOW IS ROLLING, AND MEASURED CAUSALLY. The rows above use hindsight —
+they know at 11:30 what will arrive at 12:00 — and no bot can. Scored the way
+a bot has to run, in arrival order, with the pick standing for a fixed time
+afterwards (research/studies/pick_rule.py):
+
+    cooldown  30m   29.8/day   recovery 3.04   1st half 0.49   +410%
+    cooldown  60m   23.6/day   recovery 3.71   1st half 1.21   +375%
+    cooldown 120m   17.7/day   recovery 6.66   1st half 3.31   +501%
+    cooldown 240m   12.5/day   recovery 7.68   1st half 3.46   +282%
+
+120 minutes is the default. It beats 60 in both halves and is not winning by
+trading less: total R is flat from 60 to 120 (212.6 against 209.7) while the
+drawdown nearly halves. 240 has the better raw ratio and pays a quarter of the
+return for it, which the compounded account prices at +282% against +501%.
+
+Rolling rather than clock-aligned because a bucket has an edge a reader hits: a
+pick at 11:59 and another at 12:01 are two minutes apart and in two different
+hours.
 
 ──────────────────────────────────────────────────────────────────────────────
 THE RANKING, KEY BY KEY, WITH THE EVIDENCE FOR EACH
@@ -104,9 +117,11 @@ skip, the chip says so in words rather than showing a bare target.
 
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 
-from .config import BAR_SECONDS, INTERVAL, INTERVALS, PICK_ORDER, log
+from .config import (BAR_SECONDS, INTERVAL, INTERVALS, PICK_COOLDOWN_MIN,
+                     PICK_ORDER, log)
 
 TAKE, FLAT, SKIP = 0, 1, 2
 BAND_NAMES = ("take", "flat", "skip")
@@ -136,14 +151,46 @@ def is_early(x) -> bool:
 
 
 def event_span() -> int:
-    """One market event, in seconds: one bar of the slowest scanned timeframe.
+    """How long a pick holds, in seconds. A ROLLING window, not a bucket.
 
-    Derived from INTERVALS rather than hardcoded, because "one market move"
-    scales with the slowest chart being watched. With Min30+Min15+Min60 this is
-    3600; adding Hour4 would make it 14400 without another edit here.
+    A clock-aligned bucket has an edge a reader hits: a pick at 11:59 and one
+    at 12:01 are two minutes apart and in two different hours. Counting from
+    the LAST PICK has no boundary to fall the wrong side of, and it is what
+    "one trade per move" means when said out loud.
+
+    PICK_COOLDOWN_MIN is the setting; 0 falls back to one bar of the slowest
+    scanned timeframe, which is what this returned before the cooldown existed.
     """
+    if PICK_COOLDOWN_MIN > 0:
+        return PICK_COOLDOWN_MIN * 60
     steps = [BAR_SECONDS[i] for i in INTERVALS if i in BAR_SECONDS]
     return max(steps) if steps else BAR_SECONDS.get(INTERVAL, 1800)
+
+
+# THE PICK HAS TO OUTLIVE THE SCAN CYCLE, and the first version of this module
+# did not. decide() is handed one cycle's signals and nothing else, so a 1h
+# setup arriving at 12:00 could not see the 15m pick already sent at 11:30 —
+# they share an hour but not a scan. That made the shipped rule behave like
+# "one pick per scan" (recovery 2.46) rather than the "one per hour" that was
+# measured (3.71 causally, 6.66 at a 120m cooldown).
+#
+# So the last pick per DIRECTION is remembered here, in process. Longs and
+# shorts hold separate cooldowns for the same reason they are separate events
+# everywhere else: an up-raid and a down-raid in the same hour are two moves.
+#
+# IN PROCESS, NOT IN THE DATABASE, and the limitation is stated rather than
+# hidden. A restart forgets, so the first signal after one may claim a pick
+# while an earlier pick is still inside its window. The cost is one extra
+# target chip after a restart, which is rare — the service restarts on a conf
+# commit — and cheap. Persisting it would need a table and a migration for a
+# failure worth one chip.
+_LAST: dict[bool, tuple[int, str]] = {}
+
+
+def reset() -> None:
+    """Forget the standing picks. For tests, and for /scan to behave the same
+    way twice."""
+    _LAST.clear()
 
 
 def signal_time(x) -> int:
@@ -177,20 +224,31 @@ def rank_key(x):
     return (slow, band, early, sym)
 
 
-def decide(results) -> None:
+def decide(results, now: int | None = None) -> None:
     """Tag every signal in this cycle with its event and whether it is the pick.
 
-    Sets four attributes and reads none of its own output:
+    Sets five attributes and reads none of its own output:
 
-        event_size  how many signals share this market event
-        event_pick  True on exactly one member
-        event_of    the picked symbol, on every member including the pick
-        event_weak  True when even the best member is a "skip" band
+        event_size  how many signals share this direction in this cycle
+        event_pick  True on the one signal that claimed the window
+        event_of    the symbol holding the pick, whether named now or earlier
+        event_weak  True when the claiming signal is a "skip" band
+        event_age   seconds since the pick was named; 0 when named just now
+
+    ONCE A PICK IS NAMED IT STANDS. A later signal inside the cooldown never
+    overrides it — it points back at the one already sent. That is not a
+    limitation, it is the requirement: a target you acted on at 11:30 must not
+    be contradicted at 12:00, and research/studies/pick_hybrid.py established
+    that every scheme for doing better — quality gates on claiming, delaying
+    the decision to see more candidates — measures WORSE, eighteen for
+    eighteen.
 
     Suppresses nothing. Raises nothing that matters — the caller wraps it, and
     a failure here must cost a chip, never an alert.
     """
     span = event_span()
+    now = int(time.time()) if now is None else int(now)
+
     groups = defaultdict(list)
     for setups, _, early, _ in results:
         for x in list(setups) + list(early):
@@ -199,25 +257,31 @@ def decide(results) -> None:
                 # than dropping it, so downstream getattr defaults never have
                 # to distinguish "not grouped" from "grouped alone".
                 x.event_size, x.event_pick = 1, False
-                x.event_of, x.event_weak = "", False
+                x.event_of, x.event_weak, x.event_age = "", False, 0
                 continue
-            groups[event_key(x, span)].append(x)
+            groups[bool(getattr(x, "is_long", False))].append(x)
 
-    for members in groups.values():
+    for up, members in groups.items():
+        when, held = _LAST.get(up, (None, ""))
+        standing = when is not None and 0 <= now - when < span
         best = min(members, key=rank_key)
-        weak = band_of(best) == SKIP
+        if not standing:
+            _LAST[up] = (now, best.symbol)
+            when, held = now, best.symbol
         for x in members:
             x.event_size = len(members)
-            x.event_pick = x is best
-            x.event_of = best.symbol
-            x.event_weak = weak
+            x.event_pick = (not standing) and x is best
+            x.event_of = held
+            x.event_weak = (not standing) and band_of(best) == SKIP
+            x.event_age = max(0, now - when)
 
 
 def describe() -> str:
-    """One line for /status, so the live ordering is never a guess."""
+    """One line for /status, so the live rule is never a guess."""
     order = ("band → tf → confirmed" if PICK_ORDER == "band"
              else "tf → band → confirmed")
-    return f"one pick per {event_span() // 60}m across all tfs · {order}"
+    return (f"one pick per {event_span() // 60}m, rolling, across all tfs "
+            f"· {order}")
 
 
 if PICK_ORDER not in ("tf", "band"):                      # pragma: no cover

@@ -24,9 +24,24 @@ os.environ.setdefault("RIPTIDE_TRACK", "1")
 
 from riptide import tracker                             # noqa: E402
 from riptide.engine import Setup                        # noqa: E402
+from riptide.decide import reset as decide_reset   # noqa: E402
 from riptide.scanner import tag_event_pick              # noqa: E402
 
 fails = []
+
+# EACH SCENARIO BELOW IS INDEPENDENT, so the standing pick from the previous one
+# must not leak into it. Live that memory is the entire point — decide._LAST is
+# what lets a 1h signal at 12:00 defer to a 15m pick sent at 11:30 — but a test
+# that shared it would be testing the order its own cases happen to be written
+# in rather than the rule.
+_raw_tag = tag_event_pick
+
+
+def tag_event_pick(results, *a, **k):                   # noqa: F811
+    decide_reset()
+    return _raw_tag(results, *a, **k)
+
+
 
 
 def check(ok, what):

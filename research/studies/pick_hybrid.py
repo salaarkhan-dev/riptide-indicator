@@ -299,6 +299,25 @@ async def main():
         score(f"take-band goes now, else wait {d // 60}m",
               run(rows, lambda t: band_of(t) == 0, delay=d))
 
+    print("\n-- IF WE MUTED PART OF THE STREAM ENTIRELY " + "-" * 33)
+    print("  not a claim gate — these signals would not be SENT at all, so")
+    print("  they cannot be picked either. cooldown 120m throughout.")
+    print(f"  {'stream kept':<38}{'/day':>6}{'trades':>7}{'total':>8}"
+          f"{'maxDD':>7}{'recov':>7}{'1st½':>7}{'2nd½':>7}{'acct':>9}"
+          f"{'accDD':>6}")
+    slow = {"Min30": 1800, "Min60": 3600}
+    for name, keep in (
+            ("everything", lambda t: True),
+            ("mute early 15m", lambda t: not (t.kind == "early"
+                                              and t.tf == "Min15")),
+            ("mute early 15m+30m", lambda t: not (t.kind == "early"
+                                                  and t.tf != "Min60")),
+            ("mute ALL early", lambda t: t.kind == "confirmed"),
+            ("mute 15m entirely", lambda t: t.tf != "Min15"),
+            ("confirmed + early 1h only",
+             lambda t: t.kind == "confirmed" or t.tf == "Min60")):
+        score(name, run([t for t in rows if keep(t)], cooldown=7200))
+
     print("\n-- WHAT THE DELAY COSTS, ON ITS OWN " + "-" * 40)
     print("  the same trades, scored at each delay, ignoring any pick rule.")
     print(f"  {'delay':<10}{'still fills':>12}{'R/trade':>10}{'total':>9}")
