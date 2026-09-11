@@ -41,7 +41,8 @@ import time
 from bisect import bisect_right
 
 from .config import (BAR_SECONDS, BTC_REGIME_INTERVAL, CFG, DI_INTERVAL,
-                     TREND_FACTOR, TREND_INTERVAL, TREND_LEN, log)
+                     POI_INTERVAL, TREND_FACTOR, TREND_INTERVAL,
+                     TREND_LEN, log)
 from .engine import (Candle, atr_series, daily_zones, in_zone,
                      rma as atr_rma)
 
@@ -211,12 +212,20 @@ async def btc_at(sess, when: int, fetch) -> int | None:
 
 async def poi_at(sess, symbol: str, when: int, price: float, is_long: bool,
                  fetch) -> bool | None:
-    """Did the raid land inside an aligned daily order block or fair value gap?
+    """Did the raid land inside an aligned order block or fair value gap?
 
-    Reads the same cached daily bars as the SuperTrend and DI, so it costs no
-    extra request.
+    ON POI_INTERVAL, WHICH IS NOT NECESSARILY DAILY AND HAS NOT BEEN SINCE
+    9 SEP. This function read TREND_INTERVAL until 11 Sep and said "daily" in
+    its own first line while doing so, which is how an Hour8 filter spent two
+    days being described as a daily one everywhere including on the alert. It
+    now reads a key of its own, defaulting to TREND_INTERVAL so the behaviour
+    is unchanged.
 
-    Returns None — not False — when the daily fetch came back EMPTY. The
+    Reads the same cached bars as the SuperTrend and DI when the intervals
+    match, so it costs no extra request in the default configuration and one
+    per symbol per TTL when POI_INTERVAL is set apart.
+
+    Returns None — not False — when the fetch came back EMPTY. The
     distinction is the whole point: "the raid was not in a zone" and "we could
     not find out" look identical to a boolean, and under POI_REQUIRED the
     first means suppress while the second must mean send. Daily fetches do
@@ -224,15 +233,14 @@ async def poi_at(sess, symbol: str, when: int, price: float, is_long: bool,
     as long as the failure lasted.
 
     A symbol with real but SHORT history is not unknown. A coin listed six
-    days ago has six daily candles and therefore genuinely has no daily point
-    of interest, so it answers False and is suppressed by the filter — which
-    is correct: a policy built on daily context cannot be run on a symbol that
-    has none.
+    days ago genuinely has no context zones, so it answers False and is
+    suppressed by the filter — which is correct: a policy built on higher
+    timeframe context cannot be run on a symbol that has none.
     """
-    hit = await _series(sess, symbol, fetch, TREND_INTERVAL)
+    hit = await _series(sess, symbol, fetch, POI_INTERVAL)
     if hit is None:
         return None
-    return in_zone(hit[4], when, price, is_long, BAR_SECONDS[TREND_INTERVAL])
+    return in_zone(hit[4], when, price, is_long, BAR_SECONDS[POI_INTERVAL])
 
 
 async def di_at(sess, symbol: str, when: int, fetch) -> int | None:

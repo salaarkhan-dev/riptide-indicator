@@ -131,7 +131,7 @@ async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
             x.di_dir = await trend.di_at(sess, symbol, x.detected_time,
                                          fetch_candles) or 0
             # The stop sits just beyond the raid extreme, and it is the raid
-            # that has to land in the daily zone — not the entry, which is a
+            # that has to land in the context zone — not the entry, which is a
             # retracement away from it.
             _poi = await trend.poi_at(sess, symbol, x.detected_time, x.stop,
                                        x.is_long, fetch_candles)
@@ -456,7 +456,7 @@ def poi_ok(x) -> bool:
     forward, out-of-sample evidence this project has, and a suppressed band is
     exactly the one whose live numbers decide whether the policy was right.
 
-    Policy G, research/studies/hybrid.py: requiring a daily POI on every
+    Policy G, research/studies/hybrid.py: requiring a POI on every
     timeframe took return per unit of drawdown from 6.94 to 21.53 on a 300
     USDT account. It suppresses roughly two thirds of alerts.
     """

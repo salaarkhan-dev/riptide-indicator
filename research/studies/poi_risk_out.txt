@@ -1,0 +1,81 @@
+THE RISK BAND CROSSED WITH THE POI, ON 1h
+4723 filled Min60 A/B trades, 59 symbols, 333 days.
+band boundaries 1.2/2.6 are survivor.py's, fitted on Min30 and NOT refitted here.
+the live POI is read on Hour8; 'daily' below is the alternative, not the status quo.
+
+  POWER. 2037 bets, sd 1.31. A grid cell holding 200 bets has SE 0.092,
+  and telling two such cells apart needs 0.366 R — bigger than any effect ever measured
+  on this project. The grid DESCRIBES. Only the tests below it decide anything.
+
+-- ALL SIGNALS ---------------------------------------------------------------
+                           tight <1.2%     band 1.2-2.6%        wide >2.6%
+  no POI at all     +0.153±0.056( 619)+0.188±0.041(1130)-0.005±0.044( 875)
+  in 8h zone (LIVE) +0.075±0.074( 358)+0.159±0.053( 686)-0.011±0.058( 499)
+  NOT in 8h zone    +0.217±0.076( 355)+0.185±0.054( 667)+0.007±0.060( 487)
+  in daily zone     +0.068±0.094( 230)+0.153±0.062( 520)-0.034±0.066( 392)
+  NOT in daily zone +0.163±0.064( 478)+0.178±0.048( 823)+0.015±0.055( 572)
+  in BOTH zones     +0.007±0.115( 152)+0.060±0.076( 339)-0.094±0.081( 256)
+  cell = R/bet ± SE (bets). a dash means under 25 bets.
+
+-- CONFIRMED ONLY ------------------------------------------------------------
+                           tight <1.2%     band 1.2-2.6%        wide >2.6%
+  no POI at all     +0.018±0.139( 101)+0.235±0.085( 268)+0.006±0.084( 257)
+  in 8h zone (LIVE) +0.051±0.196(  55)+0.244±0.117( 145)-0.034±0.108( 150)
+  NOT in 8h zone    -0.041±0.190(  53)+0.166±0.114( 156)+0.057±0.122( 127)
+  in daily zone     +0.377±0.270(  32)+0.164±0.143(  99)+0.026±0.133( 108)
+  NOT in daily zone -0.098±0.160(  75)+0.257±0.101( 195)-0.026±0.104( 162)
+  in BOTH zones               —(  18)+0.210±0.192(  55)-0.143±0.152(  73)
+  cell = R/bet ± SE (bets). a dash means under 25 bets.
+
+-- EARLY ONLY ----------------------------------------------------------------
+                           tight <1.2%     band 1.2-2.6%        wide >2.6%
+  no POI at all     +0.164±0.057( 601)+0.180±0.042(1059)+0.000±0.046( 794)
+  in 8h zone (LIVE) +0.080±0.075( 348)+0.141±0.055( 650)+0.001±0.063( 441)
+  NOT in 8h zone    +0.237±0.077( 344)+0.188±0.056( 615)-0.030±0.062( 441)
+  in daily zone     +0.057±0.095( 224)+0.155±0.064( 493)-0.067±0.070( 342)
+  NOT in daily zone +0.184±0.066( 462)+0.167±0.050( 762)+0.020±0.058( 524)
+  in BOTH zones     -0.019±0.116( 147)+0.047±0.077( 325)-0.100±0.088( 218)
+  cell = R/bet ± SE (bets). a dash means under 25 bets.
+
+== PRIMARY: does the band survive inside each POI arm? =====================
+
+  ALL SIGNALS
+      no POI at all: band vs outside             +0.188 vs  +0.063  diff +0.125  |z|  2.3  MDE 0.158  SEPARATES
+      in 8h zone (LIVE): band vs outside         +0.159 vs  +0.022  diff +0.137  |z|  1.9  MDE 0.206
+      NOT in 8h zone: band vs outside            +0.185 vs  +0.093  diff +0.092  |z|  1.3  MDE 0.210
+      in daily zone: band vs outside             +0.153 vs  +0.014  diff +0.138  |z|  1.7  MDE 0.240
+      NOT in daily zone: band vs outside         +0.178 vs  +0.080  diff +0.098  |z|  1.5  MDE 0.187
+      in BOTH zones: band vs outside             +0.060 vs  -0.034  diff +0.094  |z|  0.9  MDE 0.294
+
+  CONFIRMED ONLY
+      no POI at all: band vs outside             +0.235 vs  +0.009  diff +0.226  |z|  2.0  MDE 0.332  SEPARATES
+      in 8h zone (LIVE): band vs outside         +0.244 vs  -0.016  diff +0.260  |z|  1.7  MDE 0.453
+      NOT in 8h zone: band vs outside            +0.166 vs  +0.020  diff +0.146  |z|  1.0  MDE 0.439
+      in daily zone: band vs outside             +0.164 vs  +0.097  diff +0.068  |z|  0.4  MDE 0.561
+      NOT in daily zone: band vs outside         +0.257 vs  -0.056  diff +0.313  |z|  2.3  MDE 0.389  SEPARATES
+      in BOTH zones: band vs outside             +0.210 vs  -0.054  diff +0.264  |z|  1.1  MDE 0.735
+
+  EARLY ONLY
+      no POI at all: band vs outside             +0.180 vs  +0.072  diff +0.108  |z|  1.9  MDE 0.164
+      in 8h zone (LIVE): band vs outside         +0.141 vs  +0.036  diff +0.105  |z|  1.4  MDE 0.213
+      NOT in 8h zone: band vs outside            +0.188 vs  +0.087  diff +0.101  |z|  1.4  MDE 0.219
+      in daily zone: band vs outside             +0.155 vs  -0.004  diff +0.159  |z|  1.9  MDE 0.246
+      NOT in daily zone: band vs outside         +0.167 vs  +0.098  diff +0.069  |z|  1.0  MDE 0.195
+      in BOTH zones: band vs outside             +0.047 vs  -0.048  diff +0.095  |z|  0.9  MDE 0.300
+
+== SECONDARY: inside the band, does the POI add anything? ==================
+
+  ALL SIGNALS  (2215 trades in the band)
+      8h zone vs no 8h zone                      +0.159 vs  +0.185  diff -0.026  |z|  0.3  MDE 0.214
+      daily zone vs no daily zone                +0.153 vs  +0.178  diff -0.025  |z|  0.3  MDE 0.241
+      both zones vs neither                      +0.060 vs  +0.169  diff -0.109  |z|  1.1  MDE 0.299
+
+  CONFIRMED ONLY  (361 trades in the band)
+      8h zone vs no 8h zone                      +0.244 vs  +0.166  diff +0.078  |z|  0.5  MDE 0.463
+      daily zone vs no daily zone                +0.164 vs  +0.257  diff -0.093  |z|  0.5  MDE 0.561
+      both zones vs neither                      +0.210 vs  +0.240  diff -0.030  |z|  0.1  MDE 0.759
+
+  EARLY ONLY  (1854 trades in the band)
+      8h zone vs no 8h zone                      +0.141 vs  +0.188  diff -0.047  |z|  0.6  MDE 0.222
+      daily zone vs no daily zone                +0.155 vs  +0.167  diff -0.012  |z|  0.2  MDE 0.248
+      both zones vs neither                      +0.047 vs  +0.168  diff -0.122  |z|  1.2  MDE 0.305

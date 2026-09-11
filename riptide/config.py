@@ -27,16 +27,17 @@ INTERVAL = os.getenv("RIPTIDE_INTERVAL", "Min30")     # Min15 Min30 Min60 Hour4
 # main timeframe, and it is off and staying off; see riptide/mtf.py).
 #
 # Measured: Min15 alone is NEGATIVE (-0.095 confirmed, -0.039 early) and only
-# turns positive inside a daily POI (+0.417 and +0.159). So a second timeframe
+# turns positive inside a POI (+0.417 and +0.159). So a second timeframe
 # is worth having ONLY with POI_REQUIRED on, and turning one on without the
 # other makes the bot worse. See MEASUREMENTS.md, "The cell table".
 INTERVALS = tuple(dict.fromkeys(
     i.strip() for i in os.getenv("RIPTIDE_INTERVALS", "Min30,Min15").split(",")
     if i.strip()) ) or (INTERVAL,)
 
-# Send only signals whose raid landed inside a daily order block or fair value
-# gap. The single largest separation measured here and the only filter to pass
-# a pre-registered held-out test on symbols it was not found on. Policy G in
+# Send only signals whose raid landed inside an order block or fair value gap
+# on POI_INTERVAL — daily when this was measured, Hour8 since 9 Sep. The
+# single largest separation measured here and the only filter to pass a
+# pre-registered held-out test on symbols it was not found on. Policy G in
 # research/studies/hybrid.py: return per unit of drawdown 6.94 -> 21.53 on a
 # 300 USDT account.
 #
@@ -48,7 +49,7 @@ POI_REQUIRED = os.getenv("RIPTIDE_POI_REQUIRED", "1") == "1"
 
 # Lowest grade worth a message. "C" sends everything the POI filter lets
 # through; "B" mutes grade C; "A" leaves only confirmed setups that are both
-# in a daily POI and with the daily trend.
+# in a POI and with the higher-timeframe trend.
 #
 # Measured over 2704 alerts in 42 days (research/studies/grades.py):
 #
@@ -248,6 +249,33 @@ TREND_INTERVAL = os.getenv("RIPTIDE_TREND_INTERVAL", "Hour8")
 # measurement — the tested arm was the SuperTrend AND the DI both on 8h.
 DI_INTERVAL = os.getenv("RIPTIDE_DI_INTERVAL", "Hour8")
 
+# The timeframe the POINT OF INTEREST is read on, and until 11 Sep it did not
+# exist. trend.poi_at read TREND_INTERVAL, so when that moved Day1 -> Hour8 on
+# 9 Sep for a measurement about the SuperTrend and the DI, the POI silently
+# moved with it and its zone lifetime went from thirty days to ten —
+# POI_MAX_AGE_BARS is 30 BARS of this timeframe, not thirty days. Nobody chose
+# that and no study measured it.
+#
+# Defaulting to TREND_INTERVAL keeps today's behaviour exactly. The point of
+# the key is that the two questions are separable and should be able to move
+# apart, the same argument that split DI_INTERVAL off above.
+#
+# COSTS A REQUEST PER SYMBOL PER TTL IF SET APART from TREND_INTERVAL —
+# trend._series caches on (symbol, interval), so one value means one fetch
+# serving the SuperTrend, the DI and the POI, and two values mean two.
+#
+# Measured on Min60, research/studies/poi_tf.py, 6015 signals over 333 days:
+# Hour8 against Day1 is |z| 0.1, a ten-day zone life against a thirty-day
+# one is |z| 0.1, and in-zone against out-of-zone points the WRONG way at
+# |z| 0.8.
+# The timeframe is not a knob worth turning on 1h. Min30, where the POI's
+# held-out win was found, was not re-measured and is not in question.
+POI_INTERVAL = os.getenv("RIPTIDE_POI_INTERVAL", "") or TREND_INTERVAL
+if POI_INTERVAL not in BAR_SECONDS:
+    log.warning("RIPTIDE_POI_INTERVAL=%r is not a known interval, using %s",
+                POI_INTERVAL, TREND_INTERVAL)
+    POI_INTERVAL = TREND_INTERVAL
+
 # The timeframe BTC's own trend is read on, for the market-context line on each
 # alert. 30m — the effect is in the SHORT timeframes and vanishes by 4h. Early
 # signals, held-out window: 30m +0.123 (1.8 SE), 1h +0.182 (2.7), 4h -0.051,
@@ -343,8 +371,8 @@ SWEEP_FRESH_BARS = int(os.getenv("RIPTIDE_SWEEP_FRESH_BARS", "2"))
 #
 #     every sweep, both timeframes      393/day
 #     every sweep, 30m only             216/day
-#     in a daily POI, both timeframes   123/day
-#     in a daily POI, 30m only           65/day   <- the default
+#     in a POI, both timeframes   123/day
+#     in a POI, 30m only           65/day   <- the default
 #
 # 30m only, POI required, is fewer messages than the 23-symbol single-timeframe
 # setup used to send (~83/day) despite scanning nearly three times the market.
@@ -358,12 +386,12 @@ SWEEP_INTERVALS = tuple(dict.fromkeys(
     if i.strip())) or (INTERVAL,)
 POI_SWEEPS = os.getenv("RIPTIDE_POI_SWEEPS", "1") == "1"
 
-# Send only the sweeps the alert would label WATCH — in a daily POI AND with
+# Send only the sweeps the alert would label WATCH — in a POI AND with
 # the shift level closer than WATCH_MAX_DIST. The gate calls the same
 # sweep_worth() that writes the label, so what the message says and what the
 # filter does cannot drift apart.
 #
-# Measured over 5098 raids inside a daily POI, by how far the shift still was:
+# Measured over 5098 raids inside a POI, by how far the shift still was:
 #
 #     under 2%   30% of raids   65% of the R that followed
 #     under 3%   48% of raids   87%          <- the threshold

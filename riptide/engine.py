@@ -11,8 +11,8 @@ import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .config import (CFG, Cfg, DI_INTERVAL, MAX_SWEEP_RVOL, TREND_INTERVAL,
-                     WATCH_MAX_DIST)
+from .config import (CFG, Cfg, DI_INTERVAL, MAX_SWEEP_RVOL, POI_INTERVAL,
+                     TREND_INTERVAL, WATCH_MAX_DIST)
 
 @dataclass
 class Candle:
@@ -90,15 +90,16 @@ class Setup:
                              # at construction, read by nothing in production;
                              # research/studies/zones.py measures it. Defaulted
                              # so no existing construction changes.
-    poi: bool = False        # the raid landed inside an aligned daily order
-                             # block or fair value gap. Set by the scanner,
-                             # never by the engine. See daily_zones.
-    poi_known: bool = True   # False when the daily bars could not be read, so
-                             # `poi` is a default rather than an answer. The
+    poi: bool = False        # the raid landed inside an aligned order block
+                             # or fair value gap on POI_INTERVAL. Set by the
+                             # scanner, never by the engine. See daily_zones,
+                             # whose name is older than its behaviour.
+    poi_known: bool = True   # False when the context bars could not be read,
+                             # so `poi` is a default rather than an answer. The
                              # POI gate sends on unknown rather than muting.
-    di_dir: int = 0          # daily DI+/DI- direction at detection: +1 up,
-                             # -1 down, 0 unknown. Set by the scanner, like
-                             # trend_dir — the engine has no daily bars.
+    di_dir: int = 0          # DI+/DI- direction on DI_INTERVAL at detection:
+                             # +1 up, -1 down, 0 unknown. Set by the scanner,
+                             # like trend_dir — the engine has no HTF bars.
     rsi_ext: float = 0.0     # RSI stretch at the raid, in the trade's favour.
                              # See rsi_extension.
     btc_dir: int = 0         # BTC's own trend at detection, +1 up / -1 down.
@@ -310,8 +311,8 @@ def entry_of(is_long: bool, top: float, bot: float, mode: str) -> float:
     return top if is_long else bot
 
 
-# The daily point of interest. A raid that lands inside a recent daily order
-# block or fair value gap is the largest single separation this project has
+# The point of interest. A raid that lands inside a recent order block or fair
+# value gap on POI_INTERVAL is the largest single separation this project has
 # measured, and the only filter to pass a pre-registered held-out test on
 # symbols it was not found on. See MEASUREMENTS.md, "The multi-timeframe model".
 #
@@ -323,7 +324,11 @@ POI_MAX_AGE_BARS = 30
 
 
 def daily_zones(cs: list[Candle], atr: list[float]) -> list[tuple]:
-    """(formed_at, is_bull, lo, hi) for every daily order block and gap.
+    """(formed_at, is_bull, lo, hi) for every order block and gap in `cs`.
+
+    NOT DAILY, DESPITE THE NAME. The name is from when the only caller passed
+    daily candles; it reads whatever series it is given, and trend.poi_at has
+    passed POI_INTERVAL bars -- Hour8 by default -- since 9 Sep.
 
     formed_at is the bar the zone COMPLETED on, not the bar it started from.
     A three-candle gap is not knowable until the third candle closes, and an
@@ -492,16 +497,21 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
 #
 # The previous version graded on daily DI with an RSI tiebreak. It was the best
 # available when it was written and it is now two findings out of date: the
-# daily POI turned out to be a larger separation than DI, and the two are
+# POI turned out to be a larger separation than DI, and the two are
 # MULTIPLICATIVE rather than additive, which no letter built on one axis can
 # express.
 #
-#   POI    the raid landed inside a daily order block or fair value gap less
-#          than 30 days old. Discovered on 14 symbols, held out on 9 it had
-#          never seen, and it then improved every arm of two other entry models
-#          built on a different premise. The only filter here to survive a
-#          pre-registered held-out test.
-#   TREND  the daily SuperTrend and daily DI agree with the trade. Stricter
+#   POI    the raid landed inside an order block or fair value gap on
+#          POI_INTERVAL, less than POI_MAX_AGE_BARS bars of that timeframe
+#          old. Measured on DAILY zones with a thirty-day life; it has read
+#          Hour8 with a ten-day life since 9 Sep, which poi_tf.py finds
+#          indistinguishable on Min60 and which nothing has checked on
+#          Min30. Discovered on 14 symbols, held out on 9 it had never seen,
+#          and it then improved every arm of two other entry models built on a
+#          different premise. The only filter here to survive a pre-registered
+#          held-out test.
+#   TREND  the SuperTrend and the DI, each on its own interval, agree with
+#          the trade. Both Hour8 since 9 Sep. Stricter
 #          than the old DI-alone reading and measured on the same cells.
 #
 # Measured, 23 symbols, 41 days, 2R target, maker/taker fees, from the FILL bar:
@@ -529,13 +539,30 @@ def confluence_of(cs: list[Candle], fvg_bar: int, is_bull: bool,
 # project has watched the LEVEL of an effect move from -0.05 to +0.32 across
 # windows while the separation between bands held. The ordering is the finding.
 # Band A rests on 43 signals and has never been held out on its own.
-_POI = "daily POI"
+# One word for a timeframe, in prose register rather than the chip register
+# telegram.TF_LABEL uses -- "daily", not "1D".
+_TF_WORD = {"Day1": "daily", "Hour8": "8h", "Hour4": "4h", "Min60": "1h",
+            "Min30": "30m", "Min15": "15m"}
+
+
+def tf_word(interval: str) -> str:
+    return _TF_WORD.get(interval, interval)
+
+
+# BOTH HALVES OF THE GRADE NAME THEIR OWN TIMEFRAME, AND THE POI HALF DID NOT
+# UNTIL 11 SEP. The trend half was made dynamic when the default first moved,
+# with the note below. The POI half was left as the literal string "daily POI"
+# -- and on 9 Sep it became wrong in exactly the way that note predicted:
+# poi_at reads POI_INTERVAL, which defaults to TREND_INTERVAL, which moved to
+# Hour8. For two days every alert, /help and /stats said "daily POI" about an
+# 8h filter. Nothing behaved wrongly; every description of it did.
+#
 # The grade's trend half is whatever TREND_INTERVAL says it is. It used to be
 # the literal word "daily" in eight places, which was correct only for as long
 # as the default never moved -- and the moment it did, every alert would have
 # named a timeframe the bot was not reading.
-_TL = {"Day1": "daily", "Hour8": "8h", "Hour4": "4h", "Min60": "1h"}.get(
-    TREND_INTERVAL, TREND_INTERVAL)
+_TL = tf_word(TREND_INTERVAL)
+_POI = f"{tf_word(POI_INTERVAL)} POI"
 
 # (letter, why) keyed by (early?, in a POI?, trend agrees?)
 GRADES = {
@@ -653,7 +680,7 @@ def shift_odds(extreme: float, struct_level: float):
 # A sweep answers exactly one question: is this chart worth looking at. So it
 # gets one answer, yes or no, rather than a tier the reader has to interpret.
 # The cut is where the value stops arriving. Measured over 5098 raids that
-# landed in a daily POI, by how far the shift level still was:
+# landed in a POI, by how far the shift level still was:
 #
 #     band     share of raids   convert   total R produced
 #     <1%            8%          22.7%         +15.9
@@ -701,7 +728,7 @@ def sweep_worth(extreme: float, struct_level: float, poi: bool = True,
       distance  how likely a setup is to appear at all. Under 3% away, 7-23%
                 of raids convert; beyond it, 1-3%.
       POI       whether that setup is worth taking when it comes. Raids inside
-                a daily zone produce setups worth +0.141 R; those outside
+                a POI zone produce setups worth +0.141 R; those outside
                 produce -0.055.
       VOLUME    how likely a setup is to appear at all, again — and far more
                 strongly than distance does.

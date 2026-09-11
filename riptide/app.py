@@ -32,7 +32,7 @@ async def main() -> None:
         return
     if len(INTERVALS) > 1 and not POI_REQUIRED:
         # Measured: Min15 alone is -0.095 R per confirmed setup and -0.039 per
-        # early. It only turns positive inside a daily POI. Scanning a second
+        # early. It only turns positive inside a POI. Scanning a second
         # timeframe without the filter that makes it work is strictly worse
         # than not scanning it, so this is loud rather than silent.
         log.warning("scanning %s with POI_REQUIRED off — the faster "

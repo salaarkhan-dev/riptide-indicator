@@ -17,9 +17,10 @@ import aiohttp
 
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
-                     TREND_INTERVAL, TRENDLINE_CONFLUENCE_BARS, log)
+                     POI_INTERVAL, TREND_INTERVAL,
+                     TRENDLINE_CONFLUENCE_BARS, log)
 from .engine import (Early, Setup, Sweep, grade_of, shift_odds,
-                     sweep_worth)
+                     sweep_worth, tf_word)
 
 def keyboard(*rows) -> dict:
     """An inline keyboard from rows of (label, callback_data) or (label, url).
@@ -631,7 +632,10 @@ def sweep_message(s: Sweep) -> str:
     # as a label rather than as news. That is the point: it says what the
     # filter let through. When the filter is off it varies, and then it is the
     # single most useful word in the message.
-    where = (" in a daily POI" if s.poi
+    # "the {word} POI", never "a daily POI". The literal word was correct
+    # only while POI_INTERVAL never moved, and on 9 Sep it moved to Hour8 and
+    # this line spent two days naming a timeframe the bot was not reading.
+    where = (f" in the {tf_word(POI_INTERVAL)} POI" if s.poi
              else "" if s.poi_known else " · POI unknown")
     # No "WATCH" on a watchable sweep. With SWEEP_WATCH_ONLY on, every sweep
     # that arrives is one, so the word said nothing — the same reason the
