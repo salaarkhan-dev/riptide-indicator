@@ -374,13 +374,15 @@ printed, and one or two will clear 2 SE by chance.
 Changing any of these mid-test invalidates it, and the analysis must check them
 rather than assume them:
 
-- `POI_INTERVAL` stays at **whatever it is set to on the day the clock starts**,
+- `POI_INTERVAL` is **`Day1`**, set in `riptide.conf` on 11 Sep before the clock
+  started, and stays there for the duration,
   and `POI_MAX_AGE_BARS` stays **30**. This is no longer a formality:
   `poi_recheck.py` finds the surviving cell at **+0.160 on Day1** and **+0.006
   on Hour8**, and the bot has read Hour8 since 9 Sep only because `poi_at` read
-  `TREND_INTERVAL` and the SuperTrend moved. If `RIPTIDE_POI_INTERVAL` is set
-  back to `Day1` before the clock starts, that is the configuration under test
-  and this line records it. Changing it *during* the test invalidates it.
+  `TREND_INTERVAL` and the SuperTrend moved. It has now been set back to `Day1`
+  while `TREND_INTERVAL` stays `Hour8` — the separation the new key exists for —
+  so **`Day1` is the configuration under test**. Changing it *during* the test
+  invalidates the test.
 - `RIPTIDE_INTERVALS` stays **Min30,Min15,Min60**, `MIN_GRADE` stays **B**
   (set in `riptide.conf`; the module default in `config.py` is still `C`, and
   that mismatch is deliberate noise to be aware of, not a second setting),
