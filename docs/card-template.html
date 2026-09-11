@@ -1,0 +1,151 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- Generated from research/studies/scorecard.py by docs/build-card.py.
+     Do not edit alert-card.html by hand — edit this template and rebuild, or
+     the numbers can drift away from the study that produced them. -->
+<style>
+  :root{
+    --ink:#111827; --dim:#6b7280; --line:#e5e7eb;
+    --gold:#b45309; --goldbg:#fffbeb; --goldline:#f59e0b;
+    --green:#15803d; --red:#b91c1c;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    width:1080px; background:#ffffff; color:var(--ink);
+    font-family:"DejaVu Sans","Noto Color Emoji",sans-serif;
+  }
+  .sheet{padding:56px 60px 60px;}
+
+  h1{font-size:40px; letter-spacing:-.5px; margin-bottom:44px;}
+  h1 span{color:var(--dim); font-size:26px; font-weight:normal;}
+
+  .sech{font-size:19px; letter-spacing:2px; color:var(--dim);
+        text-transform:uppercase; margin:0 0 18px;}
+  .sec{margin-bottom:52px;}
+
+  /* the one rule */
+  .rulebox{background:var(--goldbg); border:3px solid var(--goldline);
+           border-radius:14px; padding:34px 38px; text-align:center;}
+  .rulebox .big{font-size:40px; line-height:1.35; font-weight:bold;}
+  .rulebox .big b{color:var(--gold);}
+  .rulebox .small{font-size:25px; color:var(--dim); margin-top:16px;}
+
+  /* what-to-do rows */
+  table{width:100%; border-collapse:collapse;}
+  .do-table td{padding:20px 4px; border-top:2px solid var(--line);
+               vertical-align:top;}
+  .do-table tr:first-child td{border-top:none;}
+  .tag{font-size:28px; font-weight:bold; white-space:nowrap; width:290px;}
+  .do{font-size:27px; font-weight:bold; text-align:right; white-space:nowrap;}
+  .exp{font-size:24px; color:var(--dim); padding-left:20px;}
+
+  /* the score table */
+  .score{font-size:25px;}
+  .score th{font-size:20px; color:var(--dim); font-weight:normal;
+            text-align:right; padding:0 0 14px; letter-spacing:1px;
+            text-transform:uppercase;}
+  .score th.l{text-align:left;}
+  .score td{padding:15px 0; border-top:2px solid var(--line);
+            text-align:right; font-family:"DejaVu Sans Mono",monospace;}
+  .score td.k{text-align:left; font-family:"DejaVu Sans",sans-serif;
+              font-weight:bold;}
+  .score td.t{text-align:left; color:var(--dim); padding-left:16px;}
+  .score td.thin{text-align:left; color:var(--dim); font-style:italic;
+                 font-family:"DejaVu Sans",sans-serif;}
+  .score .se{color:var(--dim); font-size:21px;}
+
+  /* width */
+  .chips{display:flex; gap:20px;}
+  .chip{flex:1; border:2px solid var(--line); border-radius:14px;
+        padding:22px 24px;}
+  .chip.win{border:3px solid var(--green);}
+  .chip .w{font-size:34px; font-weight:bold;
+           font-family:"DejaVu Sans Mono",monospace;}
+  .chip .r{font-size:23px; color:var(--dim); margin-top:6px;}
+
+  .note{font-size:23px; color:var(--dim); margin-top:18px; line-height:1.45;}
+  .note b{color:var(--ink);}
+</style>
+
+<div class="sheet">
+
+  <h1>RIPTIDE &nbsp;<span>how to read an alert</span></h1>
+
+  <div class="sec">
+    <div class="rulebox">
+      <div class="big">🎯 <b>THE PICK</b> is the one to take.<br>
+        Everything else is information.</div>
+      <div class="small">About 18 of the 85 alerts a day carry it.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sech">the first line tells you what to do</div>
+    <table class="do-table">
+      <tr>
+        <td class="tag" style="color:var(--gold)">🎯 THE PICK</td>
+        <td class="exp">the best signal right now</td>
+        <td class="do" style="color:var(--green)">TAKE IT</td>
+      </tr>
+      <tr>
+        <td class="tag">👀 WATCH</td>
+        <td class="exp">real, but something else was better</td>
+        <td class="do" style="color:var(--dim)">LOOK ONLY</td>
+      </tr>
+      <tr>
+        <td class="tag">👀 SWEEP</td>
+        <td class="exp">no entry yet, may never come</td>
+        <td class="do" style="color:var(--dim)">LOOK ONLY</td>
+      </tr>
+      <tr>
+        <td class="tag">📐 TRENDLINE</td>
+        <td class="exp">a list of charts, no edge measured</td>
+        <td class="do" style="color:var(--dim)">LOOK ONLY</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="sec">
+    <div class="sech">what the 🎯 picks have scored · 333 days</div>
+    <table class="score">
+      <tr>
+        <th class="l">type</th><th class="l">tf</th>
+        <th>win</th><th>rr</th><th>r / trade</th><th>max dd</th>
+      </tr>
+<!--TABLE-->
+    </table>
+    <div class="note"><!--NOTE--></div>
+  </div>
+
+  <div class="sec">
+    <div class="sech">the word next to the stop</div>
+    <div class="chips">
+      <div class="chip">
+        <div class="w">tight</div>
+        <div class="r">under 1.2%<br>measured at zero</div>
+      </div>
+      <div class="chip win">
+        <div class="w" style="color:var(--green)">normal</div>
+        <div class="r">1.2 – 2.6%<br><b style="color:var(--ink)">the good one</b></div>
+      </div>
+      <div class="chip">
+        <div class="w" style="color:var(--red)">wide</div>
+        <div class="r">over 2.6%<br>loses money</div>
+      </div>
+    </div>
+    <div class="note">It describes the stop, not the trade. A 🎯 is still a 🎯 when it says <b>wide</b> — size it smaller.</div>
+  </div>
+
+  <div class="sec" style="margin-bottom:0">
+    <div class="sech">the three ways to lose</div>
+    <table class="do-table">
+      <tr><td class="tag" style="color:var(--red); width:60px">✕</td>
+        <td class="exp" style="color:var(--ink)">Taking the 👀 WATCH alerts as well.</td></tr>
+      <tr><td class="tag" style="color:var(--red); width:60px">✕</td>
+        <td class="exp" style="color:var(--ink)">Holding more than about <b>5 positions</b> at once.</td></tr>
+      <tr><td class="tag" style="color:var(--red); width:60px">✕</td>
+        <td class="exp" style="color:var(--ink)">Waiting for a better entry. The edge decays fast.</td></tr>
+    </table>
+  </div>
+
+</div>
