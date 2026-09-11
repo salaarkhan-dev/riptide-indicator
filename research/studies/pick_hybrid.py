@@ -131,6 +131,36 @@ sits in one half of one window is the exact pattern entry_deep.py and
 universe_size.py were written about, and four of the eight gate variants show
 the same split. Read the first-half column first.
 
+MUTING PART OF THE STREAM IS THE THIRD LEVER AND IT FAILS THE SAME WAY. Not a
+claim gate — these signals would not be SENT at all, so they cannot be picked
+either. Cooldown 120m throughout:
+
+    stream kept                 /day   total  maxDD  recov  1st½    acct
+    everything                  17.7   209.7   31.5   6.66  3.31   +501%
+    mute early 15m              11.8   132.6   37.5   3.54  0.48   +196%
+    mute 15m entirely           10.8   107.3   38.4   2.80  0.14   +128%
+    mute early 15m+30m           7.6    83.7   42.1   1.99 -0.49    +97%
+    mute ALL early               4.5    67.0   36.3   1.84 -0.26    +81%
+
+EVERY CUT MAKES IT WORSE, AND THE DRAWDOWN RISES WHILE IT DOES. That second
+part is the surprise: muting is supposed to be the safe direction, and instead
+maxDD goes 31.5 -> 37.5 -> 42.1 as the stream shrinks. The mechanism is the
+same one the claim gates hit — a window whose only candidates were muted
+produces NO trade, and the windows that survive are more concentrated in time,
+so the losing runs stack.
+
+That settles a question that keeps being asked in a different costume. Early
+15m signals have a NEGATIVE R per trade in isolation (-0.038 in pick_rule.py's
+cell table) and are still worth keeping, because their value is not their own
+expectancy — it is that they give the pick rule something to choose in windows
+where nothing else fires. Removing the worst-looking third of the stream costs
+two thirds of the return.
+
+The whole family now points one way: on this strategy, a rule that sometimes
+takes NOTHING loses to a rule that always takes SOMETHING. Dropping the skip
+band, gating who may claim, delaying the decision, muting a timeframe — four
+different mechanisms, four losses, one reason.
+
 WHAT THIS CLOSES. The pick rule as a family. The grouping is settled (rolling
 60m), the ordering is settled (tf first, which has now won under hindsight, per
 scan, and under a cooldown), and the gap to hindsight is closed as
