@@ -1,0 +1,27 @@
+UNIVERSE SIZE
+120 symbols cached, 7893 filled trades, 333 days.
+every difference below is inside its own noise. read direction, not magnitude.
+
+                                  n   /day   win          R each    total   maxDD  recovery
+
+-- take every alert ---------------------------------------------------------
+  60 symbols (per bet)         2422    7.3   39%   +0.036±0.027    +87.0    65.7      1.32
+  120 symbols (per bet)        3908   11.7   39%   +0.016±0.022    +62.6   109.1      0.57
+
+-- one per cluster, any band ------------------------------------------------
+  60 symbols                   2056    6.2   37%   +0.058±0.031   +119.7    39.8      3.01
+  120 symbols                  3301    9.9   37%   +0.048±0.026   +158.4    75.6      2.09
+
+-- one per cluster, IN THE RISK BAND ----------------------------------------
+  60 symbols                   1151    3.5   38%   +0.063±0.041    +72.6    39.2      1.85
+  120 symbols                  1982    6.0   38%   +0.076±0.032   +149.6    50.8      2.94
+
+-- the same, confirmed setups only ------------------------------------------
+  60 symbols                    254    0.8   42%   +0.197±0.091    +50.0    15.1      3.30
+  120 symbols                   457    1.4   40%   +0.149±0.067    +67.9    23.4      2.90
+
+-- the mechanism that was hoped for, and did not happen ---------------------
+  60 symbols     clusters of 2+   821   with an in-band member  63%   median cluster size 1
+  120 symbols    clusters of 2+  1455   with an in-band member  66%   median cluster size 1
+  bigger clusters were supposed to be likelier to hold an in-band
+  signal. They are barely likelier. The gain is simply MORE of them.
