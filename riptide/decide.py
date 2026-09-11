@@ -178,12 +178,26 @@ def event_span() -> int:
 # shorts hold separate cooldowns for the same reason they are separate events
 # everywhere else: an up-raid and a down-raid in the same hour are two moves.
 #
-# IN PROCESS, NOT IN THE DATABASE, and the limitation is stated rather than
-# hidden. A restart forgets, so the first signal after one may claim a pick
-# while an earlier pick is still inside its window. The cost is one extra
-# target chip after a restart, which is rare — the service restarts on a conf
-# commit — and cheap. Persisting it would need a table and a migration for a
-# failure worth one chip.
+# PERSISTED SINCE 11 SEP, AND THE REASON IS THAT THE OLD NOTE HERE WAS WRONG.
+#
+# It said: in process, not in the database; a restart forgets; the cost is one
+# extra target chip after a restart, which is rare, because the service
+# restarts on a conf commit.
+#
+# Both halves were wrong. Restarts are NOT rare — deploy/update.sh restarts the
+# service on every auto-update, which is every push to the branch, and a live
+# chat showed two inside thirty minutes. And the cost is not one chip: the
+# window is cleared for BOTH directions, so the very next scan claims a fresh
+# long pick and a fresh short pick regardless of what was sent minutes earlier.
+# Reported from the chat as three 🎯 alerts, all 15m, all early, inside one
+# 120-minute window — which is three times the position the rule exists to
+# hold, and the rule's entire measured value (recovery 0.13 against 6.66) is in
+# holding it.
+#
+# So it is stored, as one string in the `meta` table the bot already keeps.
+# There is no table and no migration — that was the other half of the old
+# excuse. The scanner owns the read and the write, which keeps this module free
+# of storage and testable on stubs; see dump() and load().
 _LAST: dict[bool, tuple[int, str]] = {}
 
 
@@ -191,6 +205,71 @@ def reset() -> None:
     """Forget the standing picks. For tests, and for /scan to behave the same
     way twice."""
     _LAST.clear()
+
+
+def dump() -> str:
+    """The standing picks as one short string, for the caller to persist.
+
+    "1:1789002000:SOL_USDT|0:1789003000:PEPE_USDT" — direction, when, symbol.
+    Not JSON: it goes into a single `meta` value that a human reads with sqlite
+    when a pick looks wrong, and a quoted dict is harder to read there than
+    three fields and two separators.
+    """
+    return "|".join(f"{int(up)}:{when}:{sym}"
+                    for up, (when, sym) in sorted(_LAST.items()))
+
+
+def load(text: str) -> None:
+    """Restore what dump() wrote. Never raises.
+
+    LEAVES THE CURRENT STATE ALONE on empty or unparseable input, rather than
+    clearing it. The two are not symmetric: keeping a window the bot may
+    already have released costs at most one delayed pick, while clearing one it
+    should still be holding costs an extra position in a move — which is the
+    exact failure this whole mechanism exists to prevent. So the safe direction
+    on any doubt is to keep holding.
+
+    A window older than the cooldown needs no special handling here: decide()
+    already tests `0 <= now - when < span`, so a stale entry simply is not
+    standing, and a clock that went backwards fails the same test.
+    """
+    if not text:
+        return
+    fresh: dict[bool, tuple[int, str]] = {}
+    try:
+        for part in text.split("|"):
+            if not part:
+                continue
+            up, when, sym = part.split(":", 2)
+            fresh[bool(int(up))] = (int(when), sym)
+    except (ValueError, TypeError) as e:
+        log.warning("pick window %r is unreadable, keeping the one in "
+                    "memory: %s", text[:80], e)
+        return
+    # A NON-EMPTY STRING THAT PARSES TO NOTHING IS NOT AN EMPTY WINDOW. "|||"
+    # splits into four blank fields, every one of them skipped, and an earlier
+    # version of this took that as "no picks standing" and cleared the window —
+    # the one direction this function is not allowed to fail in. Caught by
+    # tests/test_event_pick.py, which feeds it exactly that.
+    if not fresh:
+        log.warning("pick window %r parsed to nothing, keeping the one in "
+                    "memory", text[:80])
+        return
+    _LAST.clear()
+    _LAST.update(fresh)
+
+
+def standing(now: int | None = None) -> list:
+    """[(direction, symbol, seconds held)] for the windows still running.
+
+    For /status. A rule whose whole value is in NOT naming a second pick is
+    invisible when it is working, so there has to be somewhere that says it is.
+    """
+    now = int(time.time()) if now is None else int(now)
+    span = event_span()
+    return [("long" if up else "short", sym, now - when)
+            for up, (when, sym) in sorted(_LAST.items(), reverse=True)
+            if 0 <= now - when < span]
 
 
 def signal_time(x) -> int:

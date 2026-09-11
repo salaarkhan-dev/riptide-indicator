@@ -607,9 +607,24 @@ async def cycle(sess, db, symbols):
     # Which one of a cluster to take. Same cross-symbol reasoning as breadth,
     # and separately wrapped so a failure to rank an event cannot also cost the
     # cluster count that comes from the call above.
+    # THE WINDOW IS READ FROM THE DATABASE AND WRITTEN BACK EVERY CYCLE, so a
+    # restart cannot clear it. decide._LAST used to live only in the process,
+    # and deploy/update.sh restarts the service on every auto-update — so each
+    # push released BOTH direction windows and the next scan named a fresh long
+    # AND a fresh short whatever had gone out minutes before. Seen live as three
+    # 🎯 inside one 120-minute window.
+    #
+    # The database is the record, not the process: loading before every call
+    # rather than once at startup means the behaviour is identical whether or
+    # not the process just restarted, which is the only way this stays testable.
+    # decide.load() deliberately keeps the in-memory window when the stored
+    # value is empty or unreadable — releasing one that should still be held is
+    # the expensive direction.
     if EVENT_PICK:
         try:
+            decide.load(meta_get(db, "pick_window", ""))
             tag_event_pick(live)
+            meta_set(db, "pick_window", decide.dump())
         except Exception as e:
             log.warning("event pick tagging failed: %s", e)
 

@@ -38,7 +38,8 @@ import sys
 
 sys.path.insert(0, ".")
 
-from riptide.decide import describe, event_span         # noqa: E402
+from riptide.decide import describe, dump, event_span   # noqa: E402
+from riptide.decide import load, standing               # noqa: E402
 from riptide.decide import decide as decide_decide     # noqa: E402
 from riptide.decide import reset as decide_reset       # noqa: E402
 from riptide.engine import Early, Setup                 # noqa: E402
@@ -242,6 +243,54 @@ tag_event_pick([([lone], [], [], [])])
 check(move_row(lone) == "alone this close",
       "a solo signal says exactly that — a blank row would read as a missing "
       "one, and 'nothing else is firing' is itself a fact about the move")
+
+print("\nTHE WINDOW SURVIVES A RESTART, which it did not until 11 Sep")
+# The live failure: deploy/update.sh restarts on every auto-update, which
+# cleared BOTH direction windows, so the next scan named a fresh long and a
+# fresh short whatever had gone out minutes before. Seen as three 🎯 in one
+# 120-minute window.
+decide_reset()
+now = 1789002000
+first = setup("AAA_USDT", 2.0)
+decide_decide([([first], [], [], [])], now=now)
+check(first.event_pick, "a pick is named")
+saved = dump()
+check(saved and "AAA_USDT" in saved, f"and it serialises: {saved!r}")
+
+decide_reset()                      # <- the restart
+load(saved)                         # <- what the scanner does next cycle
+survivor = setup("BBB_USDT", 2.0)
+decide_decide([([survivor], [], [], [])], now=now + 60)
+check(not survivor.event_pick,
+      "a signal arriving one minute after a RESTART does NOT claim a second "
+      "pick — this is the bug that produced three 🎯 in one window")
+check(survivor.event_of == "AAA_USDT",
+      "it names the pick sent before the restart")
+check(survivor.event_age == 60, "and its age is measured from the real pick")
+
+decide_reset()
+load(saved)
+later = setup("CCC_USDT", 2.0)
+decide_decide([([later], [], [], [])], now=now + event_span() + 60)
+check(later.event_pick,
+      "once the restored window genuinely expires, a new pick is named")
+
+print("\nload() never clears a window it cannot read")
+decide_reset()
+decide_decide([([setup("DDD_USDT", 2.0)], [], [], [])], now=now)
+for bad in ("", "garbage", "1:notanumber:XXX", "|||"):
+    load(bad)
+    check("DDD_USDT" in dump(),
+          f"{bad!r} leaves the standing window alone — releasing one that "
+          f"should still hold is the expensive direction")
+
+print("\n/status can show what is standing")
+decide_reset()
+decide_decide([([setup("EEE_USDT", 2.0)], [], [], [])], now=now)
+rows = standing(now + 120)
+check(rows == [("long", "EEE_USDT", 120)], f"got {rows}")
+check(standing(now + event_span() + 1) == [],
+      "and an expired window is not listed as standing")
 
 print("\nRIPTIDE_PICK_ORDER=band flips the first key and nothing else")
 import importlib                                        # noqa: E402
