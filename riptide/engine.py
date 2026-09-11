@@ -85,6 +85,11 @@ class Setup:
     tf: str = ""             # the structure timeframe this was found on.
                              # Blank means RIPTIDE_INTERVAL; the scanner sets
                              # it explicitly once more than one is scanned.
+    span: float = 0.0        # price distance between the cluster's highest and
+                             # lowest pivot — how COMPRESSED the pool was. Set
+                             # at construction, read by nothing in production;
+                             # research/studies/zones.py measures it. Defaulted
+                             # so no existing construction changes.
     poi: bool = False        # the raid landed inside an aligned daily order
                              # block or fair value gap. Set by the scanner,
                              # never by the engine. See daily_zones.
@@ -1085,6 +1090,7 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                         pivots=len(c.prices) or 1,
                         sweep_time=cs[c.sweep_bar].t if c.sweep_bar >= 0 else 0,
                         grab_time=cs[c.grab_bar].t, fvg_time=cs[fvg_bar].t,
+                        span=(max(c.prices) - min(c.prices)) if c.prices else 0.0,
                         rsi_ext=rsi_extension(rsi[c.sweep_bar], not c.is_high)
                                 if c.sweep_bar >= 0 else 0.0,
                         confluence=confluence_of(cs, fvg_bar, not c.is_high,
