@@ -22,8 +22,9 @@ liquidity pool  →  sweep/raid  →  market structure shift (MSS)
 ```
 
 Deployed configuration (`riptide.conf`): Min30 structure (Min15 also scanned),
-daily point-of-interest required, grade A–B only, 60 most liquid USDT perps
-refreshed 6-hourly, 2R target, 10-bar fill window, 60-bar horizon.
+daily point-of-interest required, grade A–B only, the 120 crypto USDT perps
+above 1M/day turnover, refreshed 6-hourly, 2R target, 10-bar fill window,
+60-bar horizon.
 
 Two tradeable alert streams:
 - **CONFIRMED** — the full chain above. Grade A.
@@ -61,7 +62,7 @@ assumption biasing results downward.
 0.022% taker out. **Funding and slippage are NOT modelled.** The same settlement
 showed funding running a further ~25% on top of the trading fee.
 
-**Survivorship bias is real and is not fixable.** The universe is the 60 most
+**Survivorship bias is real and is not fixable.** The universe is the most
 liquid perps *today*, walked back 333 days. Every coin that died, delisted or
 dropped out is missing. **Absolute levels are biased optimistic, more so for
 longs.** Comparisons between two arms measured on the same rows are largely
@@ -71,9 +72,10 @@ immune (common-mode) — trust differences, distrust levels.
 
 1. **Circular-shift null** — rotate a symbol's feature series in time against its
    outcomes. Preserves persistence and distribution, destroys only the pairing.
-2. **Symbol bootstrap** — resample the 60 symbols with replacement 4,000×. A
-   number carried by five coins collapses; one spread over forty survives. This
-   is stricter than the per-bet SE, which assumes symbols are interchangeable.
+2. **Symbol bootstrap** — resample the universe's symbols with replacement
+   4,000×. A number carried by five coins collapses; one spread over forty
+   survives. Stricter than the per-bet SE, which assumes symbols are
+   interchangeable.
 3. **Split-half** — an effect that is a property holds its sign in both halves of
    the window. One that flips is a period.
 4. **Minimum detectable effect (MDE)** — printed next to every bucket comparison.
@@ -81,7 +83,11 @@ immune (common-mode) — trust differences, distrust levels.
 
 ---
 
-## 3. Baseline performance (333 days, 60 symbols, Min30)
+## 3. Baseline performance (333 days, Min30)
+
+Measured on the 60-symbol universe that was deployed when this was written. The
+floor was later lowered to 1M/day (120 symbols); see section 11 for what that
+changed, which on performance is nothing measurable.
 
 | | Confirmed (A) | Early (B) | Both |
 |---|---|---|---|
@@ -433,28 +439,6 @@ sample cannot simply be added.
 
 ---
 
-## 11. Shipped since this document was first written
-
-**Event concentration rule (item 22)** — `riptide/scanner.py::tag_event_pick`.
-Groups signals by (timeframe, bar, direction), names one, marks the rest as its
-siblings. The alert chip reads `🔗 6 on this close, size once · 🎯 the pick` or
-`· pick is ARB`. Ranked by the risk band, then confirmed before early, then
-alphabetically for determinism. Per-symbol history is deliberately excluded.
-**Suppresses nothing** — every alert still sends in full. Off with
-`RIPTIDE_EVENT_PICK=0`. Covered by `tests/test_event_pick.py`.
-
-**Risk band label (section 4)** — the alert now prints `take` / `flat` / `skip`
-on the risk line, gated to the two timeframes the band has been measured on.
-Covered by `tests/test_risk_verdict.py`.
-
-**The deeper question worth answering:** the strategy is +0.034 ± 0.027 R/bet —
-statistically indistinguishable from zero, with 107% of net R from 5 of 60
-symbols. Before optimising it further, it is worth asking whether there is an
-edge here at all, or whether 45 hypotheses against one survivor is what a null
-result looks like when examined hard enough.
-
----
-
 ## 10. Where the evidence lives
 
 All studies in `research/studies/`, each with a `*_out.txt` of its last run and a
@@ -465,7 +449,64 @@ band) · `power.py` (MDE table + market events) · `tier1.py` (items 1–9 + the
 Min15 transfer test) · `exits.py` (items 14–18 + MFE ladder) ·
 `portfolio_v2.py` (items 20, 22, 24) · `zones.py` (items 7, 9–12) ·
 `symbols.py` (item 23) · `news.py` (macro releases) · `risk_band.py` (the
-original pre-registration).
+original pre-registration) · `stop_atr.py` + `PREREG_stop_atr.md` (the
+pre-registered stop÷ATR test and its failure) · `universe_size.py` (3M against
+1M floor).
 
 Shared scorer: `research/harness.py`. Deep history loader:
 `research/deep.py`. Prior negative results: `MEASUREMENTS.md`.
+
+Tests: `tests/test_control_frozen.py` pins the production signal;
+`test_event_pick.py`, `test_risk_verdict.py` and `test_tracker_event.py` cover
+what shipped on 11 Sep.
+
+---
+
+## 11. Shipped on 11 Sep — read this before proposing anything
+
+This section exists because an outside review, working from an earlier version
+of this document, recommended three projects that were all already finished. If
+you are being asked for advice, the list below is what has changed.
+
+**Risk band label.** The alert prints `2.34% risk · take`, `0.9% · flat`,
+`3.12% · skip`. Gated to Min30 and Min15, the only timeframes the band has
+been measured on. Suppresses nothing. `tests/test_risk_verdict.py`.
+
+**Event concentration rule.** `riptide/scanner.py::tag_event_pick` groups
+signals by (timeframe, bar, direction) and names one: `🎯 the pick` or
+`pick is ARB`. Ranked **take → flat → skip**, then confirmed before early, then
+alphabetically for determinism. When every member is a `skip` it declines to
+pick at all, because the evidence there points at the whole cluster rather than
+one of them. Per-symbol history is deliberately excluded — ranking symbols does
+not persist. Suppresses nothing; `RIPTIDE_EVENT_PICK=0` turns it off.
+
+**Forward instrumentation of that rule.** `outcomes.event_pick` records five
+states: -1 unrecorded, 0 solo, 1 the pick, 2 a sibling, 3 a cluster with no
+pick. `/stats` compares 1 against 2 only — solo signals were never a choice, so
+including them would measure "was there a cluster" rather than "was the ranking
+right". **This is the first line on /stats never fitted on past data**, and it
+needs roughly ten resolved clusters a side before it says anything.
+
+**Stop÷ATR — tested and dead.** See section 9, item 3.
+
+**Universe floor 3M → 1M, 69 → 120 symbols.** Done for data rate, not
+opportunity: bets scale as symbols^0.905, so this takes the MDE from about 0.32
+to 0.25 and nearly doubles the forward observation rate, at roughly 31 alerts a
+day instead of 19. `universe_size.py` then asked whether the combination is
+actually better and found it depends on the reader — the wider universe dilutes
+somebody who takes everything (+0.032 → +0.016 R/bet) and helps somebody who
+filters to the band (recovery 1.75 → 2.94). **Every one of those differences is
+inside its own noise**, and the proof is that moving the cutoff by nine symbols
+reversed one of the rows.
+
+**The control is now enforced, not just asserted.**
+`tests/test_control_frozen.py` hashes the five fields a reader acts on across
+213 signals from a committed candle fixture. Deliberately NOT two separate
+engine objects: two code paths drift, and every measurement afterwards
+describes a strategy nobody runs. One engine plus a frozen hash makes drift
+impossible and any real change loud. Research instrumentation stays welcome —
+`Setup.span` and `harness.stale_bars` were both added today without moving it.
+
+**Still deliberately not done**, on the same reasoning as section 9: daily
+bias, new entry models, new exit models. 2R survived thirteen alternatives and
+nothing beat it at 2 SE.
