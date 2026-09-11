@@ -77,6 +77,49 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 RESULT, 11 Sep 2026 — THE OBJECTION WAS RIGHT AND matrix.py OVERSTATED. THE POI
 SURVIVES IN EXACTLY ONE CELL, AND IT IS THE CELL THE FILTER WAS BUILT ON.
 
+TWELVE CELLS, THREE TIMEFRAMES, BOTH ZONE MAPS, ONE WINNER. Trend agreeing,
+same rows throughout; the only thing that changes inside a pair is which map
+is read. "win+" is how many of eight non-overlapping 42-day windows came out
+positive, where 4/8 is a coin toss.
+
+    tf   stream     POI          in     out     gap     SE  |z|   win+
+    15m  confirmed  daily    -0.010  +0.055  -0.065  0.075  0.9    5/8
+    15m  confirmed  8h       +0.017  +0.072  -0.055  0.067  0.8    4/8
+    15m  early      daily    +0.004  +0.032  -0.028  0.030  0.9    3/8
+    15m  early      8h       +0.011  +0.045  -0.034  0.028  1.2    4/8
+    30m  confirmed  daily    +0.174  +0.014  +0.160  0.099  1.6    6/8  <-- the
+    30m  confirmed  8h       +0.066  +0.060  +0.006  0.087  0.1    4/8      only
+    30m  early      daily    +0.047  +0.105  -0.058  0.041  1.4    3/8      one
+    30m  early      8h       +0.032  +0.117  -0.085  0.039  2.2    2/8
+    1h   confirmed  daily    +0.132  +0.086  +0.046  0.117  0.4    3/8
+    1h   confirmed  8h       +0.106  +0.100  +0.006  0.110  0.1    5/8
+    1h   early      daily    +0.079  +0.129  -0.051  0.057  0.9    4/8
+    1h   early      8h       +0.088  +0.126  -0.038  0.055  0.7    3/8
+
+ONE CELL IS POSITIVE WITH ANY STRENGTH AND IT NEEDS THE DAILY MAP. Min30
+confirmed on Day1: +0.160, six of eight windows, median +0.331. Its Hour8 twin
+is +0.006 on four of eight with a median of +0.019 — a coin toss. The live
+configuration is the coin toss.
+
+THE 1h CONFIRMED CELL LOOKS SUPPORTIVE AND IS NOT, and that is worth saying
+because an earlier reading of mine leaned on it. Daily is +0.046, which is the
+right sign, but it is positive in only THREE of eight windows with a median of
+-0.042 — the level is carried by two good windows out of eight. Point estimate
+and window count disagree, and when they disagree the window count is the
+honest one. There is no 1h POI effect in either map.
+
+EVERY EARLY CELL IS NEGATIVE IN BOTH MAPS, all six of them, and 30m early on
+Hour8 reaches -0.085 at |z| 2.2 — the only cell in the study that clears 2 SE,
+and it says the filter HURTS there. Early signals are roughly 80% of the alert
+stream, so "the POI improves signal quality" is true of about a fifth of what
+the bot sends and false of the rest.
+
+DAY1 AGAINST HOUR8, COUNTED FAIRLY. Daily is better in three of six cells and
+Hour8 in the other three, so on a show of hands it is a tie. On MAGNITUDE it is
+not close: daily's win in the one cell that matters is +0.154, and the largest
+of Hour8's three wins is +0.013. Reverting POI_INTERVAL to Day1 buys the one
+working cell and costs a rounding error everywhere else.
+
 THE SHAPE REPLICATES. THE SIZE IS A QUARTER. Min30 confirmed, the original's
 headline square, rebuilt on 333 days against what was reported on 41:
 
@@ -190,8 +233,8 @@ from research.studies.poi_tf import DAY, DAYS, H8       # noqa: E402
 from research.studies.poi_tf import collect, context, universe  # noqa: E402
 from research.studies.power import mde                  # noqa: E402
 
-TFS = ("Min15", "Min30")
-SHORT = {"Min15": "15m", "Min30": "30m"}
+TFS = ("Min15", "Min30", "Min60")
+SHORT = {"Min15": "15m", "Min30": "30m", "Min60": "1h"}
 WINDOW = 42 * 86400                # the original study's window, to the day
 SD = 1.31                          # per-bet, stable across every timeframe
 
@@ -203,14 +246,17 @@ def bets_of(rows):
     return [statistics.fmean(g[k]) for k in sorted(g)]
 
 
-def gap(rows):
-    """(in-zone minus out-of-zone, SE, n_in, n_out) on the DAILY POI.
+def gap(rows, zone="day"):
+    """(in minus out, SE, mean_in, mean_out) for one POI definition.
 
-    The daily zone, not the live 8h one, because the argument being tested is
-    about the original configuration and nothing else.
+    `zone` picks which map: "day" is the ORIGINAL configuration the filter was
+    found on, "h8" is what the bot has actually read since 9 Sep. They are
+    measured on the same rows so the comparison between them is paired at the
+    population level even though each contrast is unpaired.
     """
-    a = [t for t in rows if t.day]
-    b = [t for t in rows if not t.day]
+    pick = (lambda t: t.day) if zone == "day" else (lambda t: t.h8)
+    a = [t for t in rows if pick(t)]
+    b = [t for t in rows if not pick(t)]
     if len(a) < 15 or len(b) < 15:
         return None
     ba, bb = bets_of(a), bets_of(b)
@@ -218,7 +264,7 @@ def gap(rows):
         return None
     ma, sa = mean_se(ba)
     mb, sb = mean_se(bb)
-    return ma - mb, (sa ** 2 + sb ** 2) ** 0.5, len(ba), len(bb)
+    return ma - mb, (sa ** 2 + sb ** 2) ** 0.5, ma, mb
 
 
 def windows(rows):
@@ -260,32 +306,49 @@ async def main():
         print(f"  {SHORT[tf]}  {n:>6} filled trades, {ok} trend-agrees, "
               f"{n - ok} trend-against")
 
-    print("\n== 1. COULD A 42-DAY STUDY HAVE KNOWN? " + "=" * 37)
-    print("  the POI gap measured in eight non-overlapping 42-day windows,")
-    print("  the original study's window length, on the deep year.")
+    print("\n== 1. DAILY POI vs 8h POI, EVERY TIMEFRAME, EVERY STREAM " + "="*18)
+    print("  same rows, same 333 days, trend agreeing. the only thing that")
+    print("  changes between the two rows of a pair is WHICH zone map is read.")
+    print("  windows+ counts how many of eight non-overlapping 42-day windows")
+    print("  came out positive — 4/8 is a coin toss, 6/8 or better is a signal.")
+    print(f"\n  {'tf':<5}{'stream':<11}{'POI':<7}{'in':>8}{'out':>8}"
+          f"{'gap':>8}{'SE':>7}{'|z|':>6}{'win+':>7}")
     for tf in TFS:
         for stream in ("confirmed", "early"):
             rows = [t for t in by_tf[tf]
                     if t.kind == stream and t.trend_ok]
-            ws = windows(rows)
-            vals = []
-            print(f"\n  {SHORT[tf]} {stream}, trend agrees")
-            for i, w in enumerate(ws, 1):
-                g = gap(w)
+            for zone, label in (("day", "daily"), ("h8", "8h")):
+                g = gap(rows, zone)
                 if g is None:
-                    print(f"    window {i}   too thin")
                     continue
-                d, se, na, nb = g
-                vals.append(d)
-                print(f"    window {i}  {d:>+7.3f} ± {se:.3f}"
-                      f"   ({na:>4} in / {nb:>4} out bets)")
-            if len(vals) >= 3:
-                print(f"    -> {sum(1 for v in vals if v > 0)}/{len(vals)} "
-                      f"positive, median {statistics.median(vals):+.3f}, "
-                      f"spread {max(vals) - min(vals):.3f}")
-            g = gap(rows)
-            if g:
-                print(f"    -> ALL {DAYS} DAYS {g[0]:>+7.3f} ± {g[1]:.3f}")
+                d, se, mi, mo = g
+                ws = [gap(w, zone) for w in windows(rows)]
+                ws = [w for w in ws if w]
+                pos = sum(1 for w in ws if w[0] > 0)
+                z = abs(d) / se if se else 0
+                print(f"  {SHORT[tf]:<5}{stream:<11}{label:<7}{mi:>+8.3f}"
+                      f"{mo:>+8.3f}{d:>+8.3f}{se:>7.3f}{z:>6.1f}"
+                      f"{pos:>5}/{len(ws)}"
+                      + ("   BETTER IN ZONE" if d > 0 and z >= 1.5 else ""))
+        print()
+
+    print("  the same thing again, per 42-day window, for the cells that")
+    print("  come out positive above.")
+    for tf in TFS:
+        for stream in ("confirmed", "early"):
+            rows = [t for t in by_tf[tf]
+                    if t.kind == stream and t.trend_ok]
+            for zone, label in (("day", "daily"), ("h8", "8h")):
+                g = gap(rows, zone)
+                if g is None or g[0] <= 0:
+                    continue
+                ws = [gap(w, zone) for w in windows(rows)]
+                vals = [w[0] for w in ws if w]
+                if len(vals) < 3:
+                    continue
+                print(f"    {SHORT[tf]:<4}{stream:<11}{label:<7}"
+                      + " ".join(f"{v:>+6.2f}" for v in vals)
+                      + f"   median {statistics.median(vals):+.3f}")
 
     print("\n== 2. WHAT THE ORIGINAL STUDY COULD DETECT " + "=" * 33)
     print("  MDE = 2.80 x sd x sqrt(2/n), sd = 1.31 per bet.")
@@ -368,10 +431,10 @@ async def main():
                 g = gap(rows)
                 if g is None:
                     continue
-                d, se, na, nb = g
+                d, se, mi, mo = g
                 print(f"  {SHORT[tf]:<5}{stream:<11}{label:<9}"
                       f"POI gap {d:>+7.3f} ± {se:.3f}"
-                      f"   ({na:>4} in / {nb:>4} out bets)"
+                      f"   (in {mi:>+6.3f} / out {mo:>+6.3f})"
                       + ("  SEPARATES" if abs(d) >= 2 * se else ""))
 
 

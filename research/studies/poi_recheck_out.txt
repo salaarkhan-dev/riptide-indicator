@@ -3,58 +3,36 @@ RECONCILING THE TWO POI RESULTS
 the DAILY zone throughout — the original configuration, not the live 8h one.
   15m   48610 filled trades, 17104 trend-agrees, 31506 trend-against
   30m   27168 filled trades, 9198 trend-agrees, 17970 trend-against
+  1h   15374 filled trades, 4723 trend-agrees, 10651 trend-against
 
-== 1. COULD A 42-DAY STUDY HAVE KNOWN? =====================================
-  the POI gap measured in eight non-overlapping 42-day windows,
-  the original study's window length, on the deep year.
+== 1. DAILY POI vs 8h POI, EVERY TIMEFRAME, EVERY STREAM ==================
+  same rows, same 333 days, trend agreeing. the only thing that
+  changes between the two rows of a pair is WHICH zone map is read.
+  windows+ counts how many of eight non-overlapping 42-day windows
+  came out positive — 4/8 is a coin toss, 6/8 or better is a signal.
 
-  15m confirmed, trend agrees
-    window 1   +0.117 ± 0.190   (  77 in /  165 out bets)
-    window 2   +0.124 ± 0.257   (  39 in /  158 out bets)
-    window 3   -0.351 ± 0.208   (  59 in /  194 out bets)
-    window 4   +0.006 ± 0.216   (  58 in /  129 out bets)
-    window 5   -0.234 ± 0.229   (  47 in /  170 out bets)
-    window 6   -0.229 ± 0.195   (  67 in /  157 out bets)
-    window 7   +0.060 ± 0.224   (  49 in /  162 out bets)
-    window 8   +0.126 ± 0.213   (  60 in /  182 out bets)
-    -> 5/8 positive, median +0.033, spread 0.477
-    -> ALL 333 DAYS  -0.065 ± 0.075
+  tf   stream     POI          in     out     gap     SE   |z|   win+
+  15m  confirmed  daily    -0.010  +0.055  -0.065  0.075   0.9    5/8
+  15m  confirmed  8h       +0.017  +0.072  -0.055  0.067   0.8    4/8
+  15m  early      daily    +0.004  +0.032  -0.028  0.030   0.9    3/8
+  15m  early      8h       +0.011  +0.045  -0.034  0.028   1.2    4/8
 
-  15m early, trend agrees
-    window 1   -0.020 ± 0.082   ( 413 in /  671 out bets)
-    window 2   +0.123 ± 0.094   ( 294 in /  734 out bets)
-    window 3   -0.023 ± 0.093   ( 298 in /  738 out bets)
-    window 4   -0.171 ± 0.084   ( 372 in /  690 out bets)
-    window 5   +0.151 ± 0.086   ( 371 in /  791 out bets)
-    window 6   -0.214 ± 0.081   ( 431 in /  670 out bets)
-    window 7   -0.047 ± 0.080   ( 404 in /  831 out bets)
-    window 8   +0.032 ± 0.084   ( 372 in /  824 out bets)
-    -> 3/8 positive, median -0.021, spread 0.364
-    -> ALL 333 DAYS  -0.028 ± 0.030
+  30m  confirmed  daily    +0.174  +0.014  +0.160  0.099   1.6    6/8   BETTER IN ZONE
+  30m  confirmed  8h       +0.066  +0.060  +0.006  0.087   0.1    4/8
+  30m  early      daily    +0.047  +0.105  -0.058  0.041   1.4    3/8
+  30m  early      8h       +0.032  +0.117  -0.085  0.039   2.2    2/8
 
-  30m confirmed, trend agrees
-    window 1   -0.114 ± 0.245   (  47 in /   97 out bets)
-    window 2   +0.450 ± 0.330   (  27 in /   77 out bets)
-    window 3   -0.608 ± 0.236   (  36 in /  110 out bets)
-    window 4   +0.077 ± 0.284   (  34 in /   53 out bets)
-    window 5   +0.429 ± 0.328   (  26 in /   73 out bets)
-    window 6   +0.379 ± 0.250   (  50 in /   78 out bets)
-    window 7   +0.918 ± 0.292   (  30 in /   89 out bets)
-    window 8   +0.282 ± 0.288   (  32 in /  119 out bets)
-    -> 6/8 positive, median +0.331, spread 1.526
-    -> ALL 333 DAYS  +0.160 ± 0.099
+  1h   confirmed  daily    +0.132  +0.086  +0.046  0.117   0.4    3/8
+  1h   confirmed  8h       +0.106  +0.100  +0.006  0.110   0.1    5/8
+  1h   early      daily    +0.079  +0.129  -0.051  0.057   0.9    4/8
+  1h   early      8h       +0.088  +0.126  -0.038  0.055   0.7    3/8
 
-  30m early, trend agrees
-    window 1   -0.161 ± 0.112   ( 231 in /  347 out bets)
-    window 2   +0.061 ± 0.130   ( 171 in /  356 out bets)
-    window 3   -0.253 ± 0.121   ( 180 in /  366 out bets)
-    window 4   -0.180 ± 0.112   ( 212 in /  344 out bets)
-    window 5   +0.140 ± 0.117   ( 217 in /  377 out bets)
-    window 6   -0.107 ± 0.110   ( 261 in /  331 out bets)
-    window 7   +0.115 ± 0.109   ( 218 in /  425 out bets)
-    window 8   -0.044 ± 0.119   ( 193 in /  398 out bets)
-    -> 3/8 positive, median -0.076, spread 0.393
-    -> ALL 333 DAYS  -0.058 ± 0.041
+  the same thing again, per 42-day window, for the cells that
+  come out positive above.
+    30m confirmed  daily   -0.11  +0.45  -0.61  +0.08  +0.43  +0.38  +0.92  +0.28   median +0.331
+    30m confirmed  8h      -0.01  -0.13  -0.42  +0.05  +0.61  -0.64  +0.42  +0.37   median +0.019
+    1h  confirmed  daily   -0.01  -0.07  -0.39  -0.56  +0.64  +0.30  +0.26  -0.15   median -0.042
+    1h  confirmed  8h      +0.01  +0.27  -0.29  -0.19  +0.13  +0.12  +0.05  -0.00   median +0.027
 
 == 2. WHAT THE ORIGINAL STUDY COULD DETECT =================================
   MDE = 2.80 x sd x sqrt(2/n), sd = 1.31 per bet.
@@ -96,22 +74,37 @@ the DAILY zone throughout — the original configuration, not the live 8h one.
   30m  early      yes  no       2704  +0.036±0.025       +0.018
   30m  early      yes  yes      1683  +0.047±0.033       +0.188
 
+  1h   confirmed  no   no        757  -0.014±0.048             
+  1h   confirmed  no   yes       385  +0.086±0.069             
+  1h   confirmed  yes  no        351  -0.013±0.071             
+  1h   confirmed  yes  yes       224  +0.132±0.094             
+  1h   early      no   no       2693  +0.053±0.024             
+  1h   early      no   yes      1423  +0.129±0.035             
+  1h   early      yes  no       1502  +0.035±0.034             
+  1h   early      yes  yes       893  +0.079±0.045             
+
 == 4. DOES THE TREND AXIS SURVIVE WHERE THE POI DOES NOT ==================
   the same two-arm question, asked of the OTHER axis.
   15m  confirmed  trend agrees  +0.057 vs against  -0.054  diff +0.111  |z|  2.6  SEPARATES
   15m  early      trend agrees  +0.030 vs against  -0.036  diff +0.066  |z|  3.5  SEPARATES
   30m  confirmed  trend agrees  +0.071 vs against  -0.052  diff +0.124  |z|  2.2  SEPARATES
   30m  early      trend agrees  +0.094 vs against  +0.019  diff +0.075  |z|  2.9  SEPARATES
+  1h   confirmed  trend agrees  +0.122 vs against  +0.011  diff +0.111  |z|  1.5
+  1h   early      trend agrees  +0.121 vs against  +0.057  diff +0.064  |z|  1.7
 
 == 5. DOES LIQUIDITY RESCUE IT ============================================
   the original ran on 23 symbols, the most liquid. universe() is
   ordered by the exchange's own ranking, so the first 23 are the
   nearest available stand-in for that set.
-  15m  confirmed  top 23   POI gap  -0.168 ± 0.113   ( 196 in /  593 out bets)
-  15m  confirmed  the rest POI gap  -0.003 ± 0.097   ( 281 in /  830 out bets)
-  15m  early      top 23   POI gap  -0.056 ± 0.045   (1309 in / 3089 out bets)
-  15m  early      the rest POI gap  -0.031 ± 0.036   (2046 in / 4170 out bets)
-  30m  confirmed  top 23   POI gap  +0.033 ± 0.149   ( 119 in /  309 out bets)
-  30m  confirmed  the rest POI gap  +0.223 ± 0.124   ( 178 in /  467 out bets)
-  30m  early      top 23   POI gap  -0.095 ± 0.061   ( 757 in / 1522 out bets)
-  30m  early      the rest POI gap  -0.019 ± 0.050   (1162 in / 2086 out bets)
+  15m  confirmed  top 23   POI gap  -0.168 ± 0.113   (in -0.084 / out +0.084)
+  15m  confirmed  the rest POI gap  -0.003 ± 0.097   (in +0.030 / out +0.033)
+  15m  early      top 23   POI gap  -0.056 ± 0.045   (in -0.033 / out +0.023)
+  15m  early      the rest POI gap  -0.031 ± 0.036   (in +0.006 / out +0.036)
+  30m  confirmed  top 23   POI gap  +0.033 ± 0.149   (in +0.026 / out -0.007)
+  30m  confirmed  the rest POI gap  +0.223 ± 0.124   (in +0.247 / out +0.025)
+  30m  early      top 23   POI gap  -0.095 ± 0.061   (in +0.025 / out +0.119)
+  30m  early      the rest POI gap  -0.019 ± 0.050   (in +0.056 / out +0.075)
+  1h   confirmed  top 23   POI gap  +0.083 ± 0.179   (in +0.133 / out +0.050)
+  1h   confirmed  the rest POI gap  +0.011 ± 0.144   (in +0.103 / out +0.092)
+  1h   early      top 23   POI gap  -0.174 ± 0.082   (in -0.051 / out +0.123)  SEPARATES
+  1h   early      the rest POI gap  +0.010 ± 0.070   (in +0.133 / out +0.123)
