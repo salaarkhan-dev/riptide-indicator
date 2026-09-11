@@ -389,6 +389,54 @@ def tag_event_pick(results) -> None:
             x.event_of = "" if none_worth_it else best.symbol
 
 
+def tag_cross_tf(results) -> None:
+    """Mark a signal that the SAME raid also produced on another timeframe.
+
+    THE GAP THIS FILLS. tag_event_pick groups on (tf, bar, direction), so its
+    "size once" chip and its pick are computed INSIDE one timeframe and it is
+    blind across them. With Min15, Min30 and Min60 all scanned, one raid on one
+    symbol routinely prints on two or three of them within the same hour. To a
+    reader those are three messages and, unless something says otherwise, three
+    trades — when they are one idea, correlated almost perfectly, and sizing
+    them as three is exactly the mistake the 🔗 chip exists to prevent.
+
+    IT IS A LABEL, NOT A GATE, AND DELIBERATELY SO. Picking a WINNER across
+    timeframes would need one timeframe to be measurably better than another,
+    and research/studies/timeframes.py says none is: no pair separates at even
+    1 SE on the same 59 symbols over the same 333 days. So there is nothing to
+    rank on and the honest thing is to show the duplication and let the reader
+    choose. Every alert still sends in full.
+
+    THE WINDOW IS A WINDOW, NOT A BUCKET, and that is not fussiness. Flooring
+    both times into a shared bucket would call a 09:59 Min15 signal and a 10:00
+    Min60 signal different events while pairing 10:00 with 10:59 — an artefact
+    of where the boundary fell rather than of the market. Matching within plus
+    or minus one bar of the SLOWEST scanned timeframe has no edges.
+    """
+    from collections import defaultdict
+    span = max(BAR_SECONDS[i] for i in INTERVALS)
+    bysym = defaultdict(list)
+    for setups, _, early, _ in results:
+        for x in list(setups) + list(early):
+            t = (getattr(x, "fvg_time", 0) or getattr(x, "mss_time", 0)
+                 or getattr(x, "sweep_time", 0))
+            x.also_tf = ()
+            if t:
+                bysym[(x.symbol, x.is_long)].append((t, x))
+
+    for members in bysym.values():
+        for t, x in members:
+            mine = getattr(x, "tf", "") or INTERVAL
+            # Sorted for determinism: a re-scan of the same bar must produce
+            # the same chip, the same reason tag_event_pick breaks ties on the
+            # symbol name.
+            x.also_tf = tuple(sorted(
+                {(getattr(y, "tf", "") or INTERVAL) for u, y in members
+                 if y is not x and abs(u - t) <= span
+                 and (getattr(y, "tf", "") or INTERVAL) != mine},
+                key=lambda i: BAR_SECONDS.get(i, 0)))
+
+
 def _same_trade(e: Early, s) -> bool:
     """Whether an Early and a Setup are the identical trade, not merely the
     same idea. Both are computed by the same formulas from the same candles,
@@ -547,6 +595,15 @@ async def cycle(sess, db, symbols):
             tag_event_pick(results)
         except Exception as e:
             log.warning("event pick tagging failed: %s", e)
+
+    # The same raid seen on another timeframe. Separate from the two calls
+    # above because it is the only one that reaches ACROSS timeframes, and
+    # separately wrapped so it cannot cost either of them.
+    if len(INTERVALS) > 1:
+        try:
+            tag_cross_tf(results)
+        except Exception as e:
+            log.warning("cross-timeframe tagging failed: %s", e)
 
     # How much of the reader's own book already sits on this side. Breadth is
     # what the MARKET is doing this bar; this is what THEY are holding across

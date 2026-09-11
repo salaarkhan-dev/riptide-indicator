@@ -30,8 +30,14 @@ INTERVAL = os.getenv("RIPTIDE_INTERVAL", "Min30")     # Min15 Min30 Min60 Hour4
 # turns positive inside a POI (+0.417 and +0.159). So a second timeframe
 # is worth having ONLY with POI_REQUIRED on, and turning one on without the
 # other makes the bot worse. See MEASUREMENTS.md, "The cell table".
+#
+# Min60 added 11 Sep. It is the cheapest of the three in fee terms and the
+# risk band transfers to it unrefitted; the full argument, and the costs, are
+# in riptide.conf next to RIPTIDE_INTERVALS. This default is kept in step with
+# that file so a dev run and the service scan the same thing.
 INTERVALS = tuple(dict.fromkeys(
-    i.strip() for i in os.getenv("RIPTIDE_INTERVALS", "Min30,Min15").split(",")
+    i.strip() for i in os.getenv("RIPTIDE_INTERVALS",
+                                 "Min30,Min15,Min60").split(",")
     if i.strip()) ) or (INTERVAL,)
 
 # Send only signals whose raid landed inside an order block or fair value gap

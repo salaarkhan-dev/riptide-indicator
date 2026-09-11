@@ -399,8 +399,39 @@ RISK_WIDE = 2.6
 # warning at all looked like the worse failure, since the label suppresses
 # nothing and the reader decides.
 #
+# Min60 ADDED 11 SEP, AND IT IS THE BEST-EVIDENCED OF THE THREE AFTER Min30.
+# research/studies/poi_risk.py, 4723 filled Min60 trades over the same 333
+# days, asked band-against-outside separately inside six POI arms and two
+# streams -- eighteen tests, EIGHTEEN positive differences, +0.068 to +0.313,
+# three clearing 2 SE. The arms overlap heavily so that is nearer five
+# independent looks than eighteen, but not one points the wrong way.
+#
+# What makes it worth more than a fourth replication is that nothing was
+# refitted. The 1.2 and 2.6 boundaries come from Min30 CONFIRMED and were
+# applied unchanged to Min60 EARLY, a different stream on a different
+# timeframe, and still separated. That is out-of-sample in the sense this
+# project almost never gets.
+#
+# THE WIDE ARM IS WHERE THE DRAWDOWN LIVES, WHICH IS THE REAL ARGUMENT. On the
+# Min60 R curve in exit order: tight +143.2 R at maxDD 41.9, band +280.1 at
+# 55.3, wide -50.7 at 141.9. Of the 150.0 R maximum drawdown of the entire 1h
+# stream, 141.9 sits in a bucket that makes no money. "skip" is not a marginal
+# expectancy claim there; it is most of the pain.
+#
+# ONE HONEST DISCOUNT. The band's LOWER boundary does not obviously transfer.
+# Min60's tight bucket runs +0.153 +/- 0.056 on 619 bets where the same bucket
+# is flat on Min30, so on 1h only the upper cut may be doing work. That
+# reading was taken AFTER seeing the grid and is not acted on: "flat" stays
+# "flat" on Min60 until forward data says otherwise. It is recorded here so
+# the next person does not rediscover it and think it is new.
+#
+# Still CONFIRMED ONLY, enforced by the caller, on every timeframe. The band
+# holds on Min60 early too (+0.105, |z| 1.4) but that is not established, and
+# widening the label and adding a timeframe in the same change would leave
+# nothing to read forward.
+#
 # Everything else stays silent until it has its own measurement.
-RISK_MEASURED_ON = {"Min30", "Min15"}
+RISK_MEASURED_ON = {"Min30", "Min15", "Min60"}
 
 
 def risk_verdict(riskpct: float, interval: str | None = None) -> str:
@@ -512,6 +543,16 @@ def marks(x) -> str | None:
                 bits.append("🎯 the pick")
             elif of:
                 bits.append(f"pick is {_short(of)}")
+    # THE SAME RAID ON ANOTHER TIMEFRAME. 🔗 above counts other SYMBOLS on this
+    # close; this counts the same symbol and the same direction printing again
+    # on a different resolution, which is one idea arriving as two or three
+    # messages. No pick between them — timeframes.py finds no timeframe
+    # measurably better than another, so there is nothing to rank on and the
+    # chip only says the duplication is there.
+    also = getattr(x, "also_tf", ())
+    if also:
+        bits.append("🔁 same raid on " + "+".join(tf_label(i) for i in also))
+
     # The reader's OWN book, not the market's. 🔗 counts what is printing this
     # bar; ⚖ counts what they are still holding on this side from every bar
     # before it. A cluster that hurts usually spans several closes, so the two
