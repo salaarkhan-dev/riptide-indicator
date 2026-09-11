@@ -96,7 +96,39 @@ CONCURRENCY = int(os.getenv("RIPTIDE_CONCURRENCY", "8"))
 MIN_REQUEST_GAP = float(os.getenv("RIPTIDE_MIN_REQUEST_GAP", "0.07"))
 QUOTE = os.getenv("RIPTIDE_QUOTE", "USDT")
 SYMBOLS_ENV = os.getenv("RIPTIDE_SYMBOLS", "")          # comma list, or blank
-MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
+# LOWERED FROM 3M TO 1M ON 11 SEP, FOR DATA RATE, NOT FOR OPPORTUNITY. With
+# the tokenised stocks excluded there are only 69 crypto perps above 3M, so the
+# floor — not TOP_N — was what capped the universe. 1M admits 120.
+#
+# The band being admitted was MEASURED first rather than assumed, on the same
+# 333 days (research/studies/report.py machinery, three liquidity bands):
+#
+#   rank      median 24h   trades   bets    win    R/bet    band cell
+#   1-60          10.6M      4263   2422    37%   +0.036      +0.236
+#   61-90          2.7M      1828   1324    34%   -0.026      +0.001
+#   91-120         1.4M      1802   1390    36%   -0.002      +0.250
+#
+# READ THAT AS "NO MEASURABLE PENALTY", NOT AS "JUST AS GOOD". Every one of
+# those R/bet figures is inside its own standard error of zero and of the
+# others, so the thinner bands are not detectably worse — and they are not
+# detectably better either. The risk-band cell is non-monotone across the three
+# (+0.236, +0.001, +0.250) on 254, 139 and 124 bets, which is noise, and it is
+# the honest caution here: the one filter this project trusts does NOT cleanly
+# reproduce in the 2-6M band.
+#
+# So the gain is statistical, not economic. Bets scale as symbols^0.905, so 69
+# to 120 takes the minimum detectable effect from about 0.32 to 0.25 and nearly
+# doubles the forward observation rate. The cost is roughly 31 alerts a day
+# instead of 19.
+#
+# WHY NOT LOWER STILL. At 1M/day a 30-minute bar turns over about 21k USDT, so
+# a 1%-risk position on a 300 USDT account is under 1% of a bar and the
+# backtest's "the limit filled because price traded through it" assumption is
+# safe. At 0.3M it is nearer 3% of a bar and that assumption starts to matter —
+# and slippage on a market-order stop is the one cost this project cannot
+# measure from candles at all. If the account grows, this floor should rise
+# with it.
+MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "1000000"))  # 24h turnover
 
 # Cap the universe at the N most liquid symbols rather than everything above a
 # turnover floor. A floor drifts with the market — 3M matched 91 symbols on one
@@ -115,15 +147,16 @@ MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
 #     20          186        MDE 0.569        59          492       MDE 0.350
 #     30          268        MDE 0.474
 #
-# 104 is every symbol above the existing 3M turnover floor — the floor did not
-# move, so nothing thinner is being admitted and fill realism is unchanged.
-# Extrapolated, it takes the historical minimum detectable effect from 0.346 to
-# about 0.27 and raises the forward observation rate by 73%.
+# Set to 120 to match every symbol above the MIN_VOL floor, so the FLOOR is the
+# binding constraint and this is only a ceiling on scan cost. 104 was tried
+# first, on a miscount that included MEXC's tokenised stocks; crypto-only there
+# are 69 above 3M and 120 above 1M. See MIN_VOL_USDT for the measurement behind
+# the floor itself.
 #
-# THE COST IS ALERT VOLUME AND REQUESTS, both linear. 104 x 2 intervals is 208
-# kline requests a cycle, which at the 0.07s pacer is about 15 seconds of a
-# 15-minute cycle. Alerts go from roughly 16 a day to 28.
-TOP_N = int(os.getenv("RIPTIDE_TOP_N", "104"))
+# THE COST IS ALERT VOLUME AND REQUESTS, both linear. 120 x 2 intervals is 240
+# kline requests a cycle, which at the 0.07s pacer is about 17 seconds of a
+# 15-minute cycle. Alerts go from roughly 19 a day to 31.
+TOP_N = int(os.getenv("RIPTIDE_TOP_N", "120"))
 
 # Skip MEXC's tokenised stocks, indices and commodities — XAU, USOIL, SPX500,
 # MUSTOCK and the rest. They are 428 of the 1024 USDT perps and 13 of the 60
