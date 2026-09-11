@@ -68,8 +68,9 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/matrix.py
 
-RESULT, 11 Sep 2026 — THE BAND REPLICATES SIX TIMES OUT OF SIX. THE POI DOES
-NOT REPLICATE AT ALL, ON ANY TIMEFRAME, IN ANY STREAM.
+RESULT, 11 Sep 2026 — THE BAND REPLICATES SIX TIMES OUT OF SIX. THE POI
+REPLICATES IN ONE CELL ONLY, AND THIS FILE FIRST READ THAT AS ZERO; SEE THE
+CORRECTION BELOW BEFORE QUOTING THE POI SUMMARY.
 
 59 symbols, 333 days. 17104 / 9198 / 4723 filled trades on 15m / 30m / 1h;
 8022 / 4097 / 2037 bets. Every A/B signal, no POI filter anywhere.
@@ -102,6 +103,19 @@ both-contexts +0.002 against neither +0.116). My pre-registration named this
 exact outcome and what it would mean: "If the POI fails on Min15 TOO, the
 filter is in trouble everywhere and not just on 1h, and that would be the most
 consequential result this project has produced." It failed on all three.
+
+CORRECTION, ADDED 11 SEP AFTER poi_recheck.py — THE SUMMARY ABOVE IS THE WRONG
+READING OF ITS OWN ROWS. Two errors, both mine. The table's primary is the LIVE
+8h POI, and the POI's provenance is DAILY; on Min30 confirmed the daily gap is
++0.160 where the 8h gap is +0.006. And taking a median across six rows buries
+one strong cell under five flat ones when five of the six are early or 15m.
+poi_recheck.py rebuilds the original 2x2 on these rows and finds Min30
+confirmed with POI and trend at +0.174 +/- 0.084 against +0.014 for trend
+alone — the original's ordering preserved exactly, at a quarter of its reported
+size, and positive in 6 of 8 non-overlapping 42-day windows. The POI is not
+dead. It is alive in one cell, the cell it was built on, at Day1, and flat
+everywhere else — which on this bot is about 80% of the stream, because early
+signals dominate it. Read the rows below with that correction.
 
 SAY WHAT THIS IS AND IS NOT. It is NOT a significant negative — under rule 5,
 two 2 SE rows out of thirty contrasts is what chance produces, and the eighteen
@@ -158,7 +172,7 @@ Grades here hold poi=True so the A/B floor is constant across arms. Production
 grades on the REAL poi and the table is asymmetric: a confirmed signal with no
 zone falls A->B and still sends, an early one falls B->C and is muted at
 MIN_GRADE=B. So POI_REQUIRED=0 releases the confirmed-with-no-zone signals and
-nothing else. The achievable comparison is "POI off, regraded" against "POI on":
+nothing else. The achievable comparison is "POI off, regraded" vs "POI on":
 
     15m  POI off regraded  52.2/day  +0.031  +34.3 R   acct -68%
     15m  POI on   (live)   44.1/day  +0.018   -7.3 R   acct -77%

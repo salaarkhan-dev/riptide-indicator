@@ -228,7 +228,8 @@ SHIP = {
 
 class T:
     __slots__ = ("sym", "t", "r", "gross", "tf", "filled", "fill_t",
-                 "exit_t", "risk_pct", "kind", "day", "h8", "h8long")
+                 "exit_t", "risk_pct", "kind", "day", "h8", "h8long",
+                 "trend_ok")
 
 
 def zone_hit(zones, when, price, is_long, step, max_age_bars):
@@ -262,13 +263,20 @@ async def context(sess, symbols, interval):
     return out
 
 
-async def collect(sess, candles, zday, z8h, interval=INTERVAL):
+async def collect(sess, candles, zday, z8h, interval=INTERVAL,
+                  require_ab=True):
     """One pool of A/B signals with every POI applied as a LABEL, not a filter.
 
     `interval` is a parameter rather than the module constant so that
     matrix.py can run the identical pipeline on Min15 and Min30 — one code
     path, three timeframes, which is the same argument the frozen-control test
     makes about research never forking the engine.
+
+    `require_ab=False` keeps the trend-DISAGREEING signals too, recording the
+    answer on each row instead of dropping it. poi_recheck.py needs them: the
+    original POI finding was an interaction with the trend, so a study that
+    only ever looks inside the trend-agrees half cannot see the other half of
+    the claim it is arguing with.
     """
     bar = BAR_SECONDS[interval]
     rows = []
@@ -291,8 +299,9 @@ async def collect(sess, candles, zday, z8h, interval=INTERVAL):
                 # poi=True for EVERY signal on purpose: the A/B floor must be
                 # the same constant in all arms or the POI comparison would be
                 # partly a grade comparison. See the caveat in the docstring.
-                if grade_of(kind == "early", True, d or 0, x.is_long,
-                            di or 0)[0] not in "AB":
+                ok = grade_of(kind == "early", True, d or 0, x.is_long,
+                              di or 0)[0] in "AB"
+                if require_ab and not ok:
                     continue
                 o = simulate(cs, i, x.entry, x.stop, x.is_long,
                              target_r=TRACK_TARGET_R)
@@ -304,6 +313,7 @@ async def collect(sess, candles, zday, z8h, interval=INTERVAL):
                              target_r=TRACK_TARGET_R, fee_pct=0.0)
                 z = T()
                 z.sym, z.t, z.kind, z.tf = sym, w, kind, interval
+                z.trend_ok = ok
                 z.r, z.filled, z.gross = o.r, o.filled, g.r
                 z.risk_pct = 100 * abs(x.entry - x.stop) / x.entry
                 # Wall-clock fill and exit, so report.compound can replay the
