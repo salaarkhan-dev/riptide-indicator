@@ -26,6 +26,14 @@ delayed bar, so a fill missed while waiting is a fill lost.
   take-band goes now, else wait 30m        7.7   1261   -19.9   72.7  -0.27  -0.95   1.79     -29%   54%
   take-band goes now, else wait 60m        7.0   1148   -69.9   90.1  -0.78  -0.94   0.45     -56%   61%
 
+-- WHAT THE SHIPPED RULE ACTUALLY PICKS ------------------------------------
+  tf -> band -> confirmed, 120m rolling cooldown. if the reader
+  only ever acts on the target chip, THIS is the mix they trade.
+  stream     confirmed 14%   early 86%
+  timeframe  Min15 64%   Min30 22%   Min60 14%
+  band       flat 47%   skip 13%   take 39%
+  of 2905 picks over 333 days
+
 -- IF WE MUTED PART OF THE STREAM ENTIRELY ---------------------------------
   not a claim gate — these signals would not be SENT at all, so
   they cannot be picked either. cooldown 120m throughout.

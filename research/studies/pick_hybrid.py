@@ -329,6 +329,21 @@ async def main():
         score(f"take-band goes now, else wait {d // 60}m",
               run(rows, lambda t: band_of(t) == 0, delay=d))
 
+    print("\n-- WHAT THE SHIPPED RULE ACTUALLY PICKS " + "-" * 36)
+    print("  tf -> band -> confirmed, 120m rolling cooldown. if the reader")
+    print("  only ever acts on the target chip, THIS is the mix they trade.")
+    picked = [t for t, _, _ in run(rows, cooldown=7200)]
+    for label, f in (("stream", lambda t: t.kind),
+                     ("timeframe", lambda t: t.tf),
+                     ("band", lambda t: ("take", "flat", "skip")[band_of(t)])):
+        c = defaultdict(int)
+        for t in picked:
+            c[f(t)] += 1
+        tot = sum(c.values()) or 1
+        print(f"  {label:<11}" + "   ".join(
+            f"{k} {v / tot:.0%}" for k, v in sorted(c.items())))
+    print(f"  of {len(picked)} picks over {DAYS} days")
+
     print("\n-- IF WE MUTED PART OF THE STREAM ENTIRELY " + "-" * 33)
     print("  not a claim gate — these signals would not be SENT at all, so")
     print("  they cannot be picked either. cooldown 120m throughout.")
