@@ -490,14 +490,18 @@ SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
 # both unreadable and past Telegram's per-chat rate limit, and a market-wide
 # move is exactly when it would happen.
 TRENDLINE_ALERTS = os.getenv("RIPTIDE_TRENDLINE_ALERTS", "1") == "1"
-# More than one is allowed and 15m+30m is the default, because a 30m close is
-# also a 15m close: both land in the SAME digest rather than in two messages,
-# and a symbol that breaks on both at once is shown once, on the slower one.
-# The raw rate at 15m+30m is 161 a day, which is not readable — the slope gate
-# below is what makes this pair viable, and it is not optional at these speeds.
+# More than one is allowed and 15m+30m+1h is the default, because a 1h close is
+# also a 30m and a 15m close: all three land in the SAME digest rather than in
+# three messages, and a symbol that breaks on several at once is shown once, on
+# the slowest. Min60 was added 11 Sep so the watch covers every timeframe the
+# bot scans; it is the cheapest of the three at 25 breaks a day across the
+# universe against 52 and 109. The raw rate for the set is 186 a day, which is
+# not readable — the slope gate below is what makes it viable, and it is not
+# optional at these speeds.
 TRENDLINE_INTERVALS = tuple(dict.fromkeys(
     i.strip() for i in
-    os.getenv("RIPTIDE_TRENDLINE_INTERVALS", "Min15,Min30").split(",")
+    os.getenv("RIPTIDE_TRENDLINE_INTERVALS",
+              "Min15,Min30,Min60").split(",")
     if i.strip())) or ("Hour4",)
 # Pivot length and channel padding, matching the indicator's own defaults. Left
 # configurable because they are the indicator's inputs and someone comparing
