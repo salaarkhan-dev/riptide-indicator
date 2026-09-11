@@ -141,11 +141,29 @@ on two or more timeframes, 11%. So the 🔁 chip shipped today marks about one
 alert in nine, and the cross-timeframe half of the pick rule matters much less
 than the cross-SYMBOL half, which is most of the mean event size of 2.2.
 
-WHAT THIS DOES NOT SETTLE. The event window here is ONE HOUR, and the deployed
-tag_event_pick groups by one BAR of one timeframe — four times finer on Min15.
-Bar-grouping was not scored separately, so "one per hour" is what is
-demonstrated and "one per bar" is not. That comparison is the first thing to
-run before changing the deployed grouping.
+THE EVENT WINDOW MATTERS MORE THAN THE RANKING, and this was the open question
+until it was measured. The deployed tag_event_pick groups by one BAR of one
+timeframe, four times finer than an hour on Min15 and blind across timeframes:
+
+    per bar per tf (DEPLOYED today)   36.0/day   recov 1.39   acct +104%
+    per slowest bar, across tfs       25.7/day   recov 4.85   acct +580%
+    per hour, across tfs              25.7/day   recov 4.85   acct +580%
+
+Widening the window is worth +3.46 recovery. Changing the ordering INSIDE the
+wide window is worth +0.61. So the grouping is the change and the tiebreak is
+the polish, which is the opposite of where the argument usually goes.
+
+The middle two rows are identical because the slowest scanned bar IS an hour
+while INTERVALS ends at Min60; they are printed separately so that if a Hour4
+stream is ever added, the two stop agreeing and the difference is visible
+rather than assumed.
+
+ONE ROW THAT LOOKS LIKE A BUG AND IS NOT. "per bar per tf, tf-first" scores
+exactly what "per bar per tf" scores, to every decimal. Inside a single
+(tf, bar, direction) group the timeframe is constant, so a tf-first key
+degenerates to the band-first key. That identity is the cleanest demonstration
+in the file of why the deployed grouping cannot benefit from a timeframe
+tiebreak at all: it never sees two timeframes in the same group.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 
@@ -219,10 +237,35 @@ def by_event(rows):
     return g
 
 
-def pick(rows, key, take=1, drop_skip=False):
+def by_bar(rows):
+    """The DEPLOYED grouping: one bar of one timeframe, one direction.
+
+    Four times finer than an hour on Min15, and blind across timeframes — a
+    raid printing on 15m, 30m and 1h lands in three different groups and gets
+    three picks. This is what tag_event_pick does today.
+    """
+    g = defaultdict(list)
+    for t in rows:
+        step = BAR_SECONDS[t.tf]
+        g[(t.tf, t.t - (t.t % step), t.is_long)].append(t)
+    return g
+
+
+def by_slow_bar(rows):
+    """One bar of the SLOWEST scanned timeframe, across timeframes. Same
+    coarseness as the hour here, kept separate so the grouping and the window
+    length are not conflated if INTERVALS changes."""
+    step = max(BAR_SECONDS[tf] for tf in TFS)
+    g = defaultdict(list)
+    for t in rows:
+        g[(t.t - (t.t % step), t.is_long)].append(t)
+    return g
+
+
+def pick(rows, key, take=1, drop_skip=False, group=None):
     """One (or `take`) signals per market event, chosen by `key`."""
     out = []
-    for members in by_event(rows).values():
+    for members in (group or by_event)(rows).values():
         ranked = sorted(members, key=key)
         if drop_skip:
             ranked = [t for t in ranked if band_of(t) != 2]
@@ -308,6 +351,14 @@ async def main():
     score("tf -> band -> confirmed", pick(rows, key_tf_first), len(ev))
     score("POI -> band -> confirmed -> tf",
           pick(rows, key_poi_first), len(ev))
+    print("  -- THE SAME RULE, DIFFERENT EVENT WINDOW " + "-" * 35)
+    score("per bar per tf (DEPLOYED today)",
+          pick(rows, key_band, group=by_bar), len(ev))
+    score("per slowest bar, across tfs",
+          pick(rows, key_band, group=by_slow_bar), len(ev))
+    score("per hour, across tfs", pick(rows, key_band), len(ev))
+    score("per bar per tf, tf-first",
+          pick(rows, key_tf_first, group=by_bar), len(ev))
     print()
     score("band->confd->tf, skip dropped",
           pick(rows, key_band, drop_skip=True), len(ev))

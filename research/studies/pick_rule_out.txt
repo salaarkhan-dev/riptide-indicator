@@ -16,6 +16,11 @@ actually sends: in a daily POI, 8h trend agreeing, grade A or B.
   confirmed -> band -> tf              25.7   4200    280.5    61.5    4.56   1.32   3.35    38%     +545%   49%
   tf -> band -> confirmed              25.7   4200    318.6    58.4    5.46   1.68   3.87    38%     +860%   49%
   POI -> band -> confirmed -> tf       25.7   4200    288.8    59.6    4.85   1.27   3.64    38%     +580%   50%
+  -- THE SAME RULE, DIFFERENT EVENT WINDOW -----------------------------------
+  per bar per tf (DEPLOYED today)      36.0   5887    193.9   139.7    1.39  -0.37   2.47    37%     +104%   78%
+  per slowest bar, across tfs          25.7   4200    288.8    59.6    4.85   1.27   3.64    38%     +580%   50%
+  per hour, across tfs                 25.7   4200    288.8    59.6    4.85   1.27   3.64    38%     +580%   50%
+  per bar per tf, tf-first             36.0   5887    193.9   139.7    1.39  -0.37   2.47    37%     +104%   78%
 
   band->confd->tf, skip dropped        22.5   3685    259.8    63.7    4.08   0.84   3.73    38%     +502%   52%
   top 2 per event                      37.4   6118    248.3   141.5    1.75  -0.12   2.51    37%     +188%   81%
