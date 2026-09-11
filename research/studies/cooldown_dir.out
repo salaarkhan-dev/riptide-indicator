@@ -1,0 +1,51 @@
+ONE COOLDOWN, OR ONE PER DIRECTION
+59 symbols, 333 days, 15m+30m+1h, the stream the bot
+actually sends: in a daily POI, 8h trend agreeing, grade A or B.
+
+  9118 filled trades in 4207 market events · 4845 long / 4273 short
+
+  rule                                 /day      n        R   maxDD   recov    1st    2nd    win     acct accDD
+  -- TF-FIRST ----------------------------------------------------------------
+  30m  per direction (shipped)         29.8   4882    245.6    83.5    2.94   0.39   2.91    37%     +369%   61%
+  30m  ONE global window               28.3   4628    193.2    79.7    2.42   0.17   2.46    37%     +173%   58%
+                                                                      -0.52  -0.23  -0.45   <- global minus shipped
+  60m  per direction (shipped)         23.6   3867    199.3    57.2    3.48   1.03   3.12    38%     +315%   45%
+  60m  ONE global window               21.0   3433    135.7    65.3    2.08   0.06   2.68    37%     +128%   48%
+                                                                      -1.40  -0.97  -0.45   <- global minus shipped
+  120m  per direction (shipped)        17.8   2909    205.2    31.5    6.52   3.23   3.57    38%     +473%   28%
+  120m  ONE global window              14.4   2350    127.6    42.5    3.00   0.88   2.20    38%     +170%   36%
+                                                                      -3.52  -2.35  -1.37   <- global minus shipped
+  240m  per direction (shipped)        12.5   2051    147.2    20.1    7.33   3.22   4.12    38%     +257%   20%
+  240m  ONE global window               9.1   1484      3.1    55.5    0.06  -0.46   0.94    36%      -12%   47%
+                                                                      -7.27  -3.68  -3.18   <- global minus shipped
+
+  -- BAND-FIRST --------------------------------------------------------------
+  30m  per direction (shipped)         29.8   4882    229.7    86.5    2.65   0.29   2.70    37%     +304%   62%
+  30m  ONE global window               28.3   4628    197.5    84.4    2.34   0.28   2.19    37%     +165%   59%
+                                                                      -0.31  -0.01  -0.51   <- global minus shipped
+  60m  per direction (shipped)         23.6   3867    183.8    58.9    3.12   0.90   2.91    37%     +239%   46%
+  60m  ONE global window               21.0   3433    127.6    64.0    1.99   0.03   2.76    37%     +109%   48%
+                                                                      -1.12  -0.87  -0.15   <- global minus shipped
+  120m  per direction (shipped)        17.8   2909    203.7    33.2    6.13   3.40   3.33    38%     +464%   30%
+  120m  ONE global window              14.4   2350    132.7    39.5    3.36   1.10   2.38    38%     +184%   33%
+                                                                      -2.78  -2.29  -0.95   <- global minus shipped
+  240m  per direction (shipped)        12.5   2051    139.4    23.1    6.03   2.55   3.76    38%     +230%   21%
+  240m  ONE global window               9.1   1484     -1.6    54.2   -0.03  -0.45   0.58    36%      -16%   46%
+                                                                      -6.06  -3.00  -3.18   <- global minus shipped
+
+  -- HOW OFTEN A LONG AND A SHORT PICK LAND TOGETHER ----------------------
+  cooldown       picks   opposite pair   same scan    rate
+  30m             4882             285         285      6%
+  60m             3867             585         193     15%
+  120m            2909             854          95     29%
+  240m            2051             940          51     46%
+
+  'opposite pair' counts picks followed by an opposite-direction
+  pick inside the same cooldown — exactly the case the global
+  window would have suppressed. 'same scan' is the subset arriving
+  in the SAME 15-minute cycle: two 🎯 in one minute, opposite ways.
+
+  -- WHAT EACH RULE ENDS UP TAKING, at 120m tf-first ----------------------
+  rule                            long   early  normal   tight    wide
+  per direction (shipped)          56%     86%     39%     47%     14%
+  ONE global window                57%     85%     42%     45%     13%

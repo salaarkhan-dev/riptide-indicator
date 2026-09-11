@@ -1,5 +1,8 @@
 <!doctype html>
 <meta charset="utf-8">
+<!-- Generated from research/studies/scorecard.py by docs/build-card.py.
+     Do not edit alert-card.html by hand — edit this template and rebuild, or
+     the numbers can drift away from the study that produced them. -->
 <style>
   :root{
     --ink:#111827; --dim:#6b7280; --line:#e5e7eb;
@@ -27,22 +30,29 @@
   .rulebox .big b{color:var(--gold);}
   .rulebox .small{font-size:25px; color:var(--dim); margin-top:16px;}
 
-  /* rows */
+  /* what-to-do rows */
   table{width:100%; border-collapse:collapse;}
-  td{padding:20px 4px; border-top:2px solid var(--line); vertical-align:top;}
-  tr:first-child td{border-top:none;}
+  .do-table td{padding:20px 4px; border-top:2px solid var(--line);
+               vertical-align:top;}
+  .do-table tr:first-child td{border-top:none;}
   .tag{font-size:28px; font-weight:bold; white-space:nowrap; width:290px;}
   .do{font-size:27px; font-weight:bold; text-align:right; white-space:nowrap;}
   .exp{font-size:24px; color:var(--dim); padding-left:20px;}
 
-  /* the sample */
-  .alert{border:2px solid var(--line); border-radius:14px; padding:28px 32px;
-         font-size:26px; line-height:1.7;}
-  .alert .hd{font-size:27px; font-weight:bold; margin-bottom:18px;}
-  .alert .lab{font-family:"DejaVu Sans Mono",monospace; color:var(--dim);
-              display:inline-block; width:170px;}
-  .alert .val{font-family:"DejaVu Sans Mono",monospace;}
-  .alert .g{color:var(--gold);}
+  /* the score table */
+  .score{font-size:25px;}
+  .score th{font-size:20px; color:var(--dim); font-weight:normal;
+            text-align:right; padding:0 0 14px; letter-spacing:1px;
+            text-transform:uppercase;}
+  .score th.l{text-align:left;}
+  .score td{padding:15px 0; border-top:2px solid var(--line);
+            text-align:right; font-family:"DejaVu Sans Mono",monospace;}
+  .score td.k{text-align:left; font-family:"DejaVu Sans",sans-serif;
+              font-weight:bold;}
+  .score td.t{text-align:left; color:var(--dim); padding-left:16px;}
+  .score td.thin{text-align:left; color:var(--dim); font-style:italic;
+                 font-family:"DejaVu Sans",sans-serif;}
+  .score .se{color:var(--dim); font-size:21px;}
 
   /* width */
   .chips{display:flex; gap:20px;}
@@ -53,7 +63,7 @@
            font-family:"DejaVu Sans Mono",monospace;}
   .chip .r{font-size:23px; color:var(--dim); margin-top:6px;}
 
-  .note{font-size:23px; color:var(--dim); margin-top:18px;}
+  .note{font-size:23px; color:var(--dim); margin-top:18px; line-height:1.45;}
   .note b{color:var(--ink);}
 </style>
 
@@ -71,7 +81,7 @@
 
   <div class="sec">
     <div class="sech">the first line tells you what to do</div>
-    <table>
+    <table class="do-table">
       <tr>
         <td class="tag" style="color:var(--gold)">🎯 THE PICK</td>
         <td class="exp">the best signal right now</td>
@@ -96,20 +106,37 @@
   </div>
 
   <div class="sec">
-    <div class="sech">every alert looks like this</div>
-    <div class="alert">
-      <div class="hd"><span class="g">🎯 THE PICK</span> — confirmed 🟢 long · <b>SOL</b> · 1h · grade <b>A</b></div>
-      <div><span class="lab">Entry</span><span class="val">145.8</span></div>
-      <div><span class="lab">Stop</span><span class="val">142.6</span>
-        <span style="color:var(--dim)">&nbsp;&nbsp; 2.19% · normal</span></div>
-      <div><span class="lab">Target</span><span class="val">152.2</span>
-        <span style="color:var(--dim)">&nbsp;&nbsp; 2R</span></div>
-      <div style="height:18px"></div>
-      <div><span class="lab">move</span><span style="color:var(--dim)">what else is firing</span></div>
-      <div><span class="lab">context</span><span style="color:var(--dim)">why it graded that way</span></div>
-      <div><span class="lab">when</span><span style="color:var(--dim)">the time, and the chart link</span></div>
-    </div>
-    <div class="note">Place the entry and stop <b>exactly as printed</b>. Target is 2R.</div>
+    <div class="sech">why only the 🎯 · 333 days, 9118 trades</div>
+    <table class="score">
+      <tr>
+        <th class="l">if you take</th><th class="l"></th>
+        <th>r / trade</th><th>total r</th><th>max dd</th><th>recovery</th>
+      </tr>
+      <tr><td class="k">every alert</td><td class="t"></td>
+        <td>+0.00</td><td>+20</td><td>411 R</td><td>0.05</td></tr>
+      <tr><td class="k" style="color:var(--gold)">only the 🎯</td><td class="t"></td>
+        <td><b>+0.07</b></td><td><b>+205</b></td><td><b>32 R</b></td>
+        <td><b>6.52</b></td></tr>
+    </table>
+    <div class="note">Ten times the return per trade, on a drawdown thirteen times smaller.
+      <b>This is the whole card.</b></div>
+  </div>
+
+  <div class="sec">
+    <div class="sech">and the 🎯 picks, broken down</div>
+    <table class="score">
+      <tr>
+        <th class="l">type</th><th class="l">tf</th>
+        <th>win</th><th>rr</th><th>r / trade</th><th>max dd</th>
+      </tr>
+      <tr><td class="k">confirmed</td><td class="t">15m</td><td>37%</td><td>1.77</td><td>+0.03 <span class="se">± 0.10</span></td><td>17 R</td></tr>
+      <tr><td class="k">confirmed</td><td class="t">30m</td><td>45%</td><td>1.83</td><td>+0.26 <span class="se">± 0.14</span></td><td>16 R</td></tr>
+      <tr><td class="k">confirmed</td><td class="t">1h</td><td>38%</td><td>1.78</td><td>+0.05 <span class="se">± 0.14</span></td><td>12 R</td></tr>
+      <tr><td class="k">early</td><td class="t">15m</td><td>38%</td><td>1.79</td><td>+0.06 <span class="se">± 0.04</span></td><td>32 R</td></tr>
+      <tr><td class="k">early</td><td class="t">30m</td><td>37%</td><td>1.78</td><td>+0.04 <span class="se">± 0.06</span></td><td>18 R</td></tr>
+      <tr><td class="k">early</td><td class="t">1h</td><td>40%</td><td>1.83</td><td>+0.13 <span class="se">± 0.08</span></td><td>24 R</td></tr>
+    </table>
+    <div class="note">No row here is separable from another — the gaps are smaller than their error bars. <b>Take the 🎯 whatever it says.</b></div>
   </div>
 
   <div class="sec">
@@ -117,28 +144,30 @@
     <div class="chips">
       <div class="chip">
         <div class="w">tight</div>
-        <div class="r">under 1.2%<br>measured at zero</div>
-      </div>
-      <div class="chip win">
-        <div class="w" style="color:var(--green)">normal</div>
-        <div class="r">1.2 – 2.6%<br><b style="color:var(--ink)">the good one</b></div>
+        <div class="r">under 1.2%<br>+0.07 ± 0.04</div>
       </div>
       <div class="chip">
-        <div class="w" style="color:var(--red)">wide</div>
-        <div class="r">over 2.6%<br>loses money</div>
+        <div class="w">normal</div>
+        <div class="r">1.2 – 2.6%<br>+0.06 ± 0.04</div>
+      </div>
+      <div class="chip">
+        <div class="w">wide</div>
+        <div class="r">over 2.6%<br>+0.11 ± 0.07</div>
       </div>
     </div>
-    <div class="note">It describes the stop, not the trade. A 🎯 is still a 🎯 when it says <b>wide</b> — size it smaller.</div>
+    <div class="note">It describes the stop, <b>not the trade</b>. Across the 🎯 picks the three
+      do not separate — <b>do not pick on it.</b> A wide stop just means price has further to
+      travel, and at fixed risk your position is already smaller.</div>
   </div>
 
   <div class="sec" style="margin-bottom:0">
     <div class="sech">the three ways to lose</div>
-    <table>
+    <table class="do-table">
       <tr><td class="tag" style="color:var(--red); width:60px">✕</td>
         <td class="exp" style="color:var(--ink)">Taking the 👀 WATCH alerts as well.</td></tr>
-      <tr><td class="tag" style="color:var(--red)">✕</td>
+      <tr><td class="tag" style="color:var(--red); width:60px">✕</td>
         <td class="exp" style="color:var(--ink)">Holding more than about <b>5 positions</b> at once.</td></tr>
-      <tr><td class="tag" style="color:var(--red)">✕</td>
+      <tr><td class="tag" style="color:var(--red); width:60px">✕</td>
         <td class="exp" style="color:var(--ink)">Waiting for a better entry. The edge decays fast.</td></tr>
     </table>
   </div>
