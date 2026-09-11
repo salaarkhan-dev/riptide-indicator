@@ -61,10 +61,41 @@ written down so it cannot be rewritten after the fact to fit whatever comes out.
 ## Design
 
 **Discovery set:** the original 60-symbol universe, 333 days, Min30.
-**Held-out set:** the ~44 symbols added by raising `RIPTIDE_TOP_N` from 60 to
-104. These are symbols on which no hypothesis in this project has ever been
-fitted, and they are a genuinely fresh cross-section rather than a later slice
-of the same one.
+**Held-out set:** symbols on which no hypothesis in this project has ever been
+fitted — a genuinely fresh cross-section rather than a later slice of the same
+one.
+
+> ### Amendment, 11 Sep 2026 — before any row was scored
+>
+> This section originally said the held-out set would be "the ~44 symbols added
+> by raising `RIPTIDE_TOP_N` from 60 to 104". **That was based on a miscount and
+> is corrected here, before the variable was computed on anything.**
+>
+> The 104 figure counted every USDT perpetual above the 3M turnover floor. The
+> scanner deliberately excludes MEXC's tokenised stocks and commodities — XAU,
+> USOIL, SPX500 and the rest — which are most of what expanding would add.
+> Crypto-only, the real counts are: **69** above 3M, 79 above 2M, 120 above 1M,
+> 161 above 0.5M, 220 above 0.3M, out of 595 live crypto USDT perps.
+>
+> So raising `TOP_N` to 104 adds **nine** symbols, not forty-four: the floor
+> binds, not the cap. Nine symbols is far too thin to hold out.
+>
+> **The fix keeps the design and leaves production alone.** The research
+> universe does not have to equal the scanned universe. The held-out set is now
+> every crypto symbol between the 60th and roughly the 120th by turnover — the
+> band from the current floor down to 1M/day — loaded for measurement only.
+> `RIPTIDE_MIN_VOL` is NOT changed, so the bot scans exactly what it scanned
+> before plus the nine, and no thinner coin reaches an alert.
+>
+> This amendment changes the SAMPLING FRAME, forced by a fact about the
+> exchange's listing mix, and changes nothing about the variable, the direction,
+> the bucketing, or the pass criteria. Those remain exactly as committed in
+> e2f16b0.
+>
+> **One consequence to hold against the result:** the held-out symbols are by
+> construction thinner than the discovery ones. If the held-out arm disagrees,
+> liquidity is a live alternative explanation and not merely a caveat. Median
+> turnover of both sets is reported alongside the result.
 
 **Primary population:** all confirmed grade A/B setups. This is where the
 statistical power is — 504 bets, MDE 0.346.

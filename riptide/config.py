@@ -103,7 +103,27 @@ MIN_VOL_USDT = float(os.getenv("RIPTIDE_MIN_VOL", "3000000"))  # 24h turnover
 # day and would match a different number on any other — while a top-N is a
 # scan cost you can actually plan around: N x len(INTERVALS) kline requests per
 # cycle. 0 disables the cap and keeps the floor alone.
-TOP_N = int(os.getenv("RIPTIDE_TOP_N", "60"))
+#
+# RAISED FROM 60 TO 104 ON 11 SEP, AND THE REASON IS STATISTICAL POWER RATHER
+# THAN OPPORTUNITY. Every conclusion on this project is limited by the number
+# of independent BETS, not by the number of features measured, and the only
+# levers on bets are more time and more symbols. Subsampling the existing
+# universe showed bets scale as symbols^0.905 — very nearly linear, mildly
+# sublinear because more symbols means more same-bar clustering:
+#
+#     10 symbols   94 bets   MDE 0.802        45 symbols  387 bets  MDE 0.395
+#     20          186        MDE 0.569        59          492       MDE 0.350
+#     30          268        MDE 0.474
+#
+# 104 is every symbol above the existing 3M turnover floor — the floor did not
+# move, so nothing thinner is being admitted and fill realism is unchanged.
+# Extrapolated, it takes the historical minimum detectable effect from 0.346 to
+# about 0.27 and raises the forward observation rate by 73%.
+#
+# THE COST IS ALERT VOLUME AND REQUESTS, both linear. 104 x 2 intervals is 208
+# kline requests a cycle, which at the 0.07s pacer is about 15 seconds of a
+# 15-minute cycle. Alerts go from roughly 16 a day to 28.
+TOP_N = int(os.getenv("RIPTIDE_TOP_N", "104"))
 
 # Skip MEXC's tokenised stocks, indices and commodities — XAU, USOIL, SPX500,
 # MUSTOCK and the rest. They are 428 of the 1024 USDT perps and 13 of the 60
