@@ -15,7 +15,30 @@ the live POI is read on Hour8; 'daily' below is the alternative, not the status 
   in daily zone     +0.068±0.094( 230)+0.153±0.062( 520)-0.034±0.066( 392)
   NOT in daily zone +0.163±0.064( 478)+0.178±0.048( 823)+0.015±0.055( 572)
   in BOTH zones     +0.007±0.115( 152)+0.060±0.076( 339)-0.094±0.081( 256)
-  cell = R/bet ± SE (bets). a dash means under 25 bets.
+  R/bet ± SE (bets). a dash means under 25 bets.
+
+                          tight <1.2%    band 1.2-2.6%       wide >2.6%
+                       win    RR  ±BE   win    RR  ±BE   win    RR  ±BE
+  no POI at all        39%  1.91 +4.7   39%  1.90 +4.3   35%  1.72 -1.3
+  in 8h zone (LIVE)    39%  1.90 +4.1   37%  1.91 +3.0   37%  1.71 -0.1
+  NOT in 8h zone       40%  1.91 +5.3   40%  1.89 +5.7   34%  1.73 -2.4
+  in daily zone        37%  1.93 +3.2   37%  1.92 +2.4   36%  1.75 -0.3
+  NOT in daily zone    40%  1.90 +5.4   40%  1.89 +5.4   35%  1.70 -1.9
+  in BOTH zones        36%  1.91 +1.6   35%  1.90 +0.5   35%  1.72 -2.0
+  win rate and realised RR over TRADES, and win rate MINUS the
+  break-even 1/(1+RR), in points. positive margin = positive cell.
+
+                            tight <1.2%      band 1.2-2.6%         wide >2.6%
+                      total maxDD recov  total maxDD recov  total maxDD recov
+  no POI at all      +143.2  41.9  3.42 +280.1  55.3  5.07  -50.7 141.9 -0.36
+  in 8h zone (LIVE)   +62.5  23.2  2.70  +98.5  40.4  2.44   -2.8  58.9 -0.05
+  NOT in 8h zone      +80.7  22.5  3.58 +181.7  26.4  6.88  -47.9  86.8 -0.55
+  in daily zone       +29.2  40.0  0.73  +54.9  59.5  0.92   -4.6  55.0 -0.08
+  NOT in daily zone  +114.0  24.8  4.59 +225.2  40.7  5.54  -46.2  89.6 -0.52
+  in BOTH zones        +9.0  30.0  0.30   +6.8  58.8  0.12  -18.3  39.4 -0.46
+  total R, peak-to-trough drawdown in R, and total/maxDD. the
+  drawdown is on the R curve in EXIT order, so it is what a
+  one-unit-per-trade account would have lived through.
 
 -- CONFIRMED ONLY ------------------------------------------------------------
                            tight <1.2%     band 1.2-2.6%        wide >2.6%
@@ -25,7 +48,30 @@ the live POI is read on Hour8; 'daily' below is the alternative, not the status 
   in daily zone     +0.377±0.270(  32)+0.164±0.143(  99)+0.026±0.133( 108)
   NOT in daily zone -0.098±0.160(  75)+0.257±0.101( 195)-0.026±0.104( 162)
   in BOTH zones               —(  18)+0.210±0.192(  55)-0.143±0.152(  73)
-  cell = R/bet ± SE (bets). a dash means under 25 bets.
+  R/bet ± SE (bets). a dash means under 25 bets.
+
+                          tight <1.2%    band 1.2-2.6%       wide >2.6%
+                       win    RR  ±BE   win    RR  ±BE   win    RR  ±BE
+  no POI at all        36%  1.90 +1.2   42%  1.89 +7.5   36%  1.79 +0.2
+  in 8h zone (LIVE)    36%  1.89 +1.7   43%  1.91 +8.7   36%  1.75 -0.8
+  NOT in 8h zone       35%  1.91 +0.7   41%  1.86 +6.2   36%  1.85 +1.4
+  in daily zone                     —   38%  1.89 +3.3   37%  1.86 +2.1
+  NOT in daily zone    32%  1.89 -3.0   44%  1.88 +9.5   35%  1.75 -1.0
+  in BOTH zones                     —   40%  1.90 +5.2   32%  1.77 -4.1
+  win rate and realised RR over TRADES, and win rate MINUS the
+  break-even 1/(1+RR), in points. positive margin = positive cell.
+
+                            tight <1.2%      band 1.2-2.6%         wide >2.6%
+                      total maxDD recov  total maxDD recov  total maxDD recov
+  no POI at all        +4.0   8.5  0.48  +78.0  19.0  4.10   +2.1  42.8  0.05
+  in 8h zone (LIVE)    +2.8   4.5  0.63  +45.9  10.3  4.47   -3.7  23.9 -0.15
+  NOT in 8h zone       +1.2   9.7  0.12  +32.1  13.4  2.39   +5.8  19.1  0.30
+  in daily zone                       —  +11.3  10.1  1.11   +7.3  21.3  0.34
+  NOT in daily zone    -7.0   9.5 -0.74  +66.8  14.7  4.53   -5.2  26.8 -0.19
+  in BOTH zones                       —   +9.4   6.2  1.52   -8.9  15.9 -0.56
+  total R, peak-to-trough drawdown in R, and total/maxDD. the
+  drawdown is on the R curve in EXIT order, so it is what a
+  one-unit-per-trade account would have lived through.
 
 -- EARLY ONLY ----------------------------------------------------------------
                            tight <1.2%     band 1.2-2.6%        wide >2.6%
@@ -35,13 +81,38 @@ the live POI is read on Hour8; 'daily' below is the alternative, not the status 
   in daily zone     +0.057±0.095( 224)+0.155±0.064( 493)-0.067±0.070( 342)
   NOT in daily zone +0.184±0.066( 462)+0.167±0.050( 762)+0.020±0.058( 524)
   in BOTH zones     -0.019±0.116( 147)+0.047±0.077( 325)-0.100±0.088( 218)
-  cell = R/bet ± SE (bets). a dash means under 25 bets.
+  R/bet ± SE (bets). a dash means under 25 bets.
+
+                          tight <1.2%    band 1.2-2.6%       wide >2.6%
+                       win    RR  ±BE   win    RR  ±BE   win    RR  ±BE
+  no POI at all        40%  1.91 +5.2   38%  1.90 +3.7   35%  1.70 -1.7
+  in 8h zone (LIVE)    39%  1.90 +4.4   36%  1.91 +1.9   37%  1.70 +0.1
+  NOT in 8h zone       40%  1.91 +5.9   40%  1.90 +5.7   34%  1.70 -3.4
+  in daily zone        36%  1.93 +2.2   36%  1.93 +2.3   36%  1.71 -1.0
+  NOT in daily zone    41%  1.90 +6.5   39%  1.89 +4.5   35%  1.69 -2.1
+  in BOTH zones        35%  1.91 +0.7   34%  1.91 -0.2   36%  1.71 -1.4
+  win rate and realised RR over TRADES, and win rate MINUS the
+  break-even 1/(1+RR), in points. positive margin = positive cell.
+
+                            tight <1.2%      band 1.2-2.6%         wide >2.6%
+                      total maxDD recov  total maxDD recov  total maxDD recov
+  no POI at all      +139.1  39.8  3.49 +202.1  53.9  3.75  -52.9 101.2 -0.52
+  in 8h zone (LIVE)   +59.7  22.1  2.70  +52.5  36.3  1.45   +0.9  51.6  0.02
+  NOT in 8h zone      +79.4  19.7  4.03 +149.5  25.2  5.94  -53.7  67.8 -0.79
+  in daily zone       +18.2  39.7  0.46  +43.7  57.8  0.76  -11.9  40.6 -0.29
+  NOT in daily zone  +121.0  19.6  6.18 +158.4  37.4  4.23  -41.0  66.2 -0.62
+  in BOTH zones        +3.5  26.6  0.13   -2.6  57.4 -0.05   -9.4  27.5 -0.34
+  total R, peak-to-trough drawdown in R, and total/maxDD. the
+  drawdown is on the R curve in EXIT order, so it is what a
+  one-unit-per-trade account would have lived through.
 
 == PRIMARY: does the band survive inside each POI arm? =====================
 
   ALL SIGNALS
       no POI at all: band vs outside             +0.188 vs  +0.063  diff +0.125  |z|  2.3  MDE 0.158  SEPARATES
+                                                   39% vs    37% win    1.90 vs  1.81 RR    +4.3 vs  +1.3 margin
       in 8h zone (LIVE): band vs outside         +0.159 vs  +0.022  diff +0.137  |z|  1.9  MDE 0.206
+                                                   37% vs    38% win    1.91 vs  1.79 RR    +3.0 vs  +1.7 margin
       NOT in 8h zone: band vs outside            +0.185 vs  +0.093  diff +0.092  |z|  1.3  MDE 0.210
       in daily zone: band vs outside             +0.153 vs  +0.014  diff +0.138  |z|  1.7  MDE 0.240
       NOT in daily zone: band vs outside         +0.178 vs  +0.080  diff +0.098  |z|  1.5  MDE 0.187
@@ -49,7 +120,9 @@ the live POI is read on Hour8; 'daily' below is the alternative, not the status 
 
   CONFIRMED ONLY
       no POI at all: band vs outside             +0.235 vs  +0.009  diff +0.226  |z|  2.0  MDE 0.332  SEPARATES
+                                                   42% vs    36% win    1.89 vs  1.82 RR    +7.5 vs  +0.5 margin
       in 8h zone (LIVE): band vs outside         +0.244 vs  -0.016  diff +0.260  |z|  1.7  MDE 0.453
+                                                   43% vs    36% win    1.91 vs  1.78 RR    +8.7 vs  -0.1 margin
       NOT in 8h zone: band vs outside            +0.166 vs  +0.020  diff +0.146  |z|  1.0  MDE 0.439
       in daily zone: band vs outside             +0.164 vs  +0.097  diff +0.068  |z|  0.4  MDE 0.561
       NOT in daily zone: band vs outside         +0.257 vs  -0.056  diff +0.313  |z|  2.3  MDE 0.389  SEPARATES
@@ -57,7 +130,9 @@ the live POI is read on Hour8; 'daily' below is the alternative, not the status 
 
   EARLY ONLY
       no POI at all: band vs outside             +0.180 vs  +0.072  diff +0.108  |z|  1.9  MDE 0.164
+                                                   38% vs    37% win    1.90 vs  1.80 RR    +3.7 vs  +1.5 margin
       in 8h zone (LIVE): band vs outside         +0.141 vs  +0.036  diff +0.105  |z|  1.4  MDE 0.213
+                                                   36% vs    38% win    1.91 vs  1.79 RR    +1.9 vs  +2.1 margin
       NOT in 8h zone: band vs outside            +0.188 vs  +0.087  diff +0.101  |z|  1.4  MDE 0.219
       in daily zone: band vs outside             +0.155 vs  -0.004  diff +0.159  |z|  1.9  MDE 0.246
       NOT in daily zone: band vs outside         +0.167 vs  +0.098  diff +0.069  |z|  1.0  MDE 0.195
@@ -67,15 +142,42 @@ the live POI is read on Hour8; 'daily' below is the alternative, not the status 
 
   ALL SIGNALS  (2215 trades in the band)
       8h zone vs no 8h zone                      +0.159 vs  +0.185  diff -0.026  |z|  0.3  MDE 0.214
+                                                   37% vs    40% win    1.91 vs  1.89 RR    +3.0 vs  +5.7 margin
       daily zone vs no daily zone                +0.153 vs  +0.178  diff -0.025  |z|  0.3  MDE 0.241
+                                                   37% vs    40% win    1.92 vs  1.89 RR    +2.4 vs  +5.4 margin
       both zones vs neither                      +0.060 vs  +0.169  diff -0.109  |z|  1.1  MDE 0.299
 
   CONFIRMED ONLY  (361 trades in the band)
       8h zone vs no 8h zone                      +0.244 vs  +0.166  diff +0.078  |z|  0.5  MDE 0.463
+                                                   43% vs    41% win    1.91 vs  1.86 RR    +8.7 vs  +6.2 margin
       daily zone vs no daily zone                +0.164 vs  +0.257  diff -0.093  |z|  0.5  MDE 0.561
+                                                   38% vs    44% win    1.89 vs  1.88 RR    +3.3 vs  +9.5 margin
       both zones vs neither                      +0.210 vs  +0.240  diff -0.030  |z|  0.1  MDE 0.759
 
   EARLY ONLY  (1854 trades in the band)
       8h zone vs no 8h zone                      +0.141 vs  +0.188  diff -0.047  |z|  0.6  MDE 0.222
+                                                   36% vs    40% win    1.91 vs  1.90 RR    +1.9 vs  +5.7 margin
       daily zone vs no daily zone                +0.155 vs  +0.167  diff -0.012  |z|  0.2  MDE 0.248
+                                                   36% vs    39% win    1.93 vs  1.89 RR    +2.3 vs  +4.5 margin
       both zones vs neither                      +0.047 vs  +0.168  diff -0.122  |z|  1.2  MDE 0.305
+
+== IS THE 1h STREAM WORTH IT ===============================================
+  every row is the SAME 333 days and the same 59 symbols, on the
+  same engine. /day is scaled to the 120-symbol live universe.
+  acct% and accDD compound 300 USDT at 1% risk with at most 10
+  positions open at once — the constraint a small account actually
+  hits, and the number that killed the unfiltered Min30 stream.
+
+  policy                    /day           R/bet   total  maxDD  recov   win    RR   ±BE     acct accDD
+  everything                28.8  +0.125±0.029  +372.5  150.0   2.48   38%  1.85  +2.8    +204%   55%
+  POI on (= deployed)       14.6  +0.088±0.037  +158.1   91.2   1.73   37%  1.85  +2.3    +140%   52%
+  band only, no POI         13.5  +0.188±0.041  +280.1   55.3   5.07   39%  1.90  +4.3    +446%   42%
+  band + POI on              6.9  +0.159±0.053   +98.5   40.4   2.44   37%  1.91  +3.0     +99%   32%
+  band, confirmed only       2.2  +0.235±0.085   +78.0   19.0   4.10   42%  1.89  +7.5    +103%   18%
+  band, early only          11.3  +0.180±0.042  +202.1   53.9   3.75   38%  1.90  +3.7    +377%   41%
+
+  post hoc — chosen AFTER seeing the grid, not pre-registered:
+  not wide (<2.6%)          19.7  +0.183±0.035  +423.3   86.7   4.88   39%  1.90  +4.5    +454%   48%
+  tight only (<1.2%)         6.2  +0.153±0.056  +143.2   41.9   3.42   39%  1.91  +4.7    +232%   35%
+  wide only (>2.6%)          9.2  -0.005±0.044   -50.7  141.9  -0.36   35%  1.72  -1.3     -57%   74%
+  not wide + POI on         10.0  +0.133±0.045  +160.9   55.2   2.92   38%  1.91  +3.3    +171%   37%

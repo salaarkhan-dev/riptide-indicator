@@ -227,7 +227,7 @@ SHIP = {
 
 
 class T:
-    __slots__ = ("sym", "t", "r", "filled", "exit_t", "risk_pct",
+    __slots__ = ("sym", "t", "r", "filled", "fill_t", "exit_t", "risk_pct",
                  "kind", "day", "h8", "h8long")
 
 
@@ -292,6 +292,10 @@ async def collect(sess, candles, zday, z8h):
                 z.sym, z.t, z.kind = sym, w, kind
                 z.r, z.filled = o.r, o.filled
                 z.risk_pct = 100 * abs(x.entry - x.stop) / x.entry
+                # Wall-clock fill and exit, so report.compound can replay the
+                # account in time with several positions open at once.
+                z.fill_t = (w + BAR_SECONDS[INTERVAL] * (o.fill_bar - i)
+                            if o.filled and o.fill_bar is not None else None)
                 z.exit_t = (w + BAR_SECONDS[INTERVAL] * (o.exit_bar - i)
                             if o.filled and o.exit_bar else None)
                 z.day = zone_hit(zd, w, x.stop, x.is_long,
