@@ -385,13 +385,57 @@ table in section 5. Most cannot.
 
 1. **Forward instrumentation.** Record features at signal time into the live
    tracker. The only action that creates new *bets* rather than new *columns*.
-   In 12 months it yields a clean out-of-sample dataset with real power.
-2. **Event concentration (item 22).** The only new positive result. One position
-   per market event rather than N. Recovery 1.33 → 1.43 arbitrarily, → 1.84 on
-   the risk band, time under water 60% → 32%.
+2. **Event concentration (item 22).** The only new positive result.
+   **SHIPPED 11 Sep** — see section 11.
 3. **Stop-distance ÷ ATR ratio.** The one unmeasured lead with a coherent
    mechanism and out-of-sample support in both halves. Needs pre-registration
-   before it is tested, not after.
+   before it is tested, not after. **Does not require forward data.**
+
+### How fast more statistical power is actually obtainable
+
+Measured by subsampling the existing universe, 30 draws per point. Bets scale
+as **symbols^0.905** — near-linear, only mildly sublinear (more symbols means
+more same-bar clustering, so trades per bet rises from 1.05 at 10 symbols to
+1.21 at 59).
+
+| Universe | Confirmed bets / 333 days | MDE |
+|---|---|---|
+| 60 (today) | 504 | 0.346 |
+| 90 | 727 | 0.288 |
+| 120 | 944 | 0.253 |
+| 200 | 1,498 | 0.201 |
+| 400 | 2,806 | 0.147 |
+
+Available supply: 1,069 live USDT perps — 104 above the current 3M/day
+turnover floor, 171 above 1M, 309 above 0.3M.
+
+**So raising `RIPTIDE_TOP_N` from 60 to 104 costs one config line, needs no new
+floor, improves the historical MDE from 0.346 to ~0.27, and raises the forward
+observation rate by ~73%.** Going past that means lowering the liquidity floor,
+which degrades fill realism and worsens survivorship — a judgement call, not a
+free win.
+
+Halving the MDE requires 4× the bets. Universe expansion is the clean lever
+(different symbols are more independent than different timeframes on the same
+symbol). Stacking Min15 onto Min30 adds ~672 confirmed bets but they are *not*
+independent of the Min30 set — a Min30 bar contains two Min15 bars — so that
+sample cannot simply be added.
+
+---
+
+## 11. Shipped since this document was first written
+
+**Event concentration rule (item 22)** — `riptide/scanner.py::tag_event_pick`.
+Groups signals by (timeframe, bar, direction), names one, marks the rest as its
+siblings. The alert chip reads `🔗 6 on this close, size once · 🎯 the pick` or
+`· pick is ARB`. Ranked by the risk band, then confirmed before early, then
+alphabetically for determinism. Per-symbol history is deliberately excluded.
+**Suppresses nothing** — every alert still sends in full. Off with
+`RIPTIDE_EVENT_PICK=0`. Covered by `tests/test_event_pick.py`.
+
+**Risk band label (section 4)** — the alert now prints `take` / `flat` / `skip`
+on the risk line, gated to the two timeframes the band has been measured on.
+Covered by `tests/test_risk_verdict.py`.
 
 **The deeper question worth answering:** the strategy is +0.034 ± 0.027 R/bet —
 statistically indistinguishable from zero, with 107% of net R from 5 of 60
