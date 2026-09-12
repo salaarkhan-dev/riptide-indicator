@@ -1,0 +1,56 @@
+CAN A 1-MINUTE STRATEGY PAY FOR ITSELF?
+30 days of 1m candles · live order book · 2026-09-12
+
+Riptide's 30m median stop is 1.45% and it pays 47% of gross to
+fees. 15m at 1.01% is NET NEGATIVE. This asks what 1m stops
+look like and what that ratio becomes.
+
+  fetched BTC_USDT          43200 bars  1m ATR 0.044%  spread 0.000%  taker 0.020%
+  fetched ZEC_USDT          43200 bars  1m ATR 0.176%  spread 0.001%  taker 0.000%
+  fetched LSK_USDT          43200 bars  1m ATR 0.098%  spread 0.012%  taker 0.020%
+  fetched BEAT_USDT         43200 bars  1m ATR 0.363%  spread 0.110%  taker 0.000%
+  fetched PONS_USDT         43200 bars  1m ATR 0.559%  spread 0.033%  taker 0.000%
+  fetched BTW_USDT          43200 bars  1m ATR 0.279%  spread 0.032%  taker 0.000%
+  fetched VIRTUAL_USDT      43200 bars  1m ATR 0.124%  spread 0.016%  taker 0.000%
+
+================================================================================================
+THE COST RATIO AT EACH STOP SIZE
+================================================================================================
+  cost in R = (spread + taker fee) / stop%.  Spread charged ONCE,
+  on the market-order exit; the limit entry is maker and free.
+
+  symbol           rank    ATR%   spr%      1xATR    1.5xATR      2xATR      3xATR
+  BTC_USDT            0   0.044  0.000       0.46       0.30       0.23       0.15
+  ZEC_USDT            3   0.176  0.001       0.01       0.00       0.00       0.00
+  LSK_USDT           10   0.098  0.012       0.32       0.22       0.16       0.11
+  BEAT_USDT          25   0.363  0.110       0.30       0.20       0.15       0.10
+  PONS_USDT          50   0.559  0.033       0.06       0.04       0.03       0.02
+  BTW_USDT           80   0.279  0.032       0.12       0.08       0.06       0.04
+  VIRTUAL_USDT      110   0.124  0.016       0.13       0.09       0.06       0.04
+
+================================================================================================
+WHAT IT TAKES TO BREAK EVEN
+================================================================================================
+  symbol            stop @2xATR   cost R   gross R to net 0   min stop% for
+                                               at 1R target      cost<0.10R
+  BTC_USDT               0.088%     0.23               1.23          0.201%
+  ZEC_USDT               0.352%     0.00               1.00          0.009%
+  LSK_USDT               0.197%     0.16               1.16          0.318%
+  BEAT_USDT              0.725%     0.15               1.15          1.103%
+  PONS_USDT              1.118%     0.03               1.03          0.330%
+  BTW_USDT               0.558%     0.06               1.06          0.324%
+  VIRTUAL_USDT           0.247%     0.06               1.06          0.160%
+
+================================================================================================
+THE COMPARISON THAT MATTERS
+================================================================================================
+  strategy                        stop %    cost %   cost in R      
+  Riptide 30m (measured)          1.450%    0.016%        0.01
+  Riptide 15m (NET NEGATIVE)      1.010%    0.016%        0.02
+  1m @ 2x ATR                     0.352%    0.016%        0.05
+  1m @ 3x ATR                     0.528%    0.016%        0.03
+
+  Median across the sampled symbols. If the 1m rows sit far
+  above the 15m row — the one already measured as losing —
+  then the branch needs a bigger stop, which is a slower
+  timeframe wearing a 1m label.

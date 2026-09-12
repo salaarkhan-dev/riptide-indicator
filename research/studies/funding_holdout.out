@@ -1,0 +1,63 @@
+FUNDING — THE CUT CHOSEN BLIND
+59 symbols · 333 days · 2905 picks, 2521 with funding
+halves: 1262 / 1259
+
+Every threshold is computed on the DISCOVERY half only and read
+once on the other. 'lift' is the kept trades against that half's
+own baseline — a filter that costs volume must earn it.
+
+============================================================================================
+DISCOVER ON FIRST HALF, READ ON THE SECOND
+============================================================================================
+  candidate                       thr  disc kept  disc lift  kept n  dropped R
+  A  funding > 0             +0.00000     +0.091     +0.065     289     -0.022
+  B  funding > median        +0.00002     +0.043     +0.018     347     +0.007
+  C  funding > 80th pct      +0.00010     +0.020     -0.006     664     +0.220
+  D  funding > 90th pct      +0.00010     +0.020     -0.006     664     +0.220
+
+  DISCOVERY PICKED: A  funding > 0  (threshold +0.00000, lift +0.065 on discovery)
+
+  HELD-OUT half              n kept    kept R      SE   baseline     LIFT  n dropped  dropped R
+  longs (the claim)             184    +0.123   0.106     +0.037   +0.085        546     +0.009
+  shorts (the control)          150    +0.250   0.119     +0.144   +0.106        379     +0.102
+
+============================================================================================
+DISCOVER ON SECOND HALF, READ ON THE FIRST
+============================================================================================
+  candidate                       thr  disc kept  disc lift  kept n  dropped R
+  A  funding > 0             +0.00000     +0.123     +0.085     184     +0.009
+  B  funding > median        +0.00005     +0.103     +0.066     494     -0.101
+  C  funding > 80th pct      +0.00010     +0.045     +0.007     661     -0.034
+  D  funding > 90th pct      +0.00010     +0.045     +0.007     661     -0.034
+
+  DISCOVERY PICKED: A  funding > 0  (threshold +0.00000, lift +0.085 on discovery)
+
+  HELD-OUT half              n kept    kept R      SE   baseline     LIFT  n dropped  dropped R
+  longs (the claim)             289    +0.091   0.084     +0.026   +0.065        395     -0.022
+  shorts (the control)          238    +0.057   0.090     +0.156   -0.099        340     +0.225
+
+============================================================================================
+AS A RULE, NOT A TABLE — the account simulator
+============================================================================================
+  A lift in R per trade that does not survive slots, margin and
+  compounding is not worth shipping. Same judge as phase2_rule.py.
+
+  arm                                        taken   win      ret   maxDD   ret/DD
+  PICK + max 8 (no funding rule)              2513   39%     +177%     15%    11.89
+  skip longs A  funding > 0                   1580   41%     +178%     13%    14.13
+  skip longs B  funding > median              1817   40%     +195%     12%    15.98
+  skip longs C  funding > 80th pct            2426   39%     +174%     14%    12.50
+  skip longs D  funding > 90th pct            2426   39%     +174%     14%    12.50
+
+  (thresholds here use the WHOLE window and are therefore
+   optimistic — this panel sizes the effect, the panels above
+   are the ones that test it.)
+
+============================================================================================
+VERDICT
+============================================================================================
+  first -> second   A  funding > 0          long lift +0.085  short lift +0.106   HELD control moved as much — mechanism suspect
+  second -> first   A  funding > 0          long lift +0.065  short lift -0.099   HELD 
+
+  Held on BOTH half-assignments. That is the bar this project
+  sets, and the trendline confluence did not clear it.
