@@ -1,5 +1,52 @@
 # Scalper Lab — a separate model family
 
+> ## RESULTS ARE IN — and the answer is "real edge, eaten by spread"
+>
+> `research/studies/scalp_lab.out`. 14 symbols, 30 days of 1m, gross R.
+>
+> **One model works before costs.** LSR-4 — price dips below the *previous 5m
+> bar's low*, closes back above it, first 1m FVG is the limit entry:
+>
+> | target | n | gross R | win |
+> |---|---|---|---|
+> | 1.0R | 13,887 | +0.094 | 55% |
+> | 1.5R | 13,887 | +0.152 | 47% |
+> | **2.0R** | 13,887 | **+0.202** | 42% |
+>
+> It clears everything: control −0.36, placebo band −0.084..+0.051, both halves
+> +0.212 / +0.197, day-block bootstrap 95% CI **+0.190 .. +0.220**, and it is
+> positive on **14 of 14 symbols**.
+>
+> **Then spread eats it.** Measured live on those same 14 symbols against the
+> median 0.259% stop:
+>
+> | | |
+> |---|---|
+> | mean net after spread | **+0.027R** |
+> | symbols still above +0.15 net | **1 of 14** |
+> | symbols net NEGATIVE | **6 of 14** |
+>
+> And that is the *optimistic* reading: spread sampled once in calm conditions,
+> charged once, slippage not modelled at all.
+>
+> **THE FILTER CAUSED THE PROBLEM IT WAS MEANT TO SOLVE.** The 1m ATR ≥ 0.15%
+> floor exists so the stop is wide enough to carry its costs. But at 1m, high
+> ATR means *illiquid*: it admitted UAI, RAVE, PONS, AKE, CYS, SKYAI and
+> rejected SOL, XRP and DOGE (1m ATR ~0.04%). Volatile and tight-spread are
+> nearly mutually exclusive at this timeframe, and the gate that protects the
+> denominator wrecks the numerator.
+>
+> **Verdict: do not deploy.** A +0.027R mean with six symbols negative is not a
+> strategy, and the single survivor (PONS, +0.206 net) is one symbol out of
+> fourteen — which is what a fluke looks like.
+>
+> The one route that is not closed: the same model on tight-spread symbols with
+> a WIDER stop, so the denominator comes from the stop rather than from the
+> symbol's volatility. That is a different hypothesis and needs its own
+> pre-registration. It is also, honestly, a slower timeframe wearing a 1m label
+> — the thing this file warned about before the data arrived.
+
+
 Riptide's Min30 liquidity-reversal model is **frozen** and is the control.
 Nothing in this file touches it, shares its tables, or appears in its `/stats`.
 Each experiment here gets its own id, its own rows, and its own verdict.
@@ -95,15 +142,15 @@ estimated entry slippage, estimated exit slippage, fee, gross R, net R.
 The proposed ranking put displacement first. **I would flip the top two**, on a
 principle this project has paid for repeatedly.
 
-| id | model | TF | new parameters |
-|---|---|---|---|
-| **LSR-2** | 5m liquidity → 1m MSS → 1m FVG | 5m+1m | **none** |
-| LSR-1 | 5m liquidity → 1m raid → displacement → FVG | 5m+1m | displacement threshold |
-| LSR-4 | previous 5m H/L raid → 1m reversal | 5m+1m | none |
-| LSR-3 | 3m liquidity → 1m displacement → FVG | 3m+1m | displacement threshold |
-| LSR-5 | micro MSS → FVG | 1m | none |
-| LSR-6 | failed breakout → displacement | 1m/3m | breakout definition |
-| LSR-7 | opening-range raid | 1m/3m | session + range length |
+| id | model | TF | new parameters | RESULT |
+|---|---|---|---|---|
+| **LSR-2** | 5m liquidity → 1m MSS → 1m FVG | 5m+1m | **none** | reject (+0.002) |
+| LSR-1 | 5m liquidity → 1m raid → displacement → FVG | 5m+1m | displacement threshold | reject (+0.111) |
+| **LSR-4** | previous 5m H/L raid → 1m reversal | 5m+1m | none | **gross +0.202, net +0.027** |
+| LSR-3 | 3m liquidity → 1m displacement → FVG | 3m+1m | displacement threshold | no trades |
+| LSR-5 | micro MSS → FVG | 1m | none | reject (−0.033) |
+| LSR-6 | prev 5m H/L → displacement | 5m+1m | displacement threshold | +0.196 — same as LSR-4, so the parameter adds nothing |
+| LSR-7 | opening-range raid | 1m/3m | session + range length | reject, inside placebo |
 
 **Why LSR-2 before LSR-1.** "Displacement" is not a primitive this engine has.
 Defining it mechanically needs a threshold — *how large is a strong candle?* —
