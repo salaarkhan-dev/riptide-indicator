@@ -12,6 +12,7 @@ import time
 
 import aiohttp
 
+from . import exchange
 from . import exhaust
 from . import journal
 from . import telegram as tg
@@ -19,7 +20,7 @@ from . import market
 from . import tracker
 from . import watch
 from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
-                     MAX_SWEEP_RVOL,
+                     MAX_SWEEP_RVOL, MIN_REQUEST_GAP,
                      INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE, POI_INTERVAL,
                      POI_REQUIRED,
                      POI_SWEEPS, SCAN_INTERVAL, SWEEP_ALERTS, SWEEP_INTERVALS,
@@ -332,6 +333,14 @@ def status_text(db, state) -> str:
         scan_line = f"{_fmt_ago(time.time() - last)} ago · {state.get('last_sent', 0)} sent"
     else:
         scan_line = "none yet"
+    # THE PACER'S CURRENT WIDENING, shown only when it is not 1. Being rate
+    # limited looks exactly like a calm market from the outside — that is what
+    # cost a quarter of the universe on 12 Sep — so when the bot is backing off
+    # it has to say so somewhere a human actually looks.
+    _gm = exchange.gap_mult()
+    if _gm > 1.01:
+        scan_line += (f"\n           ⚠️ rate limited · request gap widened to "
+                      f"{MIN_REQUEST_GAP * _gm * 1000:.0f}ms (x{_gm:.1f})")
     if TRACK:
         live = db.execute("SELECT COUNT(*) FROM outcomes WHERE status IN "
                           "('pending','open')").fetchone()[0]
@@ -419,7 +428,13 @@ def status_text(db, state) -> str:
         poi_line += (f" · sweeps {'+'.join(SWEEP_INTERVALS)}"
                      + (" in POI" if POI_SWEEPS and POI_REQUIRED else "")
                      + (" · WATCH only" if SWEEP_WATCH_ONLY else "")
-                     + (f" · rvol<{MAX_SWEEP_RVOL:g}"
+                     # "rvol&lt;1.55", NOT "rvol<1.55". Telegram parses the
+                     # message as HTML, reads "<1.55" as a start tag and
+                     # rejects the WHOLE message with a 400 — so this one
+                     # character silently killed every /status while
+                     # SWEEP_WATCH_ONLY was on. tests/test_tg_html.py now
+                     # renders these and fails on a bare "<".
+                     + (f" · rvol&lt;{MAX_SWEEP_RVOL:g}"
                         if SWEEP_WATCH_ONLY and MAX_SWEEP_RVOL > 0 else ""))
     return (
         f"<b>Riptide status</b>\n\n"

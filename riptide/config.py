@@ -97,10 +97,25 @@ CONCURRENCY = int(os.getenv("RIPTIDE_CONCURRENCY", "8"))
 # a body carrying no candles at all. From one IP that burst is fine; from
 # another it is not, and the difference is invisible from the code.
 #
-# 0.07s is about 14 requests a second, so a 120-request cycle spreads over
-# ~9 seconds. That is nothing against a 15-minute scan and it removes the
-# burst entirely. 0 disables the pacing.
-MIN_REQUEST_GAP = float(os.getenv("RIPTIDE_MIN_REQUEST_GAP", "0.07"))
+# RAISED FROM 0.07 TO 0.12 ON 12 SEP, ON EVIDENCE RATHER THAN CAUTION. 0.07s
+# is about 14 requests a second, which was measured as safe on a 60-symbol
+# universe. That universe is now 115 symbols across three structure timeframes
+# plus Hour8 POI and Day1 context — roughly 600 requests a cycle, not 120 — and
+# at 14/s MEXC began refusing 20-26 symbols PER TIMEFRAME every cycle with
+# {"success": false, "code": 510}. A quarter of the universe went unscanned.
+#
+# 0.12s is about 8 a second, so a 600-request cycle spreads over ~72 seconds.
+# Against a 15-minute scan that is free.
+#
+# THE FLOOR IS NOT THE WHOLE ANSWER AND IS NOT MEANT TO BE. The real limit is
+# not knowable from here — it is undocumented for this endpoint and depends on
+# what else shares the IP — so riptide/exchange.py widens the gap itself
+# whenever the exchange refuses and narrows it again when it stops. This value
+# is the starting point that adaptation begins from, chosen so a fresh process
+# does not have to learn the same lesson through a bad first cycle.
+#
+# 0 disables the pacing entirely, adaptation included.
+MIN_REQUEST_GAP = float(os.getenv("RIPTIDE_MIN_REQUEST_GAP", "0.12"))
 QUOTE = os.getenv("RIPTIDE_QUOTE", "USDT")
 SYMBOLS_ENV = os.getenv("RIPTIDE_SYMBOLS", "")          # comma list, or blank
 # LOWERED FROM 3M TO 1M ON 11 SEP, FOR DATA RATE, NOT FOR OPPORTUNITY. With
