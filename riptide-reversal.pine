@@ -83,15 +83,15 @@ RULE = '\n───────────────────────�
 f_pivotTip(_name, _level, _isDeveloping) =>
     role = _name == 'R' ? 'RESISTANCE' : _name == 'S' ? 'SUPPORT' : 'PIVOT'
     built = _name == 'R' ? 'R = (range ÷ 2) − low of the range' :
-            _name == 'S' ? 'S = (range ÷ 2) − high of the range' :
+              _name == 'S' ? 'S = (range ÷ 2) − high of the range' :
                            'P = range ÷ 4  (the balance point)'
     use = _name == 'R' ?
-            '• Below it: first overhead supply. Rallies into R\n  often stall — a long entering just under R has\n  a short runway.\n• A close above it: R usually flips to support.\n• It marks where a move PAUSES, not which way it goes.' :
+              '• Below it: first overhead supply. Rallies into R\n  often stall — a long entering just under R has\n  a short runway.\n• A close above it: R usually flips to support.\n• It marks where a move PAUSES, not which way it goes.' :
           _name == 'S' ?
-            '• Above it: first demand below. Declines into S\n  often stall — a short entering just above S has\n  a short runway.\n• A close below it: S usually flips to resistance.\n• It marks where a move PAUSES, not which way it goes.' :
-            '• Above P the range is in bullish balance, below\n  it bearish. It is the reference, not a trade.\n• Price tends to revisit P inside a range and to\n  leave it alone in a trend — so P getting ignored\n  is itself information.'
+              '• Above it: first demand below. Declines into S\n  often stall — a short entering just above S has\n  a short runway.\n• A close below it: S usually flips to resistance.\n• It marks where a move PAUSES, not which way it goes.' :
+              '• Above P the range is in bullish balance, below\n  it bearish. It is the reference, not a trade.\n• Price tends to revisit P inside a range and to\n  leave it alone in a trend — so P getting ignored\n  is itself information.'
     warn = _isDeveloping ?
-            '\n\n⚠ DEVELOPING — this is built from the range still\nforming and WILL move before it closes. Use it as a\npreview only. It raises no alerts, by design.' : ''
+              '\n\n⚠ DEVELOPING — this is built from the range still\nforming and WILL move before it closes. Use it as a\npreview only. It raises no alerts, by design.' : ''
     'RANGE PIVOT — ' + _name + ' · ' + role + RULE +
       'Price ' + str.tostring(_level, format.mintick) + '   ' + f_pctTxt(_level) + ' away\n' +
       '\nWHAT IT IS\nA DeMark pivot from the last COMPLETED higher-\ntimeframe range — not the classic floor pivot. It\nweights the range by where that bar closed, so an\nup-close range and a down-close range give\ndifferent levels.\n' +
@@ -710,7 +710,7 @@ if showDashboard and barstate.islast
     // agreeing with the alert I just got?
     bool meDone = buyCount == 9 or sellCount == 9
     bool teDone = buyExhaustionCount == 13 or sellExhaustionCount == 13
-    nearPivot = pivotValid and math.abs(pctDist) <= 1.0
+    nearPivot = pivotValid and not na(pctDist) and math.abs(pctDist) <= 1.0
     confText  = teDone ? 'Terminal ✦' : meDone ? 'Momentum ✦' : nearPivot ? 'At pivot' : '—'
     confColor = teDone ? color.orange : meDone ? color.yellow : nearPivot ? color.gray : color.gray
     confTip = teDone ? 'A TERMINAL count completed on this bar.' + RULE + 'The strongest thing this indicator says. If a Riptide 🎯 in the same direction arrived within a few bars, that is two unrelated methods agreeing — worth a journal note.\n\nIt is still not a measured edge. The research port exists to find out whether this confluence is worth anything.' :
