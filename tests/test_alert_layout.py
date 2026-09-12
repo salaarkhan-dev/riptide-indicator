@@ -121,6 +121,13 @@ check("3R" not in strip(setup_message(setup(2.34))),
       "3R is gone — the tracker scores at 2R and so does every study, so a "
       "second unmeasured target beside the measured one is not printed")
 check("2R" in r["Target"], "the target row names the R multiple it is")
+check("needs a 4.7% move" in r["Target"],
+      f"and how far price must travel to get there — 2 x 2.34% — because a "
+      f"reader cannot do that in their head from three prices, and a 10.51% "
+      f"stop needing a 21% move went out looking like every other alert: "
+      f"{r['Target']!r}")
+check("needs a 21.0% move" in rows(setup_message(setup(10.51)))["Target"],
+      "the alert that prompted it now says so on its face")
 
 print("\na sweep has no order levels and does not pretend to")
 sw = rows(sweep_message(Sweep(

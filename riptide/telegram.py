@@ -604,8 +604,18 @@ def _numbers(entry: float, stop: float, risk: float, is_long: bool) -> list:
     rows = [row("Entry", price_cell(entry)),
             row("Stop", price_cell(stop,
                                    f"{riskpct:.2f}%  ·  {stop_width(riskpct)}")),
-            row("Target", price_cell(entry + sign * risk * TRACK_TARGET_R,
-                                     f"{TRACK_TARGET_R:g}R"))]
+            # HOW FAR PRICE HAS TO TRAVEL, which "2R" does not say and a reader
+            # cannot do in their head from three prices. A 10.51% stop needs a
+            # 21% move to pay 2R, and that alert went out looking like every
+            # other one — the number that makes it obviously a stretch was
+            # sitting in the message twice over, in pieces, and never stated.
+            #
+            # Pure arithmetic on the two numbers above it (target R x stop %),
+            # so it claims nothing and cannot go stale.
+            row("Target", price_cell(
+                entry + sign * risk * TRACK_TARGET_R,
+                f"{TRACK_TARGET_R:g}R · needs a "
+                f"{TRACK_TARGET_R * riskpct:.1f}% move"))]
     # The break-even row is gone unless it is switched back on. It advised a
     # stop move for months without ever having been measured, and it loses
     # money at every arm level on both signal types — see be_arm_r in
