@@ -203,6 +203,21 @@ nearestVal  = nearestIsR ? R1 : nearestIsP ? P : S1
 
 // Where price sits in the range, in words. Shared by several tooltips so they
 // agree rather than each inventing its own phrasing.
+// HOW MUCH ROOM A MOVE HAS BEFORE IT MEETS A KNOWN LEVEL. For a LONG the
+// runway is the nearest pivot ABOVE price; for a SHORT, the nearest BELOW.
+// This is the number that compares directly against an alert's "needs a move
+// of" line, which is the only arithmetic a reader should have to do.
+f_runway(_isLong) =>
+    dR = f_pct(R1)
+    dP = f_pct(P)
+    dS = f_pct(S1)
+    bR = not na(dR) and (_isLong ? dR > 0 : dR < 0) ? math.abs(dR) : 1e9
+    bP = not na(dP) and (_isLong ? dP > 0 : dP < 0) ? math.abs(dP) : 1e9
+    bS = not na(dS) and (_isLong ? dS > 0 : dS < 0) ? math.abs(dS) : 1e9
+    m  = math.min(bR, math.min(bP, bS))
+    nm = m >= 1e9 ? '' : m == bR ? 'R' : m == bP ? 'P' : 'S'
+    [m >= 1e9 ? float(na) : m, nm]
+
 zoneTxt = not pivotValid ? 'range not complete' :
           priceClose > R1 ? 'ABOVE R — broken out' :
           priceClose < S1 ? 'BELOW S — broken down' :
@@ -272,13 +287,13 @@ f_pressLine(_isLong) =>
               : (osc < 50 ? f_row('Pressure', pressTxt + ' — already turned down ✓')
                           : f_row('Pressure', pressTxt + ' — has NOT turned yet'))
 
-// Is the nearest pivot helping or standing in the way?
-f_locLine(_isLong) =>
-    not pivotValid ? f_row('Location', 'range not complete') :
-      nearestName == 'P' ? f_row('Location', 'P ' + f_pctTxt(nearestVal) + ' — mid-range, no edge') :
-      _isLong == (nearestName == 'S')
-          ? f_row('Location', nearestName + ' ' + f_pctTxt(nearestVal) + ' — with you, room ahead ✓')
-          : f_row('Location', nearestName + ' ' + f_pctTxt(nearestVal) + ' — in the way, short runway')
+// How far the implied move can travel before it meets known supply or demand,
+// stated so it can be read straight against an alert's "needs a move of".
+f_runwayLine(_isLong) =>
+    [rw, nm] = f_runway(_isLong)
+    na(rw) ? f_row('Runway', 'clear — no pivot in the way') :
+      rw < 1.0 ? f_row('Runway', str.tostring(rw, '#.##') + '% to ' + nm + ' — almost none') :
+          f_row('Runway', str.tostring(rw, '#.##') + '% to ' + nm + ' — target must fit under it')
 
 f_phaseTip(_isTerminal, _isLong, _perfect, _cancel, _invalid) =>
     tag   = _isTerminal ? 'T 13  TERMINAL' : 'M 9  MOMENTUM'
@@ -296,8 +311,12 @@ f_phaseTip(_isTerminal, _isLong, _perfect, _cancel, _invalid) =>
               'A stretched ' + ran + ', not a turn. Phase 1 of 2 —\nthe weaker and far more frequent of the two.' +
                   (_perfect ? '\n★ bar 8 or 9 pushed past bars 6 and 7.' : '')
     tag + star + ' · ' + side + RULE + facts + '\nWHAT IT MEANS\n' + means +
-      '\n\nWITH RIPTIDE\n' + f_pressLine(_isLong) + f_locLine(_isLong) +
-      '\nMeasured at NO edge — the opposite direction\nscored better than this one. Use it to see where a\nrun has stretched, never as a reason to enter.'
+      '\n\nWITH RIPTIDE — WHAT TO LOOK FOR\n' +
+      f_row('Wait for', '🎯 ' + turn + ' on this symbol') +
+      f_row('Its stop', 'should sit inside ' + f_lvl(_invalid)) +
+      f_runwayLine(_isLong) + f_pressLine(_isLong) +
+      f_row('Skip', '👀 WATCH and 👀 SWEEP — one per move') +
+      '\nThe count does NOT improve a 🎯\'s odds. Measured,\nthe opposite direction scored better than this one.\nUse it for the room and the invalidation above —\nnever as the reason to enter.'
 
 f_pivotTip(_name, _level, _isDeveloping) =>
     role  = _name == 'R' ? 'RESISTANCE' : _name == 'S' ? 'SUPPORT' : 'PIVOT'
@@ -323,9 +342,15 @@ f_pivotTip(_name, _level, _isDeveloping) =>
              '\n\n⚠ DEVELOPING — built from the range still forming.\nIt WILL move before the range closes and it raises\nno alerts. A sketch, never a level.' : ''
     _name + ' · ' + role + ' · ' + i_htf + RULE + facts +
       '\nWHAT IT MEANS\n' + built + '\nA DeMark pivot weights the range by where it closed,\nso an up-close and a down-close range give different\nlevels. It marks where a move PAUSES — not which\nway it goes. A close beyond it flips the role.' +
-      '\n\nWITH RIPTIDE\n' + f_row('Pressure', pressTxt) +
-      'Compare ' + f_pctTxt(_level) + ' against the "needs a move of"\nline on an alert. A 🎯 that must travel further than\nthis is asking price to clear known ' +
-      (above ? 'supply' : 'demand') + '\non the way.' + warn
+      '\n\nWITH RIPTIDE — WHAT TO LOOK FOR\n' +
+      (above
+         ? f_row('🎯 LONG', 'runway only ' + f_pctTxt(_level) + ' before ' + _name) +
+           f_row('', 'check "needs a move of" fits under it') +
+           f_row('🎯 SHORT', 'good location — selling into ' + _name)
+         : f_row('🎯 LONG', 'good location — ' + _name + ' is support below') +
+           f_row('🎯 SHORT', 'runway only ' + f_pctTxt(_level) + ' before ' + _name) +
+           f_row('', 'check "needs a move of" fits under it')) +
+      f_row('Pressure', pressTxt) + warn
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  MOMENTUM EXHAUSTION  (TD Setup, 9)
