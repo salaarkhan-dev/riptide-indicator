@@ -178,4 +178,8 @@ async def main():
         print(f"    {b['name']:<34}{b['ret']:>+6.0f}% / {b['dd']:.0f}% DD"
               f"  = {b['score']:.2f}")
 
-asyncio.run(main())
+# Guarded so another study can import simulate() without running this whole
+# report as a side effect. research/studies/phase2_rule.py reuses the
+# simulator and got portfolio.py's entire output prepended to its own.
+if __name__ == "__main__":
+    asyncio.run(main())
