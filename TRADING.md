@@ -208,6 +208,30 @@ a warning rather than an edge.
 > −0.72 with confirmed slots). The slot rules never had an edge to allocate;
 > they were rationing a stream measured at recovery 0.05. See `PHASE2.md`.
 >
+> **AND THE FEE RATE WAS WRONG TOO.** `portfolio.py` hardcoded
+> `fee_maker=0.02, fee_taker=0.06` — the exact pair `research/harness.py`
+> withdrew on 10 Sep as *"roughly TWICE the true cost, and three times on the
+> taker side"*, derived from a real settlement rather than a fee table. The
+> study silently opted out of its own project's correction. Fixed to the
+> harness defaults (0.010 / 0.022); re-run at the corrected rates:
+>
+> | rule | ret/DD leaked | ret/DD fixed, old fees | **fixed + real fees** |
+> |---|---|---|---|
+> | everything, no rules | 1.30 | 1.16 | **2.54** |
+> | max 8 open | 2.21 | 1.74 | **1.98** |
+> | max 8, 3 slots confirmed | 3.67 | 3.41 | **3.83** |
+> | max 8, stop day at −6% | 1.03 | 2.83 | **5.64** |
+>
+> The structure the harness models is what matters, and it is what the fee
+> discussion usually gets wrong: **a limit entry and a limit target are BOTH
+> MAKER**, so a winner pays maker×2 and only a stopped-out trade pays the taker
+> leg. On MEXC today maker is 0% on 118 of the 120 scanned symbols and taker is
+> 0% on 82 — so on most of this universe **a winning trade pays no fee at all**.
+>
+> Note also that the daily-loss-stop rows now rank first, where the text below
+> calls them noise. That text was written at the leaked, over-charged numbers.
+> The question is worth re-asking; the answer below is not evidence either way.
+>
 > Read everything below as ordinal at best, and prefer `phase2_rule.out`.
 
 This is where the remaining improvement is. Entry filters have failed 21

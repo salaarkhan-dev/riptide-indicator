@@ -160,7 +160,19 @@ def simulate(rows, rk: Rules):
 
 
 async def main():
-    rows = await load(target_r=TRACK_TARGET_R, fee_maker=0.02, fee_taker=0.06)
+    # FEES: the harness defaults, NOT the list rates. This line used to pass
+    # fee_maker=0.02, fee_taker=0.06 — the exact pair research/harness.py
+    # withdrew on 10 Sep as "roughly TWICE the true cost, and three times on
+    # the taker side", derived from a real settlement rather than a fee table.
+    # A study that hardcodes the superseded rate silently opts out of the
+    # correction, which is what this one had been doing.
+    #
+    # The structure matters more than the level and is already right in the
+    # harness: a limit entry and a limit target are BOTH MAKER, so a winner
+    # pays maker x2; only a stopped-out trade pays the taker leg. On MEXC today
+    # maker is 0% on 118 of the 120 scanned symbols and taker is 0% on 82, so a
+    # winning trade on most of this universe pays nothing at all.
+    rows = await load(target_r=TRACK_TARGET_R)
     async with aiohttp.ClientSession() as s:
         cs = await fetch_candles(s, "BTC_USDT", BTC_REGIME_INTERVAL)
         if len(cs) > 40:
