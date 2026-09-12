@@ -101,6 +101,12 @@ compltedPhases = showPhaseMarkers == 'Completed Only'
 showNone       = showPhaseMarkers == 'None' ? false : true
 showSteps      = showNone and not compltedPhases
 
+// yloc.belowbar / yloc.abovebar pin a label to the candle, which is fine on a
+// bare chart and useless on a real one — Riptide's own MSS, Pivot and Day
+// markers live in exactly the same place. Measuring the gap in ATR rather than
+// in ticks keeps it looking the same on a 78000 chart and a 0.0001 one.
+markerPad = input.float(0.9, 'Marker spacing (ATR)', minval = 0, maxval = 5, step = 0.1, display = display, group = group_phase9, tooltip = 'How far the M9 and T13 markers sit from the candle, in ATR.\n\nRaise it if they collide with other indicators\' labels; 0 puts them back against the bar.')
+
 phaseSRLevels = input.bool(true, 'Momentum Support & Resistance Levels', group = group_phase9, tooltip = 'The extreme of the 9-bar Momentum window, projected forward.\n\nIt is the level that CANCELS the sequence: a close beyond it ends the Terminal count. So it doubles as the "am I still in this idea" line, and every marker tooltip quotes its exact price and distance.\n\nEach level stays until price crosses it, then disappears.')
 stopLevels    = input.bool(false, 'Momentum & Terminal Invalidation Levels', group = group_phase9, tooltip = 'Where the reversal read is WRONG, drawn as blue dots.\n\nA measured extension beyond the phase extreme: (2 × extreme) − the opposing price of that bar.\n\nUseful as a sanity check on a Riptide stop — if the bot\'s stop sits well inside this, the trade is tighter than the structure the count implies.')
 
@@ -146,6 +152,12 @@ priceLow   = low
 priceClose = close
 
 nzVolume = nz(volume)
+
+// The unit the marker offset is measured in, so spacing survives a change of
+// symbol or of price scale.
+atr14 = ta.atr(14)
+padUp = nz(atr14, 0) * markerPad
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  RANGE PIVOT VALUES — computed EARLY so the markers can quote them
@@ -435,7 +447,7 @@ plot(stopLevels and buyPhaseStopLevel > 0 ? buyPhaseStopLevel : na, "ME Buy Inva
 // tooltip, and a 6px glyph carries no meaning either. Pine keeps the most
 // recent max_labels_count and drops the rest, so the history self-trims.
 if showNone and buyCount == 9
-    label.new(bar_index, na, buyPhaseQualified ? 'M9★' : 'M9', xloc.bar_index, yloc.belowbar,
+    label.new(bar_index, priceLow - padUp, buyPhaseQualified ? 'M9★' : 'M9', xloc.bar_index, yloc.price,
               color.new(#00897b, 10), label.style_label_up, color.white, size.small,
               text.align_center,
               f_phaseTip(false, true, buyPhaseQualified, buyPhaseResistance, buyPhaseStopPrice, 0.))
@@ -471,7 +483,7 @@ sellPhaseStopLevel := sellCount == 9 ? sellPhaseStopPrice : priceClose > sellPha
 plot(stopLevels and sellPhaseStopLevel > 0 ? sellPhaseStopLevel : na, "ME Sell Invalidation", color.blue, 1, plot.style_circles, display = display)
 
 if showNone and sellCount == 9
-    label.new(bar_index, na, sellPhaseQualified ? 'M9★' : 'M9', xloc.bar_index, yloc.abovebar,
+    label.new(bar_index, priceHigh + padUp, sellPhaseQualified ? 'M9★' : 'M9', xloc.bar_index, yloc.price,
               color.new(#c62828, 10), label.style_label_down, color.white, size.small,
               text.align_center,
               f_phaseTip(false, false, sellPhaseQualified, sellPhaseSupport, sellPhaseStopPrice, 0.))
@@ -545,7 +557,7 @@ buyExhaustionStopLevel := buyExhaustionCount == 13 ? buyExhaustionStopPrice : pr
 plot(stopLevels and buyExhaustionStopLevel > 0 ? buyExhaustionStopLevel : na, "TE Buy Invalidation", color.blue, 1, plot.style_circles, display = display)
 
 if showNone and startBuyExhaustion13 and buyExhaustionCount != buyExhaustionCount[1] and buyExhaustionCount == 13
-    label.new(bar_index, na, 'T13', xloc.bar_index, yloc.belowbar, color.new(#1b5e20, 0),
+    label.new(bar_index, priceLow - padUp, 'T13', xloc.bar_index, yloc.price, color.new(#1b5e20, 0),
               label.style_label_up, color.white, size.small, text.align_center,
               f_phaseTip(true, true, false, buyPhaseResistance, buyExhaustionStopPrice, buyExhaustionTargetPrice))
 
@@ -611,7 +623,7 @@ sellExhaustionTargetLevel := sellExhaustionCount == 13 ? sellExhaustionTargetPri
 plot(sellExhaustionTargetLevel > 0 ? sellExhaustionTargetLevel : na, "TE Sell Target", color.gray, 1, plot.style_circles, display=display.none)
 
 if showNone and startSellExhaustion13 and sellExhaustionCount != sellExhaustionCount[1] and sellExhaustionCount == 13
-    label.new(bar_index, na, 'T13', xloc.bar_index, yloc.abovebar, color.new(#b71c1c, 0),
+    label.new(bar_index, priceHigh + padUp, 'T13', xloc.bar_index, yloc.price, color.new(#b71c1c, 0),
               label.style_label_down, color.white, size.small, text.align_center,
               f_phaseTip(true, false, false, sellPhaseSupport, sellExhaustionStopPrice, sellExhaustionTargetPrice))
 
@@ -719,11 +731,33 @@ if barstate.islast and isPressureEnabled and hasVolume
 // ─────────────────────────────────────────────────────────────────────────────
 
 group_vwcb = 'Volume-Weighted Bars'
-vwcb = input.bool(true, 'Volume-Weighted Bars', group=group_vwcb, tooltip='Colours each bar by its volume against an 89-bar average.\n\nDark green / dark red — above the high multiplier. Someone was in a hurry.\nAqua / orange — below the low multiplier. Thin, and a thin move is easier to reverse.\nUncoloured — ordinary.\n\nA texture cue, not a signal. Riptide measures the same idea numerically as rvol on its sweep alerts.')
+
+// WHAT THE FOUR COLOURS MEAN, since nothing on the chart said so:
+//
+//   dark green   an UP bar on unusually HIGH volume   — someone was in a hurry
+//   dark red     a DOWN bar on unusually high volume  — same, the other way
+//   aqua         an UP bar on unusually LOW volume    — thin, easily reversed
+//   orange       a DOWN bar on unusually low volume   — thin, easily reversed
+//   uncoloured   ordinary volume — most bars
+//
+// THE LOW-VOLUME PAIR IS OFF BY DEFAULT NOW. "Unusually quiet" is a much
+// weaker statement than "unusually busy", it fires on roughly as many bars,
+// and two extra colours on a chart that already carries Riptide's own markers
+// is the kind of decoration that makes a reader stop seeing any of it. The
+// high-volume pair is the part worth looking at, so it keeps the default and
+// the other is one checkbox away.
+vwcb     = input.bool(true,  'Volume-Weighted Bars', group=group_vwcb, tooltip='Colours a bar when its volume is unusual against an 89-bar average.\n\nDARK GREEN — up bar, high volume. Someone was in a hurry.\nDARK RED — down bar, high volume. Same, the other way.\nAQUA — up bar, low volume. Thin, and a thin move is easy to reverse.\nORANGE — down bar, low volume.\nNO COLOUR — ordinary volume. Most bars.\n\nA texture cue, not a signal. Riptide measures the same idea numerically as rvol on its sweep alerts.')
+vwcbHigh = input.bool(true,  '  Mark high-volume bars', group=group_vwcb, tooltip='Dark green on an up bar, dark red on a down bar.\n\nThis is the half worth having: a bar that traded far more than usual is telling you something happened, and the colour is the only place the chart says so.')
+vwcbLow  = input.bool(false, '  Mark low-volume bars', group=group_vwcb, tooltip='Aqua on an up bar, orange on a down bar.\n\nOFF by default. "Unusually quiet" is a much weaker statement than "unusually busy", it fires about as often, and the extra two colours mostly compete with Riptide\'s own markers for attention. Switch it on if you want to see where a move was thin.')
 vSMA = ta.sma(nzVolume, input.int(89, '  Volume MA Length', display = display, group=group_vwcb))
-upThesh = input.float(1.618, '  High-Volume Multiplier', display = display, minval=1., step=.1, group=group_vwcb)
-loThesh = input.float(0.618, '  Low-Volume Multiplier', display = display, minval=.1, step=.1, group=group_vwcb)
-barcolor(vwcb and nzVolume != 0 ? nzVolume > vSMA * upThesh ? open < close ? #006400 : #910000 : nzVolume < vSMA * loThesh ? open < close ? #7FFFD4 : #FF9800 : na : na, title='Volume-Weighted Bars', editable = false)
+upThesh = input.float(1.618, '  High-Volume Multiplier', display = display, minval=1., step=.1, group=group_vwcb, tooltip='A bar counts as high-volume above this multiple of the average.')
+loThesh = input.float(0.618, '  Low-Volume Multiplier', display = display, minval=.1, step=.1, group=group_vwcb, tooltip='A bar counts as low-volume below this multiple of the average.')
+
+isHighVol = vwcb and vwcbHigh and nzVolume != 0 and nzVolume > vSMA * upThesh
+isLowVol  = vwcb and vwcbLow  and nzVolume != 0 and nzVolume < vSMA * loThesh
+barcolor(isHighVol ? (open < close ? #006400 : #910000) :
+         isLowVol  ? (open < close ? #7FFFD4 : #FF9800) : na,
+         title='Volume-Weighted Bars', editable = false)
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  DASHBOARD
@@ -874,7 +908,7 @@ if osc > upperBand and osc[1] < upperBand and isPressureEnabled and hasVolume
 if osc < lowerBand and osc[1] > lowerBand and isPressureEnabled and hasVolume
     alert(tickerTxt + ' volume pressure crossing oversold zone, price ' + priceCloseTxt)
 
-if nzVolume > vSMA * upThesh and vwcb
+if nzVolume > vSMA * upThesh and vwcb and vwcbHigh
     alert(tickerTxt + ' high volume, price ' + priceCloseTxt)
 
 var table logo = table.new(position.bottom_right, 1, 1)
