@@ -606,6 +606,57 @@ TRENDLINE_FRESH_BARS = int(os.getenv("RIPTIDE_TRENDLINE_FRESH_BARS", "2"))
 TRENDLINE_MAX_LINES = int(os.getenv("RIPTIDE_TRENDLINE_MAX_LINES", "20"))
 
 
+# ── EXHAUSTION COUNTS (riptide/exhaust.py) ──────────────────────────────────
+#
+# IT SHIPS OFF. The counts are a chart aid whose only measurement came back
+# pointing the wrong way, so the stream is built, tested and dormant: turn it on
+# with /exhaust on when you want to watch it for a while, and off again when you
+# are done. Nothing about it runs until you do.
+#
+# THE REST OF THE DEFAULTS ARE A VOLUME DECISION AND NOTHING ELSE. Rows a day
+# across the real universe, 59 symbols over 333 days, from
+# research/studies/exhaust_rate.py (rerun it; do not trust this comment):
+#
+#     tf     M9/day   M9*/day   T13/day    both   both*
+#     15m      128        96        40      167     136
+#     30m       66        49        19       85      68
+#     1h        34        24         9       43      34
+#     ALL      227       169        68      295     237
+#
+# Everything on is 295 rows a day — three and a half times Riptide's entire
+# alert volume and sixteen times the number of 🎯 picks. Adding that much with
+# NO measured edge, to a chat whose one measured finding is "take the 🎯 and
+# ignore the rest", would be actively harmful even switched on deliberately.
+#
+# So when it is switched on it starts in the quiet corner of that table: 1h
+# only, and a plain 9 must be PERFECTED to count. ~34 a day over at most 24
+# hourly closes, which sits beside the trendline digest's ~37. Widen it
+# deliberately, using the table above.
+#
+# AND THE MEASUREMENT WAS NOT MERELY ABSENT, IT CAME BACK NEGATIVE. A 🎯
+# landing near a completed count scored no better, and the OPPOSITE direction
+# benefited more (+0.273 against +0.093). See research/studies/exhaustion.py.
+EXHAUST_ALERTS = os.getenv("RIPTIDE_EXHAUST_ALERTS", "0") == "1"
+EXHAUST_INTERVALS = tuple(dict.fromkeys(
+    i.strip() for i in
+    os.getenv("RIPTIDE_EXHAUST_INTERVALS", "Min60").split(",") if i.strip()))
+# "both", "momentum" or "terminal". The biggest volume lever after the
+# timeframe — terminal alone is 68 of the 295, under a quarter of the traffic.
+EXHAUST_KINDS = os.getenv("RIPTIDE_EXHAUST_KINDS", "both").strip().lower()
+if EXHAUST_KINDS not in ("both", "momentum", "terminal"):
+    log.warning("RIPTIDE_EXHAUST_KINDS=%r is not both/momentum/terminal, "
+                "using both", EXHAUST_KINDS)
+    EXHAUST_KINDS = "both"
+# Whether a plain 9 counts or only a perfected one. 169 of 227 nines perfect
+# (74%), so this is not the volume lever the timeframe is — but an unperfected 9
+# is the weakest thing the indicator prints and the most likely to be misread.
+EXHAUST_PERFECT_ONLY = os.getenv("RIPTIDE_EXHAUST_PERFECT_ONLY", "1") == "1"
+EXHAUST_FRESH_BARS = int(os.getenv("RIPTIDE_EXHAUST_FRESH_BARS", "2"))
+# Same cap and same reason as TRENDLINE_MAX_LINES above: the 4096-character
+# limit is what guarantees the message sends, this is what keeps it readable.
+EXHAUST_MAX_LINES = int(os.getenv("RIPTIDE_EXHAUST_MAX_LINES", "20"))
+
+
 def _min_fresh(name: str, value: int) -> int:
     """
     Freshness windows below 2 bars send nothing at all, ever.
@@ -632,6 +683,8 @@ FRESH_BARS = _min_fresh("RIPTIDE_FRESH_BARS", FRESH_BARS)
 SWEEP_FRESH_BARS = _min_fresh("RIPTIDE_SWEEP_FRESH_BARS", SWEEP_FRESH_BARS)
 TRENDLINE_FRESH_BARS = _min_fresh("RIPTIDE_TRENDLINE_FRESH_BARS",
                                   TRENDLINE_FRESH_BARS)
+EXHAUST_FRESH_BARS = _min_fresh("RIPTIDE_EXHAUST_FRESH_BARS",
+                                EXHAUST_FRESH_BARS)
 
 
 @dataclass

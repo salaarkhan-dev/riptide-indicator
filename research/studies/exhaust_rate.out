@@ -1,0 +1,22 @@
+EXHAUSTION WATCH — COMPLETED COUNTS PER DAY ACROSS THE UNIVERSE
+59 symbols requested · 333 days · Min15+Min30+Min60
+
+Rows in a digest, not messages: the watch sends one digest per bar
+close carrying every symbol that completed on it.
+
+tf        symbols    M9/day   M9*/day   T13/day     both    both*
+Min15          59       128        96        40      167      136
+Min30          59        66        49        19       85       68
+Min60          59        34        24         9       43       34
+ALL                     227       169        68      295      237
+
+WHAT THE COLUMNS MEAN FOR THE SETTINGS
+  'both'   = RIPTIDE_EXHAUST_KINDS=both with PERFECT_ONLY=0
+  'both*'  = RIPTIDE_EXHAUST_KINDS=both with PERFECT_ONLY=1
+  M9*      = KINDS=momentum, PERFECT_ONLY=1
+  T13      = KINDS=terminal  (the perfected gate does not apply)
+
+THE SHIPPED DEFAULT is 1h + both + perfected only: 34 a day.
+EVERYTHING ON is 295 a day, against roughly 85
+alerts and 18 picks from the bot itself. That ratio is the whole
+reason the default is the quiet corner of this table.

@@ -12,6 +12,7 @@ import time
 
 import aiohttp
 
+from . import exhaust
 from . import journal
 from . import telegram as tg
 from . import market
@@ -50,6 +51,7 @@ HELP = (
     "/scan — run a scan now\n"
     "/trend on|off — filter setups by the higher-timeframe trend\n"
     "/trendline on|off|4h — trendline-break heads-ups (not trades)\n"
+    "/exhaust on|off|30m — 9 and 13 count heads-ups (not trades)\n"
     "/pause — record setups but stop sending\n"
     "/resume — start sending again\n"
     "/update — check GitHub for a new build now\n"
@@ -391,6 +393,25 @@ def status_text(db, state) -> str:
             tl_line += "\n           no close scanned yet since restart"
     else:
         tl_line = "off · /trendline on"
+    # Same treatment for the exhaustion watch, and for the same reason: it runs
+    # on its own timer, so "alerts on" says nothing about whether it woke.
+    if exhaust.enabled(db):
+        ex_n = db.execute("SELECT COUNT(*) FROM seen_exhaust").fetchone()[0]
+        ex_line = (f"{'+'.join(tg.tf_label(t) for t in exhaust.intervals(db))}"
+                   f" · {exhaust.kinds(db)}"
+                   f"{' · perfected only' if exhaust.perfect_only(db) else ''}"
+                   f" · ~{_ex_rate(db)}/day · {ex_n} recorded · not in /stats")
+        c = exhaust.last_cycle
+        if c:
+            ex_line += (f"\n           last close {_fmt_ago(time.time() - c['at'])}"
+                        f" ago · {c['seen']} found · {c['dupe']} already sent "
+                        f"· {c['stale']} not fresh · {c['sent']} SENT")
+            if c["failed"]:
+                ex_line += f" · {c['failed']} FETCH FAILED"
+        else:
+            ex_line += "\n           no close scanned yet since restart"
+    else:
+        ex_line = "off · /exhaust on"
     poi_line = ("POI required" if POI_REQUIRED else "POI not required")
     poi_line += (f" · grade {MIN_GRADE} and better"
                  if MIN_GRADE != "C" else " · all grades")
@@ -410,6 +431,7 @@ def status_text(db, state) -> str:
         f"trend      {trend_line}\n"
         f"outcomes   {track_line}\n"
         f"trendline  {tl_line}\n"
+        f"exhaust    {ex_line}\n"
         f"oi log     {oi_line}\n"
         f"uptime     {_fmt_ago(time.time() - state.get('started', time.time()))}\n"
         f"last scan  {scan_line}\n"
@@ -700,6 +722,135 @@ def trendline_cmd(db, text: str) -> str:
             f"<code>/trendline off</code> — stop them")
 
 
+# Completed counts a day per timeframe, as (M9, M9 perfected, T13), measured
+# over 59 symbols and 333 days in research/studies/exhaust_rate.py. It is the
+# number that set every default: all three timeframes unfiltered is 295 rows a
+# day, three and a half times the bot's entire alert volume. Printed by
+# /exhaust for the same reason /trendline prints its own — the rate is the
+# product decision, not a footnote to it.
+EXHAUST_RATE = {"Min15": (128, 96, 40),
+                "Min30": (66, 49, 19),
+                "Min60": (34, 24, 9)}
+
+
+def _ex_rate(db, tfs=None, want=None, perfect=None) -> int:
+    """Alerts a day at a given setting. Defaults to the live one, and takes
+    overrides so a message can quote the rate a change WOULD produce."""
+    tfs = tuple(tfs) if tfs is not None else exhaust.intervals(db)
+    want = want if want is not None else exhaust.kinds(db)
+    perfect = perfect if perfect is not None else exhaust.perfect_only(db)
+    total = 0
+    for t in tfs:
+        nine, nine_perf, thirteen = EXHAUST_RATE.get(t, (0, 0, 0))
+        if want in ("both", "momentum"):
+            total += nine_perf if perfect else nine
+        if want in ("both", "terminal"):
+            total += thirteen
+    return total
+
+
+def exhaust_cmd(db, text: str) -> str:
+    """/exhaust — read the state, or set the switch, timeframes, kind or
+    the perfected-only gate."""
+    parts = text.strip().split()
+    arg = parts[1].lower() if len(parts) > 1 else ""
+
+    if arg in ("on", "off"):
+        exhaust.set_enabled(db, arg == "on")
+        return (f"Exhaustion heads-ups <b>{arg.upper()}</b> · "
+                f"{'+'.join(tg.tf_label(t) for t in exhaust.intervals(db))}"
+                + (f"\n<i>about {_ex_rate(db)} a day across the universe, in "
+                   f"one digest per bar close.</i>" if arg == "on" else "")
+                + "\n\n<i>This overrides RIPTIDE_EXHAUST_ALERTS in "
+                  "riptide.conf and survives updates, so a change on GitHub "
+                  "will not take effect until you set it back the other "
+                  "way.</i>")
+
+    if arg in ("both", "momentum", "terminal"):
+        exhaust.set_kinds(db, arg)
+        which = {"both": "both counts",
+                 "momentum": "the 9-count only (M9)",
+                 "terminal": "the 13-count only (T13)"}[arg]
+        return (f"Now sending <b>{which}</b> · about <b>{_ex_rate(db, want=arg)}"
+                f" a day</b>.\nTakes effect at the next close — no restart.\n\n"
+                f"<i>The 13-count is the rarer and stronger of the two and is "
+                f"about a quarter of the traffic. Neither has a measured edge; "
+                f"this picks how much of nothing you would like to read.</i>")
+
+    if arg in ("perfect", "perfected"):
+        on = not (len(parts) > 2 and parts[2].lower() in ("off", "0", "no"))
+        exhaust.set_perfect(db, on)
+        return (f"Perfected 9s only: <b>{'ON' if on else 'off'}</b> · about "
+                f"<b>{_ex_rate(db, perfect=on)} a day</b>.\n"
+                f"Takes effect at the next close — no restart.\n\n"
+                f"<i>A perfected 9 is the M9★ on the chart: bar 8 or 9 "
+                f"undercut bars 6 and 7. 74% of 9s perfect, so this is not the "
+                f"volume lever the timeframe is — but an unperfected 9 is the "
+                f"weakest thing the indicator prints.</i>")
+
+    if arg:
+        want = []
+        for w in arg.replace("+", ",").split(","):
+            w = w.strip()
+            tf = _TF_WORD.get(w, w if w in BAR_SECONDS else "")
+            if tf not in EXHAUST_RATE:
+                return ("Timeframes must come from "
+                        + ", ".join(f"<code>{tg.tf_label(t)}</code>"
+                                    for t in EXHAUST_RATE)
+                        + " — e.g. <code>/exhaust 30m,1h</code>.\n\n"
+                          "<i>Not because the others would break anything — "
+                          "because those are the three whose alert rate has "
+                          "been counted, and the rate is the only thing that "
+                          "decides whether this stays readable.</i>")
+            want.append(tf)
+        exhaust.set_intervals(db, want)
+        rate = _ex_rate(db, tfs=want)
+        warn = ("\n\n⚠️ <i>That is a feed, not an alert. Anything you scroll "
+                "past also buries the ones you would have opened. "
+                "<code>/exhaust terminal</code> thins it hardest.</i>"
+                if rate > 80 else "")
+        return (f"Exhaustion heads-ups now on <b>"
+                f"{'+'.join(tg.tf_label(t) for t in want)}</b> · about "
+                f"<b>{rate} a day</b>.\nTakes effect at the next close "
+                f"— no restart." + warn)
+
+    on = exhaust.enabled(db)
+    tfs = exhaust.intervals(db)
+    want, perfect = exhaust.kinds(db), exhaust.perfect_only(db)
+    rows = "\n".join(
+        f"  <code>/exhaust {tg.tf_label(t):<4}</code> ~{_ex_rate(db, tfs=(t,)):>3}"
+        f" a day on its own" + ("   <b>← watched</b>" if t in tfs else "")
+        for t in EXHAUST_RATE)
+    return (f"<b>Exhaustion count heads-ups</b> — "
+            f"{'ON' if on else 'off'} · "
+            f"{'+'.join(tg.tf_label(t) for t in tfs)} · {want}"
+            f"{' · perfected only' if perfect else ''} · "
+            f"<b>~{_ex_rate(db)} a day</b>\n\n"
+            f"<i>The 9-count and 13-count off the Riptide reversal indicator, "
+            f"on every symbol at once, in one digest per bar close. A count "
+            f"measures how long a move has been going against itself — a "
+            f"completed one says the move is old, not that it is over.</i>\n\n"
+            f"<b>STRONG LONG</b> / <b>STRONG SHORT</b> <i>are completed "
+            f"13-counts (T13). </i><b>possible long</b> / <b>possible short</b>"
+            f"<i> are completed 9-counts (M9★).</i>\n\n"
+            f"<b>It is not a trade, and this one is worse than that.</b> "
+            f"<i>Scored through the same harness as everything else here, a 🎯 "
+            f"landing near a completed count did no better than one landing "
+            f"anywhere else — and the OPPOSITE direction scored three times as "
+            f"well (+0.273 against +0.093, and +0.296 against +0.057 on the "
+            f"sent stream at 2.3 SE). A signal whose control beats it is a "
+            f"shared regime read backwards. There is no entry, no stop and no "
+            f"grade on it, and it is not in /stats.</i>\n\n"
+            f"<b>Rate per timeframe</b>, at the current kind and gate:\n{rows}\n"
+            f"<i>All three, unfiltered, is 295 rows a day — three and a half "
+            f"times every alert this bot sends, and sixteen times the "
+            f"picks.</i>\n\n"
+            f"<code>/exhaust 30m,1h</code> — watch both\n"
+            f"<code>/exhaust terminal</code> — 13-counts only, far fewer\n"
+            f"<code>/exhaust perfect off</code> — plain 9s too, many more\n"
+            f"<code>/exhaust off</code> — stop them")
+
+
 async def handle_command(sess, db, state, text: str) -> None:
     cmd = text.strip().split()[0].lower().lstrip("/").split("@")[0]
 
@@ -760,6 +911,9 @@ async def handle_command(sess, db, state, text: str) -> None:
 
     elif cmd == "trendline":
         await tg.tg_send(sess, trendline_cmd(db, text))
+
+    elif cmd == "exhaust":
+        await tg.tg_send(sess, exhaust_cmd(db, text))
 
     elif cmd == "pause":
         meta_set(db, "alerts_paused", "1")

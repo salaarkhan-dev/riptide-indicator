@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
-from . import journal, market, tracker, watch
+from . import exhaust, journal, market, tracker, watch
 from .config import DB_PATH, INTERVAL
 from .engine import Early, Setup, Sweep
 
@@ -39,6 +39,8 @@ def db_init():
     # the above: it is a heads-up list, nothing in it is a trade, and none of
     # it may reach the tables /stats scores.
     watch.init(db)
+    # The exhaustion watch, for the same reason and on the same terms.
+    exhaust.init(db)
     return db
 
 

@@ -10,6 +10,7 @@ import time
 import aiohttp
 
 from . import telegram as tg
+from . import exhaust
 from . import watch
 from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
                      INTERVALS, POI_REQUIRED, SCAN_ON_START, TG_COMMANDS,
@@ -107,6 +108,14 @@ async def main() -> None:
         if watch.enabled(db):
             log.info("trendline watch on, %s bars, slope >= %.2f",
                      "+".join(watch.intervals(db)), watch.min_slope(db))
+        # The exhaustion watch, on the same terms: always started so /exhaust
+        # works without a restart, and an idle loop costs one sleep per close.
+        tasks.append(asyncio.create_task(
+            exhaust.exhaust_loop(sess, db, state), name="exhaust"))
+        if exhaust.enabled(db):
+            log.info("exhaustion watch on, %s bars, %s%s",
+                     "+".join(exhaust.intervals(db)), exhaust.kinds(db),
+                     ", perfected only" if exhaust.perfect_only(db) else "")
         if TG_COMMANDS:
             tasks.append(asyncio.create_task(
                 command_loop(sess, db, state), name="commands"))
