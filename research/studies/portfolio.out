@@ -1,0 +1,25 @@
+300 USDT · 10x · target 2R · 41.6 days · maker/taker fees
+'ret/DD' is return divided by max drawdown — the column that matters.
+
+  rules                              trades   win      end     ret  maxDD  ret/DD lose run  blocked
+  everything, no rules                  983   40%      438    +46%    40%    1.16       23      338
+  max 12 open                           866   40%      472    +57%    29%    1.95       16      455
+  max 8 open                            633   41%      459    +53%    31%    1.74       14      688
+  max 5 open                            438   38%      281     -6%    44%   -0.14       14      883
+  max 3 open                            268   41%      330    +10%    21%    0.48       10     1053
+  max 8, max 5 same direction           625   40%      382    +27%    25%    1.09       12      696
+  max 8, max 3 same direction           469   40%      341    +14%    19%    0.74       11      852
+  max 8, 3 slots for confirmed          489   44%      645   +115%    34%    3.41       10      832
+  max 8, early needs BTC                519   39%      344    +15%    41%    0.36       15      802
+  max 8, stop day at -4%                551   41%      460    +53%    19%    2.85       11      770
+  max 8, stop day at -6%                577   41%      471    +57%    20%    2.83       14      744
+  max 8, stop day at -10%               624   42%      505    +68%    26%    2.62       14      697
+  ALL RULES                             303   40%      338    +13%    30%    0.42       13     1018
+  ALL RULES, flat sizing                306   40%      335    +12%    28%    0.42       14     1015
+  ALL RULES, risk 2%                    253   43%      545    +82%    39%    2.11        9     1068
+  ALL RULES, risk 0.5%                  328   38%      292     -3%    19%   -0.15       13      993
+
+  best by return per unit of drawdown:
+    max 8, 3 slots for confirmed        +115% / 34% DD  = 3.41
+    max 8, stop day at -4%               +53% / 19% DD  = 2.85
+    max 8, stop day at -6%               +57% / 20% DD  = 2.83

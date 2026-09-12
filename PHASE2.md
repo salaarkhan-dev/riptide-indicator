@@ -101,26 +101,90 @@ unstable or unmeasured, it says so.
 
 | rule | setting | why |
 |---|---|---|
-| Risk per trade | **0.5%** | Chosen. Return per unit of drawdown barely moves across 0.5/1/2% (2.39 / 2.11 / 2.00) — this is a pain choice, not an edge choice. 0.5% measured +12% return on 6% drawdown. |
-| Concurrent positions | **max 8** | Drawdown falls monotonically as the cap tightens, but below 8 return falls faster. ret/DD: no cap 1.30, max 12 1.84, max 8 2.21, max 5 0.89, max 3 0.05. |
-| Reserve for confirmed | **3 slots** | Best single rule measured, and the only one with a mechanism: confirmed are worth 3.4× an early signal (+0.227 vs +0.021) and early outnumber them 5.6:1, so without a rule the worse signal crowds out the better one purely by arriving first. |
-| Same-direction cap | **none** | Sounds like correlation control, measured badly: 0.47 against 2.21. It blocks winners during exactly the trending moves that pay. |
-| Daily loss limit | **none** | Unproven. −4% scored 2.67, −6% scored 1.54, −10% never fired. A threshold that flips the result like that is noise. |
+| Risk per trade | **0.5%** | Chosen. A pain choice, not an edge choice — ret/DD barely moves across 0.5/1/2%. At 0.5% on the picked stream the study below shows +175% on 15% max drawdown over 333 days. |
+| Concurrent positions | **max 8** | Kept as a safety bound, not for return: on the picked stream it blocks 9 trades in 333 days. The old justification ("drawdown falls monotonically as the cap tightens") was an artifact of the simulator leak — corrected, it is not even ordered. |
+| Reserve for confirmed | **none** | Best rule for the SENT stream, a drag on the PICKED one: 8.77 against 11.74, and 2.81 against 5.54 on the first half. The pick rule already ranks confirmed ahead of early inside its window. |
+| Same-direction cap | **none** | Sounds like correlation control, measured badly on the sent stream (0.47 against 2.21) and never re-asked on the picked one. Left out, and flagged as unmeasured rather than settled. |
+| Daily loss limit | **none** | Unproven, and its numbers came from the leaking simulator. Post-fix the −4% and −6% stops rank 2nd and 3rd on the sent stream, which is a reason to re-ask the question, not to ship one. |
 | Break-even | **off** | Loses at every arm level on both signal types. Arming at 1R costs −2.5 SE and drops total R from +53.1 to +34.8. It converts trades that would have reached target into +0.1R scratches. |
 | Entry | **limit at the stated entry** | This is literally what was backtested: "bars after the gap forms in which a limit at the entry may fill." |
 | Fill window | **10 bars, then cancel** | Past this the backtest records "never filled", which is a result, not a discard. ~19% of grade B never fill and the +0.173 R/signal is the average *after* those misses. |
 | Target | **2R** | Measured monotone 1R +20.4, 1.5R +39.5, 2R +52.8, 3R +61.9 total R, though each step is ~1.5 SE. |
 | Daily quota | **none** | No measured limit on how many alerts to take per day ever came out of this project. Slots are the scarce resource, not signals. |
 
-**Do not stack every rule.** All of them together scored 2.11, worse than
-reserving slots alone at 3.67. Each rule blocks trades and stacking them blocks
-the winners too.
+**Do not stack every rule.** Each rule blocks trades, and stacking them blocks
+the winners too. The study below is the clearest case: adding confirmed-slot
+reservation on top of the pick rule costs half its first-half score.
+
+---
+
+## ANSWERED — which rule the bot trades
+
+`research/studies/phase2_rule.out`. 59 symbols, 333 days, 15m+30m+1h, 300 USDT
+at 10x, maker/taker fees, risk 0.5%. Of 9071 signals sent, 2905 (32%) carry a 🎯.
+
+| arm | fed | taken | win | ret | maxDD | **ret/DD** | 1st half | 2nd half |
+|---|---|---|---|---|---|---|---|---|
+| everything, no rules | 9071 | 8832 | 36% | −29% | 89% | −0.33 | −0.80 | +2.49 |
+| slots: max 8 | 9071 | 5734 | 36% | −12% | 74% | −0.16 | −0.69 | +1.50 |
+| slots: max 8 + 3 confd | 9071 | 4281 | 35% | −51% | 70% | −0.72 | −0.83 | +0.31 |
+| PICK only, no cap | 2905 | 2905 | 38% | +164% | 15% | 10.99 | 4.70 | 4.04 |
+| **PICK + max 8** | 2905 | 2896 | 38% | **+175%** | **15%** | **11.74** | **5.54** | **4.22** |
+| PICK + max 8 + 3 confd | 2905 | 2749 | 38% | +143% | 16% | 8.77 | 2.81 | 4.16 |
+| PICK + max 8, no 15m | 1051 | 1051 | 39% | +53% | 13% | 4.14 | −0.13 | 6.63 |
+| slots 8 + 3 confd, no 15m | 4449 | 2494 | 36% | −1% | 50% | −0.03 | −0.71 | +1.75 |
+
+**The pick rule wins and it is not close.** Every take-everything-then-cap arm
+is NEGATIVE over the full window and negative in the first half. Every pick arm
+is strongly positive in **both** halves — the only arms in the table that are.
+
+**The slot rules never had an edge to allocate.** They were rationing a stream
+measured at recovery 0.05. Capping how much of nothing you take does not make it
+something; it just loses more slowly (−0.33 → −0.16).
+
+### So: `SELECT = the 🎯 pick, hard cap 8 concurrent.`
+
+Three consequences, each of which contradicts something written above it:
+
+**1. Do NOT reserve slots for confirmed.** 8.77 against 11.74, and 2.81 against
+5.54 on the first half. It is the best rule for the *sent* stream and a drag on
+the *picked* one — the pick rule already ranks confirmed ahead of early inside
+its own window, so reserving slots just blocks picks that had already won the
+comparison. `TRADING.md`'s recommendation does not transfer.
+
+**2. Do NOT exclude 15m.** This is the reverse of what the fee arithmetic
+predicted, and the reason is that the pick rule *selects within* the timeframe:
+
+| stream | n | net R/trade |
+|---|---|---|
+| 15m **sent** | 4622 | **−0.024** |
+| 15m **PICKED** | 1854 | **+0.064** |
+| 30m sent / picked | 2798 / 634 | +0.030 / +0.070 |
+| 1h sent / picked | 1651 / 417 | +0.048 / +0.112 |
+
+15m is a losing timeframe to take wholesale and a winning one to take
+selectively. Dropping it removes 64% of all picks and takes ret/DD from 11.74 to
+4.14 — and makes it *unstable*, −0.13 in the first half against +5.54 with 15m
+kept. **Keep it.**
+
+**3. The cap barely binds, and that is fine.** 2905 fed, 2896 taken — it blocks
+9 trades in 333 days. It is worth keeping anyway: it costs nothing measurable
+and it is the only thing standing between a bug and an unbounded position count.
+
+### Still to check before stage 1
+
+The 🎯 stream is ~2905 trades over 333 days — about **8.7 a day**, well above the
+8-slot cap in bursts. The cap's near-zero bite above says the two rarely collide,
+but that is a backtest with instant fills. Shadow mode should count how often a
+pick is refused for want of a slot in live conditions.
 
 ---
 
 ## What is still OPEN
 
-### 1. Which selection rule the bot trades — the central question
+### 1. ~~Which selection rule the bot trades~~ — ANSWERED ABOVE
+
+Kept for the record, because the *reason* it went unasked for so long matters.
 
 The project has **two** selection rules and they have never been compared,
 because they live in incompatible harnesses:
@@ -142,37 +206,47 @@ It needs one rule that answers, per signal, "do I place this order?"
 three-timeframe pipeline and runs `portfolio.simulate()` over it, so the judge
 is the same code and only the rows change.
 
-**Until that resolves, no order code should be written against either rule.**
+**This is now resolved — see the answer above.**
 
-### 2. The old portfolio number is not stable
+### 2. ~~The old portfolio number is not stable~~ — it was a BUG, not drift
 
-Rerunning `portfolio.py` unchanged today:
+My first reading of this was wrong, and the wrong reading was the comfortable
+one. Rerunning `portfolio.py` unchanged gave 5.47 where `TRADING.md` records
+3.67, and I wrote that off as a window sliding forward — "the ordering survived,
+the levels did not."
 
-| rule | TRADING.md | today |
-|---|---|---|
-| max 8, 3 slots for confirmed | 3.67 | **5.47** |
-| everything, no rules | 1.30 | **0.54** |
+It was a leaking simulator. `portfolio.py` sorted a trade's close ahead of its
+own open at equal timestamps, so a trade that filled and stopped inside ONE bar
+had its close silently dropped and its open parked in a dict nothing would ever
+clear. The first `max_open` of those pinned every slot **permanently**: the
+account traded month one and then sat frozen for eleven months, reporting a
+plausible return on a flattering drawdown.
 
-Same code, same rules, a window that slid forward ~42 days. **The ordering
-survived; the levels did not.** Treat every ret/DD level in `TRADING.md` as
-ordinal, not cardinal — and do not size an account off one.
+353 of 9071 rows are same-bar stop-outs. Fixed in `portfolio.py`, with the
+correction table in `TRADING.md`.
 
-### 3. 15m may have to be excluded entirely
+**What it cost:** on the 41.6-day window the recommended rule went from 138
+trades to 489, and its drawdown from a reported **13% to an actual 34%** — the
+one number anyone sizing an account would have used, wrong by nearly 3×. The
+claim that *"drawdown falls monotonically as the cap tightens"* was pure
+artifact: tighter caps leak slots faster.
 
-On the sent stream, net of fees (`fee_key.out`, n=4625):
+**The lesson worth keeping:** the tell was visible in the output all along —
+`max 12 open` and `everything, no rules` returned byte-identical rows, which no
+real cap does. Two separate reruns printed it and I read past it both times. A
+simulator that silently drops events produces numbers that look exactly like
+numbers.
 
-| tf | gross R | net R | fee as % of gross |
-|---|---|---|---|
-| **15m** | +0.0064 | **−0.0268** | **521%** |
-| 30m | +0.0486 | +0.0255 | 47% |
-| 1h | +0.0594 | +0.0435 | 27% |
+### 3. ~~15m may have to be excluded entirely~~ — ANSWERED, and reversed
 
-15m loses money after fees. The mechanism is not subtle — fee in R is
-`fee_pct / risk_pct`, and 15m's median stop is 1.01% against 1h's 2.04%, so
-every 15m trade pays roughly twice the fee per unit of risk.
+I predicted from the fee arithmetic that a bot must not be given 15m. The
+measurement says the opposite: picked 15m is **+0.064** net R/trade against
+**−0.024** sent, and excluding it takes ret/DD from 11.74 to 4.14. See above.
 
-A human skips a bad-looking 15m alert without noticing they did. **A bot takes
-every one.** `phase2_rule.py` asks whether this carries to the picked stream.
+The fee argument was not wrong, it was incomplete: `fee_pct / risk_pct` still
+makes 15m roughly twice as expensive per unit of risk as 1h, which is exactly
+why picked 15m (+0.064) trails picked 1h (+0.112). It just does not make it
+negative once the pick rule has chosen which ones to take.
 
 ### 4. Minimum order size at minimum capital
 

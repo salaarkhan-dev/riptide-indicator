@@ -169,6 +169,47 @@ a warning rather than an edge.
 
 ## Per portfolio
 
+> ## ⚠️ EVERY NUMBER IN THIS SECTION WAS PRODUCED BY A LEAKING SIMULATOR
+>
+> **Corrected 12 Sep.** `portfolio.py` sorted a trade's close ahead of its open
+> at equal timestamps. For a trade that filled and stopped out inside ONE bar,
+> its own close was therefore processed first, found nothing open, and silently
+> returned — and the open that followed added a position **nothing would ever
+> close**. The first `max_open` of those pinned every slot permanently.
+>
+> The account took a few hundred trades in month one and then nothing, while
+> the report showed plausible returns on flattering drawdowns. The visible tell
+> was there all along: `max 12 open` and `everything, no rules` returned
+> byte-identical rows.
+>
+> After the fix, on the same 41.6-day window:
+>
+> | rule | trades before | trades after | ret/DD before | after | **maxDD after** |
+> |---|---|---|---|---|---|
+> | everything, no rules | 162 | **983** | 1.30 | 1.16 | 40% |
+> | max 12 open | 162 | 866 | 1.84 | 1.95 | 29% |
+> | max 8 open | 128 | 633 | 2.21 | 1.74 | 31% |
+> | max 5 open | 76 | 438 | 0.89 | **−0.14** | 44% |
+> | max 8, 3 slots confirmed | 138 | 489 | 3.67 | 3.41 | **34%** |
+>
+> **What survives:** "max 8, 3 slots for confirmed" is still the best rule of
+> those tested, and the mechanism behind it is unchanged.
+>
+> **What does not:** the claim below that *"drawdown falls monotonically as the
+> cap tightens — 21 / 16 / 15 / 12 / 9%"*. Corrected, it reads 40 / 29 / 31 /
+> 44 / 21% — **not monotone, and not even ordered.** That claim was an artifact
+> of tighter caps leaking slots faster. The drawdown on the recommended rule is
+> **34%, not 13%** — the single most important number here for anyone sizing an
+> account, and it was wrong by a factor of nearly three.
+>
+> **And the framing was wrong too.** `research/studies/phase2_rule.py` reruns
+> this question on 333 days and three timeframes instead of 42 days and one,
+> and every take-everything-then-cap arm comes out NEGATIVE (−0.16 for max 8,
+> −0.72 with confirmed slots). The slot rules never had an edge to allocate;
+> they were rationing a stream measured at recovery 0.05. See `PHASE2.md`.
+>
+> Read everything below as ordinal at best, and prefer `phase2_rule.out`.
+
 This is where the remaining improvement is. Entry filters have failed 21
 times, and a 22nd idea — scanning fewer, more liquid symbols — failed its own
 pre-registered test in `universe.py`. Portfolio rules are the one family that

@@ -54,6 +54,24 @@ def simulate(rows, rk: Rules):
     # Sort on (time, kind, seq) — a Row is not orderable, and letting the
     # tuple fall through to it would compare objects and raise. seq keeps the
     # order stable so a rerun cannot silently reshuffle a tie.
+    #
+    # CLOSE-BEFORE-OPEN IS DELIBERATE AND IT LEAKED. Sorting kind 0 (close)
+    # ahead of kind 1 (open) frees a slot before the same instant's new entries
+    # compete for it, which is right — EXCEPT for a trade whose own fill and
+    # exit land on the same timestamp. There the trade's own close is processed
+    # first, finds nothing open, silently returns, and the open that follows
+    # adds a position NOTHING WILL EVER CLOSE.
+    #
+    # 353 of 9071 rows are same-bar stop-outs (filled and stopped inside one
+    # bar, r ~= -1). The first `max_open` of them pinned every slot: the
+    # account took 195 trades in month one and then nothing for eleven months,
+    # while the report showed a plausible-looking +34% on 7% drawdown. A cap of
+    # 12 and no cap at all returned identical rows, which was the visible tell.
+    #
+    # Fixed at the OPEN instead of by reordering: a same-timestamp trade is
+    # taken (it still has to pass every cap and the margin check) and realised
+    # immediately, holding a slot for zero time, which is what a stop-out
+    # inside the entry bar actually is. Its close event then no-ops as before.
     events = []
     for n, r in enumerate(rows):
         if r.filled and r.exit_time:
@@ -70,6 +88,27 @@ def simulate(rows, rk: Rules):
     halted = False
     streak = worst_streak = 0
 
+    def realise(r, notional):
+        """Book a closed trade. Returns None if the account is gone.
+
+        One copy, called from the close event and from the same-bar stop-out
+        path at the open, so the two can never drift into booking P&L, the win
+        count, the losing streak or the drawdown differently.
+        """
+        nonlocal bal, peak, dd, wins, streak, worst_streak, halted
+        bal += r.r * notional * (r.risk_pct / 100)
+        if r.r > 0:
+            wins += 1
+            streak = 0
+        else:
+            streak += 1
+            worst_streak = max(worst_streak, streak)
+        peak = max(peak, bal)
+        dd = max(dd, (peak - bal) / peak)
+        if rk.daily_loss_stop and bal <= day_open * (1 - rk.daily_loss_stop / 100):
+            halted = True
+        return None if bal <= 0 else bal
+
     for t, kind, _seq, r in events:
         d = time.gmtime(t).tm_yday
         if d != day:
@@ -80,18 +119,7 @@ def simulate(rows, rk: Rules):
                 continue
             notional = stake.pop(id(r))
             open_pos.pop(id(r))
-            bal += r.r * notional * (r.risk_pct / 100)
-            if r.r > 0:
-                wins += 1
-                streak = 0
-            else:
-                streak += 1
-                worst_streak = max(worst_streak, streak)
-            peak = max(peak, bal)
-            dd = max(dd, (peak - bal) / peak)
-            if rk.daily_loss_stop and bal <= day_open * (1 - rk.daily_loss_stop / 100):
-                halted = True
-            if bal <= 0:
+            if realise(r, notional) is None:
                 return None
             continue
 
@@ -114,9 +142,16 @@ def simulate(rows, rk: Rules):
         if (sum(stake.values()) + notional) / LEVERAGE > bal:
             blocked += 1
             continue
+        taken += 1
+        # A trade that filled and stopped inside one bar holds a slot for zero
+        # time. Realise it here rather than parking it in open_pos, whose close
+        # event has already gone past — see the note on the event sort above.
+        if r.exit_time <= r.fill_time:
+            if realise(r, notional) is None:
+                return None
+            continue
         open_pos[id(r)] = r
         stake[id(r)] = notional
-        taken += 1
 
     return dict(name=rk.name, n=taken, win=100 * wins / max(taken, 1), bal=bal,
                 ret=100 * (bal / START - 1), dd=100 * dd, blocked=blocked,
