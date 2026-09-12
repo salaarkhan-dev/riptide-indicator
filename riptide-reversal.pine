@@ -295,28 +295,50 @@ f_runwayLine(_isLong) =>
       rw < 1.0 ? f_row('Runway', str.tostring(rw, '#.##') + '% to ' + nm + ' — almost none') :
           f_row('Runway', str.tostring(rw, '#.##') + '% to ' + nm + ' — target must fit under it')
 
-f_phaseTip(_isTerminal, _isLong, _perfect, _cancel, _invalid) =>
+// THE TARGET ROW IS WHY THE TERMINAL TOOLTIP IS DIFFERENT. A completed
+// countdown carries a MEASURED objective — (2 x the phase extreme) minus the
+// opposing price — and that number compares straight against an alert's
+// "needs a move of". If Riptide wants 21% of travel and the structure here
+// measures 9.8%, the count is not supporting that trade, and no amount of
+// prose about exhaustion changes it. The original computed this level and hid
+// it (display.none); it is surfaced here because it is the one fact a T13 has
+// that an M9 does not.
+f_targetLine(_isLong, _target) =>
+    t = f_pct(_target)
+    na(t) or _target == 0 ? f_row('Its target', 'no measured objective') :
+      f_row('Its target', str.tostring(math.abs(t), '#.##') + '% measured — compare "needs a move of"')
+
+f_phaseTip(_isTerminal, _isLong, _perfect, _cancel, _invalid, _target) =>
     tag   = _isTerminal ? 'T 13  TERMINAL' : 'M 9  MOMENTUM'
     star  = (not _isTerminal and _perfect) ? '  ★ PERFECTED' : ''
     side  = _isLong ? 'BUY SIDE' : 'SELL SIDE'
     ran   = _isLong ? 'decline' : 'advance'
     turn  = _isLong ? 'LONG' : 'SHORT'
-    facts = f_row('Bias', 'possible ' + turn + ' turn') +
+    // Momentum is forward-looking — a level it can still lose, and a next
+    // phase. Terminal is past tense — it already survived that level, and what
+    // it has instead is an objective.
+    facts = _isTerminal ?
+              f_row('Bias', 'possible ' + turn + ' turn') +
+              f_row('Target', f_lvl(_target) + '  measured') +
+              f_row('Invalid', (_isLong ? 'below ' : 'above ') + f_lvl(_invalid)) +
+              f_row('Held', (_isLong ? 'under ' : 'over ') + f_lvl(_cancel) + ' for all 13') :
+              f_row('Bias', 'possible ' + turn + ' turn') +
               f_row('Cancels', (_isLong ? 'close above ' : 'close below ') + f_lvl(_cancel)) +
               f_row('Invalid', (_isLong ? 'below ' : 'above ') + f_lvl(_invalid)) +
-              f_row('Next', _isTerminal ? 'nothing — this is the last step'
-                                      : 'Terminal count 1 → 13')
+              f_row('Next', 'Terminal count 1 → 13')
     means = _isTerminal ?
-              'The full measured course of a ' + ran + ', and it\nsurvived: escaping the cancel level, or an opposite\n9, would have ended it. Not a top or a bottom —\nprice can still run.' :
+              'The rarest print here. Thirteen qualifying bars\nwithout once escaping the level above, and without\nthe other side completing its own 9 — most counts\ndie long before this.\nStill not a ' + (_isLong ? 'bottom' : 'top') + '. It marks a run that has gone\nits full measured distance, not one that is over.' :
               'A stretched ' + ran + ', not a turn. Phase 1 of 2 —\nthe weaker and far more frequent of the two.' +
                   (_perfect ? '\n★ bar 8 or 9 pushed past bars 6 and 7.' : '')
+    look = f_row('Wait for', '🎯 ' + turn + ' on this symbol') +
+           f_row('Its stop', 'should sit inside ' + f_lvl(_invalid)) +
+           f_runwayLine(_isLong) +
+           (_isTerminal ? f_targetLine(_isLong, _target) : '') +
+           f_pressLine(_isLong) +
+           f_row('Skip', '👀 WATCH and 👀 SWEEP — one per move')
     tag + star + ' · ' + side + RULE + facts + '\nWHAT IT MEANS\n' + means +
-      '\n\nWITH RIPTIDE — WHAT TO LOOK FOR\n' +
-      f_row('Wait for', '🎯 ' + turn + ' on this symbol') +
-      f_row('Its stop', 'should sit inside ' + f_lvl(_invalid)) +
-      f_runwayLine(_isLong) + f_pressLine(_isLong) +
-      f_row('Skip', '👀 WATCH and 👀 SWEEP — one per move') +
-      '\nThe count does NOT improve a 🎯\'s odds. Measured,\nthe opposite direction scored better than this one.\nUse it for the room and the invalidation above —\nnever as the reason to enter.'
+      '\n\nWITH RIPTIDE — WHAT TO LOOK FOR\n' + look +
+      '\nThe count does NOT improve a 🎯\'s odds. Measured,\nthe opposite direction scored better than this one.\nUse it for the room, the objective and the\ninvalidation above — never as the reason to enter.'
 
 f_pivotTip(_name, _level, _isDeveloping) =>
     role  = _name == 'R' ? 'RESISTANCE' : _name == 'S' ? 'SUPPORT' : 'PIVOT'
@@ -424,7 +446,7 @@ if showNone and buyCount == 9
     label.new(bar_index, na, buyPhaseQualified ? 'M9★' : 'M9', xloc.bar_index, yloc.belowbar,
               color.new(#00897b, 10), label.style_label_up, color.white, size.small,
               text.align_center,
-              f_phaseTip(false, true, buyPhaseQualified, buyPhaseResistance, buyPhaseStopPrice))
+              f_phaseTip(false, true, buyPhaseQualified, buyPhaseResistance, buyPhaseStopPrice, 0.))
 
 plotshape(showSteps and sellCount == 1, 'Sell ME 1', shape.none, location.belowbar, #00000000, 0, '1', color.new(color.teal, 35), false, size.tiny, display = display)
 plotshape(showSteps and sellCount == 2, 'Sell ME 2', shape.none, location.belowbar, #00000000, 0, '2', color.new(color.teal, 35), false, size.tiny, display = display)
@@ -460,7 +482,7 @@ if showNone and sellCount == 9
     label.new(bar_index, na, sellPhaseQualified ? 'M9★' : 'M9', xloc.bar_index, yloc.abovebar,
               color.new(#c62828, 10), label.style_label_down, color.white, size.small,
               text.align_center,
-              f_phaseTip(false, false, sellPhaseQualified, sellPhaseSupport, sellPhaseStopPrice))
+              f_phaseTip(false, false, sellPhaseQualified, sellPhaseSupport, sellPhaseStopPrice, 0.))
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  TERMINAL EXHAUSTION  (TD Countdown, 13)
@@ -533,7 +555,7 @@ plot(stopLevels and buyExhaustionStopLevel > 0 ? buyExhaustionStopLevel : na, "T
 if showNone and startBuyExhaustion13 and buyExhaustionCount != buyExhaustionCount[1] and buyExhaustionCount == 13
     label.new(bar_index, na, 'T13', xloc.bar_index, yloc.belowbar, color.new(#1b5e20, 0),
               label.style_label_up, color.white, size.normal, text.align_center,
-              f_phaseTip(true, true, false, buyPhaseResistance, buyExhaustionStopPrice))
+              f_phaseTip(true, true, false, buyPhaseResistance, buyExhaustionStopPrice, buyExhaustionTargetPrice))
 
 var startSellExhaustion13     = false
 var sellExhaustion13RefClose8 = 0.
@@ -599,7 +621,7 @@ plot(sellExhaustionTargetLevel > 0 ? sellExhaustionTargetLevel : na, "TE Sell Ta
 if showNone and startSellExhaustion13 and sellExhaustionCount != sellExhaustionCount[1] and sellExhaustionCount == 13
     label.new(bar_index, na, 'T13', xloc.bar_index, yloc.abovebar, color.new(#b71c1c, 0),
               label.style_label_down, color.white, size.normal, text.align_center,
-              f_phaseTip(true, false, false, sellPhaseSupport, sellExhaustionStopPrice))
+              f_phaseTip(true, false, false, sellPhaseSupport, sellExhaustionStopPrice, sellExhaustionTargetPrice))
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  PIVOT DRAWING
