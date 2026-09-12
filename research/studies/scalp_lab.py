@@ -298,7 +298,8 @@ def simulate(m, fvg_bar, entry, stop, is_long, target_r):
     return fill, ((last - entry) if is_long else (entry - last)) / risk
 
 
-def run_model(sym, m, atr, levels, confirm, k, target_r, flip=False):
+def run_model(sym, m, atr, levels, confirm, k, target_r, flip=False,
+              min_stop_pct=0.0):
     """One symbol, one model, one target. `flip` trades every setup backwards —
     the control."""
     out = []
@@ -332,6 +333,13 @@ def run_model(sym, m, atr, levels, confirm, k, target_r, flip=False):
             stop = (min(m[x].l for x in range(j, fb + 1)) if is_long
                     else max(m[x].h for x in range(j, fb + 1)))
             stop = stop * (0.9995 if is_long else 1.0005)
+            # A FLOOR ON THE STOP, because cost in R is cost%/stop% and the
+            # structural stop is whatever the raid happened to be. 0 keeps the
+            # original behaviour; see scalp_wide.py for what the floor buys.
+            if min_stop_pct > 0:
+                floor = entry * min_stop_pct / 100
+                stop = (min(stop, entry - floor) if is_long
+                        else max(stop, entry + floor))
             d_long = (not is_long) if flip else is_long
             if flip:
                 entry, stop = entry, entry + (entry - stop)
