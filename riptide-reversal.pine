@@ -406,14 +406,14 @@ sellPhaseQualified = (priceHigh >= priceHigh[3] and priceHigh >= priceHigh[2]) o
 
 // Running steps: plain numerals rather than 6px subscripts, and deliberately
 // faint — a count building is not an event.
-plotshape(showSteps and buyCount == 1, 'Buy ME 1', shape.none, location.abovebar, #00000000, 0, '1', color.new(color.red, 35), false, size.tiny, display = display)
-plotshape(showSteps and buyCount == 2, 'Buy ME 2', shape.none, location.abovebar, #00000000, 0, '2', color.new(color.red, 35), false, size.tiny, display = display)
-plotshape(showSteps and buyCount == 3, 'Buy ME 3', shape.none, location.abovebar, #00000000, 0, '3', color.new(color.red, 35), false, size.tiny, display = display)
-plotshape(showSteps and buyCount == 4, 'Buy ME 4', shape.none, location.abovebar, #00000000, 0, '4', color.new(color.red, 35), false, size.tiny, display = display)
-plotshape(showSteps and buyCount == 5, 'Buy ME 5', shape.none, location.abovebar, #00000000, 0, '5', color.new(color.red, 35), false, size.tiny, display = display)
-plotshape(showSteps and buyCount == 6, 'Buy ME 6', shape.none, location.abovebar, #00000000, 0, '6', color.new(color.red, 35), false, size.tiny, display = display)
-plotshape(showSteps and buyCount == 7, 'Buy ME 7', shape.none, location.abovebar, #00000000, 0, '7', color.new(color.red, 20), false, size.small, display = display)
-plotshape(showSteps and buyCount == 8, 'Buy ME 8', shape.none, location.abovebar, #00000000, 0, '8', color.red, false, size.small, display = display)
+plotshape(showSteps and buyCount == 1, 'Buy ME 1', shape.labeldown, location.abovebar, #00000000, 0, '1', color.new(color.red, 35), false, size.tiny, display = display)
+plotshape(showSteps and buyCount == 2, 'Buy ME 2', shape.labeldown, location.abovebar, #00000000, 0, '2', color.new(color.red, 35), false, size.tiny, display = display)
+plotshape(showSteps and buyCount == 3, 'Buy ME 3', shape.labeldown, location.abovebar, #00000000, 0, '3', color.new(color.red, 35), false, size.tiny, display = display)
+plotshape(showSteps and buyCount == 4, 'Buy ME 4', shape.labeldown, location.abovebar, #00000000, 0, '4', color.new(color.red, 35), false, size.tiny, display = display)
+plotshape(showSteps and buyCount == 5, 'Buy ME 5', shape.labeldown, location.abovebar, #00000000, 0, '5', color.new(color.red, 35), false, size.tiny, display = display)
+plotshape(showSteps and buyCount == 6, 'Buy ME 6', shape.labeldown, location.abovebar, #00000000, 0, '6', color.new(color.red, 35), false, size.tiny, display = display)
+plotshape(showSteps and buyCount == 7, 'Buy ME 7', shape.labeldown, location.abovebar, #00000000, 0, '7', color.new(color.red, 20), false, size.small, display = display)
+plotshape(showSteps and buyCount == 8, 'Buy ME 8', shape.labeldown, location.abovebar, #00000000, 0, '8', color.red, false, size.small, display = display)
 
 // THE LEVELS ARE COMPUTED BEFORE THE MARKER, because the marker's tooltip
 // quotes them. In the original the marker was drawn first and could only refer
@@ -448,14 +448,14 @@ if showNone and buyCount == 9
               text.align_center,
               f_phaseTip(false, true, buyPhaseQualified, buyPhaseResistance, buyPhaseStopPrice, 0.))
 
-plotshape(showSteps and sellCount == 1, 'Sell ME 1', shape.none, location.belowbar, #00000000, 0, '1', color.new(color.teal, 35), false, size.tiny, display = display)
-plotshape(showSteps and sellCount == 2, 'Sell ME 2', shape.none, location.belowbar, #00000000, 0, '2', color.new(color.teal, 35), false, size.tiny, display = display)
-plotshape(showSteps and sellCount == 3, 'Sell ME 3', shape.none, location.belowbar, #00000000, 0, '3', color.new(color.teal, 35), false, size.tiny, display = display)
-plotshape(showSteps and sellCount == 4, 'Sell ME 4', shape.none, location.belowbar, #00000000, 0, '4', color.new(color.teal, 35), false, size.tiny, display = display)
-plotshape(showSteps and sellCount == 5, 'Sell ME 5', shape.none, location.belowbar, #00000000, 0, '5', color.new(color.teal, 35), false, size.tiny, display = display)
-plotshape(showSteps and sellCount == 6, 'Sell ME 6', shape.none, location.belowbar, #00000000, 0, '6', color.new(color.teal, 35), false, size.tiny, display = display)
-plotshape(showSteps and sellCount == 7, 'Sell ME 7', shape.none, location.belowbar, #00000000, 0, '7', color.new(color.teal, 20), false, size.small, display = display)
-plotshape(showSteps and sellCount == 8, 'Sell ME 8', shape.none, location.belowbar, #00000000, 0, '8', color.teal, false, size.small, display = display)
+plotshape(showSteps and sellCount == 1, 'Sell ME 1', shape.labeldown, location.belowbar, #00000000, 0, '1', color.new(color.teal, 35), false, size.tiny, display = display)
+plotshape(showSteps and sellCount == 2, 'Sell ME 2', shape.labeldown, location.belowbar, #00000000, 0, '2', color.new(color.teal, 35), false, size.tiny, display = display)
+plotshape(showSteps and sellCount == 3, 'Sell ME 3', shape.labeldown, location.belowbar, #00000000, 0, '3', color.new(color.teal, 35), false, size.tiny, display = display)
+plotshape(showSteps and sellCount == 4, 'Sell ME 4', shape.labeldown, location.belowbar, #00000000, 0, '4', color.new(color.teal, 35), false, size.tiny, display = display)
+plotshape(showSteps and sellCount == 5, 'Sell ME 5', shape.labeldown, location.belowbar, #00000000, 0, '5', color.new(color.teal, 35), false, size.tiny, display = display)
+plotshape(showSteps and sellCount == 6, 'Sell ME 6', shape.labeldown, location.belowbar, #00000000, 0, '6', color.new(color.teal, 35), false, size.tiny, display = display)
+plotshape(showSteps and sellCount == 7, 'Sell ME 7', shape.labeldown, location.belowbar, #00000000, 0, '7', color.new(color.teal, 20), false, size.small, display = display)
+plotshape(showSteps and sellCount == 8, 'Sell ME 8', shape.labeldown, location.belowbar, #00000000, 0, '8', color.teal, false, size.small, display = display)
 
 phase9Support = ta.lowest(9)
 sellPhaseSupport = 0.0
@@ -511,19 +511,19 @@ if buyExhaustionCount == 8 and buyExhaustionCount != buyExhaustionCount[1]
     buyExhaustion13RefClose8 := priceClose
 
 buyTEStep = showSteps and startBuyExhaustion13 and buyExhaustionCount != buyExhaustionCount[1]
-plotshape(buyTEStep and buyExhaustionCount == 1,  'Buy TE 1',  shape.none, location.belowbar, #00000000, 0, '1',  color.new(color.red, 45), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 2,  'Buy TE 2',  shape.none, location.belowbar, #00000000, 0, '2',  color.new(color.red, 45), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 3,  'Buy TE 3',  shape.none, location.belowbar, #00000000, 0, '3',  color.new(color.red, 45), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 4,  'Buy TE 4',  shape.none, location.belowbar, #00000000, 0, '4',  color.new(color.red, 45), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 5,  'Buy TE 5',  shape.none, location.belowbar, #00000000, 0, '5',  color.new(color.red, 45), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 6,  'Buy TE 6',  shape.none, location.belowbar, #00000000, 0, '6',  color.new(color.red, 45), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 7,  'Buy TE 7',  shape.none, location.belowbar, #00000000, 0, '7',  color.new(color.red, 45), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 8,  'Buy TE 8',  shape.none, location.belowbar, #00000000, 0, '8',  color.new(color.red, 30), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 9,  'Buy TE 9',  shape.none, location.belowbar, #00000000, 0, '9',  color.new(color.red, 30), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 10, 'Buy TE 10', shape.none, location.belowbar, #00000000, 0, '10', color.new(color.red, 30), false, size.tiny, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 11, 'Buy TE 11', shape.none, location.belowbar, #00000000, 0, '11', color.red, false, size.small, display = display)
-plotshape(buyTEStep and buyExhaustionCount == 12, 'Buy TE 12', shape.none, location.belowbar, #00000000, 0, '12', color.red, false, size.small, display = display)
-plotshape(showSteps and startBuyExhaustion13 and buyExhaustionCount == buyExhaustionCount[1] and buyExhaustionCount == 12 and buyExhaustionBar13Fails, 'Buy TE deferred', shape.none, location.belowbar, #00000000, 0, '12+', color.new(color.red, 45), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 1,  'Buy TE 1',  shape.labeldown, location.belowbar, #00000000, 0, '1',  color.new(color.red, 45), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 2,  'Buy TE 2',  shape.labeldown, location.belowbar, #00000000, 0, '2',  color.new(color.red, 45), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 3,  'Buy TE 3',  shape.labeldown, location.belowbar, #00000000, 0, '3',  color.new(color.red, 45), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 4,  'Buy TE 4',  shape.labeldown, location.belowbar, #00000000, 0, '4',  color.new(color.red, 45), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 5,  'Buy TE 5',  shape.labeldown, location.belowbar, #00000000, 0, '5',  color.new(color.red, 45), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 6,  'Buy TE 6',  shape.labeldown, location.belowbar, #00000000, 0, '6',  color.new(color.red, 45), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 7,  'Buy TE 7',  shape.labeldown, location.belowbar, #00000000, 0, '7',  color.new(color.red, 45), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 8,  'Buy TE 8',  shape.labeldown, location.belowbar, #00000000, 0, '8',  color.new(color.red, 30), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 9,  'Buy TE 9',  shape.labeldown, location.belowbar, #00000000, 0, '9',  color.new(color.red, 30), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 10, 'Buy TE 10', shape.labeldown, location.belowbar, #00000000, 0, '10', color.new(color.red, 30), false, size.tiny, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 11, 'Buy TE 11', shape.labeldown, location.belowbar, #00000000, 0, '11', color.red, false, size.small, display = display)
+plotshape(buyTEStep and buyExhaustionCount == 12, 'Buy TE 12', shape.labeldown, location.belowbar, #00000000, 0, '12', color.red, false, size.small, display = display)
+plotshape(showSteps and startBuyExhaustion13 and buyExhaustionCount == buyExhaustionCount[1] and buyExhaustionCount == 12 and buyExhaustionBar13Fails, 'Buy TE deferred', shape.labeldown, location.belowbar, #00000000, 0, '12+', color.new(color.red, 45), false, size.tiny, display = display)
 
 var buyExhaustionHighest    = 0.
 var buyExhaustionHigh       = 0.
@@ -577,19 +577,19 @@ if sellExhaustionCount == 8 and sellExhaustionCount != sellExhaustionCount[1]
     sellExhaustion13RefClose8 := priceClose
 
 sellTEStep = showSteps and startSellExhaustion13 and sellExhaustionCount != sellExhaustionCount[1]
-plotshape(sellTEStep and sellExhaustionCount == 1,  'Sell TE 1',  shape.none, location.abovebar, #00000000, 0, '1',  color.new(color.teal, 45), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 2,  'Sell TE 2',  shape.none, location.abovebar, #00000000, 0, '2',  color.new(color.teal, 45), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 3,  'Sell TE 3',  shape.none, location.abovebar, #00000000, 0, '3',  color.new(color.teal, 45), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 4,  'Sell TE 4',  shape.none, location.abovebar, #00000000, 0, '4',  color.new(color.teal, 45), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 5,  'Sell TE 5',  shape.none, location.abovebar, #00000000, 0, '5',  color.new(color.teal, 45), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 6,  'Sell TE 6',  shape.none, location.abovebar, #00000000, 0, '6',  color.new(color.teal, 45), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 7,  'Sell TE 7',  shape.none, location.abovebar, #00000000, 0, '7',  color.new(color.teal, 45), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 8,  'Sell TE 8',  shape.none, location.abovebar, #00000000, 0, '8',  color.new(color.teal, 30), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 9,  'Sell TE 9',  shape.none, location.abovebar, #00000000, 0, '9',  color.new(color.teal, 30), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 10, 'Sell TE 10', shape.none, location.abovebar, #00000000, 0, '10', color.new(color.teal, 30), false, size.tiny, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 11, 'Sell TE 11', shape.none, location.abovebar, #00000000, 0, '11', color.teal, false, size.small, display = display)
-plotshape(sellTEStep and sellExhaustionCount == 12, 'Sell TE 12', shape.none, location.abovebar, #00000000, 0, '12', color.teal, false, size.small, display = display)
-plotshape(showSteps and startSellExhaustion13 and sellExhaustionCount == sellExhaustionCount[1] and sellExhaustionCount == 12 and sellExhaustionBar13Fails, 'Sell TE deferred', shape.none, location.abovebar, #00000000, 0, '12+', color.new(color.teal, 45), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 1,  'Sell TE 1',  shape.labeldown, location.abovebar, #00000000, 0, '1',  color.new(color.teal, 45), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 2,  'Sell TE 2',  shape.labeldown, location.abovebar, #00000000, 0, '2',  color.new(color.teal, 45), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 3,  'Sell TE 3',  shape.labeldown, location.abovebar, #00000000, 0, '3',  color.new(color.teal, 45), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 4,  'Sell TE 4',  shape.labeldown, location.abovebar, #00000000, 0, '4',  color.new(color.teal, 45), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 5,  'Sell TE 5',  shape.labeldown, location.abovebar, #00000000, 0, '5',  color.new(color.teal, 45), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 6,  'Sell TE 6',  shape.labeldown, location.abovebar, #00000000, 0, '6',  color.new(color.teal, 45), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 7,  'Sell TE 7',  shape.labeldown, location.abovebar, #00000000, 0, '7',  color.new(color.teal, 45), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 8,  'Sell TE 8',  shape.labeldown, location.abovebar, #00000000, 0, '8',  color.new(color.teal, 30), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 9,  'Sell TE 9',  shape.labeldown, location.abovebar, #00000000, 0, '9',  color.new(color.teal, 30), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 10, 'Sell TE 10', shape.labeldown, location.abovebar, #00000000, 0, '10', color.new(color.teal, 30), false, size.tiny, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 11, 'Sell TE 11', shape.labeldown, location.abovebar, #00000000, 0, '11', color.teal, false, size.small, display = display)
+plotshape(sellTEStep and sellExhaustionCount == 12, 'Sell TE 12', shape.labeldown, location.abovebar, #00000000, 0, '12', color.teal, false, size.small, display = display)
+plotshape(showSteps and startSellExhaustion13 and sellExhaustionCount == sellExhaustionCount[1] and sellExhaustionCount == 12 and sellExhaustionBar13Fails, 'Sell TE deferred', shape.labeldown, location.abovebar, #00000000, 0, '12+', color.new(color.teal, 45), false, size.tiny, display = display)
 
 var sellExhaustionHighest     = 0.
 var sellExhaustionHigh        = 0.
