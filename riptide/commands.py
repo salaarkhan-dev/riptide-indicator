@@ -198,7 +198,31 @@ LEGEND = (
     "survivorship, so trust the gap between the zones more than the numbers "
     "themselves. Every figure above is a CONFIRMED figure — on early signals "
     "the same split is non-monotone, which is why the word describes the stop "
-    "rather than claiming a return.\n\n"
+    "rather than claiming a return.\n"
+    "<b>AND ON THE STREAM THIS BOT ACTUALLY SENDS, THAT ORDERING IS NOT "
+    "THERE.</b> Everything above was measured on ALL confirmed 30m signals. "
+    "What you receive is the subset that is also in a daily POI with the 8h "
+    "trend agreeing — and re-measured on just that subset, with the same "
+    "symbol bootstrap, the order inverts. Confirmed alerts, 333 days:\n"
+    "<b>tight</b> <b>+0.218 R</b>, bootstrap <b>+0.115 to +0.289</b>, "
+    "<b>0%</b> of draws at or below zero.\n"
+    "<b>normal</b> -0.019 R, -0.120 to +0.048, 76% of draws at or below "
+    "zero.\n"
+    "<b>wide</b> -0.060 R, -0.199 to +0.071, 74%.\n"
+    "The honest reading: the POI/trend filter and the band overlap, and once "
+    "you have filtered to a zone with the trend, the stop width no longer "
+    "sorts the way it did on the wider pool. That was found by looking, so it "
+    "is NOT acted on — the ranking still puts normal first and nothing in the "
+    "code changed. It is written here because a legend that kept quoting the "
+    "old ordering would be telling you something this bot's own stream "
+    "contradicts. <b>Do not choose between alerts on the width.</b>\n"
+    "It matters less than either table suggests. Swapping the band out of the "
+    "pick ranking for a COIN TOSS, 40 draws, moves the recovery factor "
+    "anywhere between <b>3.93 and 8.24</b> — and the shipped rule scores "
+    "<b>6.52</b>, inside that spread and below the random median in the first "
+    "half of the window. <b>The second key is not doing measurable work.</b> "
+    "The value is in the timeframe key and in taking ONE. See "
+    "research/studies/band_key.py.\n\n"
 
     "<b>move · you hold N longs</b> — how much of YOUR book is on this side, "
     "counting every position still open, not just this bar.\n"
@@ -233,17 +257,44 @@ LEGEND = (
 LEGEND_CHUNK = 3500
 
 
-def legend_parts(text: str = "") -> list:
-    """/legend as one or more sendable messages, split between sections."""
+def _split(text: str, sep: str) -> list:
+    """Greedy pack of `text`'s pieces into chunks under the cap.
+
+    Returns [] when a single piece is itself over the cap, so the caller can
+    try a finer separator instead of emitting something Telegram will refuse.
+    """
     out, cur = [], ""
-    for block in (text or LEGEND).split("\n\n"):
-        if cur and len(cur) + len(block) + 2 > LEGEND_CHUNK:
+    for piece in text.split(sep):
+        if len(piece) > LEGEND_CHUNK:
+            return []
+        if cur and len(cur) + len(piece) + len(sep) > LEGEND_CHUNK:
             out.append(cur)
             cur = ""
-        cur = f"{cur}\n\n{block}" if cur else block
+        cur = f"{cur}{sep}{piece}" if cur else piece
     if cur:
         out.append(cur)
     return out
+
+
+def legend_parts(text: str = "") -> list:
+    """/legend as one or more sendable messages, split between sections.
+
+    THREE SEPARATORS, COARSEST FIRST, because the first version of this could
+    not split a section at all: it packed whole blank-line-delimited blocks and
+    emitted any single oversized block as-is. The band section then grew past
+    the cap on its own and /legend went straight back to the 400 this function
+    was written to fix — the same silent failure, one layer down.
+
+    So it falls through: blank lines, then single lines, then a hard character
+    cut that cannot fail whatever anyone writes above.
+    """
+    text = text or LEGEND
+    for sep in ("\n\n", "\n"):
+        out = _split(text, sep)
+        if out:
+            return out
+    return [text[i:i + LEGEND_CHUNK]
+            for i in range(0, len(text), LEGEND_CHUNK)]
 
 
 def _fmt_ago(seconds: float) -> str:
