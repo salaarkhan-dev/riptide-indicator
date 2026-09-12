@@ -1,0 +1,10 @@
+TIME TO RESOLVE — is this actually a 1-minute trade?
+floor 0.6%  target 2.0R
+
+  all 14 symbols              n= 13862  net +0.187R  resolved 65%  MEDIAN    66 min  p90  119 min
+
+  tokenised stocks found: ['MUSTOCK_USDT', 'SKHYNIXSTOCK_USDT']
+  excluding tokenised stocks  n= 11864  net +0.200R  resolved 68%  MEDIAN    58 min  p90  119 min
+  ONLY tokenised stocks       n=  1998  net +0.110R  resolved 42%  MEDIAN   119 min  p90  119 min
+
+  For scale: a 1m bar is 1 minute. Riptide's Min30 horizon is 60 bars = 30 HOURS.

@@ -40,11 +40,55 @@
 > strategy, and the single survivor (PONS, +0.206 net) is one symbol out of
 > fourteen — which is what a fluke looks like.
 >
-> The one route that is not closed: the same model on tight-spread symbols with
-> a WIDER stop, so the denominator comes from the stop rather than from the
-> symbol's volatility. That is a different hypothesis and needs its own
-> pre-registration. It is also, honestly, a slower timeframe wearing a 1m label
-> — the thing this file warned about before the data arrived.
+> The one route left open was the same model on tight-spread symbols with a
+> WIDER stop. **It was run. It works, and it is not a scalper.** See below.
+
+---
+
+> ## THE WIDE-STOP TEST — it passes, and it is a one-hour trade
+>
+> `scalp_wide.out`, `scalp_wide_timing.out`. Liquid symbols (median spread
+> **0.0108%**, three times tighter than the illiquid set), stop taken from a
+> deliberate floor instead of the raid.
+>
+> | target | best floor | discovery net | **HELD-OUT net** | control |
+> |---|---|---|---|---|
+> | 1.5R | 0.6% | +0.134 | **+0.176** | −0.291 |
+> | **2R** | **0.6%** | +0.175 | **+0.199** | −0.284 |
+>
+> The floor was chosen on the first half and read once on the second. It clears
+> the +0.15 bar, the control is strongly negative, and excluding the two
+> tokenised stocks in the universe *improves* it to **+0.200R** — so that
+> contamination was not carrying the result.
+>
+> ### But it is not a scalp, and the timing says so plainly
+>
+> | | |
+> |---|---|
+> | median time to resolve | **58 minutes** |
+> | 90th percentile | 119 minutes (the horizon cap) |
+> | never resolved in 2h | **32%** |
+>
+> A 0.6% stop on a symbol whose 1-minute bar moves 0.04% is **fifteen times its
+> 1m ATR**. Of course it takes an hour. This is a one-hour mean-reversion trade
+> that happens to be *triggered* by a 1-minute pattern, and it should be named
+> and tested as one — exactly what this file predicted before the data arrived.
+>
+> ### Two reasons not to get excited yet
+>
+> **The held-out half is 15 days.** Riptide's numbers come from 333 days split
+> in two. Here the whole window is 30 days because *MEXC serves no more 1m
+> history than that*. A crypto regime lasts longer than 15 days, so this split
+> can be passed by a strategy that merely suits the month. It is the weakest
+> validation in this project, and it is weak for a structural reason that no
+> amount of care can fix.
+>
+> **The trade count is not reachable.** 13,862 trades over 30 days and 14
+> symbols is ~460 signals a day, each held about an hour. You cannot hold 460
+> hour-long positions. The +0.199R is per *signal*, and phase2_rule.py already
+> showed what happens when slots bind: the per-trade number and the account
+> number are different animals. **Nothing here has been through an account
+> simulator yet**, and until it has, this is a pattern rather than a strategy.
 
 
 Riptide's Min30 liquidity-reversal model is **frozen** and is the control.
