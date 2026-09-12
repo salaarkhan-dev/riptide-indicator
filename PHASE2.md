@@ -248,13 +248,45 @@ makes 15m roughly twice as expensive per unit of risk as 1h, which is exactly
 why picked 15m (+0.064) trails picked 1h (+0.112). It just does not make it
 negative once the pick rule has chosen which ones to take.
 
-### 4. Minimum order size at minimum capital
+### 4. ~~Minimum order size at minimum capital~~ — checked, not a problem
 
-Funding starts at the exchange minimum. At 0.5% risk that is a very small
-notional, and MEXC has per-symbol minimum order sizes. **Expect most signals to
-be unplaceable at stage 1.** That is fine — stage 1 is about proving the
-plumbing, not about return — but the bot must skip them cleanly and count them,
-not error.
+I assumed minimum order sizes would block most signals at minimum funding.
+Probed `contract/detail` across the 120-symbol universe on 12 Sep:
+
+| minimum order notional | symbols |
+|---|---|
+| median | **$1.03** |
+| cheapest (SHIB) | $0.005 |
+| over $10 | 13 of 120 |
+| over $50 | 2 of 120 |
+
+At 0.5% risk on a small account a position is on the order of $100 notional, so
+**107 of 120 symbols are placeable at stage 1**. The bot must still skip the
+handful it cannot afford, and count them — but "most signals unplaceable" was
+wrong.
+
+### 5. The fee assumption is CONSERVATIVE, and by a lot
+
+Every number in this project — `fee_key.out`, `phase2_rule.out`, the claim that
+15m is net −0.0268 — is computed at **0.02% maker / 0.06% taker**. The live
+schedule is not that:
+
+| | zero rate | of the 120-symbol universe |
+|---|---|---|
+| maker | **118 / 120** | 98% |
+| taker | **81 / 120** | 68% |
+
+Many symbols sit in a `mc-trade-zone-0fees` concept plate. The backtest is
+therefore charging fees that most of the universe does not currently pay, which
+means every result here is a **floor, not a forecast** — the safe direction to
+be wrong in.
+
+**It cannot simply be rerun at zero.** Today's schedule says nothing about what
+the rates were across the 333-day window, and promotional zones end. The honest
+statement is that the measured numbers understate, by an amount nobody has
+bounded. Worth a sensitivity arm (fees off vs fees in) before stage 2 sizing,
+and worth re-checking the plate membership periodically, since a symbol leaving
+it silently raises the cost of every trade on it.
 
 ---
 
