@@ -19,12 +19,26 @@ hinted at this from the outside: sweep-to-setup conversion falls monotonically
 from 26% to 6.5% as sweep volume rises (+15.6 SE), which says loud raids are
 breakouts. Open interest would say so directly.
 
-WHY THIS IS A LOGGER AND NOT A FILTER. MEXC serves holdVol and fundingRate
-only as a live snapshot from contract/ticker; there is no history endpoint for
-either. They cannot be backtested at all — not with more effort, not with a
-better script. The only way they ever become measurable is to start recording
-now and wait. Six weeks of this file is the difference between testing the
-idea and guessing at it.
+WHY THIS IS A LOGGER AND NOT A FILTER. MEXC serves holdVol only as a live
+snapshot from contract/ticker. OPEN INTEREST HAS NO HISTORY ENDPOINT — probed
+12 Sep across five candidate paths, all 404 — so it cannot be backtested at
+all, not with more effort and not with a better script. The only way it ever
+becomes measurable is to start recording now and wait. Six weeks of this file
+is the difference between testing the idea and guessing at it.
+
+    THIS FILE USED TO SAY THE SAME OF FUNDING, AND THAT WAS WRONG.
+    /api/v1/contract/funding_rate/history is public, needs no key, and carries
+    1618 settlements per symbol — 539 DAYS on BTC_USDT, longer than the 333-day
+    window every study here runs on. Funding was backtestable the whole time
+    and this docstring said it was not, which is worse than saying nothing:
+    it closed a door that was open. Corrected 12 Sep.
+
+    The same probe found index-price and fair-price KLINES are public too,
+    which makes the basis (last - index) a full candle history rather than a
+    snapshot. That is the finer-grained version of the funding signal and it
+    is also testable today. Neither has been measured yet, and the prior is
+    poor — 21 entry filters have failed in this project — but "unmeasured" and
+    "unmeasurable" are different words and only one of them was true.
 
 Nothing here can affect an alert. It writes to its own table, is wrapped so a
 failure is logged and swallowed, and no other module reads it yet. There is
