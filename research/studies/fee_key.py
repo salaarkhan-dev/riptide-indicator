@@ -70,7 +70,6 @@ import research.env  # noqa: F401  (must precede riptide.config)
 
 import asyncio                                          # noqa: E402
 import statistics                                       # noqa: E402
-from collections import defaultdict                     # noqa: E402
 
 import aiohttp                                          # noqa: E402
 
@@ -193,7 +192,7 @@ async def main():
 
     # Composition, so a change in what gets picked is visible rather than
     # inferred from a single ratio.
-    print(f"\n  what the shipped key picks, fees in vs fees off:")
+    print("\n  what the shipped key picks, fees in vs fees off:")
     print(f"  {'':<18}{'15m':>8}{'30m':>8}{'1h':>8}{'early':>8}{'normal':>8}")
     p = pick_rolling(rows, KEYS["A  tf > band > confd  (shipped)"], COOLDOWN)
     tot = len(p)
@@ -202,9 +201,6 @@ async def main():
                     for tf in TFS)
           + f"{sum(1 for t in p if t.kind == 'early') / tot:>8.0%}"
           + f"{sum(1 for t in p if band_of(t) == 1) / tot:>8.0%}")
-    bysym = defaultdict(int)
-    for t in p:
-        bysym[t.tf] += 1
     print("\n  (the picks are the same either way — the fee changes what each")
     print("   trade SCORES, never which one the ranking names.)")
 

@@ -60,11 +60,37 @@ THE RANKING, KEY BY KEY, WITH THE EVIDENCE FOR EACH
      of the window (1.68 vs 1.27, 3.87 vs 3.64) and inside BOTH streams
      separately (early 4.71 vs 3.76, confirmed 1.33 vs 1.17). Against that:
      no pair of timeframes separates at even 1 SE (timeframes.py), so "1h beats
-     30m" is not a claim this repo can make. What it has instead is arithmetic.
-     Fee in R is fee_pct / risk_pct; the median stop doubles from 15m to 1h; so
-     the fee takes 67% of the gross edge on 15m and 16% on 1h. Preferring the
-     slower chart is a COST argument, not an edge argument, and cost arguments
-     do not need a significance test.
+     30m" is not a claim this repo can make.
+
+     THIS KEY'S STATED JUSTIFICATION WAS A FEE ARGUMENT AND THE FEE ARGUMENT
+     IS WITHDRAWN AS A JUSTIFICATION, though not as a fact. It used to read:
+     "the fee takes 67% of the gross edge on 15m and 16% on 1h, so preferring
+     the slower chart is a COST argument and cost arguments do not need a
+     significance test."
+
+     Both halves of that are wrong. research/studies/fee_key.py, on the
+     deployed stream at the rates harness.py measured from a real settlement:
+
+         15m   median stop 1.01%   gross +0.0064   net -0.0268   fee 521% of gross
+         30m   median stop 1.45%   gross +0.0486   net +0.0255   fee  47%
+         1h    median stop 2.04%   gross +0.0594   net +0.0435   fee  27%
+
+     The 67% was computed at the old 0.02/0.06 list rates and never recomputed;
+     the true figure on 15m is not 67% but FIVE TIMES the gross edge, because
+     the gross edge there is nearly zero and fee in R is fee_pct / risk_pct.
+     So the cost gradient is far steeper than the docstring claimed.
+
+     And it still does not justify this key, because the key does not depend on
+     it. Re-scored with fees switched OFF entirely, tf-first leads by the same
+     margin it does with them on — 10.72 against 9.04 for no-band, 9.48 for
+     band-demoted, 10.26 for band-first — and beats 78% of random tiebreaks
+     without fees against 80% with them. If the fee were what made this key
+     work, removing it would collapse the arm. It does not move.
+
+     What is left is honest and thin: tf-first leads every alternative tried,
+     in both halves, with and without fees, and it has never been shown to beat
+     a coin toss in that seat (see the note under key 2). It is kept because it
+     leads, not because there is a mechanism behind it.
 
   2. RISK BAND, take then flat then skip.  The best-evidenced axis and the
      reason it is second rather than first is specific. matrix.py: band against
@@ -78,6 +104,35 @@ THE RANKING, KEY BY KEY, WITH THE EVIDENCE FOR EACH
 
      Three tiers, not two: a tight "flat" beats a wide "skip" because the skip
      bootstrap is entirely below zero while the flat one straddles it.
+
+     THIS KEY IS NOT DOING MEASURABLE WORK AND THE PARAGRAPH ABOVE IS KEPT ONLY
+     AS THE HISTORY OF WHY IT IS HERE. research/studies/band_key.py held the
+     population, the cooldown and the arrival clock fixed and swapped only the
+     key, then put a COIN TOSS in this seat over 40 seeds:
+
+         A  tf > band > confd  (shipped)      recovery 6.52   halves 3.23 / 3.57
+         B  tf > confd (band removed)                  5.46          3.48 / 2.75
+         C  tf > confd > band                          5.91          3.50 / 3.18
+         D  band > tf > confd                          6.18          3.30 / 3.33
+         E  tf > coin toss        5th 3.93   median 5.72   90th 6.99   95th 8.24
+
+     Every arm lands inside the coin toss's spread. The shipped rule beats 80%
+     of tosses, short of the 90th percentile its pre-registration required, and
+     it is BELOW the random median in the first half. Nothing else beat it
+     either, so the pre-registered default applied and nothing changed.
+
+     AND ON THIS STREAM THE ORDER APPEARS TO BE INVERTED. Under survivor.py's
+     symbol bootstrap, on confirmed alerts the bot actually sends:
+
+         tight   +0.218   boot [+0.115, +0.289]    0% of draws <= 0
+         normal  -0.019   boot [-0.120, +0.048]   76%
+         wide    -0.060   boot [-0.199, +0.071]   74%
+
+     This key ranks normal FIRST. survivor.py measured the band on all 595
+     confirmed Min30 signals; the rows above are the subset also sitting in a
+     daily POI with the trend agreeing, and the two filters evidently overlap.
+     Not acted on: a cell found after looking does not get to reorder a
+     ranking, and it needs its own pre-registered forward test first.
 
   3. CONFIRMED before EARLY.  Weak and kept only as a tiebreak. matrix.py:
      confirmed leads early in 5 of 6 comparisons and clears 1 SE in none of
