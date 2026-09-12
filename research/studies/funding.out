@@ -1,0 +1,104 @@
+  fetching funding history…
+
+FUNDING AT SIGNAL TIME — does it predict anything?
+59 symbols · 333 days · Min15+Min30+Min60
+9071 sent, 2905 picked · funding matched on 7964 (88%)
+funding range: -0.01008 … +0.00232 per 8h (median +0.000037)
+
+Each direction is measured against ITS OWN baseline, because shorts
+out-scored longs in every bucket and comparing the two columns would
+only restate that. THE SIGNATURE OF REAL POSITIONING INFORMATION is
+that as funding rises the long delta and the short delta move in
+OPPOSITE directions. Both drifting the same way is a shared regime,
+which is how the exhaustion study died.
+
+============================================================================================
+PRIMARY — THE 🎯 PICKS (2521 with funding)
+============================================================================================
+
+  raw funding quintile
+    baseline: all longs +0.032 (n=1414), all shorts +0.150 (n=1107)
+    bucket                   nL   long R  vs base    nS  short R  vs base  L-S spread
+    Q1 most negative        294   +0.114   +0.082   225   +0.195   +0.045      +0.037
+    Q2                      238   +0.004   -0.028   230   -0.002   -0.152      +0.124
+    Q3                      446   +0.114   +0.083   315   +0.149   -0.001      +0.084
+    Q4                      113   -0.056   -0.088   115   +0.166   +0.016      -0.104
+    Q5 most positive        323   -0.105   -0.137   222   +0.256   +0.106      -0.243
+
+  per-symbol percentile
+    baseline: all longs +0.032 (n=1414), all shorts +0.150 (n=1107)
+    bucket                   nL   long R  vs base    nS  short R  vs base  L-S spread
+    P1 lowest for sym       256   +0.098   +0.067   187   +0.141   -0.009      +0.076
+    P2                      213   +0.020   -0.011   194   +0.197   +0.047      -0.058
+    P3                      241   +0.162   +0.130   169   +0.089   -0.061      +0.191
+    P4                      216   +0.024   -0.008   208   +0.135   -0.015      +0.007
+    P5 highest for sym      488   -0.059   -0.091   349   +0.168   +0.018      -0.108
+
+============================================================================================
+SECONDARY — EVERY ALERT SENT (7964)
+============================================================================================
+
+  raw funding quintile
+    baseline: all longs -0.011 (n=4288), all shorts +0.042 (n=3676)
+    bucket                   nL   long R  vs base    nS  short R  vs base  L-S spread
+    Q1 most negative        802   +0.001   +0.012   798   +0.033   -0.010      +0.021
+    Q2                      786   +0.049   +0.060   804   -0.066   -0.108      +0.168
+    Q3                     1334   +0.018   +0.029   997   +0.004   -0.038      +0.067
+    Q4                      420   -0.087   -0.076   446   +0.063   +0.021      -0.098
+    Q5 most positive        946   -0.078   -0.067   631   +0.236   +0.194      -0.261
+
+  per-symbol percentile
+    baseline: all longs -0.011 (n=4288), all shorts +0.042 (n=3676)
+    bucket                   nL   long R  vs base    nS  short R  vs base  L-S spread
+    P1 lowest for sym       728   +0.014   +0.024   663   +0.029   -0.013      +0.037
+    P2                      676   +0.016   +0.027   685   -0.002   -0.045      +0.072
+    P3                      734   -0.030   -0.020   608   +0.010   -0.032      +0.012
+    P4                      650   -0.069   -0.058   691   +0.050   +0.008      -0.067
+    P5 highest for sym     1500   +0.000   +0.011  1029   +0.093   +0.051      -0.040
+
+============================================================================================
+PLACEBO FLOOR — top quintile minus bottom, against 200 shuffles
+============================================================================================
+  stream                         real  null 5th   median     95th  percentile
+  picks, longs                 -0.219    -0.175   -0.005   +0.140          2%   <- outside the null band
+  picks, shorts                +0.061    -0.220   -0.023   +0.211         69%
+  sent, longs                  -0.079    -0.110   +0.007   +0.120         10%
+  sent, shorts                 +0.204    -0.130   -0.003   +0.121        100%   <- outside the null band
+
+============================================================================================
+BOTH HALVES — an effect in one half is a non-result
+============================================================================================
+
+  ── FIRST half: 1235 picks, 3983 sent ──
+
+  picks, raw quintile
+    baseline: all longs +0.025 (n=662), all shorts +0.161 (n=573)
+    bucket                   nL   long R  vs base    nS  short R  vs base  L-S spread
+    Q1 most negative        193   +0.084   +0.059   152   +0.166   +0.005      +0.054
+    Q2                      119   -0.005   -0.030   123   -0.118   -0.279      +0.249
+    Q3                      154   +0.085   +0.060   122   +0.280   +0.119      -0.059
+    Q4                       41   +0.160   +0.136    56   +0.200   +0.039      +0.097
+    Q5 most positive        155   -0.122   -0.147   120   +0.300   +0.140      -0.286
+
+  ── SECOND half: 1286 picks, 3981 sent ──
+
+  picks, raw quintile
+    baseline: all longs +0.038 (n=752), all shorts +0.139 (n=534)
+    bucket                   nL   long R  vs base    nS  short R  vs base  L-S spread
+    Q1 most negative        101   +0.170   +0.132    73   +0.255   +0.116      +0.016
+    Q2                      119   +0.012   -0.026   107   +0.131   -0.007      -0.018
+    Q3                      292   +0.130   +0.092   193   +0.067   -0.072      +0.164
+    Q4                       72   -0.179   -0.217    59   +0.134   -0.004      -0.212
+    Q5 most positive        168   -0.090   -0.128   102   +0.203   +0.064      -0.192
+
+============================================================================================
+EXTREMES — the crowding story is about tails, not sign
+============================================================================================
+  picks  bottom decile   long n=  167  +0.213 ±0.112   short n=  112  +0.203 ±0.134
+  picks  middle 80%      long n=  941  +0.036 ±0.046   short n=  785  +0.112 ±0.050
+  picks  top decile      long n=  306  -0.080 ±0.078   short n=  210  +0.266 ±0.100
+
+  sent   bottom decile   long n=  418  +0.039 ±0.069   short n=  380  -0.023 ±0.071
+  sent   middle 80%      long n= 2982  -0.005 ±0.025   short n= 2692  +0.005 ±0.027
+  sent   top decile      long n=  888  -0.054 ±0.046   short n=  604  +0.246 ±0.059
+

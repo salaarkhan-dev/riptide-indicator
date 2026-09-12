@@ -1,314 +1,348 @@
-"""Does the CROWD'S POSITIONING predict which raids pay? The first non-price test.
+"""DOES THE FUNDING RATE AT SIGNAL TIME PREDICT ANYTHING?
 
-EVERY VARIABLE THIS PROJECT HAS EVER TESTED IS A TRANSFORM OF PRICE. Thirty-one
-indicators, five regime readings, pool geometry, gap size, session, breadth —
-all of them price rearranged. That is a closed loop: the strategy is built from
-price and then conditioned on price, so a failure to find anything might mean
-there is nothing to find, or merely that price has already been fully used.
+WHY THIS IS ASKABLE AT ALL. riptide/market.py said for months that funding
+"cannot be backtested at all — not with more effort, not with a better script",
+and that was simply false: /api/v1/contract/funding_rate/history is public and
+carries 539 days, longer than the 333-day window every study here runs on. This
+is the study that claim was preventing.
 
-FUNDING IS THE FIRST THING AVAILABLE THAT IS NOT PRICE. It is what longs pay
-shorts to hold the perpetual, settled every four or eight hours, and MEXC serves
-540 days of it per symbol — enough to cover the whole deep window. It measures
-which side is crowded and what they are paying to stay there. (It is not
-CLEANLY independent of price: funding tracks the perp-spot basis, which follows
-price. Closer to positioning than anything else here, not orthogonal to it.)
+WHAT FUNDING IS. A perpetual has no expiry, so an 8-hourly payment keeps it
+pinned to spot. Positive funding: longs pay shorts, which happens when the perp
+trades above index — crowded long. Negative: shorts pay longs — crowded short.
+It is a direct, public read on positioning, which is why it is worth asking.
 
-THE MECHANISM, WRITTEN DOWN BEFORE MEASURING, AND IT IS DIRECTIONAL
+THE TWO STORIES ARE OPPOSITE, AND THAT IS THE WARNING.
 
-  This strategy FADES a liquidity raid. The claim underneath it is that a sweep
-  of the lows is a stop-run — forced selling that exhausts itself — rather than
-  the start of a move down. Funding says whether there was anything to force.
+    SQUEEZE     A long into NEGATIVE funding has fuel: shorts are crowded and
+                pay to stay, so a move up forces them out.
+    TREND       A long into POSITIVE funding is confirmed: the crowd and the
+                trend agree, and paying to hold is what conviction looks like.
 
-    LONG  (the lows were raided)   Funding POSITIVE means the crowd is levered
-                                   long and paying to stay there. Sweeping the
-                                   lows flushes exactly those positions, and
-                                   buying it is buying from forced sellers.
+Both are plausible, both are widely believed, and they predict opposite signs.
+Anything that can be explained either way explains nothing in advance — so the
+sign is not a prediction here, it is the thing being measured, and the control
+below is what decides whether either story survives.
 
-    SHORT (the highs were raided)  Funding NEGATIVE means the crowd is levered
-                                   short. Sweeping the highs squeezes them, and
-                                   selling it is selling to forced buyers.
+THE PRIOR IS BAD AND SHOULD BE STATED FIRST. Twenty-one entry filters have
+failed in this project. Funding is among the most watched numbers in crypto,
+which is exactly the kind of input least likely to carry unpriced information.
+The base rate for this working is low, and the purpose of running it is that it
+is now cheap to ask rather than that it is likely to pay.
 
-  So the signed quantity that should matter is funding AGAINST the trade:
+──────────────────────────────────────────────────────────────────────────────
+PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
-      crowd_against = +funding for a long, -funding for a short
+  PRIMARY. Net R per trade on the PICKED stream (what phase 2 will actually
+  trade), split into quintiles of the funding rate in force at signal time,
+  reported separately for LONG and SHORT signals. The claim, if any, is about
+  what the bot should skip.
 
-  PREDICTION, PRE-REGISTERED: higher `crowd_against` pays better. A raid into a
-  crowded opposite book is a liquidation; a raid in a flat book is just a move.
-  If the sign comes out the OTHER way the mechanism is wrong, and a
-  wrong-signed result is not a discovery to be reinterpreted afterwards.
+  THE CONTROL, AND IT IS WHAT MATTERS. The same split on the OPPOSITE
+  direction. If low funding helps longs AND helps shorts equally, the mechanism
+  is not positioning — it is whatever both share, most likely a volatility or
+  trend regime. The exhaustion study died on exactly this test and it is the
+  reason this one reports the control beside every number rather than beneath.
 
-NORMALISATION, BECAUSE THE RAW NUMBER IS NOT COMPARABLE
+  SECONDARY. The full SENT stream, which has three times the trades and can see
+  an effect the picked stream is too thin for.
 
-  Symbols settle on different cycles — 8h for BTC, 4h for TAO — so raw rates
-  are not comparable across symbols, and the level drifts over the year. Every
-  variable is therefore the trailing 30-day PERCENTILE OF THAT SYMBOL'S OWN
-  funding, which normalises the cycle, the symbol and the era at once. The
-  reading used is the last settlement STRICTLY BEFORE the signal.
+  BOTH HALVES of the window, for every cut. An effect living in one half is a
+  non-result here as everywhere else.
 
-PRE-REGISTERED — the same three conditions the regime study used, and it
-failed all of them, so the bar is not being lowered here:
+  A PLACEBO FLOOR. The funding values are shuffled across signals 200 times,
+  keeping the distribution and destroying the pairing. The real top-minus-
+  bottom difference is reported as a percentile of that null. A result inside
+  the null band is noise no matter how large it looks, and with five quintiles
+  x two directions x two streams the table takes twenty looks — roughly one
+  will clear 2 SE by chance.
 
-  1. Top tercile beats bottom by 2 SE over the whole window.
-  2. The sign holds in at least 3 of the 4 quarters — a variable that separates
-     only BETWEEN quarters is a relabelling of "it was Q3".
-  3. It clears the circular-shift null's p95.
+  ALSO REPORTED, because the crowding story is about extremes rather than sign:
+  the top and bottom DECILE against everything else, and a per-symbol
+  percentile version that removes symbols whose funding is structurally high.
 
-  AND FOR THE SIGNED VARIABLE, a fourth: the effect must appear in LONGS and
-  SHORTS separately, in the directions the mechanism predicts. A result that
-  lives entirely in one side is a directional bet on the year, not a mechanism.
+  WHAT WOULD FALSIFY IT: no monotone relationship across quintiles; or one that
+  reverses between halves; or one whose control moves as much as the signal.
 
-  EXPECTATION: `crowd_against` clears condition 1 and fails condition 2, like
-  everything else. Recorded so it cannot be revised.
+CAUSALITY IS THE WHOLE IMPLEMENTATION RISK. Funding settles every 8 hours. A
+signal at time t must be joined to the most recent settlement AT OR BEFORE t —
+never the one after, which is partly determined by the move the signal is
+trying to predict. A lookahead here would make every number below meaningless
+and would look completely normal. `funding_at` below is bisect-right minus one
+and nothing else, for that reason.
 
-    PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
+    PYTHONPATH=. RIPTIDE_DEEP_CACHE=/tmp/deep \
         python3 research/studies/funding.py
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 
 import asyncio                                          # noqa: E402
-import bisect                                           # noqa: E402
+import json                                             # noqa: E402
+import os                                               # noqa: E402
 import random                                           # noqa: E402
-import statistics                                       # noqa: E402
-from collections import defaultdict                     # noqa: E402
-from datetime import datetime, timezone                 # noqa: E402
+from bisect import bisect_right                         # noqa: E402
 
 import aiohttp                                          # noqa: E402
 
-from riptide.config import log                          # noqa: E402
-from riptide.exchange import BASE, get_json, list_symbols  # noqa: E402
+from riptide.config import BASE, BAR_SECONDS            # noqa: E402
 from research.deep import load_universe                 # noqa: E402
+from research.studies.poi_tf import DAY, DAYS, H8       # noqa: E402
+from research.studies.poi_tf import collect, context, universe  # noqa: E402
+from research.studies.pick_rule import TFS, pick_rolling  # noqa: E402
+from research.studies.band_key import COOLDOWN, KEYS    # noqa: E402
 from research.harness import mean_se                    # noqa: E402
-from research.studies.replicate import DAYS, TF, bets, collect  # noqa: E402
 
-PAGE = 1000             # the endpoint's cap
-RANK_DAYS = 30
-SHIFTS = 300
+CACHE = os.getenv("RIPTIDE_DEEP_CACHE", "/tmp/deep")
+PACE = 0.7
+SEEDS = 200
 
 
-async def funding_history(sess, symbol, days=DAYS + 40):
-    """[(settle_time, rate)] oldest first, covering `days`.
+# ── the funding history ──────────────────────────────────────────────────────
 
-    Paged newest-first and stopped as soon as the window is covered, so a
-    symbol on a 4-hour cycle costs one more request than one on 8 hours rather
-    than twice as many.
-    """
-    import time
-    floor = time.time() - days * 86400
-    out = {}
-    for page in range(1, 8):
-        d = await get_json(sess, f"{BASE}/api/v1/contract/funding_rate/history",
-                           {"symbol": symbol, "page_num": page,
-                            "page_size": PAGE})
-        r = d and d.get("data")
-        rows = r and r.get("resultList")
-        if not rows:
+async def fetch_funding(sess, symbol, pages=12):
+    """Every settlement for one symbol, newest first, flattened to (t, rate)."""
+    out = []
+    for page in range(1, pages + 1):
+        url = (f"{BASE}/api/v1/contract/funding_rate/history"
+               f"?symbol={symbol}&page_num={page}&page_size=100")
+        try:
+            async with sess.get(url, timeout=aiohttp.ClientTimeout(total=20)) as r:
+                d = json.loads(await r.text())
+        except Exception:
             break
-        for x in rows:
-            out[int(x["settleTime"]) // 1000] = float(x["fundingRate"])
-        if min(int(x["settleTime"]) // 1000 for x in rows) <= floor:
+        if not (isinstance(d, dict) and d.get("success")):
             break
-        if page >= (r.get("totalPage") or 1):
+        data = d.get("data") or {}
+        rows = data.get("resultList") or []
+        out += [(int(x["settleTime"]) // 1000, float(x["fundingRate"]))
+                for x in rows]
+        await asyncio.sleep(PACE)
+        if page >= (data.get("totalPage") or 1):
             break
-    return sorted((t, v) for t, v in out.items() if t >= floor)
-
-
-def rank_series(hist):
-    """{settle_time: percentile within the trailing 30 days} for one symbol.
-
-    A RAW RATE IS NOT COMPARABLE and would not be actionable. Cycles differ per
-    symbol, the level drifts across the year, and "funding was 0.01%" is partly
-    a statement about which month it is. The trailing percentile asks whether
-    positioning is crowded FOR THIS SYMBOL RIGHT NOW, which is stationary and is
-    what a live filter could actually read.
-    """
-    times = [t for t, _ in hist]
-    vals = [v for _, v in hist]
-    out = {}
-    for i, t in enumerate(times):
-        lo = bisect.bisect_left(times, t - RANK_DAYS * 86400)
-        window = vals[lo:i]
-        if len(window) < 20:
-            continue
-        v = vals[i]
-        out[t] = (sum(1 for w in window if w < v) / len(window), v)
+    out.sort()
     return out
 
 
-def feature_at(ranks, hist_times, when):
-    """The last settlement STRICTLY BEFORE `when`. No look-ahead, by design."""
-    i = bisect.bisect_left(hist_times, when) - 1
-    if i < 0:
-        return None
-    return ranks.get(hist_times[i])
+async def funding_table(sess, symbols):
+    """{symbol: ([times], [rates])}, cached on disk — it is ~600 requests."""
+    path = os.path.join(CACHE, "funding.json")
+    if os.path.exists(path):
+        raw = json.load(open(path))
+        if all(s in raw for s in symbols):
+            return {s: (raw[s][0], raw[s][1]) for s in raw}
+    raw = {}
+    for i, s in enumerate(symbols):
+        rows = await fetch_funding(sess, s)
+        raw[s] = ([t for t, _ in rows], [v for _, v in rows])
+        print(f"    funding {i + 1}/{len(symbols)} {s}: {len(rows)} settlements")
+    os.makedirs(CACHE, exist_ok=True)
+    json.dump(raw, open(path, "w"))
+    return raw
 
 
-def split(sigs, feat, lo=1 / 3, hi=2 / 3):
-    vals = [feat[s] for s in sigs if s in feat]
-    if len(vals) < 60:
-        return None
-    q = sorted(vals)
-    a, b = q[int(lo * len(q))], q[int(hi * len(q))]
-    top = bets([s for s in sigs if s in feat and feat[s] >= b])
-    bot = bets([s for s in sigs if s in feat and feat[s] <= a])
-    if len(top) < 20 or len(bot) < 20:
-        return None
-    mt, st = mean_se([r for _, r in top])
-    mb, sb = mean_se([r for _, r in bot])
-    se = (st ** 2 + sb ** 2) ** 0.5
-    return dict(nt=len(top), nb=len(bot), mt=mt, mb=mb,
-                wt=sum(1 for _, r in top if r > 0) / len(top),
-                wb=sum(1 for _, r in bot if r > 0) / len(bot),
-                d=mt - mb, se=se, z=(mt - mb) / se if se else 0.0)
-
-
-def circular_null(sigs, feat, seeds=SHIFTS):
-    """|z| when each symbol's funding-rank series is rotated in time.
-
-    Funding is strongly autocorrelated — a crowded book stays crowded for days
-    — so an independent shuffle would be far too lenient, exactly as
-    feature_batch2 established. Rotation preserves the persistence and the
-    bucket sizes and destroys only the link to the outcome.
-    """
-    bysym = defaultdict(list)
-    for s in sigs:
-        if s in feat:
-            bysym[s.sym].append(s)
-    for v in bysym.values():
-        v.sort(key=lambda s: s.t)
-    out = []
-    for k in range(seeds):
-        rnd = random.Random(3300 + k)
-        rot = {}
-        for group in bysym.values():
-            if len(group) < 2:
-                continue
-            j = rnd.randrange(len(group))
-            for i, s in enumerate(group):
-                rot[s] = feat[group[(i + j) % len(group)]]
-        got = split([s for s in sigs if s in rot], rot)
-        if got:
-            out.append(abs(got["z"]))
-    return sorted(out)
-
-
-def line(label, got, note=""):
+def funding_at(table, sym, t):
+    """The rate in force at time t. STRICTLY causal: the last settlement at or
+    before t, never the next one. Returns None when the symbol has no history
+    covering t, which must stay distinct from a rate of zero."""
+    got = table.get(sym)
     if not got:
-        print(f"  {label:<32}   too few")
-        return
-    print(f"  {label:<32}{got['nt']:>6}{got['wt']:>6.0%}{got['mt']:>+9.3f}"
-          f"   |{got['nb']:>6}{got['wb']:>6.0%}{got['mb']:>+9.3f}"
-          f"   |{got['d']:>+8.3f}{got['z']:>+6.1f} SE  {note}")
+        return None
+    times, rates = got
+    i = bisect_right(times, t) - 1
+    return rates[i] if 0 <= i < len(rates) else None
 
 
-def header(title):
-    print(f"\n{title}")
-    print(f"  {'':<32}{'  TOP THIRD':<21}   |{'  BOTTOM THIRD':<21}   |"
-          f"  DIFFERENCE")
-    print(f"  {'':<32}{'bets':>6}{'win':>6}{'R/bet':>9}   |{'bets':>6}"
-          f"{'win':>6}{'R/bet':>9}   |")
+# ── the cuts ─────────────────────────────────────────────────────────────────
+
+def quintiles(vals):
+    s = sorted(vals)
+    return [s[int(len(s) * f)] for f in (0.2, 0.4, 0.6, 0.8)] if s else []
+
+
+def bucket_of(v, edges):
+    i = 0
+    for e in edges:
+        if v > e:
+            i += 1
+    return i
+
+
+def block(title, rows, key, edges, labels):
+    """One table per cut.
+
+    EACH DIRECTION IS MEASURED AGAINST ITS OWN BASELINE, and the first version
+    of this function did not do that. It printed long R beside short R and
+    called the second one a control, which it is not: shorts out-scored longs
+    in every single bucket, so the comparison only said "shorts did better in
+    this window" — a fact about the window, not about funding.
+
+    The question funding actually poses is whether a bucket moves a direction
+    away from ITS OWN average. And the signature of real positioning
+    information is specific: as funding goes from negative (crowded shorts) to
+    positive (crowded longs), the long delta and the short delta must move in
+    OPPOSITE directions. Two columns drifting the same way is a shared regime.
+    """
+    longs = [r.r for r in rows if r.is_long]
+    shorts = [r.r for r in rows if not r.is_long]
+    bl = sum(longs) / len(longs) if longs else 0.0
+    bs = sum(shorts) / len(shorts) if shorts else 0.0
+    print(f"\n  {title}")
+    print(f"    baseline: all longs {bl:+.3f} (n={len(longs)}), "
+          f"all shorts {bs:+.3f} (n={len(shorts)})")
+    print(f"    {'bucket':<22}{'nL':>5}{'long R':>9}{'vs base':>9}"
+          f"{'nS':>6}{'short R':>9}{'vs base':>9}{'L-S spread':>12}")
+    out = []
+    for b, lab in enumerate(labels):
+        sel = [r for r in rows if key(r) is not None
+               and bucket_of(key(r), edges) == b]
+        L = [r.r for r in sel if r.is_long]
+        S = [r.r for r in sel if not r.is_long]
+        if not L and not S:
+            continue
+        m1 = sum(L) / len(L) if L else 0.0
+        m2 = sum(S) / len(S) if S else 0.0
+        d1, d2 = m1 - bl, m2 - bs
+        out.append((lab, len(L), d1, len(S), d2))
+        print(f"    {lab:<22}{len(L):>5}{m1:>+9.3f}{d1:>+9.3f}"
+              f"{len(S):>6}{m2:>+9.3f}{d2:>+9.3f}{d1 - d2:>+12.3f}")
+    return out
+
+
+def placebo(rows, key, edges, n_bucket):
+    """Where the real top-minus-bottom sits against a shuffled null."""
+    live = [(key(r), r.r) for r in rows if key(r) is not None]
+    if len(live) < 50:
+        return None
+    def spread(pairs):
+        lo = [r for v, r in pairs if bucket_of(v, edges) == 0]
+        hi = [r for v, r in pairs if bucket_of(v, edges) == n_bucket - 1]
+        if not lo or not hi:
+            return 0.0
+        return sum(hi) / len(hi) - sum(lo) / len(lo)
+    real = spread(live)
+    vals = [v for v, _ in live]
+    rs = [r for _, r in live]
+    rnd = random.Random(20260912)
+    null = []
+    for _ in range(SEEDS):
+        rnd.shuffle(vals)
+        null.append(spread(list(zip(vals, rs))))
+    null.sort()
+    pct = 100.0 * sum(1 for x in null if x < real) / len(null)
+    return real, null[int(SEEDS * 0.05)], null[SEEDS // 2], null[int(SEEDS * 0.95)], pct
 
 
 async def main():
+    by_tf = {}
     async with aiohttp.ClientSession() as sess:
-        syms = await list_symbols(sess)
-        candles = await load_universe(sess, syms, TF, DAYS)
-        sigs = await collect(sess, candles)
-        fund = {}
-        for sym in candles:
-            try:
-                h = await funding_history(sess, sym)
-            except Exception as e:
-                log.warning("%s: funding history failed: %s", sym, e)
-                continue
-            if len(h) > 60:
-                fund[sym] = (rank_series(h), [t for t, _ in h])
+        syms = await universe(sess)
+        zday = await context(sess, syms, DAY)
+        z8h = await context(sess, syms, H8)
+        for tf in TFS:
+            cs = await load_universe(
+                sess, syms, tf, DAYS,
+                min_bars=int(0.8 * DAYS * 86400 // BAR_SECONDS[tf]))
+            r = await collect(sess, cs, zday, z8h, interval=tf)
+            by_tf[tf] = [t for t in r if t.filled and t.exit_t is not None]
+        print("  fetching funding history…")
+        table = await funding_table(sess, syms)
 
-    conf = [s for s in sigs if s.kind == "confirmed"]
+    sent = [t for tf in TFS for t in by_tf[tf] if t.day]
+    picks = pick_rolling(sent, KEYS["A  tf > band > confd  (shipped)"], COOLDOWN)
+    pick_ids = {id(t) for t in picks}
 
-    # Build the three variables per signal, from the last settlement BEFORE it.
-    crowd, extreme, raw = {}, {}, {}
-    for s in conf:
-        got = fund.get(s.sym)
-        if not got:
-            continue
-        hit = feature_at(got[0], got[1], s.t)
-        if hit is None:
-            continue
-        pct, rate = hit
-        # The signed variable: funding AGAINST the trade, so a long wants the
-        # crowd long (positive) and a short wants the crowd short (negative).
-        # Expressed as a percentile it must be flipped for shorts.
-        crowd[s] = pct if s.is_long else 1.0 - pct
-        extreme[s] = abs(pct - 0.5) * 2          # crowded either way
-        raw[s] = pct                             # unsigned, the control
+    # SIDE TABLES, NOT ATTRIBUTES. poi_tf.T declares __slots__, so t.fr = ...
+    # raises AttributeError. Keyed by id(t), which is safe because `sent` holds
+    # every row alive for the life of this function.
+    FR, FRP = {}, {}
+    per_sym = {}
+    for t in sent:
+        v = funding_at(table, t.sym, t.t)
+        if v is not None:
+            FR[id(t)] = v
+            per_sym.setdefault(t.sym, []).append(v)
+    ranked = {s: sorted(v) for s, v in per_sym.items()}
+    for t in sent:
+        v = FR.get(id(t))
+        if v is not None:
+            col = ranked[t.sym]
+            FRP[id(t)] = bisect_right(col, v) / max(len(col), 1)
 
-    print(f"FUNDING RATE — the first NON-PRICE variable tested in this project\n"
-          f"{len(fund)} symbols with funding history · {len(conf)} Min30 "
-          f"confirmed signals · {len(crowd)} matched\ntrailing 30-day "
-          f"percentile of each symbol's OWN funding, last settlement before "
-          f"the signal")
+    fr_of = lambda r: FR.get(id(r))      # noqa: E731
+    frp_of = lambda r: FRP.get(id(r))    # noqa: E731
+    have = [t for t in sent if id(t) in FR]
+    print(f"\nFUNDING AT SIGNAL TIME — does it predict anything?")
+    print(f"{len(syms)} symbols · {DAYS} days · {'+'.join(TFS)}")
+    print(f"{len(sent)} sent, {len(picks)} picked · funding matched on "
+          f"{len(have)} ({100 * len(have) / max(len(sent), 1):.0f}%)")
+    if have:
+        fr = sorted(FR[id(t)] for t in have)
+        print(f"funding range: {fr[0]:+.5f} … {fr[-1]:+.5f} per 8h "
+              f"(median {fr[len(fr) // 2]:+.6f})")
+    print("\nEach direction is measured against ITS OWN baseline, because shorts")
+    print("out-scored longs in every bucket and comparing the two columns would")
+    print("only restate that. THE SIGNATURE OF REAL POSITIONING INFORMATION is")
+    print("that as funding rises the long delta and the short delta move in")
+    print("OPPOSITE directions. Both drifting the same way is a shared regime,")
+    print("which is how the exhaustion study died.")
 
-    VARS = (("crowd positioned AGAINST us", crowd,
-             "the mechanism: higher should pay"),
-            ("funding extreme, either way", extreme, ""),
-            ("raw funding percentile", raw, "unsigned control"))
+    edges = quintiles([FR[id(t)] for t in have])
+    labels = ["Q1 most negative", "Q2", "Q3", "Q4", "Q5 most positive"]
+    pedges = [0.2, 0.4, 0.6, 0.8]
+    plabels = ["P1 lowest for sym", "P2", "P3", "P4", "P5 highest for sym"]
 
-    header("WHOLE WINDOW")
-    results = {}
-    for name, feat, note in VARS:
-        got = split(conf, feat)
-        results[name] = (got, feat)
-        line(name, got, note)
+    pick_rows = [t for t in have if id(t) in pick_ids]
+    print(f"\n{'=' * 92}\nPRIMARY — THE 🎯 PICKS ({len(pick_rows)} with funding)"
+          f"\n{'=' * 92}")
+    block("raw funding quintile", pick_rows, fr_of, edges, labels)
+    block("per-symbol percentile", pick_rows, frp_of, pedges, plabels)
 
-    print(f"\n{'=' * 104}\nWITHIN EACH QUARTER — the test that killed every "
-          f"regime variable\n{'=' * 104}")
-    byq = defaultdict(list)
-    for s in conf:
-        dt = datetime.fromtimestamp(s.t, timezone.utc)
-        byq[f"{dt.year}Q{(dt.month - 1) // 3 + 1}"].append(s)
-    for name, (got, feat) in results.items():
-        if not got:
-            continue
-        header(name)
-        signs = []
-        for q in sorted(byq):
-            g = split(byq[q], feat)
-            line(q, g)
-            if g:
-                signs.append(g["d"] > 0)
-        if signs:
-            agree = max(sum(signs), len(signs) - sum(signs))
-            print(f"    sign holds in {agree} of {len(signs)} quarters"
-                  f"{'  <-- passes condition 2' if agree >= 3 else ''}")
+    print(f"\n{'=' * 92}\nSECONDARY — EVERY ALERT SENT ({len(have)})\n{'=' * 92}")
+    block("raw funding quintile", have, fr_of, edges, labels)
+    block("per-symbol percentile", have, frp_of, pedges, plabels)
 
-    # ---- condition 4: does the mechanism work on BOTH sides? --------------
-    got, feat = results["crowd positioned AGAINST us"]
-    if got:
-        print(f"\n{'=' * 104}\nLONGS AND SHORTS SEPARATELY — the mechanism "
-              f"claims BOTH, not one\n{'=' * 104}")
-        header("crowd positioned against us")
-        line("LONG signals only", split([s for s in conf if s.is_long], feat))
-        line("SHORT signals only",
-             split([s for s in conf if not s.is_long], feat))
-        print(f"    An effect living entirely on one side is a directional bet "
-              f"on the year,\n    not the liquidation mechanism the "
-              f"pre-registration describes.")
+    print(f"\n{'=' * 92}\nPLACEBO FLOOR — top quintile minus bottom, against "
+          f"{SEEDS} shuffles\n{'=' * 92}")
+    print(f"  {'stream':<26}{'real':>9}{'null 5th':>10}{'median':>9}"
+          f"{'95th':>9}{'percentile':>12}")
+    for lab, rows in (("picks, longs", [r for r in pick_rows if r.is_long]),
+                      ("picks, shorts", [r for r in pick_rows if not r.is_long]),
+                      ("sent, longs", [r for r in have if r.is_long]),
+                      ("sent, shorts", [r for r in have if not r.is_long])):
+        got = placebo(rows, fr_of, edges, 5)
+        if got:
+            real, lo, med, hi, pct = got
+            flag = "" if lo <= real <= hi else "   <- outside the null band"
+            print(f"  {lab:<26}{real:>+9.3f}{lo:>+10.3f}{med:>+9.3f}"
+                  f"{hi:>+9.3f}{pct:>11.0f}%{flag}")
 
-    print(f"\n{'=' * 104}\nTHE CIRCULAR-SHIFT NULL\n{'=' * 104}")
-    print(f"  {'variable':<32}{'real |SE|':>11}{'null p95':>10}{'null max':>10}")
-    for name, (got, feat) in results.items():
-        if not got:
-            continue
-        null = circular_null(conf, feat)
-        if not null:
-            continue
-        p95 = null[int(0.95 * (len(null) - 1))]
-        print(f"  {name:<32}{abs(got['z']):>11.2f}{p95:>10.2f}{null[-1]:>10.2f}"
-              f"{'   clears' if abs(got['z']) >= p95 else ''}")
+    print(f"\n{'=' * 92}\nBOTH HALVES — an effect in one half is a non-result"
+          f"\n{'=' * 92}")
+    ok = sorted(have, key=lambda r: r.fill_t or 0)
+    mid = ok[len(ok) // 2].fill_t
+    for lab, part in (("FIRST half", [r for r in have if (r.fill_t or 0) <= mid]),
+                      ("SECOND half", [r for r in have if (r.fill_t or 0) > mid])):
+        sub = [r for r in part if id(r) in pick_ids]
+        print(f"\n  ── {lab}: {len(sub)} picks, {len(part)} sent ──")
+        block(f"picks, raw quintile", sub, fr_of, edges, labels)
 
-    print(f"\nPRE-REGISTERED: 2 SE on the window · sign in 3 of 4 quarters · "
-          f"clears the null ·\nand for the signed variable, present on BOTH "
-          f"sides in the predicted direction.")
+    print(f"\n{'=' * 92}\nEXTREMES — the crowding story is about tails, not sign"
+          f"\n{'=' * 92}")
+    if have:
+        fr = sorted(FR[id(t)] for t in have)
+        d1, d9 = fr[len(fr) // 10], fr[9 * len(fr) // 10]
+        for lab, rows in (("picks", pick_rows), ("sent", have)):
+            for name, sel in (("bottom decile", lambda r: fr_of(r) <= d1),
+                              ("middle 80%", lambda r: d1 < fr_of(r) < d9),
+                              ("top decile", lambda r: fr_of(r) >= d9)):
+                same = [r.r for r in rows if sel(r) and r.is_long]
+                opp = [r.r for r in rows if sel(r) and not r.is_long]
+                if not same and not opp:
+                    continue
+                m1, s1 = mean_se(same) if same else (0, 0)
+                m2, s2 = mean_se(opp) if opp else (0, 0)
+                print(f"  {lab:<7}{name:<16}long n={len(same):>5} {m1:>+7.3f}"
+                      f" ±{s1:.3f}   short n={len(opp):>5} {m2:>+7.3f} ±{s2:.3f}")
+            print()
 
 
 if __name__ == "__main__":
