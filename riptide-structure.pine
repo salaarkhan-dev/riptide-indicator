@@ -415,10 +415,17 @@ if not isInside and bias != 0
                      line.style_solid)
                 tag(bosLvl, bosT, "BOS", bias > 0 ? bullCol : bearCol,
                      bias > 0)
-            // The protected extreme of the range becomes the CHoCH level, and
-            // the cycle restarts.
-            chLvl    := bias > 0 ? runLo : runHi
-            chT    := bias > 0 ? runLoT : runHiT
+            // THE INDUCEMENT BECOMES THE PROTECTED LEVEL. This was runLo —
+            // the lowest point since the inducement broke — which sounds like
+            // the doc's "lowest point within the related range" and is not the
+            // same thing: a single deep wick during the dip put the reversal
+            // level thousands of points below the structure, so neither the
+            // BOS above nor the CHoCH below could ever be reached and the
+            // engine sat frozen for twelve days. The pullback low IS the
+            // structural low of the range, it is always a confirmed pivot, and
+            // a break of it is exactly what "the inducement failed" means.
+            chLvl    := na(idmLvl) ? (bias > 0 ? runLo : runHi) : idmLvl
+            chT      := na(idmLvl) ? (bias > 0 ? runLoT : runHiT) : idmT
             idmLvl   := na
             idmTaken := false
             bosLvl   := na
@@ -446,8 +453,14 @@ if not isInside and bias != 0
         // and it has to be captured before the flip. Setting chLvl := na here
         // — which is what this did — left the engine with no reversal level at
         // all until some later BOS refilled it. The panel read "Flips on —".
-        float newProt  = bias > 0 ? runHi : runLo
-        int   newProtT = bias > 0 ? runHiT : runLoT
+        // The most recent confirmed pivot on the other side, falling back to
+        // the running extreme only before the first one exists. Same reason as
+        // above: a pivot is a level the market actually turned at, a running
+        // extreme is wherever the deepest wick happened to reach.
+        float newProt  = bias > 0 ? (na(pvHi) ? runHi : pvHi)
+             : (na(pvLo) ? runLo : pvLo)
+        int   newProtT = bias > 0 ? (na(pvHi) ? runHiT : pvHiT)
+             : (na(pvLo) ? runLoT : pvLoT)
         bias     := -bias
         idmLvl   := na
         idmTaken := false
