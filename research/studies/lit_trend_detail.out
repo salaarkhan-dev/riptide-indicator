@@ -1,0 +1,57 @@
+THE STRUCTURE-TREND GATE, IN FULL — what shipping it would change
+27040 filled signals, 59 symbols, 333 days, Min30. '/day at 120' scales to the deployed universe.
+n counts FILLED signals only; unfilled limits never became trades.
+
+A/B POOLED — the pre-registered primary
+  arm                            n   win  avg win  avg loss    R/sig           PF   total R
+  everything (no gate)        9159   37%   +1.827    -1.008   +0.051±0.015  1.08    +464.9
+  KEPT  structure agrees      5635   38%   +1.848    -1.011   +0.080±0.019  1.13    +449.1
+  CUT   structure disagrees   3524   36%   +1.793    -1.005   +0.004±0.023  1.01     +15.8
+                            separation |SE|  2.5   gate delta   -15.8R   alerts -38%  (21.5/day at 120)
+  the cut group does NOT lose money — this gate costs alerts and returns nothing
+
+A/B EARLY
+  arm                            n   win  avg win  avg loss    R/sig           PF   total R
+  everything (no gate)        7898   37%   +1.825    -1.009   +0.048±0.016  1.08    +377.0
+  KEPT  structure agrees      4769   38%   +1.847    -1.013   +0.067±0.020  1.11    +317.8
+  CUT   structure disagrees   3129   37%   +1.792    -1.004   +0.019±0.025  1.03     +59.3
+                            separation |SE|  1.5   gate delta   -59.3R   alerts -40%  (19.1/day at 120)
+  the cut group does NOT lose money — this gate costs alerts and returns nothing
+
+A/B CONFIRMED — the only arm whose cut group loses money
+  arm                            n   win  avg win  avg loss    R/sig           PF   total R
+  everything (no gate)        1261   38%   +1.839    -1.003   +0.070±0.040  1.11     +87.9
+  KEPT  structure agrees       866   40%   +1.851    -1.001   +0.152±0.049  1.25    +131.4
+  CUT   structure disagrees    395   32%   +1.805    -1.007   -0.110±0.068  0.84     -43.5
+                            separation |SE|  3.1   gate delta   +43.5R   alerts -31%  (2.4/day at 120)
+
+C/D — what the existing grade already throws away
+  arm                            n   win  avg win  avg loss    R/sig           PF   total R
+  everything (no gate)       17881   35%   +1.765    -1.008   -0.026±0.010  0.96    -470.0
+  KEPT  structure agrees      5618   35%   +1.834    -1.015   -0.013±0.019  0.98     -73.1
+  CUT   structure disagrees  12263   36%   +1.733    -1.004   -0.032±0.012  0.95    -397.0
+                            separation |SE|  0.9   gate delta  +397.0R   alerts -69%  (74.9/day at 120)
+
+============================================================================================
+LONG AND SHORT, ON THE CONFIRMED ARM
+============================================================================================
+
+  longs
+  arm                            n   win  avg win  avg loss    R/sig           PF   total R
+      KEPT  agrees             320   38%   +1.822    -0.981   +0.070±0.078  1.11     +22.4
+      CUT   disagrees          191   33%   +1.788    -0.990   -0.074±0.098  0.89     -14.1
+
+  shorts
+  arm                            n   win  avg win  avg loss    R/sig           PF   total R
+      KEPT  agrees             546   42%   +1.866    -1.014   +0.199±0.062  1.34    +108.9
+      CUT   disagrees          204   31%   +1.822    -1.023   -0.144±0.094  0.80     -29.4
+
+============================================================================================
+WHAT IT COSTS TO BE WRONG
+============================================================================================
+  if the effect is REAL      the gate adds   +43.5R over 333 days
+  if the effect is NOISE     the cut group would have averaged the pool's +0.070,
+                             so cutting 395 of them costs   -27.5R
+  the bet is roughly symmetric in R and it is ALERTS ONLY — no
+  capital moves on a label being wrong. that is the whole argument
+  for shipping it before the forward sample exists.
