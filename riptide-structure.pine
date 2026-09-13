@@ -422,16 +422,63 @@ step(Deg d, bool nHi, float pHi, int pHiT, bool nLo, float pLo, int pLoT) =>
             d.runLoT   := time
     d
 
-var Deg deep = Deg.new(slot = 0)
-var Deg intl = Deg.new(slot = 1)
-var Deg main = Deg.new(slot = 2)
+// THE CASCADE IS A FRACTAL ON THE PIVOT STREAM, NOT A CHAIN OF REVERSALS.
+//
+// It used to promote a pivot only when the degree below changed character. That
+// is far too lossy: deep printed four changes of character across two days, so
+// internal received four pivots and main received none, and a degree with four
+// pivots has levels spanning the entire chart. The panel showed it exactly —
+// "needs 1295.43 to continue, 807.87 to flip" with price at 1088.
+//
+// A swing of a higher degree is a swing that the swings either side of it did
+// not exceed. That is the classic swing-of-swings and it is still not a bar
+// count: it reads the pivot sequence, which is structure, not candles. It also
+// thins by roughly half per level instead of by ninety per cent, which is what
+// keeps all three degrees populated at once.
+type Casc
+    float h0 = na
+    float h1 = na
+    int   h1T = na
+    float l0 = na
+    float l1 = na
+    int   l1T = na
+    bool  outHi = false
+    bool  outLo = false
+    float outPx = na
+    int   outT = na
 
-// THE CASCADE. Deep reads candles; internal reads deep's changes of character;
-// main reads internal's. Called in that order so a flip propagates upward on
-// the same bar it happens.
+cascade(Casc c, bool nHi, float hi, int hiT, bool nLo, float lo, int loT) =>
+    c.outHi := false
+    c.outLo := false
+    if nHi
+        if not na(c.h1) and not na(c.h0) and c.h1 > c.h0 and c.h1 > hi
+            c.outHi := true
+            c.outPx := c.h1
+            c.outT  := c.h1T
+        c.h0  := c.h1
+        c.h1  := hi
+        c.h1T := hiT
+    if nLo
+        if not na(c.l1) and not na(c.l0) and c.l1 < c.l0 and c.l1 < lo
+            c.outLo := true
+            c.outPx := c.l1
+            c.outT  := c.l1T
+        c.l0  := c.l1
+        c.l1  := lo
+        c.l1T := loT
+    c
+
+var Deg  deep = Deg.new(slot = 0)
+var Deg  intl = Deg.new(slot = 1)
+var Deg  main = Deg.new(slot = 2)
+var Casc c1   = Casc.new()
+var Casc c2   = Casc.new()
+
 step(deep, not na(rawHi), rawHi, rawHiT, not na(rawLo), rawLo, rawLoT)
-step(intl, deep.outHi, deep.outPx, deep.outT, deep.outLo, deep.outPx, deep.outT)
-step(main, intl.outHi, intl.outPx, intl.outT, intl.outLo, intl.outPx, intl.outT)
+cascade(c1, not na(rawHi), rawHi, rawHiT, not na(rawLo), rawLo, rawLoT)
+step(intl, c1.outHi, c1.outPx, c1.outT, c1.outLo, c1.outPx, c1.outT)
+cascade(c2, c1.outHi, c1.outPx, c1.outT, c1.outLo, c1.outPx, c1.outT)
+step(main, c2.outHi, c2.outPx, c2.outT, c2.outLo, c2.outPx, c2.outT)
 
 // ═════════════════════════ 5. DRAWING ═══════════════════════════════════════
 // Anchored in TIME, never in bar_index: a structural level legitimately sits
@@ -484,6 +531,72 @@ draw(deep, showDeep, "ii", 1, szDeep, line.style_dotted)
 draw(intl, showInt,  "i",  2, szInt,  line.style_dashed)
 draw(main, showMain, "",   3, szMain, line.style_solid)
 
+// ── THE LEVELS THAT ARE STILL LIVE ──────────────────────────────────────────
+// The missing half of the picture. Drawing only the moment a level BREAKS
+// leaves the right-hand side of the chart empty and answers the wrong
+// question: a trader looking at the hard edge wants to know what price has to
+// do NEXT, not what it did last Tuesday.
+//
+// So every degree also projects the levels it is currently waiting on — the
+// BOS it must clear to continue, the CHoCH that would flip it, the inducement
+// still sitting untaken — extended to the current bar and relabelled at the
+// right edge, which is where the reference puts them and where the eye
+// already is.
+type Live
+    line  ln = na
+    label lb = na
+
+live(Live v, bool on, float y, int x1, string txt, color c, int w, string st,
+     string sz) =>
+    if not on or na(y) or na(x1)
+        line.delete(v.ln)
+        label.delete(v.lb)
+        v.ln := na
+        v.lb := na
+    else if na(v.ln)
+        v.ln := line.new(x1, y, time, y, xloc = xloc.bar_time, color = c,
+             width = w, style = st)
+        v.lb := label.new(time, y, txt, xloc = xloc.bar_time,
+             style = label.style_none, textcolor = c, size = sz)
+    else
+        line.set_xy1(v.ln, x1, y)
+        line.set_xy2(v.ln, time, y)
+        line.set_color(v.ln, c)
+        label.set_xy(v.lb, time, y)
+        label.set_text(v.lb, txt)
+        label.set_textcolor(v.lb, c)
+
+var Live lvBosD = Live.new()
+var Live lvChD  = Live.new()
+var Live lvIdmD = Live.new()
+var Live lvBosI = Live.new()
+var Live lvChI  = Live.new()
+var Live lvIdmI = Live.new()
+var Live lvBosM = Live.new()
+var Live lvChM  = Live.new()
+var Live lvIdmM = Live.new()
+
+// Pending levels are dimmed against the confirmed ones: a level that has not
+// been reached yet is a question, and it should not shout as loudly as an
+// answer already on the chart.
+liveSet(Deg d, Live vb, Live vc, Live vi, bool on, string pfx, int w,
+     string sz, string st) =>
+    color bc = d.bias > 0 ? cBull : cBear
+    color cc = d.bias > 0 ? cBear : cBull
+    color ic = d.bias > 0 ? cIdmLo : cIdmHi
+    live(vb, on and d.idmTaken, d.bos, d.bosT, pfx + "BOS",
+         color.new(bc, 35), w, st, sz)
+    live(vc, on, d.ch, d.chT, pfx + "CHoCH", color.new(cc, 35), w, st, sz)
+    live(vi, on and not d.idmTaken, d.idm, d.idmT, pfx + "IDM",
+         color.new(ic, 25), 1, st, sz)
+
+liveSet(deep, lvBosD, lvChD, lvIdmD, showDeep, "ii", 1, szDeep,
+     line.style_dotted)
+liveSet(intl, lvBosI, lvChI, lvIdmI, showInt, "i", 2, szInt,
+     line.style_dashed)
+liveSet(main, lvBosM, lvChM, lvIdmM, showMain, "", 3, szMain,
+     line.style_solid)
+
 // Swing labels come off the deep degree, the only one that sees every turn.
 if showSwing and deep.sHi and not na(deep.pvHi)
     label.new(deep.pvHiT, deep.pvHi,
@@ -523,9 +636,6 @@ var int armCh  = 0
 
 float span = not na(deep.bos) and not na(deep.ch) ? math.abs(deep.bos - deep.ch)
      : na
-if deep.sIdm
-    armIdm := 1
-    nIdm += 1
 if armIdm == 1 and not na(deep.bos) and not na(deep.ch)
     bool hitBos = deep.bias > 0 ? high >= deep.bos : low <= deep.bos
     bool hitCh  = deep.bias > 0 ? low <= deep.ch : high >= deep.ch
@@ -535,15 +645,23 @@ if armIdm == 1 and not na(deep.bos) and not na(deep.ch)
     else if hitCh
         nIdmCh += 1
         armIdm := 0
+// Armed AFTER the resolve above, so an inducement taken on this bar cannot
+// also be scored on it.
+if deep.sIdm
+    armIdm := 1
+    nIdm   += 1
 
 if not na(span) and span > 0
     bool nearBos = deep.bias > 0 ? high >= deep.bos - span * 0.25
          : low <= deep.bos + span * 0.25
     bool nearCh = deep.bias > 0 ? low <= deep.ch + span * 0.25
          : high >= deep.ch - span * 0.25
-    if armBos == 0 and nearBos
-        armBos := 1
-        nBosNear += 1
+    // RESOLVE BEFORE ARMING. Written the other way round, a bar that came
+    // near a level ARMED and then immediately RESOLVED on the same bar — and
+    // since "near" is a quarter of the range from each end, a narrow range has
+    // both ends near at once. That is how the table read 0% for "BOS near ->
+    // BOS break" against 98.8% for "-> opposite pullback": nothing was being
+    // measured except the two thresholds overlapping.
     if armBos == 1
         if deep.sBos or deep.sTrap
             nBosBrk += 1
@@ -551,9 +669,6 @@ if not na(span) and span > 0
         else if nearCh
             nBosOpp += 1
             armBos := 0
-    if armCh == 0 and nearCh
-        armCh := 1
-        nChNear += 1
     if armCh == 1
         if deep.sCh
             nChBrk += 1
@@ -561,6 +676,12 @@ if not na(span) and span > 0
         else if nearBos
             nChOpp += 1
             armCh := 0
+    if armBos == 0 and nearBos
+        armBos := 1
+        nBosNear += 1
+    if armCh == 0 and nearCh
+        armCh := 1
+        nChNear += 1
 
 // ═══════════════════════════ 7. PANELS ══════════════════════════════════════
 trendTxt(Deg d) =>
