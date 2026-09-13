@@ -1,0 +1,36 @@
+SMT DIVERGENCE AGAINST A CIRCULAR-SHIFT NULL
+8901 A/B signals, 102 symbols, 333 days, Min30.  BTC_USDT rolled 300 times.
+
+  The null rolls BTC's highs and lows in time and leaves the
+  timestamps alone, so BTC keeps its own volatility clustering and
+  its own rate of making 20-bar extremes — everything but
+  its real-time link to the symbol that was raided.
+
+  panel                                R/sig      n       R/sig      n
+  PRIMARY  early, divergence          +0.038   3921  vs  -0.045   3609   diff +0.083  |SE|  2.9
+                                    null p95  2.5   null max  3.6   CLEARS
+           pooled, divergence         +0.036   4533  vs  -0.037   4368   diff +0.073  |SE|  2.8
+                                    null p95  2.4   null max  3.5   CLEARS
+           confirmed, divergence      +0.023    612  vs  +0.002    759   diff +0.021  |SE|  0.3
+                                    null p95  1.0   null max  1.7   FAILS — inside the null
+
+  CONTROL  early, CONFLUENCE          -0.043   2391  vs  +0.017   5139   diff -0.061  |SE|  2.0
+                                    null p95  2.8   null max  4.0   FAILS — inside the null
+
+================================================================================================
+BOTH HALVES, against the same null
+================================================================================================
+  panel                                R/sig      n       R/sig      n
+    early, half 1                     +0.039   1925  vs  -0.043   1835   diff +0.082  |SE|  2.1
+                                    null p95  1.8   null max  2.7   CLEARS
+    early, half 2                     +0.037   1996  vs  -0.048   1774   diff +0.085  |SE|  2.1
+                                    null p95  2.5   null max  3.1   FAILS — inside the null
+
+================================================================================================
+SYMBOL BOOTSTRAP — 2000 draws over the universe
+================================================================================================
+  early       [ +0.033,  +0.132]   median  +0.085   all above zero
+  pooled      [ +0.029,  +0.118]   median  +0.075   all above zero
+
+  a difference that depends on a handful of symbols is not a
+  property of the market. the 5th percentile has to clear zero.

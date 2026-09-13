@@ -74,6 +74,80 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/smt_null.py
+
+──────────────────────────────────────────────────────────────────────────────
+RESULT, 13 Sep 2026 — IT SURVIVES, NARROWLY, AND ONE PANEL FAILS.
+
+8901 A/B signals, 102 symbols, 333 days, Min30. BTC rolled 300 times.
+
+  PRIMARY, EARLY STREAM — CLEARS:
+
+      divergence +0.038 (3921)  vs  none -0.045 (3609)   diff +0.083  |SE| 2.9
+      null p95 2.5    null max 3.6                                    CLEARS
+
+  POOLED — CLEARS at 2.8 against a p95 of 2.4. CONFIRMED — fails at 0.3 against
+  1.0, which is the effect being absent rather than the null being harsh, and
+  matches unicorn_smt.py exactly.
+
+  THE CONTROL BEHAVES AS PRE-REGISTERED. Confluence — BTC made the SAME extreme
+  — comes in at -0.061, the right direction, and does NOT independently clear
+  its own null (2.0 against a p95 of 2.8). Divergence clears, agreement does
+  not. That is the pattern the pre-registration asked for, and the one a
+  shared-regime artefact could not produce: a common cause would push both arms
+  the same way.
+
+  THE SYMBOL BOOTSTRAP IS CLEAN, and this is the panel that passed most
+  convincingly:
+
+      early   [+0.033, +0.132]   median +0.085   all above zero
+      pooled  [+0.029, +0.118]   median +0.075   all above zero
+
+  2000 draws over the universe and the 5th percentile is clear of zero in both.
+  The difference is not a handful of symbols.
+
+  AND THE PANEL THAT FAILS, stated plainly rather than buried. Half 2 does not
+  clear its own null:
+
+      half 1   diff +0.082   |SE| 2.1   null p95 1.8   CLEARS
+      half 2   diff +0.085   |SE| 2.1   null p95 2.5   FAILS
+
+  Read this carefully, because the obvious reading is wrong. The EFFECT is
+  almost identical in the two halves (+0.082 and +0.085) — it is the NULL that
+  differs, 1.8 against 2.5. So this is not the effect disappearing in half the
+  window, which is how twenty-one filters died; it is 300 rotations on half the
+  data producing a noisier estimate of the null's own p95. That makes it a
+  power problem rather than a stability problem, and it is still a failure: the
+  pre-registration said clear the null, and on half 2 it does not.
+
+WHAT IS DIFFERENT ABOUT THIS RESULT, AND IT IS NOT THE SIGNIFICANCE. Every
+filter this project has rejected was rejected for the same reason, stated most
+sharply in path_exit.py: "Filtering on a predictor only helps when the excluded
+group is NEGATIVE, and this one is merely less positive. A prediction is not a
+decision." Twenty-one filters found groups that were less good. This is the
+first one where THE EXCLUDED GROUP IS ACTUALLY NEGATIVE — -0.045 R per signal
+on the early stream, against +0.038 for what is kept. That is the difference
+between a filter that costs volume for nothing and a filter that removes losers.
+
+HOW MUCH IT WOULD MATTER. The early stream sits near zero overall. Keeping only
+the divergence half is 52% of it at +0.038 instead of 100% at roughly -0.004.
+That is not a marginal improvement to a profitable stream; it is the difference
+between a stream worth running and one that is not.
+
+WHY IT IS STILL NOT SHIPPED. The margin over the null is thin — 2.9 against a
+p95 of 2.5, with a null max of 3.6 — so the honest description is "clears by
+about a third of a standard error", not "significant". One of five panels
+fails. And this file, unicorn_smt.py and the direction and control panels
+before it are now around ten looks at the same data, which is enough to expect
+half a false positive at 5% on their own.
+
+This joins the +0.25 ATR stop buffer from stop_deep.py as an economically large,
+statistically marginal result, and belongs in the same place: forward data,
+recorded live against the existing stream, not a config change on a backtest.
+The difference is that the buffer was one row at +1.1 SE and this cleared a
+circular-shift null, a symbol bootstrap and a mechanism control.
+
+MY PREDICTION WAS 60/40 THAT IT CLEARS. It cleared, by about the margin that
+60/40 deserves.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 
