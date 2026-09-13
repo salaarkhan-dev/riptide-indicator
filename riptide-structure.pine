@@ -65,6 +65,8 @@ Structure(LongP, ShortP, InducementP, FTD, LQDY_Type, Show_ChoCh, Color_BuChoCh,
     var line BoS_Line          = na 
     var label BoS_Label        = na
     var bool BoS_Permit        = true
+    //LIT Gate: has the inducement been collected since the last structural event
+    var bool IDM_Swept         = false
     //   \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\/////////////////////////////////////////////////
     //    ||||||||||||||||||||||||||||||||||||||||ChoCh Block||||||||||||||||||||||||||||||||||||||||||
     //   //////////////////////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -109,6 +111,7 @@ Structure(LongP, ShortP, InducementP, FTD, LQDY_Type, Show_ChoCh, Color_BuChoCh,
             BeChoCh_B := ''   
     //Clear BoS When ChoCh Formation
     if (BeChoCh_B == 'Break' or BuChoCh_B == 'Break')
+        IDM_Swept := false
         if BoS_Permit == true
             line.delete(BoS_Line), label.delete(BoS_Label)
     //Next ChoCh Line
@@ -179,6 +182,13 @@ Structure(LongP, ShortP, InducementP, FTD, LQDY_Type, Show_ChoCh, Color_BuChoCh,
         // Mitigated BoS Line
         if close > line.get_y1(BoS_Line) and (BoS_Permit )
             BoS_Permit := false
+            //LIT: a high taken while the inducement below is still untouched is
+            //the trap, not a break. Structure does not advance on it.
+            if IDM_Swept
+                IDM_Swept := false
+            else
+                line.set_style(BoS_Line, line.style_dotted), label.set_text(BoS_Label, 'x')
+                label.set_textcolor(BoS_Label, Color_IDMT), line.set_color(BoS_Line, color.new(Color_IDMT, 30))
         // Mitigated and Set Liquidity Line
         if close < line.get_y1(BoS_Line) and high > line.get_y1(BoS_Line) and (BoS_Permit )
             BoS_Permit := false
@@ -203,6 +213,12 @@ Structure(LongP, ShortP, InducementP, FTD, LQDY_Type, Show_ChoCh, Color_BuChoCh,
         // Mitigated BoS Line
         if close < line.get_y1(BoS_Line) and (BoS_Permit )
             BoS_Permit := false
+            //LIT: as above, mirrored.
+            if IDM_Swept
+                IDM_Swept := false
+            else
+                line.set_style(BoS_Line, line.style_dotted), label.set_text(BoS_Label, 'x')
+                label.set_textcolor(BoS_Label, Color_IDMT), line.set_color(BoS_Line, color.new(Color_IDMT, 30))
         // Mitigated and Set Liquidity Line
         if close > line.get_y1(BoS_Line) and low < line.get_y1(BoS_Line) and (BoS_Permit )
             BoS_Permit := false
@@ -212,7 +228,10 @@ Structure(LongP, ShortP, InducementP, FTD, LQDY_Type, Show_ChoCh, Color_BuChoCh,
     //   //////////////////////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     // Inducement in Up Trend
     if Trend == 'Up Trend'
-        if nz(ILP) != 0 
+        //LIT: the inducement must sit INSIDE the range, never on the CHoCH
+        //level itself - a pullback low that IS the reversal level induces
+        //nothing, it just restates the boundary.
+        if nz(ILP) != 0 and low[InducementP] != BeChoCh_P
             IDM_Permit := true
             if Show_IDMT
                 Inducement_Line := line.new(bar_index[InducementP], low[InducementP], bar_index, low[InducementP] , color = color.new(Color_IDMT, 30) , style = line.style_dotted)
@@ -227,16 +246,19 @@ Structure(LongP, ShortP, InducementP, FTD, LQDY_Type, Show_ChoCh, Color_BuChoCh,
         if IDMT_Type == 'Total' 
             if low < line.get_y1(Inducement_Line)  
                 IDM_Permit := false
+                IDM_Swept  := true
         if IDMT_Type == 'Sweeps'
             if low < line.get_y1(Inducement_Line) and close > line.get_y1(Inducement_Line)
                 IDM_Permit := false
+                IDM_Swept  := true
             if close < line.get_y1(Inducement_Line)
                 line.delete(Inducement_Line)
                 label.delete(Inducement_Label)
 
     // Inducement in Down Trend
     if Trend == 'Down Trend'
-        if nz(IHP) != 0 
+        //LIT: as above, mirrored.
+        if nz(IHP) != 0 and high[InducementP] != BuChoCh_P
             IDM_Permit := true
             if Show_IDMT
                 Inducement_Line := line.new(bar_index[InducementP], high[InducementP], bar_index, high[InducementP] , color = color.new(Color_IDMT, 30) , style = line.style_dotted)
@@ -251,9 +273,11 @@ Structure(LongP, ShortP, InducementP, FTD, LQDY_Type, Show_ChoCh, Color_BuChoCh,
         if IDMT_Type == 'Total' 
             if high > line.get_y1(Inducement_Line)  
                 IDM_Permit := false
+                IDM_Swept  := true
         if IDMT_Type == 'Sweeps'
             if high > line.get_y1(Inducement_Line) and close < line.get_y1(Inducement_Line)
                 IDM_Permit := false
+                IDM_Swept  := true
             if close > line.get_y1(Inducement_Line)
                 line.delete(Inducement_Line)
                 label.delete(Inducement_Label)
