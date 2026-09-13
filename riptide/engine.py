@@ -168,6 +168,13 @@ class Early:
     anchor_time: int
     pivots: int
     bars_from_sweep: int
+    span: float = 0.0      # price distance between the pool's highest and
+                           # lowest pivot — how COMPRESSED the pool was. Setup
+                           # has carried this since zones.py; Early did not,
+                           # which left the one signal type whose own docstring
+                           # names "a pool taken in a trend" as its failure mode
+                           # unable to be measured against pool geometry. Read
+                           # by research only; the engine never branches on it.
     pools: int = 0         # how many separate pools raided into this one gap.
                            # Set when duplicates are collapsed, not by detection.
     confluence: int = 0    # order-block agreement only, 0-1: with no shift
@@ -1095,6 +1102,8 @@ def run_engine(symbol: str, cs: list[Candle], cfg: Cfg = CFG,
                                 fvg_bar=i, fvg_time=cs[i].t,
                                 anchor_time=cs[c.oldest_bar].t,
                                 pivots=len(c.prices) or 1,
+                                span=(max(c.prices) - min(c.prices)
+                                      if c.prices else 0.0),
                                 bars_from_sweep=i - c.sweep_bar,
                                 rsi_ext=rsi_extension(rsi[c.sweep_bar], is_bull),
                                 # No shift yet, so no breaker to agree with:
