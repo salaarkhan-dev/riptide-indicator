@@ -1,0 +1,79 @@
+THE PATH-DEPENDENT EXIT LAB
+8953 A/B signals, 101 symbols, 333 days, Min30.
+2212 of them reach 2R (25%) — those are the only rows where the
+two arms can differ, so they are the whole effective sample.
+
+================================================================================================
+THE BLIND POLICIES, for reference
+================================================================================================
+  always 2R                       +0.0101 R per signal
+  always 3R                       +0.0248 R per signal   paired +0.0147 ±0.0081  +1.8 SE
+
+  of the 2212 that reached 2R, 1572 went on to 3R (71%) and
+  640 gave it back. that ratio is why the blind version is a wash.
+
+  path of the 2R-reachers: median 11 bars to target, median MAE -0.38 R,
+  median giveback 0.55 R, 65% never closed back under 1R.
+
+  POWER. the paired difference is zero on every row that misses 2R, so
+  its sd over all 8953 signals is 0.769 (sd 1.55 on the 2212 reachers).
+  a rule holding half of them moves ~1106 rows; MDE at 2 SE is about 0.0115 R per signal.
+
+  THE TWO-HALVES CHECK ON THE BLIND ROW — the one thing path_exit.py
+  did not ask about its own best policy.
+                   always 2R   always 3R      diff      SE
+  first half         +0.0157     +0.0060   -0.0097    -0.8
+  second half        +0.0045     +0.0437   +0.0391    +3.6
+
+================================================================================================
+DISCOVER ON THE FIRST HALF, READ ON THE SECOND
+================================================================================================
+  discovery: 4477 signals, 1102 reach 2R.  cuts: bars<=11  mae>=-0.37  giveback<=0.54
+
+  candidate                       R/signal     vs 2R     SE      vs 3R     SE
+  P1  FAST  to 2R                  +0.0168   +0.0011   +0.1    +0.0108   +1.4
+  P2  SHALLOW  MAE                 +0.0108   -0.0049   -0.6    +0.0049   +0.6
+  P3  CLEAN  no dip under 1R       +0.0083   -0.0074   -0.7    +0.0024   +0.4
+  P4  EFFICIENT  small giveback    +0.0178   +0.0021   +0.2    +0.0119   +1.4
+
+  DISCOVERY PICKED: P4  EFFICIENT  small giveback  (+0.0021 R per signal over always 2R)
+
+  HELD-OUT half                   R/signal     vs 2R     SE      vs 3R     SE
+  always 2R                        +0.0045
+  always 3R                        +0.0437
+  the rule                         +0.0225   +0.0180   +2.3    -0.0212   -2.8
+    INVERTED (the control)         +0.0257   +0.0212   +2.8    -0.0180   -2.3
+
+  the rule holds 543 of the 1110 reachers on this half.
+
+================================================================================================
+DISCOVER ON THE SECOND HALF, READ ON THE FIRST
+================================================================================================
+  discovery: 4476 signals, 1110 reach 2R.  cuts: bars<=12  mae>=-0.39  giveback<=0.56
+
+  candidate                       R/signal     vs 2R     SE      vs 3R     SE
+  P1  FAST  to 2R                  +0.0326   +0.0281   +3.4    -0.0111   -1.5
+  P2  SHALLOW  MAE                 +0.0320   +0.0275   +3.6    -0.0116   -1.5
+  P3  CLEAN  no dip under 1R       +0.0319   +0.0273   +3.1    -0.0118   -1.9
+  P4  EFFICIENT  small giveback    +0.0218   +0.0173   +2.1    -0.0218   -2.9
+
+  DISCOVERY PICKED: P1  FAST  to 2R  (+0.0281 R per signal over always 2R)
+
+  HELD-OUT half                   R/signal     vs 2R     SE      vs 3R     SE
+  always 2R                        +0.0157
+  always 3R                        +0.0060
+  the rule                         +0.0147   -0.0011   -0.1    +0.0087   +1.2
+    INVERTED (the control)         +0.0070   -0.0087   -1.2    +0.0011   +0.1
+
+  the rule holds 607 of the 1102 reachers on this half.
+
+================================================================================================
+VERDICT
+================================================================================================
+  first -> second   P4  EFFICIENT  small giveback vs 2R +2.3 SE   vs 3R -2.8 SE   FAILED
+  second -> first   P1  FAST  to 2R               vs 2R -0.1 SE   vs 3R +1.2 SE   FAILED
+
+  No rule beat both blind policies on both half-assignments.
+  The route to 2R does not carry information the level does
+  not — at least not under a hold rule that keeps the original
+  stop, which is the only form the ban list permits.
