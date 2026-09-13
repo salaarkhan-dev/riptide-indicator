@@ -51,7 +51,12 @@ gBreak = "Break confirmation"
 gShow  = "What to draw"
 gCol   = "Colours"
 
-MODES = ["Shadow", "Body", "Body & Sweep"]
+// The options list is written out at each call on purpose. Pine reads a bare
+// `[a, b, c]` as TUPLE syntax, not as an array literal, so `MODES = [...]` is a
+// syntax error and the list can only appear inline in `options =`.
+//
+// The shared tooltip is a plain string constant, which IS allowed — `tooltip`
+// wants a const string and concatenated literals fold to one.
 MODE_TIP = "How a level counts as broken.\n\n" +
      "Shadow — a wick through it is enough. Fastest, most sensitive, most " +
      "false breaks.\n\n" +
@@ -61,13 +66,17 @@ MODE_TIP = "How a level counts as broken.\n\n" +
      "poked through with a wick and failed. The strictest of the three: it " +
      "wants the liquidity taken first and the close second."
 
-modeIdm = input.string("Body", "IDM break", options = MODES, group = gBreak,
+modeIdm = input.string("Body", "IDM break",
+     options = ["Shadow", "Body", "Body & Sweep"], group = gBreak,
      tooltip = MODE_TIP)
-modeBos = input.string("Body", "BOS break", options = MODES, group = gBreak,
+modeBos = input.string("Body", "BOS break",
+     options = ["Shadow", "Body", "Body & Sweep"], group = gBreak,
      tooltip = MODE_TIP)
-modeChoch = input.string("Body", "CHoCH break", options = MODES, group = gBreak,
+modeChoch = input.string("Body", "CHoCH break",
+     options = ["Shadow", "Body", "Body & Sweep"], group = gBreak,
      tooltip = MODE_TIP)
-modePb = input.string("Body", "Pullback / pivot confirmation", options = MODES,
+modePb = input.string("Body", "Pullback / pivot confirmation",
+     options = ["Shadow", "Body", "Body & Sweep"],
      group = gBreak, tooltip = "What confirms that a pullback has ENDED, and " +
      "therefore that a pivot exists.\n\nA swing high is confirmed when price " +
      "breaks the LOW of the candle that made that high — the pullback away " +
@@ -338,7 +347,8 @@ if not isInside and bias != 0
                 float pbTop = bias > 0 ? pvHi : idmLvl
                 float pbBot = bias > 0 ? idmLvl : pvLo
                 int   pbLft = bias > 0 ? pvHiBar : pvLoBar
-                if not na(pbTop) and not na(pbBot) and pbTop > pbBot
+                if not na(pbTop) and not na(pbBot) and not na(pbLft)
+                     and pbTop > pbBot
                     box.new(pbLft, pbTop, bar_index, pbBot,
                          xloc = xloc.bar_index,
                          border_color = color.new(idmCol, 70),
