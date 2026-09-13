@@ -142,12 +142,14 @@ beLockR = input.float(0.1, "Break-even stop locks in (R)", minval = 0.0, step = 
 
 // ── 5. Appearance ───────────────────────────────────────────────────────────
 drawMode = input.string("On MSS confirmation", "When to draw a pattern",
-     options = ["On MSS confirmation", "Live (as they form)"], group = gLook,
-     tooltip = "On MSS confirmation: nothing appears until the whole sequence completes, then the full pattern is drawn back over the bars where it happened. Clean, and nothing on screen ever turns out to be a false start. Live: watch pools and raids form in real time — useful for trading it, much busier.")
+     options = ["On MSS confirmation", "On MSS confirmation + live pools", "Live (as they form)"], group = gLook,
+     tooltip = "On MSS confirmation: nothing appears until the whole sequence completes, then the full pattern is drawn back over the bars where it happened. Clean, and nothing on screen ever turns out to be a false start.\n\nOn MSS confirmation + live pools: the same, PLUS the pools that are still waiting to be raided. This is how the reference indicator is arranged — completed patterns and a separate always-on live-liquidity layer — and it was not expressible here before, because the two settings were one either/or switch. Raids in progress and structure lines still wait for the shift; only the pool itself is shown early.\n\nLive: watch pools and raids form in real time — useful for trading it, much busier.")
 showLiquidity  = input.bool(false, "Liquidity levels (dotted)",      group = gLook,
      tooltip = "Off by default. The dotted level is the pool the raid marker already sits on, so it mostly restates the X while striping the chart.")
 showPivots     = input.bool(false, "Swing markers (diamonds)",       group = gLook,
      tooltip = "Off by default. A pool needs two swings, so every pool carries at least two diamonds and they are the densest thing on the chart. The raid marker and the structure label already say where the pattern is.")
+showPoolBox    = input.bool(false, "Pool zone (shaded band)",        group = gLook,
+     tooltip = "Off by default. The band a pool actually occupies — from its lowest swing to its highest — extended right while it waits to be raided, which is what the reference indicator draws and this drew no equivalent of. The dotted level above is the pool's single price; this is its WIDTH, and the width is the part worth seeing: measured across five symbols, 13% of all pools are wider than the reference's 0.2 ATR cap but 40% of the still-live unraided ones are, because a tight level gets raided and clears while a wide band sits there. A pool you can see the thickness of is one you can judge.")
 hideDeadPivots = input.bool(true,  "  drop them once the pool dies",  group = gLook,
      tooltip = "Drops the swing markers of a pool that DIED having produced nothing — raided and never shifted, or expired untouched. Pools still waiting, and pools that went on to shift structure, keep theirs: a diamond group beside an X and an MSS label is the whole pattern and is the part worth seeing. Measured over 41.6 days this takes a 3.5-day screen from about 36 markers to 16, against roughly 14 for the reference indicator. Off keeps every diamond ever drawn, which is what this used to do because the label handle was discarded at draw time and nothing could ever delete it.")
 showGrab       = input.bool(true,  "Raid marker (X)",                group = gLook)
@@ -366,7 +368,17 @@ debugMode            = input.bool(false, "Debug mode", group = gEng,
 debugJoins           = input.bool(true, "Debug: label every swing point", group = gEng,
      tooltip = "With debug mode on, each swing is labelled with the pool it joined or the precise reason it was rejected. This is how you tell 'the swing was never detected' apart from 'it was detected and refused'.")
 
-deferred = drawMode == "On MSS confirmation"
+// TWO QUESTIONS, NOT ONE, AND THEY USED TO SHARE A SWITCH.
+//   deferred  — hold the COMPLETED PATTERN back until the shift confirms.
+//   livePools — show a pool that is still WAITING to be raided.
+// "On MSS confirmation + live pools" is the combination that had no way to be
+// expressed: the reference indicator has always drawn confirmed patterns and a
+// separate always-on live-liquidity layer, and a single either/or could not
+// reach it. Note what stays behind `deferred`: the structure line and the X
+// still wait for the shift, because those describe a pattern in progress
+// rather than a pool on the chart.
+deferred  = drawMode != "Live (as they form)"
+livePools = drawMode != "On MSS confirmation"
 
 // ═════════════════════════════ 2. TYPES ═════════════════════════════════════
 type LiqPivot
@@ -418,6 +430,9 @@ type Cluster
                                 // this is what locates it.
     array<LiqPivot> pivots
     line   liqLine
+    box    poolBox                  // the shaded band from the pool's lowest
+                                    // swing to its highest. Held, like liqLine,
+                                    // so a pool that dies can take it with it.
     line   mssLine
     label  grabX                    // the confirmed raid X, drawn at MSS time
     label  grabTagLbl               // and its dark tag
@@ -894,6 +909,33 @@ drawAllDiamonds(Cluster c) =>
     if c.pivots.size() > 0
         for i = 0 to c.pivots.size() - 1
             drawDiamond(c, c.pivots.get(i))
+
+// The pool's BAND, not its level. calcLevel collapses a pool to one price for
+// the engine to raid; this is the spread the price came from, which is the
+// thing a person is judging when they decide whether it is a level at all.
+drawPoolBox(Cluster c, int x2) =>
+    if showPoolBox and na(c.poolBox) and c.pivots.size() > 0
+        float lo = c.pivots.get(0).price
+        float hi = lo
+        for i = 0 to c.pivots.size() - 1
+            float pp = c.pivots.get(i).price
+            lo := math.min(lo, pp)
+            hi := math.max(hi, pp)
+        // A pool of swings at one exact price has zero height and would draw
+        // as an invisible line. Give it the same presence as the dotted level.
+        if hi - lo < syminfo.mintick
+            hi := hi + syminfo.mintick / 2
+            lo := lo - syminfo.mintick / 2
+        c.poolBox := box.new(c.oldestBar, hi, x2, lo,
+             xloc         = xloc.bar_index,
+             border_color = dirCol(c.isHigh),
+             border_width = 1,
+             bgcolor      = color.new(dirCol(c.isHigh), 92))
+
+dropPoolBox(Cluster c) =>
+    if not na(c.poolBox)
+        box.delete(c.poolBox)
+        c.poolBox := na
 
 drawLiqLine(Cluster c, int x2) =>
     if showLiquidity and na(c.liqLine)
@@ -1437,7 +1479,10 @@ injectLevel(bool isHigh, float price, int anchorBar, float opp, int oppBar, int 
              tag         = tag,
              pivots      = array.new<LiqPivot>())
         clusters.push(c)
-        if not deferred
+        // A lone pivot is not liquidity yet, but its level is what the pool
+        // will sit on if a second swing joins — so this belongs with the pool
+        // layer, not with the completed pattern.
+        if livePools
             drawLiqLine(c, bar_index)
 
 // Plain reference levels (PDH/PDL/PWH/PWL), independent of the pattern engine.
@@ -1539,14 +1584,18 @@ registerPivot(bool isHigh, float price, int pbar, float tolerance) =>
             if not na(target.liqLine)
                 line.set_y1(target.liqLine, target.level)
                 line.set_y2(target.liqLine, target.level)
-            if not deferred
+            if livePools
                 drawDiamond(target, target.pivots.get(target.pivots.size() - 1))
+                // The band grew with the new swing, so the old one is stale.
+                dropPoolBox(target)
+                drawPoolBox(target, bar_index)
         if not grew and target.pivots.size() >= minPivotsForLiquidity
             target.active := true
             target.level  := calcLevel(target)
-            if not deferred
+            if livePools
                 drawLiqLine(target, bar_index)
                 drawAllDiamonds(target)
+                drawPoolBox(target, bar_index)
 
 // ═════════════════════════ 8. ENGINE ═══════════════════════════════════════
 // Per-bar alert flags. Non-var, so they reset each bar. The engine is main
@@ -1725,9 +1774,40 @@ if engineOk
                 // and time span as far as the reference's own panel allows
                 // only reaches 27. The difference was always about WHICH
                 // pools deserve a marker, not how pools are built.
-                if hideDeadPivots and not c.markersDropped and (c.expired or c.suppressed)
+                // RETIRED AT THE RAID, NOT WHEN IT FINALLY EXPIRES. This
+                // used to fire on `expired or suppressed` alone, and the
+                // tooltip above has always claimed it covers "raided and never
+                // shifted". Both were true, but only eventually: a raided pool
+                // stays un-expired until effGrabBars runs out, which is 50 bars
+                // — TWENTY-FIVE HOURS on 30m — of holding diamonds for a
+                // pattern that is already over.
+                //
+                // It is already over. Measured across five symbols: of 390
+                // pools that were raided and never shifted, 379 (97%) end
+                // expired. Three per cent is not a live pattern, it is a
+                // rounding error being drawn as if undecided, and it cost 6.4
+                // diamonds per symbol on a 3.5-day screen out of 27 drawn.
+                //
+                // The 3% is not lost. dropDiamonds clears p.drawn, so
+                // renderPattern's drawAllDiamonds puts them straight back when
+                // a shift does confirm — and since a shift can only fire on a
+                // bar AFTER the sweep, the drop and the restore land on the
+                // same bar for a pattern that completes. Nothing flickers and
+                // no completed group loses its markers.
+                //
+                // The raid dot already stands in meanwhile: drawRaidDot marks
+                // the raid in progress in either draw mode, for exactly this
+                // reason.
+                if hideDeadPivots and not c.markersDropped and
+                     (c.expired or c.suppressed or (wasSwept and not wasMss))
                     dropDiamonds(c)
                     c.markersDropped := true
+                // The band is a statement about a pool that is WAITING. Once
+                // the raid has happened it is answering a question nobody is
+                // asking any more, and unlike the diamonds it is not part of
+                // the completed pattern, so it is never restored.
+                if c.expired or c.suppressed or (wasSwept and not wasMss)
+                    dropPoolBox(c)
 
                 // Lone pivot, not liquidity yet. A shallow undercut must not
                 // kill it or a forming double bottom loses its first low.
@@ -1741,6 +1821,8 @@ if engineOk
                 if wasActive and not wasSwept and not c.expired
                     if not na(c.liqLine)
                         line.set_x2(c.liqLine, bar_index)
+                    if not na(c.poolBox)
+                        box.set_right(c.poolBox, bar_index)
                     float buf     = atr * grabBufferATR
                     bool  grabbed = c.isHigh ? high > c.level + buf : low < c.level - buf
                     if grabbed
