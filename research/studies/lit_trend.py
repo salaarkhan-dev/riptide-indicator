@@ -80,6 +80,56 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/lit_trend.py
+
+──────────────────────────────────────────────────────────────────────────────
+RESULT — 27040 filled signals, 59 symbols, 333 days, Min30. Full output in
+lit_trend.out.
+
+THE PRE-REGISTERED PRIMARY PASSED EVERY CHECK. On the A/B pool the structural
+trend agreeing is +0.080 against +0.004 when it disagrees, diff +0.075 at
+|SE| 2.5, clearing a circular-shift null whose p95 is 2.1, with a symbol
+bootstrap of [+0.013, +0.139] entirely above zero and both halves the same
+sign at +0.087 and +0.063. That is the second filter in this project to get
+through the whole gauntlet, after SMT divergence.
+
+AND IT SHOULD STILL NOT SHIP, FOR THE REASON WRITTEN IN path_exit.py. The
+excluded group is +0.004 — not negative, merely less positive. A prediction is
+not a decision. Applying the gate to the A/B pool:
+
+    total +464.9R   gated +450.8R   delta -14.1R   alerts -38%
+
+Thirty-eight per cent fewer alerts and FOURTEEN R WORSE. The separation is
+real and the gate is not. It is a volume knob, and if alert volume is the
+problem then it should be argued as that and measured against the other ways
+of cutting volume, not smuggled in as an edge.
+
+TWO RECORDED EXPECTATIONS WERE WRONG, WHICH IS THE POINT OF RECORDING THEM.
+Redundancy was predicted at 80%+ and came in at 66%, so the structural trend
+really is a different read from the SuperTrend/DI rather than the same gate in
+a hat — the information is new, it is just not worth money. And the effect was
+predicted to be larger on EARLY signals, by analogy with SMT. It is the
+reverse: early +0.048 at |SE| 1.5, which does not separate, against confirmed
++0.262 at |SE| 3.1, which does.
+
+THE CONFIRMED CELL IS THE ONLY PLACE A REAL GATE LIVES, AND IT IS POST-HOC.
+There the excluded group is -0.110, so cutting it gains +43.5R while dropping
+31% of confirmed alerts. Four reasons not to believe it yet: n is 395 on the
+excluded side; it was a pre-registered SECONDARY, not the primary; it inverts
+the recorded directional expectation, so it is the arm I would have been least
+surprised to see fail; and NO NULL HAS BEEN RUN ON IT. A 3.1 on a subgroup
+found after reading four arms is the exact shape of thing rotation kills —
+it is how pivot_tune.py's three-touch finding died. Settling it means a
+pre-registered confirmed-only run with its own null and bootstrap.
+
+THE C/D CONTROL IS A CLEAN NEGATIVE and worth keeping for what it rules out.
+Structure does not rescue the signals the existing gate throws away: +0.019 at
+|SE| 0.9, inside a null of p95 1.8, bootstrap straddling zero. Both sides of
+that arm are negative (-0.013 and -0.032), which says the incumbent
+SuperTrend/DI gate is doing real work and the structural trend cannot stand in
+for it.
+
+SO THE TWO INDICATORS CAN SHARE A CHART AND THE STRUCTURE CAN INFORM A HUMAN
+READING IT, BUT ON THIS EVIDENCE THE TREND SHOULD NOT GATE THE ALERT.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 
