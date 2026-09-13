@@ -70,6 +70,62 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/tf5.py
+
+──────────────────────────────────────────────────────────────────────────────
+RESULT, 13 Sep 2026 — MIN5 IS DEAD, AND MY EXPLANATION OF WHY WAS HALF WRONG.
+
+33 symbols carrying 270 days on all four rungs.
+
+    tf      signals  fill   /day    risk    GROSS     fee        NET   total
+    Min5      26001   78%  350.2   0.55%   +0.024  +0.065  -0.041    -828.6
+    Min15      9879   78%  133.1   0.97%   +0.055  +0.035  +0.020    +153.2
+    Min30      5175   78%   69.7   1.36%   +0.084  +0.025  +0.059    +237.7
+    Min60      2626   79%   35.4   1.97%   +0.146  +0.017  +0.130    +269.3
+
+  Min5 separates from every other rung: -3.3 SE against Min15, -4.2 against
+  Min30, -5.2 against Min60. Negative in both halves (-0.047, -0.035). Over 270
+  days it loses 828 R.
+
+  THE FOUR PRE-REGISTERED PREDICTIONS WERE ALL RIGHT, and the conclusion I drew
+  them for was still wrong. Predicted: risk near 0.55% (0.55%), fee in R about
+  2.5x Min30's (0.065 against 0.025, 2.6x), gross positive but smallest
+  (+0.024, smallest), net at or below zero (-0.041).
+
+  WHAT I GOT WRONG IS THE FRAMING. This file says "the decisive panel is gross
+  against net" and predicts the structure works while the cost eats it. THE
+  GROSS LADDER IS MONOTONE TOO:
+
+      +0.024   +0.055   +0.084   +0.146
+
+  Min5 is the weakest rung BEFORE a single basis point of fee. Six times the
+  gross edge sits on Min60 as on Min5. So this is not a cost problem with a
+  sound model underneath — the model itself degrades as the bar shrinks, and
+  the fee then finishes it off. The zero-fee column, which was supposed to be
+  the generous case that might rescue Min5, ranks it last anyway.
+
+  THE FEE MULTIPLIER IS EXACTLY THE ARITHMETIC PREDICTED, which is the part
+  that does hold. net/gross by rung: -173%, 36%, 70%, 89%. The fee is 0.065 R
+  on Min5 against 0.017 on Min60 — a 3.8x spread produced by nothing but
+  risk_pct falling from 1.97% to 0.55%, because fee in R is fee_pct / risk_pct
+  and the rate never changed. On Min5 the fee is nearly THREE TIMES the gross
+  edge.
+
+  AND IT IS UNDEPLOYABLE EVEN IF IT WERE POSITIVE. 350 alerts a day at 120
+  symbols, against 70 for Min30. Nobody reads that, and the 8-slot account
+  simulator would decline 90% of them for want of margin.
+
+WHAT THIS CLOSES. The bottom of the timeframe ladder. Min5 fails on structure,
+fails on cost, fails in both halves, and fails operationally — four independent
+reasons, and the first of them means the other three do not need arguing. It
+also retires the idea that the 1m attempt failed only for want of history:
+Min5 has 278 days and fails anyway, so the earlier 31-day washout was not
+hiding a result.
+
+THE LADDER ALSO SAYS SOMETHING THE STUDY WAS NOT ASKED. Gross edge rises
+monotonically with bar length across a 12x range, and so does net. Nothing here
+tested Hour4 or above, and timeframes.py has. But the direction is consistent
+enough that "go slower" has a better prior than any filter this project has
+tested.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 

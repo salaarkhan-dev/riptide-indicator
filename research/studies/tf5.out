@@ -1,2 +1,56 @@
 BTW_USDT Min60: 1 discontinuities in 3418 bars
 universe: 33 symbols with 270 days on all of Min5/Min15/Min30/Min60
+
+DOES THE MODEL WORK ON 5 MINUTES
+33 symbols, 270 days, A/B signals, target 2R, same engine and same gates on every rung.
+'/day' is scaled to 120 symbols — the deployed universe.
+'fee' is gross minus net: fee_pct / risk_pct, which is why it grows as the stop shrinks.
+
+  tf       signals   fill     /day     risk    GROSS      fee             NET    win    total
+  Min5       26001    78%    350.2    0.55%   +0.024   +0.065   -0.041±0.010    36%   -828.6
+  Min15       9879    78%    133.1    0.97%   +0.055   +0.035   +0.020±0.016    37%   +153.2
+  Min30       5175    78%     69.7    1.36%   +0.084   +0.025   +0.059±0.022    38%   +237.7
+  Min60       2626    79%     35.4    1.97%   +0.146   +0.017   +0.130±0.031    39%   +269.3
+
+========================================================================================================
+MIN5 AGAINST EACH OTHER RUNG — unpaired, different signals
+========================================================================================================
+  Min5 vs Min15   net  -0.041 vs  +0.020   diff  -0.061   |z|  3.3   SEPARATES
+  Min5 vs Min30   net  -0.041 vs  +0.059   diff  -0.100   |z|  4.2   SEPARATES
+  Min5 vs Min60   net  -0.041 vs  +0.130   diff  -0.171   |z|  5.2   SEPARATES
+
+========================================================================================================
+THE FEE IS THE WHOLE QUESTION — gross against net
+========================================================================================================
+  maker is 0% on 118 of 120 MEXC symbols and taker 0% on 82, so the
+  GROSS column is not a fantasy — it is what most of this universe
+  actually pays on a winning trade. read the pair as a range.
+
+  tf         risk%  fee in R    gross      net  net/gross
+  Min5       0.55%     0.065   +0.024   -0.041     -173%
+  Min15      0.97%     0.035   +0.055   +0.020       36%
+  Min30      1.36%     0.025   +0.084   +0.059       70%
+  Min60      1.97%     0.017   +0.146   +0.130       89%
+
+========================================================================================================
+BOTH HALVES
+========================================================================================================
+    Min5    half 1     10123   gross  +0.015   net  -0.047 ±0.014
+    Min5    half 2     10123   gross  +0.033   net  -0.035 ±0.014
+    Min15   half 1      3835   gross  +0.073   net  +0.039 ±0.023
+    Min15   half 2      3836   gross  +0.038   net  +0.001 ±0.022
+    Min30   half 1      2008   gross  +0.099   net  +0.075 ±0.031
+    Min30   half 2      2008   gross  +0.069   net  +0.043 ±0.031
+    Min60   half 1      1038   gross  +0.168   net  +0.152 ±0.044
+    Min60   half 2      1039   gross  +0.124   net  +0.107 ±0.044
+
+========================================================================================================
+OPERATIONAL
+========================================================================================================
+  Min5       350.2 alerts/day at 120 symbols   total   -828.6 R over 270 days
+  Min15      133.1 alerts/day at 120 symbols   total   +153.2 R over 270 days
+  Min30       69.7 alerts/day at 120 symbols   total   +237.7 R over 270 days
+  Min60       35.4 alerts/day at 120 symbols   total   +269.3 R over 270 days
+
+  a timeframe that is mildly profitable and fires hundreds of
+  times a day is not deployable on a bot a person reads.
