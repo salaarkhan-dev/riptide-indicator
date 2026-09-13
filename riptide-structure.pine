@@ -672,26 +672,53 @@ if showSwing and deep.sLo and not na(deep.pvLo)
          xloc = xloc.bar_time, style = label.style_label_up,
          color = color.new(cBull, 100), textcolor = cBull, size = szDeep)
 
-// STRONG AND WEAK, on the main degree only. The extreme the structure is
-// protecting is strong; the one it still has to take is weak, and the weak one
-// is where the liquidity sits. Drawn once on the last bar rather than on every
-// bar that moves it.
-var label lbStrong = na
-var label lbWeak   = na
+// STRONG AND WEAK, ON THE EXTREMES THEMSELVES.
+//
+// THIS WAS BACKWARDS AND PRICE SETTLED IT. The protected low was labelled
+// "Strong Low" on the reasoning that the structure defends it — and price then
+// went straight through it, while the reference had called the same pivot a
+// WEAK low. The reference was right and the definition was wrong.
+//
+// Strong and weak are not about what the structure would LIKE to defend. They
+// are about whether the liquidity resting at that extreme has been collected:
+//
+//   WEAK    nothing has broken through it yet, so the stops are still sitting
+//           there and price is drawn to them. Most extremes are weak.
+//   STRONG  a break of structure came off it. The liquidity below a strong low
+//           was already spent producing that break, so there is less reason
+//           for price to return.
+//
+// Read that way the low at 1055 was weak: no break of structure ever came off
+// it, so the stops under it were untouched — which is exactly why they got
+// taken.
+//
+// Drawn on the extremes of the MAIN degree, with the swing name alongside in
+// the reference's own format ("LL | Weak Low"), and only on the last bar so it
+// tracks the live structure instead of littering history.
+var label lbHiX = na
+var label lbLoX = na
 if showWeak and barstate.islast
-    label.delete(lbStrong)
-    label.delete(lbWeak)
-    lbStrong := na(main.ch) ? na
-         : label.new(main.chT, main.ch,
-             (main.bias > 0 ? "Strong Low" : "Strong High"),
+    label.delete(lbHiX)
+    label.delete(lbLoX)
+    // An extreme is STRONG only if it is the level the current structure was
+    // actually built from — the inducement a break came off. Everything else
+    // still has its liquidity intact.
+    bool loStrong = not na(main.ch) and not na(main.pvLo) and main.bias > 0
+         and math.abs(main.pvLo - main.ch) < syminfo.mintick
+    bool hiStrong = not na(main.ch) and not na(main.pvHi) and main.bias < 0
+         and math.abs(main.pvHi - main.ch) < syminfo.mintick
+    lbHiX := na(main.pvHi) ? na
+         : label.new(main.pvHiT, main.pvHi,
+             (na(deep.oldHi) or main.pvHi > deep.oldHi ? "HH" : "LH") + " | " +
+             (hiStrong ? "Strong High" : "Weak High"),
              xloc = xloc.bar_time, style = label.style_none,
-             textcolor = main.bias > 0 ? cBull : cBear, size = szInt)
-    lbWeak := na(main.bos) ? na
-         : label.new(main.bosT, main.bos,
-             (main.bias > 0 ? "Weak High" : "Weak Low"),
+             textcolor = color.new(cBear, hiStrong ? 0 : 25), size = szInt)
+    lbLoX := na(main.pvLo) ? na
+         : label.new(main.pvLoT, main.pvLo,
+             (na(deep.oldLo) or main.pvLo < deep.oldLo ? "LL" : "HL") + " | " +
+             (loStrong ? "Strong Low" : "Weak Low"),
              xloc = xloc.bar_time, style = label.style_none,
-             textcolor = color.new(main.bias > 0 ? cBear : cBull, 25),
-             size = szInt)
+             textcolor = color.new(cBull, loStrong ? 0 : 25), size = szInt)
 
 bool hiddenNow = array.includes(hidFlag, true)
 barcolor(showInside and isInside ? cInside : hiddenNow ? cHidden : na,
