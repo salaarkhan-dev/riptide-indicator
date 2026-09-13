@@ -102,6 +102,69 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/pool_span.py
+
+──────────────────────────────────────────────────────────────────────────────
+RESULT, 13 Sep 2026 — THE HYPOTHESIS IS WRONG, AND IT IS WRONG IN SIGN.
+
+9116 A/B signals, 103 symbols, 333 days, Min30. 29% come from a pool wider than
+the reference's cap, so there was no shortage of rows to see it with.
+
+  ON EARLY — the arm the observation was specifically about — WIDE POOLS ARE
+  MILDLY BETTER, NOT WORSE:
+
+      pool <  0.2 ATR   +0.000   n 5549
+      pool >= 0.2 ATR   +0.028   n 2160      diff -0.028   |z| 0.9
+
+  Not significant, and pointing the opposite way to the prediction. Both halves
+  of the window agree on that wrong sign (-0.034 and -0.021), which is the
+  two-halves check passing in the direction that kills the idea rather than
+  rescuing it.
+
+  THE STOP-SIZE CONTROL WAS THE ONE I EXPECTED TO EAT HALF THE EFFECT, and
+  there is nothing for it to eat. All three terciles show wide pools ahead by
+  a similar margin (-0.035, -0.025, -0.048). So this is not the fee denominator
+  in a costume; there is simply no effect of the predicted kind.
+
+  WHAT CAPPING WOULD ACTUALLY DO, and this is the number that settles it:
+
+      early       keeps 72%   R/sig +0.008 -> +0.000   total  +63.7 ->   +2.2
+      confirmed   keeps 64%   R/sig +0.018 -> +0.042   total  +25.7 ->  +37.9
+
+  On the early stream a 0.2 ATR cap destroys 97% of the total R. That is the
+  textbook profile of a filter deleting winners, and it is why this file prints
+  both columns.
+
+  CONFIRMED LEANS THE OTHER WAY and it does not survive inspection. Tight beats
+  wide by +0.066 at |z| 1.0, and capping would raise total R from +25.7 to
+  +37.9 — tempting. But the band breakdown is not monotone: 0.20-0.40 ATR is
+  the worst band on the board (-0.090, |z| 2.3) while 0.40+ is the BEST (+0.251
+  on 99 rows). A real property of pool geometry does not improve again past the
+  band that is supposedly too wide. That shape is noise, the |z| 2.3 is one
+  of eight bands looked at, and confirmed was not the hypothesis anyway.
+
+A DESIGN FLAW IN THIS STUDY, AND IT IS MINE. The staircase panel — the one
+that was supposed to test the MECHANISM rather than its symptom — returned
+"too few (0 / 0)" on the trend-fighting row. The reason is structural and I
+should have seen it while writing the file: `grade_of` only returns A or B when
+the signal AGREES with the higher-timeframe trend, so gating on A/B leaves
+exactly zero trend-fighting signals to compare against. The panel could never
+have produced a number. Answering it needs `require_ab=False`, the route
+`poi_tf.collect` already takes for precisely this reason.
+
+AND THE OBSERVATION THAT STARTED THIS IS NOT DEAD — IT WAS AIMED AT THE WRONG
+AXIS, PARTLY BY ME. The chart it came from reads "Trend: BUY" in the corner
+while price falls on the 30m. So the signal AGREED with the Hour8 trend and
+fought the immediate local move. Every arm above is about HTF trend agreement,
+which was constant at 100% by construction. LOCAL direction against HTF trend
+is a different question and this study does not touch it.
+
+WHAT THIS CLOSES. Pool width as a predictor of early-signal quality, on 9116
+signals with the error bar small enough to have seen it: it is not there, it is
+mildly reversed, it holds that reversal in both halves and in all three stop
+terciles, and acting on it would cost 97% of the early stream's total R. The
+visual complaint that prompted it is real and separately measured — 40% of
+still-live unraided pools exceed the reference cap — but a pool being ugly on
+the chart and a pool making a bad trade turn out to be different things.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 
