@@ -1,0 +1,83 @@
+  SOL_USDT           986 trades
+  ZEC_USDT           996 trades
+  XRP_USDT           995 trades
+  HYPE_USDT         1027 trades
+  PEPE_USDT         1026 trades
+  NEAR_USDT          919 trades
+  SUI_USDT          1016 trades
+  ADA_USDT           932 trades
+  UNI_USDT           999 trades
+  DOGE_USDT          989 trades
+  TAO_USDT           995 trades
+  WLD_USDT           984 trades
+  UAI_USDT          1029 trades
+  ARB_USDT          1004 trades
+  reading live order books…
+
+14 symbols · 13897 trades · 0.6% floor · 2.0R
+BASE net R — discovery +0.208 (n=6948)   held-out +0.227 (n=6949)
+
+TWELVE LOOKS. At 5% roughly ONE clears on noise alone, so one
+winner is the null result here and not a finding.
+
+==============================================================================================
+DISCOVERY HALF — every family, both sides
+==============================================================================================
+  family          bucket                  n    kept     net R   vs base
+  1 direction     long                 3459     50%    +0.267    +0.059
+  1 direction     short                3489     50%    +0.150    -0.058
+
+  2 EMA trend     against trend        3636     52%    +0.009    -0.199
+  2 EMA trend     with trend           3200     46%    +0.440    +0.232
+
+  3 funding       funding high         3828     55%    +0.221    +0.012
+  3 funding       funding low          3120     45%    +0.193    -0.015
+
+  4 RVOL          rvol high            2532     36%    +0.141    -0.067
+  4 RVOL          rvol low             4413     64%    +0.247    +0.039
+
+  5 ADX           ranging              4069     59%    +0.255    +0.046
+  5 ADX           trending             2767     40%    +0.146    -0.062
+
+  6 supertrend    st agrees            3119     45%    +0.468    +0.259
+  6 supertrend    st opposes           3717     53%    -0.005    -0.213
+
+==============================================================================================
+HELD-OUT HALF — reading the discovery winner ONCE
+==============================================================================================
+  discovery chose:  6 supertrend  ->  'st agrees'  (+0.259 on discovery)
+
+                            n    kept     net R   vs base
+  held-out base          6949    100%    +0.227    +0.000
+  st agrees              3171     46%    +0.423    +0.196
+
+==============================================================================================
+ANNEX (post-hoc) — every family on the held-out half
+==============================================================================================
+  family          bucket                  n    kept     net R   vs base
+  1 direction     long                 3486     50%    +0.287    +0.060
+  1 direction     short                3463     50%    +0.166    -0.061
+
+  2 EMA trend     against trend        3807     55%    +0.053    -0.174
+  2 EMA trend     with trend           3142     45%    +0.438    +0.211
+
+  3 funding       funding high         3073     44%    +0.225    -0.002
+  3 funding       funding low          3876     56%    +0.228    +0.001
+
+  4 RVOL          rvol high            2637     38%    +0.219    -0.007
+  4 RVOL          rvol low             4312     62%    +0.231    +0.005
+
+  5 ADX           ranging              4246     61%    +0.272    +0.046
+  5 ADX           trending             2703     39%    +0.155    -0.071
+
+  6 supertrend    st agrees            3171     46%    +0.423    +0.196
+  6 supertrend    st opposes           3778     54%    +0.062    -0.165
+
+
+==============================================================================================
+VERDICT
+==============================================================================================
+  'st agrees' held: +0.196 R on the half it was not
+  chosen on, keeping 46% of trades.
+  ONE winner out of twelve looks is exactly what chance
+  produces. It is worth a third window, not a deployment.
