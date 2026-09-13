@@ -181,14 +181,35 @@ else
 var pendOn  = array.new<bool>(10, false)
 var pendLvl = array.new<float>(10, na)
 var pendUp  = array.new<bool>(10, false)
-var swept   = array.new<bool>(10, false)
 var hidFlag = array.new<bool>(10, false)
+// The SWEEP LEVEL: how far a wick has poked through this level and failed, and
+// which level that memory belongs to so it resets when the level moves.
+var swLvl = array.new<float>(10, na)
+var swFor = array.new<float>(10, na)
 array.fill(hidFlag, false)
 
-rawBreak(float lvl, bool up, string mode, bool didSweep) =>
-    mode == "Shadow"      ? (up ? high > lvl : low < lvl) :
-     mode == "Body"       ? (up ? close > lvl : close < lvl) :
-     (up ? close > lvl : close < lvl) and didSweep
+// "Body & Sweep" USED TO REQUIRE THAT A SWEEP HAD HAPPENED, and that was a
+// deadlock, not a filter. If price jumps a level in one candle there is no
+// failed wick, so the break could never confirm — ever. The internal degree
+// pinned a level at 425 while price traded at 1087 and sat there for the
+// whole chart, because the break it was waiting for was unreachable by
+// construction rather than by market behaviour.
+//
+// The reference's own diagram shows what it actually means: a wick that pokes
+// through and closes back RAISES the bar, and the body must then close beyond
+// THAT. With no failed wick there is nothing to raise, so it degrades to plain
+// Body — strict when price has probed the level, ordinary when it has not.
+rawBreak(int slot, float lvl, bool up, string mode) =>
+    bool r = false
+    if mode == "Shadow"
+        r := up ? high > lvl : low < lvl
+    else if mode == "Body"
+        r := up ? close > lvl : close < lvl
+    else
+        float sl  = array.get(swLvl, slot)
+        float eff = na(sl) ? lvl : (up ? math.max(lvl, sl) : math.min(lvl, sl))
+        r := up ? close > eff : close < eff
+    r
 
 wickOnly(float lvl, bool up) =>
     up ? (high > lvl and close <= lvl) : (low < lvl and close >= lvl)
@@ -197,8 +218,17 @@ wickOnly(float lvl, bool up) =>
 confirmBreak(int slot, float lvl, bool up, string mode, bool useHidden) =>
     bool done = false
     if not na(lvl)
+        // The sweep memory belongs to ONE level. When the level moves, the
+        // wicks that failed against the old one say nothing about the new one.
+        float sf = array.get(swFor, slot)
+        if na(sf) or sf != lvl
+            array.set(swFor, slot, lvl)
+            array.set(swLvl, slot, na)
         if wickOnly(lvl, up)
-            array.set(swept, slot, true)
+            float cur = array.get(swLvl, slot)
+            float w   = up ? high : low
+            array.set(swLvl, slot, na(cur) ? w
+                 : (up ? math.max(cur, w) : math.min(cur, w)))
         if array.get(pendOn, slot)
             float pl = array.get(pendLvl, slot)
             bool  pu = array.get(pendUp, slot)
@@ -207,7 +237,7 @@ confirmBreak(int slot, float lvl, bool up, string mode, bool useHidden) =>
                 array.set(hidFlag, slot, true)   // it was a shadow after all
             else
                 done := true
-        else if rawBreak(lvl, up, mode, array.get(swept, slot))
+        else if rawBreak(slot, lvl, up, mode)
             if useHidden and mode != "Shadow"
                 array.set(pendOn, slot, true)
                 array.set(pendLvl, slot, lvl)
