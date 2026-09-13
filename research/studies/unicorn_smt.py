@@ -95,6 +95,89 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/unicorn_smt.py
+
+──────────────────────────────────────────────────────────────────────────────
+RESULT, 13 Sep 2026 — THE UNICORN FAILS. SMT IS THE FIRST ENTRY FILTER IN THIS
+PROJECT TO CLEAR ITS OWN CONTROL.
+
+9279 A/B signals, 106 symbols, 333 days, Min30.
+
+  THE UNICORN IS WORSE, CONSISTENTLY. 583 of 1421 confirmed setups (41%) have
+  a gap overlapping a breaker:
+
+      overlap   -0.035        no overlap  +0.047      diff -0.082   |z| 1.3
+        half 1  -0.032  vs  +0.040                    diff -0.072   |z| 0.8
+        half 2  -0.037  vs  +0.054                    diff -0.092   |z| 1.0
+
+  Not significant, and the sign is stable across both halves — which is the
+  two-halves check confirming the idea is dead rather than rescuing it. The
+  order block overlap is nothing at all (+0.011, |z| 0.2), and requiring BOTH
+  zones is worse than requiring neither (-0.045). Two independent reasons for a
+  zone are not better than one; on this evidence they are slightly worse.
+  Predicted, for the reason given above: the 0-2 confluence ladder was already
+  non-monotonic, and splitting noise into halves finds noise in both.
+
+  SMT DIVERGENCE CLEARS EVERYTHING IT WAS ASKED TO. 4679 of 9175 (51%) show
+  the symbol making a new 20-bar extreme while BTC does not:
+
+      divergence  +0.037   vs  none  -0.036      diff +0.074   |z| 2.9
+
+    BOTH DIRECTIONS, SAME SIGN — longs +0.098 (|z| 2.6), shorts +0.052
+    (|z| 1.5). Weaker on shorts but pointing the same way, which is what a
+    symmetric mechanism looks like and what a directional bias does not.
+
+    BOTH HALVES, SAME SIGN AND SIMILAR SIZE — +0.066 (|z| 1.8) and +0.082
+    (|z| 2.3). Twenty-one filters failed exactly here.
+
+    AND THE CONTROL POINTS THE RIGHT WAY, which is the panel that matters
+    most. CONFLUENCE — BTC made the SAME extreme, so the sweep was real and
+    nothing was trapped — scores -0.037 against +0.017, diff -0.054 at |z| 1.9.
+    If the feature were reading "BTC did something notable" both arms would
+    beat the middle. They do not: divergence is good, agreement is bad, and
+    that is the mechanism rather than the number.
+
+  IT LIVES ALMOST ENTIRELY ON THE EARLY STREAM, and that is the most
+  convincing part of the whole result because it was not predicted and it is
+  exactly where the mechanism says it should be:
+
+      early      +0.040  vs  -0.044     diff +0.084   |z| 3.0
+      confirmed  +0.020  vs  -0.001     diff +0.022   |z| 0.3
+
+  The Early docstring in riptide/engine.py names its own failure mode: "There
+  is no confirmation that the sweep reversed anything, so a pool taken in a
+  trend keeps going and the signal is simply wrong." A confirmed setup has a
+  structure shift to vouch for the sweep. An early one has nothing — and SMT is
+  precisely an independent check on whether the sweep was real. The filter adds
+  the confirmation that signal type is missing, and adds almost nothing to the
+  one that already has it.
+
+WHAT IS NOT DONE, AND IT IS THE REASON THIS IS NOT SHIPPED ON THIS FILE ALONE.
+
+  NO CIRCULAR-SHIFT NULL. This is the instrument that killed `pivot_tune.py`'s
+  three-touch finding, which looked like +0.206 R held out and turned out to be
+  smaller than what its own shape produces against a random outcome. Every
+  signal in a window shares one BTC series, so "diverged from BTC" is heavily
+  autocorrelated across symbols and time, and an independent-SE z on it is
+  optimistic by an unknown amount. Rotating the BTC series in time — same
+  values, same order, same autocorrelation, no real-time link to the outcome —
+  is the only honest null here. That test is the next thing to run and it is
+  the one that decides whether this is real.
+
+  NO SYMBOL BOOTSTRAP. `survivor.symbol_bootstrap` exists and has not been
+  applied.
+
+  NO DISCOVERY/HOLDOUT SPLIT. The rule is binary and its one parameter
+  (SMT_BACK = 20) was fixed in source before the run, so there is nothing
+  fitted — but both halves were read, not one.
+
+  FIVE LOOKS were declared. |z| 2.9 survives that comfortably on its own terms;
+  it does not survive being wrong about the standard error, which is what the
+  missing null would tell us.
+
+  MY EXPECTATION WAS THAT BOTH WOULD FAIL. The Unicorn did, for the reason I
+  gave. SMT did not, and I also predicted that if anything appeared it would
+  appear on ONE direction only — it appears on both. Being wrong in that
+  direction is the interesting kind.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 

@@ -1,0 +1,45 @@
+THE UNICORN AND SMT DIVERGENCE
+9279 A/B signals, 106 symbols, 333 days, Min30.  SMT reference: BTC_USDT, 15983 bars.
+
+========================================================================================================
+MODEL A — THE UNICORN  (breaker n FVG overlap)
+========================================================================================================
+  confirmed setups only: a breaker needs a shift to break through,
+  so an early signal scores 0 by construction.
+
+                                                 R/sig      n       R/sig      n
+  gap overlaps a breaker: 583 of 1421 (41%)
+  UNICORN  overlap  vs  no overlap              -0.035    583  vs  +0.047    838   diff -0.082  |z|  1.3
+    (order block overlap, for contrast)         +0.022    427  vs  +0.010    994   diff +0.011  |z|  0.2
+    both zones agree  vs  neither               +0.010    168  vs  +0.055    579   diff -0.045  |z|  0.4
+
+    half 1                                      -0.032    291  vs  +0.040    430   diff -0.072  |z|  0.8
+    half 2                                      -0.037    292  vs  +0.054    408   diff -0.092  |z|  1.0
+
+========================================================================================================
+MODEL B — SMT DIVERGENCE  (vs BTC_USDT, read at the raid bar)
+========================================================================================================
+  4679 of 9175 signals (51%) show divergence: the symbol made a new 20-bar extreme and BTC_USDT did not.
+
+                                                 R/sig      n       R/sig      n
+  SMT  divergence  vs  none                     +0.037   4679  vs  -0.036   4496   diff +0.074  |z|  2.9  SEPARATES
+
+  by direction — SMT's story is symmetric, so an effect on one
+  side only is a directional bias, not SMT:
+    longs                                       +0.042   2233  vs  -0.056   2143   diff +0.098  |z|  2.6  SEPARATES
+    shorts                                      +0.033   2446  vs  -0.019   2353   diff +0.052  |z|  1.5
+
+  THE CONTROL. confluence — the reference made the SAME extreme,
+  so the sweep was real and nothing was trapped. SMT says this
+  should be WORSE. if both beat the middle, the feature is reading
+  'BTC_USDT did something' rather than the disagreement:
+    confluence  vs  not                         -0.037   2722  vs  +0.017   6453   diff -0.054  |z|  1.9
+
+    half 1                                      +0.038   2313  vs  -0.028   2290   diff +0.066  |z|  1.8
+    half 2                                      +0.037   2366  vs  -0.045   2206   diff +0.082  |z|  2.3  SEPARATES
+
+========================================================================================================
+AND ON THE EARLY STREAM — SMT only
+========================================================================================================
+    early: divergence vs none                   +0.040   4051  vs  -0.044   3718   diff +0.084  |z|  3.0  SEPARATES
+    confirmed: divergence vs none               +0.020    628  vs  -0.001    778   diff +0.022  |z|  0.3
