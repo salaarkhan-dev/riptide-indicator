@@ -652,12 +652,33 @@ barcolor(showInside and isInside ? cInside : hiddenNow ? cHidden : na,
 
 // ═══════════════════════ 6. LIT STATISTICS ══════════════════════════════════
 // What actually happened after each structural event ON THIS CHART, counted
-// rather than asserted. Measured on the deep degree because it is the only one
-// with enough events for a rate to mean anything.
+// rather than asserted. Measured on the deep degree, the only one with enough
+// events for a rate to mean anything.
 //
-// "Near" is a quarter of the BOS-to-Choch range from the level. That threshold
-// is mine, not the reference's — theirs is not published — so read the rates as
-// a consistent internal measure rather than as a number comparable to theirs.
+// THE LEVELS ARE CAPTURED WHEN THE INDUCEMENT IS TAKEN, NOT READ BACK LATER,
+// and that is the whole fix. This block runs AFTER the step() calls, and a BOS
+// clears deep.bos on the very bar it fires — so the level being scored had
+// already been erased by the time the old code looked for it, and every break
+// row read 0%. Verified against research/lit.py, which reproduces the
+// reference's inducement row on ZEC 15m (21 events against its 23, splitting
+// 52.4/42.9 against its 56.5/43.5).
+//
+// A "BREAK" MEANS A CONFIRMED STRUCTURAL BREAK, not price touching the level.
+// The port had this wrong first and it put 77.8% where the reference has
+// 33.3%: touching a level measures how often price ARRIVES, which is a
+// different and much easier question than how often it gets THROUGH.
+//
+// The "near" band below is OURS. The reference's is not published, and a sweep
+// in the port showed no single threshold can reproduce both of its rows — at
+// 0.75 the BOS row lands close and the CHoCH row does not — so what remains is
+// a structural difference in the definition, not a parameter. Fitting a free
+// threshold to an undocumented number is the failure mode MEASUREMENTS.md is a
+// record of, so this is stated as our own measure rather than tuned to theirs.
+statNear = input.float(0.25, "Statistics: 'near' band", minval = 0.05,
+     maxval = 1.0, step = 0.05, group = gShow,
+     tooltip = "How close to a level counts as 'near', as a fraction of the " +
+     "BOS-to-CHoCH range. 0.25 means the outer quarter at each end.")
+
 var int nIdm     = 0
 var int nIdmBos  = 0
 var int nIdmCh   = 0
@@ -667,58 +688,69 @@ var int nBosOpp  = 0
 var int nChNear  = 0
 var int nChBrk   = 0
 var int nChOpp   = 0
-var int armIdm = 0        // 0 idle, 1 waiting to see which level is touched
-var int armBos = 0
-var int armCh  = 0
+// The captured cycle: the two levels that were live when the inducement was
+// taken, plus which side the structure was on.
+var float aBos  = na
+var float aCh   = na
+var bool  aBull = false
+var bool  aHit  = false
+var bool  aNrB  = false
+var bool  aNrC  = false
 
-float span = not na(deep.bos) and not na(deep.ch) ? math.abs(deep.bos - deep.ch)
-     : na
-if armIdm == 1 and not na(deep.bos) and not na(deep.ch)
-    bool hitBos = deep.bias > 0 ? high >= deep.bos : low <= deep.bos
-    bool hitCh  = deep.bias > 0 ? low <= deep.ch : high >= deep.ch
-    if hitBos
-        nIdmBos += 1
-        armIdm  := 0
-    else if hitCh
-        nIdmCh += 1
-        armIdm := 0
-// Armed AFTER the resolve above, so an inducement taken on this bar cannot
-// also be scored on it.
+// SCORE FIRST, against the captured levels.
+if not na(aBos) and not na(aCh)
+    float sp = math.abs(aBos - aCh)
+    bool tb = aBull ? high >= aBos : low <= aBos
+    bool tc = aBull ? low <= aCh : high >= aCh
+    if not aHit and (tb or tc)
+        aHit := true
+        if tb
+            nIdmBos += 1
+        else
+            nIdmCh += 1
+    if sp > 0
+        bool inB = aBull ? high >= aBos - sp * statNear
+             : low <= aBos + sp * statNear
+        bool inC = aBull ? low <= aCh + sp * statNear
+             : high >= aCh - sp * statNear
+        if not aNrB and inB
+            aNrB := true
+            nBosNear += 1
+        if not aNrC and inC
+            aNrC := true
+            nChNear += 1
+        // Re-armable: scored once per APPROACH rather than once per cycle,
+        // because price can leave the band and come back before the level
+        // resolves. The reference's counts exceed its own inducement count,
+        // which a per-cycle counter cannot do.
+        if aNrB
+            if deep.sBos
+                nBosBrk += 1
+                aNrB := false
+            else if tc
+                nBosOpp += 1
+                aNrB := false
+        if aNrC
+            if deep.sCh
+                nChBrk += 1
+                aNrC := false
+            else if tb
+                nChOpp += 1
+                aNrC := false
+    // A confirmed structural event ends the cycle.
+    if deep.sBos or deep.sCh
+        aBos := na
+        aCh  := na
+
+// THEN arm, so an inducement taken on this bar is never scored on it.
 if deep.sIdm
-    armIdm := 1
-    nIdm   += 1
-
-if not na(span) and span > 0
-    bool nearBos = deep.bias > 0 ? high >= deep.bos - span * 0.25
-         : low <= deep.bos + span * 0.25
-    bool nearCh = deep.bias > 0 ? low <= deep.ch + span * 0.25
-         : high >= deep.ch - span * 0.25
-    // RESOLVE BEFORE ARMING. Written the other way round, a bar that came
-    // near a level ARMED and then immediately RESOLVED on the same bar — and
-    // since "near" is a quarter of the range from each end, a narrow range has
-    // both ends near at once. That is how the table read 0% for "BOS near ->
-    // BOS break" against 98.8% for "-> opposite pullback": nothing was being
-    // measured except the two thresholds overlapping.
-    if armBos == 1
-        if deep.sBos or deep.sTrap
-            nBosBrk += 1
-            armBos := 0
-        else if nearCh
-            nBosOpp += 1
-            armBos := 0
-    if armCh == 1
-        if deep.sCh
-            nChBrk += 1
-            armCh := 0
-        else if nearBos
-            nChOpp += 1
-            armCh := 0
-    if armBos == 0 and nearBos
-        armBos := 1
-        nBosNear += 1
-    if armCh == 0 and nearCh
-        armCh := 1
-        nChNear += 1
+    nIdm += 1
+    aBos  := deep.bos
+    aCh   := deep.ch
+    aBull := deep.bias > 0
+    aHit  := false
+    aNrB  := false
+    aNrC  := false
 
 // ═══════════════════════════ 7. PANELS ══════════════════════════════════════
 trendTxt(Deg d) =>
