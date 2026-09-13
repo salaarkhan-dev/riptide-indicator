@@ -99,9 +99,21 @@ hidBos = input.bool(true, "Hidden Shadow on BOS", group = gBreak,
      "the break type above is Shadow: a wick break is already a wick break.")
 hidCh  = input.bool(true, "Hidden Shadow on Choch", group = gBreak)
 
-showPb     = input.bool(true,  "Pullback zones",        group = gShow,
-     tooltip = "The supply or demand the pullback left behind, shaded from " +
-     "the swing it came from down to the inducement it rests on.")
+labSize = input.string("Small", "Label size",
+     options = ["Tiny", "Small", "Normal", "Large"], group = gShow,
+     tooltip = "Sets the MAIN degree's label size. Internal and deep internal " +
+     "step down from it automatically, so the three degrees stay telling " +
+     "apart at a glance rather than all rendering the same.\n\n" +
+     "Tiny -> small / tiny / tiny\nSmall -> normal / small / tiny\n" +
+     "Normal -> large / normal / small\nLarge -> huge / large / normal\n\n" +
+     "Note that even the smallest setting keeps the MAIN labels at Pine's " +
+     "'small' rather than 'tiny': the top degree has to stay readable.")
+
+showPb     = input.bool(false, "Pullback zones",        group = gShow,
+     tooltip = "OFF by default. Shading every pullback buries the structure " +
+     "under boxes, which is the opposite of what a structure tool is for — " +
+     "the lines and their labels already say where the pullback was. Turn it " +
+     "on only if you specifically want the supply/demand areas filled in.")
 showTrap   = input.bool(true,  "Breaks with no IDM taken", group = gShow,
      tooltip = "The LIT trap: a level broken while the inducement below is " +
      "still untouched. Drawn dotted and labelled 'x'. Structure does NOT " +
@@ -119,15 +131,31 @@ showStats  = input.bool(true,  "LIT statistics table",  group = gShow,
      "within a quarter of the range of a level, does it break it or turn " +
      "back to the other side.")
 
-cBull   = input.color(#26a69a, "Bullish BOS / Choch",  group = gCol)
-cBear   = input.color(#ef5350, "Bearish BOS / Choch",  group = gCol)
-cIdmLo  = input.color(#42a5f5, "Bullish IDM (low)",    group = gCol)
-cIdmHi  = input.color(#ffb300, "Bearish IDM (high)",   group = gCol)
-cDemand = input.color(#26a69a, "Demand pullback",      group = gCol)
-cSupply = input.color(#ef5350, "Supply pullback",      group = gCol)
+// Mapped one-for-one onto the reference indicator's own Theme & Colors panel,
+// in its order, so a palette copied from there lands on the right rows here.
+cBull   = input.color(#26a69a, "Bullish BOS / CHoCH",  group = gCol)
+cBear   = input.color(#f06292, "Bearish BOS / CHoCH",  group = gCol)
+cIdmLo  = input.color(#64b5f6, "Bullish IDM (Low)",    group = gCol)
+cIdmHi  = input.color(#ffca28, "Bearish IDM (High)",   group = gCol)
+cDemand = input.color(#4db6ac, "Demand Pullback",      group = gCol)
+cSupply = input.color(#f48fb1, "Supply Pullback",      group = gCol)
+// Not in the reference's list — these three mark states it has no equivalent
+// of, so they sit below the mapped block rather than inside it.
 cTrap   = input.color(#787b86, "Invalid break",        group = gCol)
 cHidden = input.color(#9c27b0, "Hidden Shadow",        group = gCol)
 cInside = input.color(#b2b5be, "Inside bar",           group = gCol)
+
+// MAIN solid, INTERNAL dashed, DEEP dotted, and the label size stepping down
+// with it. Two independent cues for depth means neither has to be read
+// carefully: weight says which degree, style confirms it.
+lad(int i) =>
+    i <= 0 ? size.tiny : i == 1 ? size.small : i == 2 ? size.normal
+     : i == 3 ? size.large : size.huge
+int baseIdx = labSize == "Tiny" ? 1 : labSize == "Small" ? 2
+     : labSize == "Normal" ? 3 : 4
+string szMain = lad(baseIdx)
+string szInt  = lad(baseIdx - 1)
+string szDeep = lad(baseIdx - 2)
 
 // ═════════════════════════ 1. INSIDE BARS ═══════════════════════════════════
 // A candle sets a range. Every candle that stays within it is an inside bar,
@@ -413,21 +441,24 @@ lvlLine(float y, int x1, color c, int w, string st) =>
     line.new(x1, y, time, y, xloc = xloc.bar_time, color = c, width = w,
          style = st)
 
-tag(float y, int x, string txt, color c, bool up, string sz) =>
-    label.new(x, y, txt, xloc = xloc.bar_time,
-         style     = up ? label.style_label_down : label.style_label_up,
-         color     = color.new(c, 100), textcolor = c, size = sz)
+// CENTRED ON THE LINE, and plain text rather than a bubble. A bubble at the
+// left end competes with the price action it is drawn over; the text at the midpoint
+// of the level reads as part of the line instead of as an annotation stuck to
+// one end of it.
+tag(float y, int x1, string txt, color c, string sz) =>
+    label.new(x1 + (time - x1) / 2, y, txt, xloc = xloc.bar_time,
+         style = label.style_none, textcolor = c, size = sz)
 
 // One degree's drawings. Width and label size carry the hierarchy: the main
 // structure is meant to be readable at a glance and the deep degree is meant
 // to recede.
-draw(Deg d, bool on, string pfx, int w, string sz) =>
+draw(Deg d, bool on, string pfx, int w, string sz, string st) =>
     if on
         color bc = d.bias > 0 ? cBull : cBear
         if d.sIdm
             color ic = d.bias > 0 ? cIdmLo : cIdmHi
-            lvlLine(d.idm, d.idmT, ic, 1, line.style_dashed)
-            tag(d.idm, d.idmT, pfx + "IDM", ic, d.bias < 0, sz)
+            lvlLine(d.idm, d.idmT, ic, 1, st)
+            tag(d.idm, d.idmT, pfx + "IDM", ic, sz)
             if showPb and not na(d.bosCand)
                 float top = d.bias > 0 ? d.bosCand : d.idm
                 float bot = d.bias > 0 ? d.idm : d.bosCand
@@ -438,34 +469,32 @@ draw(Deg d, bool on, string pfx, int w, string sz) =>
                              : cSupply, 75),
                          bgcolor = color.new(d.bias > 0 ? cDemand : cSupply, 90))
         if d.sBos
-            lvlLine(d.bos, d.bosT, bc, w, line.style_solid)
-            tag(d.bos, d.bosT, pfx + "BOS", bc, d.bias > 0, sz)
+            lvlLine(d.bos, d.bosT, bc, w, st)
+            tag(d.bos, d.bosT, pfx + "BOS", bc, sz)
         if d.sCh
             // bias has already flipped, so the colour of the move that BROKE
             // is the new one
-            lvlLine(d.ch, d.chT, d.bias > 0 ? cBull : cBear, w,
-                 line.style_solid)
-            tag(d.ch, d.chT, pfx + "Choch", d.bias > 0 ? cBull : cBear,
-                 d.bias > 0, sz)
+            lvlLine(d.ch, d.chT, d.bias > 0 ? cBull : cBear, w, st)
+            tag(d.ch, d.chT, pfx + "CHoCH", d.bias > 0 ? cBull : cBear, sz)
         if d.sTrap and showTrap
             lvlLine(d.bos, d.bosT, cTrap, 1, line.style_dotted)
-            tag(d.bos, d.bosT, "x", cTrap, d.bias > 0, size.tiny)
+            tag(d.bos, d.bosT, "x", cTrap, szDeep)
 
-draw(deep, showDeep, "ii", 1, size.tiny)
-draw(intl, showInt,  "i",  2, size.small)
-draw(main, showMain, "",   3, size.normal)
+draw(deep, showDeep, "ii", 1, szDeep, line.style_dotted)
+draw(intl, showInt,  "i",  2, szInt,  line.style_dashed)
+draw(main, showMain, "",   3, szMain, line.style_solid)
 
 // Swing labels come off the deep degree, the only one that sees every turn.
 if showSwing and deep.sHi and not na(deep.pvHi)
     label.new(deep.pvHiT, deep.pvHi,
          na(deep.oldHi) ? "H" : deep.pvHi > deep.oldHi ? "HH" : "LH",
          xloc = xloc.bar_time, style = label.style_label_down,
-         color = color.new(cBear, 100), textcolor = cBear, size = size.tiny)
+         color = color.new(cBear, 100), textcolor = cBear, size = szDeep)
 if showSwing and deep.sLo and not na(deep.pvLo)
     label.new(deep.pvLoT, deep.pvLo,
          na(deep.oldLo) ? "L" : deep.pvLo < deep.oldLo ? "LL" : "HL",
          xloc = xloc.bar_time, style = label.style_label_up,
-         color = color.new(cBull, 100), textcolor = cBull, size = size.tiny)
+         color = color.new(cBull, 100), textcolor = cBull, size = szDeep)
 
 bool hiddenNow = array.includes(hidFlag, true)
 barcolor(showInside and isInside ? cInside : hiddenNow ? cHidden : na,
