@@ -565,6 +565,13 @@ live(Live v, bool on, float y, int x1, string txt, color c, int w, string st,
         label.set_xy(v.lb, time, y)
         label.set_text(v.lb, txt)
         label.set_textcolor(v.lb, c)
+    // CE10235. An if/else chain that is the LAST expression of a function is
+    // that function's return value, so Pine type-checks the branches against
+    // each other — and these ended on `label`, `label` and void. Returning the
+    // object turns the chain back into a plain statement and makes the
+    // function consistent with step() and cascade(), which also hand their
+    // object back.
+    v
 
 var Live lvBosD = Live.new()
 var Live lvChD  = Live.new()
