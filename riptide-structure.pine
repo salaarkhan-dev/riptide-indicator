@@ -120,6 +120,18 @@ showTrap   = input.bool(true,  "Breaks with no IDM taken", group = gShow,
      "advance on it. Leave this on while learning — the contrast between a " +
      "valid break and a trap is the most useful thing on the chart.")
 showSwing  = input.bool(true,  "Swing labels (HH/HL/LH/LL)", group = gShow)
+showX      = input.bool(true,  "X where liquidity was taken", group = gShow,
+     tooltip = "Marks the BAR the inducement was swept, at the price it was " +
+     "swept from — which is a different fact from the IDM line, and the more " +
+     "actionable one. The line says where the liquidity is; the X says it has " +
+     "been collected and the break that follows is now live.\n\nThis is our " +
+     "reading of the reference's X, which it does not document. Its marks sit " +
+     "at inducement prices on sweep bars, which is what this draws.")
+showWeak   = input.bool(true,  "Strong / weak extremes", group = gShow,
+     tooltip = "The extreme the structure PROTECTS is strong; the one it has " +
+     "to take is weak. In a bullish main structure the low that produced the " +
+     "break is strong and the high above it is weak — that high is where the " +
+     "liquidity sits, and it is the one price is drawn to.")
 showInside = input.bool(false, "Colour inside bars",    group = gShow)
 showPanel  = input.bool(true,  "Trend panel",           group = gShow)
 showStats  = input.bool(true,  "LIT statistics table",  group = gShow,
@@ -561,6 +573,15 @@ draw(Deg d, bool on, string pfx, int w, string sz, string st) =>
         if d.sTrap and showTrap
             lvlLine(d.bos, d.bosT, cTrap, 1, line.style_dotted)
             tag(d.bos, d.bosT, "x", cTrap, szDeep)
+        // X — the liquidity was collected HERE, at the price it was resting
+        // at. Drawn on the sweep bar rather than at the level's origin,
+        // because the actionable fact is when it happened, not where the line
+        // starts.
+        if d.sIdm and showX
+            label.new(time, d.idm, "X", xloc = xloc.bar_time,
+                 style     = label.style_none,
+                 textcolor = color.new(d.bias > 0 ? cIdmLo : cIdmHi, 20),
+                 size      = sz)
 
 draw(deep, showDeep, "ii", 1, szDeep, line.style_dotted)
 draw(intl, showInt,  "i",  2, szInt,  line.style_dashed)
@@ -650,6 +671,27 @@ if showSwing and deep.sLo and not na(deep.pvLo)
          na(deep.oldLo) ? "L" : deep.pvLo < deep.oldLo ? "LL" : "HL",
          xloc = xloc.bar_time, style = label.style_label_up,
          color = color.new(cBull, 100), textcolor = cBull, size = szDeep)
+
+// STRONG AND WEAK, on the main degree only. The extreme the structure is
+// protecting is strong; the one it still has to take is weak, and the weak one
+// is where the liquidity sits. Drawn once on the last bar rather than on every
+// bar that moves it.
+var label lbStrong = na
+var label lbWeak   = na
+if showWeak and barstate.islast
+    label.delete(lbStrong)
+    label.delete(lbWeak)
+    lbStrong := na(main.ch) ? na
+         : label.new(main.chT, main.ch,
+             (main.bias > 0 ? "Strong Low" : "Strong High"),
+             xloc = xloc.bar_time, style = label.style_none,
+             textcolor = main.bias > 0 ? cBull : cBear, size = szInt)
+    lbWeak := na(main.bos) ? na
+         : label.new(main.bosT, main.bos,
+             (main.bias > 0 ? "Weak High" : "Weak Low"),
+             xloc = xloc.bar_time, style = label.style_none,
+             textcolor = color.new(main.bias > 0 ? cBear : cBull, 25),
+             size = szInt)
 
 bool hiddenNow = array.includes(hidFlag, true)
 barcolor(showInside and isInside ? cInside : hiddenNow ? cHidden : na,
