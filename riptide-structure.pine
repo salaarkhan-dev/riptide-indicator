@@ -208,13 +208,13 @@ confirmBreak(int slot, float lvl, bool up, string mode) =>
 // setting, so the structure it produces is the same for everyone.
 var int   seek    = 1        // +1 hunting a high, -1 hunting a low
 var float extPx   = na       // the running extreme
-var int   extBar  = na
+var int   extT  = na
 var float extOpp  = na       // the opposite side of the extreme's own candle
 
 var float pvHi    = na       // last confirmed swing high
-var int   pvHiBar = na
+var int   pvHiT = na
 var float pvLo    = na
-var int   pvLoBar = na
+var int   pvLoT = na
 var float prevHi  = na       // the one before it, for HH/LH naming
 var float prevLo  = na
 
@@ -224,35 +224,35 @@ bool newLo = false
 if not isInside
     if na(extPx)
         extPx  := seek > 0 ? high : low
-        extBar := bar_index
+        extT := time
         extOpp := seek > 0 ? low : high
     else if seek > 0
         if high > extPx
             extPx  := high
-            extBar := bar_index
+            extT := time
             extOpp := low
         if confirmBreak(3, extOpp, false, modePb)
             prevHi  := pvHi
             pvHi    := extPx
-            pvHiBar := extBar
+            pvHiT := extT
             newHi   := true
             seek    := -1
             extPx   := low
-            extBar  := bar_index
+            extT  := time
             extOpp  := high
     else
         if low < extPx
             extPx  := low
-            extBar := bar_index
+            extT := time
             extOpp := high
         if confirmBreak(3, extOpp, true, modePb)
             prevLo  := pvLo
             pvLo    := extPx
-            pvLoBar := extBar
+            pvLoT := extT
             newLo   := true
             seek    := 1
             extPx   := high
-            extBar  := bar_index
+            extT  := time
             extOpp  := low
 
 // ═══════════════════ 4. THE LIT STATE MACHINE ═══════════════════════════════
@@ -271,51 +271,64 @@ if not isInside
 // inducement is still sitting there, so the break is not structural.
 var int   bias     = 0
 var float idmLvl   = na
-var int   idmBar   = na
+var int   idmT   = na
 var bool  idmTaken = false
 var float bosLvl   = na
-var int   bosBar   = na
+var int   bosT   = na
 var float chLvl    = na
-var int   chBar     = na
+var int   chT     = na
 var float runHi    = na      // highest since the last structural event
-var int   runHiBar = na
+var int   runHiT = na
 var float runLo    = na
-var int   runLoBar = na
+var int   runLoT = na
 
 if not isInside
     // Running extremes, reset only by a structural event.
     if na(runHi) or high > runHi
         runHi    := high
-        runHiBar := bar_index
+        runHiT := time
     if na(runLo) or low < runLo
         runLo    := low
-        runLoBar := bar_index
+        runLoT := time
 
 // Bootstrap: the first two confirmed pivots set an initial bias. It is a
 // guess, and the first CHoCH corrects it — which is exactly what a CHoCH is
 // for, so nothing is lost by starting somewhere.
 if bias == 0 and not na(pvHi) and not na(pvLo)
-    bias  := pvHiBar > pvLoBar ? 1 : -1
+    bias  := pvHiT > pvLoT ? 1 : -1
     chLvl := bias > 0 ? pvLo : pvHi
-    chBar := bias > 0 ? pvLoBar : pvHiBar
+    chT   := bias > 0 ? pvLoT : pvHiT
+    // AND RESET THE RUNNING EXTREMES. Without this they carry the highest and
+    // lowest price in the whole loaded history into the first structure, which
+    // is what put "needs to break 61300" on a 77,000 chart and deadlocked the
+    // engine: an unreachable BOS level means no BOS, which means no reset,
+    // which means no CHoCH either.
+    runHi   := high
+    runHiT  := time
+    runLo   := low
+    runLoT  := time
 
 // A new pullback extreme becomes the inducement, replacing any older one.
 if bias > 0 and newLo and not idmTaken
     if na(chLvl) or pvLo > chLvl
         idmLvl := pvLo
-        idmBar := pvLoBar
+        idmT := pvLoT
 if bias < 0 and newHi and not idmTaken
     if na(chLvl) or pvHi < chLvl
         idmLvl := pvHi
-        idmBar := pvHiBar
+        idmT := pvHiT
 
 // ═════════════════════════ 5. DRAWING ═══════════════════════════════════════
+// ANCHORED IN TIME, NOT IN BAR INDEX. A structural level is the one drawing
+// that legitimately sits thousands of bars back, and line.new refuses a
+// bar_index further behind than max_bars_back (RE10026). xloc.bar_time has no
+// such limit, so every anchor stored above is a timestamp.
 lvlLine(float y, int x1, color c, int w, string st) =>
-    line.new(x1, y, bar_index, y, xloc = xloc.bar_index, color = c,
+    line.new(x1, y, time, y, xloc = xloc.bar_time, color = c,
          width = w, style = st)
 
 tag(float y, int x, string txt, color c, bool up) =>
-    label.new(x, y, txt, xloc = xloc.bar_index,
+    label.new(x, y, txt, xloc = xloc.bar_time,
          style     = up ? label.style_label_down : label.style_label_up,
          color     = color.new(c, 100),
          textcolor = c,
@@ -337,20 +350,31 @@ if not isInside and bias != 0
             // range", and taking it HERE rather than at the next pivot is what
             // makes the level stable.
             bosLvl := bias > 0 ? runHi : runLo
-            bosBar := bias > 0 ? runHiBar : runLoBar
+            bosT   := bias > 0 ? runHiT : runLoT
+            // The BOS level is now fixed, so the opposite extreme restarts
+            // HERE. What it collects between now and the break is the dip the
+            // inducement caused, and the bottom of that dip is the low the
+            // structure protects — measuring it from the start of the leg
+            // would hand CHoCH a level from before the pattern began.
+            if bias > 0
+                runLo  := low
+                runLoT := time
+            else
+                runHi  := high
+                runHiT := time
             if showIdm
-                lvlLine(idmLvl, idmBar, idmCol, 1, line.style_dashed)
-                tag(idmLvl, idmBar, "IDM", idmCol, bias < 0)
+                lvlLine(idmLvl, idmT, idmCol, 1, line.style_dashed)
+                tag(idmLvl, idmT, "IDM", idmCol, bias < 0)
             if showPb
                 // The pullback itself: from the pivot that started it to the
                 // inducement resting under its extreme.
                 float pbTop = bias > 0 ? pvHi : idmLvl
                 float pbBot = bias > 0 ? idmLvl : pvLo
-                int   pbLft = bias > 0 ? pvHiBar : pvLoBar
-                if not na(pbTop) and not na(pbBot) and not na(pbLft)
+                int   pbLftT = bias > 0 ? pvHiT : pvLoT
+                if not na(pbTop) and not na(pbBot) and not na(pbLftT)
                      and pbTop > pbBot
-                    box.new(pbLft, pbTop, bar_index, pbBot,
-                         xloc = xloc.bar_index,
+                    box.new(pbLftT, pbTop, time, pbBot,
+                         xloc = xloc.bar_time,
                          border_color = color.new(idmCol, 70),
                          bgcolor = color.new(idmCol, 93))
 
@@ -359,56 +383,63 @@ if not isInside and bias != 0
         if idmTaken
             sigBos := true
             if showBos
-                lvlLine(bosLvl, bosBar, bias > 0 ? bullCol : bearCol, 2,
+                lvlLine(bosLvl, bosT, bias > 0 ? bullCol : bearCol, 2,
                      line.style_solid)
-                tag(bosLvl, bosBar, "BOS", bias > 0 ? bullCol : bearCol,
+                tag(bosLvl, bosT, "BOS", bias > 0 ? bullCol : bearCol,
                      bias > 0)
             // The protected extreme of the range becomes the CHoCH level, and
             // the cycle restarts.
             chLvl    := bias > 0 ? runLo : runHi
-            chBar    := bias > 0 ? runLoBar : runHiBar
+            chT    := bias > 0 ? runLoT : runHiT
             idmLvl   := na
             idmTaken := false
             bosLvl   := na
             runHi    := high
-            runHiBar := bar_index
+            runHiT := time
             runLo    := low
-            runLoBar := bar_index
+            runLoT := time
         else
             // THE TRAP. The high went, the inducement did not. Structure does
             // not advance and no BOS is printed.
             sigTrap := true
             if showTrap
-                lvlLine(bosLvl, bosBar, trapCol, 1, line.style_dotted)
-                tag(bosLvl, bosBar, "no IDM", trapCol, bias > 0)
+                lvlLine(bosLvl, bosT, trapCol, 1, line.style_dotted)
+                tag(bosLvl, bosT, "no IDM", trapCol, bias > 0)
 
     // ── step 4: character changes ───────────────────────────────────────────
     if not na(chLvl) and confirmBreak(2, chLvl, bias < 0, modeChoch)
         sigChoch := true
         if showChoch
-            lvlLine(chLvl, chBar, bias > 0 ? bearCol : bullCol, 2,
+            lvlLine(chLvl, chT, bias > 0 ? bearCol : bullCol, 2,
                  line.style_solid)
-            tag(chLvl, chBar, "CHoCH", bias > 0 ? bearCol : bullCol, bias < 0)
+            tag(chLvl, chT, "CHoCH", bias > 0 ? bearCol : bullCol, bias < 0)
+        // The extreme price just came FROM is what flips the new bias back,
+        // and it has to be captured before the flip. Setting chLvl := na here
+        // — which is what this did — left the engine with no reversal level at
+        // all until some later BOS refilled it. The panel read "Flips on —".
+        float newProt  = bias > 0 ? runHi : runLo
+        int   newProtT = bias > 0 ? runHiT : runLoT
         bias     := -bias
         idmLvl   := na
         idmTaken := false
         bosLvl   := na
-        chLvl    := na
+        chLvl    := newProt
+        chT      := newProtT
         runHi    := high
-        runHiBar := bar_index
+        runHiT   := time
         runLo    := low
-        runLoBar := bar_index
+        runLoT   := time
 
 // Pivot naming. HH/HL in an uptrend, LH/LL in a downtrend — the four words a
 // beginner actually needs, placed where the pivot is rather than in a legend.
 if showPivots and newHi and not na(pvHi)
     string t = na(prevHi) ? "H" : pvHi > prevHi ? "HH" : "LH"
-    label.new(pvHiBar, pvHi, t, xloc = xloc.bar_index,
+    label.new(pvHiT, pvHi, t, xloc = xloc.bar_time,
          style = label.style_label_down, color = color.new(bearCol, 100),
          textcolor = bearCol, size = size.tiny)
 if showPivots and newLo and not na(pvLo)
     string t = na(prevLo) ? "L" : pvLo < prevLo ? "LL" : "HL"
-    label.new(pvLoBar, pvLo, t, xloc = xloc.bar_index,
+    label.new(pvLoT, pvLo, t, xloc = xloc.bar_time,
          style = label.style_label_up, color = color.new(bullCol, 100),
          textcolor = bullCol, size = size.tiny)
 
