@@ -1,5 +1,31 @@
 # Scalper Lab — a separate model family
 
+> ## THE PINE FILES ARE GONE. Tested on a live chart, judged not good enough.
+>
+> `riptide-scalper.pine` and `riptide-scalper-strategy.pine` were removed on
+> 13 Sep. They drew and traded LSR-4 with the 5m trend filter — the one model
+> of seven that produced a held-out edge — and on a real chart it was not worth
+> keeping.
+>
+> **The research below stays**, because it is the record of *why*, and that is
+> worth more than the model was. Recreating the indicator from it is an
+> afternoon; recreating the reasons is not.
+>
+> What the branch actually established, and none of it depends on the deleted
+> files:
+>
+> - A 1m stop cannot carry the spread, and a stop wide enough to carry it takes
+>   an hour to resolve — so it was never a scalper.
+> - The ATR floor meant to protect against costs selects for *illiquid* symbols
+>   and causes the problem it was built to solve.
+> - 5m trend agreement is the only entry filter in this project's history to
+>   survive a held-out test, confirmed by two independent measures.
+> - Bollinger, volatility, turnover and three ADX smoothings add nothing on top
+>   of it. The model is one filter deep.
+>
+> Riptide Min30 was frozen throughout and is unaffected.
+
+
 > ## RESULTS ARE IN — and the answer is "real edge, eaten by spread"
 >
 > `research/studies/scalp_lab.out`. 14 symbols, 30 days of 1m, gross R.
