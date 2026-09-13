@@ -84,14 +84,24 @@ htfHigh = request.security(syminfo.tickerid, htf, high[1], lookahead = barmerge.
 htfLow  = request.security(syminfo.tickerid, htf, low[1],  lookahead = barmerge.lookahead_off)
 newHtf  = ta.change(htfHigh) != 0 or ta.change(htfLow) != 0
 
-// THE SUPERTREND SIGN IS THE ONE THING TO GET RIGHT HERE. Pine's ta.supertrend
-// returns direction = -1 for an UPTREND and +1 for a downtrend, which is the
-// opposite of what the name suggests. This project already lost a conclusion to
-// exactly that inversion once — a sign bug flipped the label on every BTC
-// measurement it ever made — so it is written out rather than inlined.
-[_stLine, stDir] = ta.supertrend(stFactor, stPeriod)
-stUpRaw = stDir < 0
-stUp = request.security(syminfo.tickerid, htf, stUpRaw, lookahead = barmerge.lookahead_off)
+// TWO THINGS TO GET RIGHT HERE, and the first version got the second wrong.
+//
+// THE SIGN. Pine's ta.supertrend returns direction = -1 for an UPTREND and +1
+// for a downtrend, which is the opposite of what the name suggests. (riptide's
+// own Python supertrend uses the opposite convention, +1 for up — the two
+// disagree, so neither can be assumed.) This project already lost a conclusion
+// to exactly that inversion: a sign bug flipped the label on every BTC
+// measurement it ever made. So it is written out rather than inlined.
+//
+// THE TIMEFRAME, which is the subtler error. Computing ta.supertrend at chart
+// resolution and then sampling THAT through request.security gives a ONE-MINUTE
+// supertrend read every five minutes — not a five-minute supertrend. They are
+// different series and only the second is what the research measured. The call
+// has to be evaluated INSIDE request.security so it runs on the 5m candles.
+f_stUp() =>
+    [_line, dir] = ta.supertrend(stFactor, stPeriod)
+    dir < 0
+stUp = request.security(syminfo.tickerid, htf, f_stUp(), lookahead = barmerge.lookahead_off)
 
 var float liqHigh   = na
 var int   liqHighAt = na
@@ -253,7 +263,7 @@ f_row(int r, string k, string v, color vc) =>
     table.cell(dash, 1, r, v, text_color = vc, bgcolor = #131722, text_size = size.normal, text_halign = text.align_right)
 
 if barstate.islast
-    pf = strategy.grossLoss > 0 ? strategy.grossProfit / strategy.grossLoss : na
+    pf = strategy.grossloss > 0 ? strategy.grossprofit / strategy.grossloss : na
     f_row(0, 'RIPTIDE SCALP', htf + ' → ' + timeframe.period, #d1d4dc)
     f_row(1, 'trades', str.tostring(strategy.closedtrades), #d1d4dc)
     f_row(2, 'net', str.tostring(strategy.netprofit, '#.##'), strategy.netprofit >= 0 ? #26a69a : #f23645)

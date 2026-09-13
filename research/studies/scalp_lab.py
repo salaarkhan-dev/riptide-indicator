@@ -249,8 +249,11 @@ def confirm_displacement(m, j, is_long, level, atr, k):
 # ── the shared pipeline ──────────────────────────────────────────────────────
 
 class Trade:
+    # exit_t added for the account simulator: a slot cap is meaningless without
+    # knowing when the slot frees, and every earlier study here only ever
+    # needed R per trade.
     __slots__ = ("sym", "model", "is_long", "fill_t", "entry", "stop",
-                 "risk_pct", "r", "bar")
+                 "risk_pct", "r", "bar", "exit_t", "held")
 
 
 def first_fvg(m, after, is_long):
@@ -285,7 +288,7 @@ def simulate(m, fvg_bar, entry, stop, is_long, target_r):
         hit_s = m[i].l <= stop if is_long else m[i].h >= stop
         hit_t = m[i].h >= tgt if is_long else m[i].l <= tgt
         if hit_s:
-            return fill, -1.0
+            return fill, -1.0, i
         # ON THE FILL BAR THE TARGET IS NOT AVAILABLE. The limit filled because
         # this bar traded through the entry, but the bar's extreme may have
         # happened BEFORE that — awarding the target here credits a move that
@@ -293,9 +296,10 @@ def simulate(m, fvg_bar, entry, stop, is_long, target_r):
         # on the fill bar, because assuming the adverse side came first is the
         # conservative reading of an unknown intrabar order.
         if hit_t and i > fill:
-            return fill, target_r
-    last = m[min(fill + HORIZON, len(m)) - 1].c
-    return fill, ((last - entry) if is_long else (entry - last)) / risk
+            return fill, target_r, i
+    end = min(fill + HORIZON, len(m)) - 1
+    last = m[end].c
+    return fill, ((last - entry) if is_long else (entry - last)) / risk, end
 
 
 def run_model(sym, m, atr, levels, confirm, k, target_r, flip=False,
@@ -345,11 +349,13 @@ def run_model(sym, m, atr, levels, confirm, k, target_r, flip=False,
                 entry, stop = entry, entry + (entry - stop)
             got = simulate(m, fb, entry, stop, d_long, target_r)
             if got:
-                fill, r = got
+                fill, r, ex = got
                 tr = Trade()
                 tr.sym, tr.model, tr.is_long = sym, "", d_long
                 tr.fill_t, tr.entry, tr.stop, tr.r, tr.bar = (
                     m[fill].t, entry, stop, r, fill)
+                tr.exit_t = m[min(ex, len(m) - 1)].t
+                tr.held = ex - fill
                 tr.risk_pct = 100 * abs(entry - stop) / entry
                 out.append(tr)
                 last_fire[key] = j
