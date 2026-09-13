@@ -274,7 +274,9 @@ var float idmLvl   = na
 var int   idmT   = na
 var bool  idmTaken = false
 var float bosLvl   = na
-var int   bosT   = na
+var int   bosT     = na
+var float bosCand  = na     // the swing extreme the current pullback came from
+var int   bosCandT = na
 var float chLvl    = na
 var int   chT     = na
 var float runHi    = na      // highest since the last structural event
@@ -309,14 +311,34 @@ if bias == 0 and not na(pvHi) and not na(pvLo)
     runLoT  := time
 
 // A new pullback extreme becomes the inducement, replacing any older one.
+// THE BOS CANDIDATE IS PINNED HERE, NOT AT THE BREAK, and that is the second
+// half of the same bug the bootstrap reset fixed. Taking "the highest point in
+// the range" as runHi at break time meant the range was everything since the
+// last structural event — and with no BOS yet there had BEEN no structural
+// event, so it was the all-history high: 82,256 on a chart trading at 77,095.
+// Unreachable, so no BOS, so no reset. The same loop, one level up.
+//
+// A pullback comes DOWN FROM a swing high. That high is what the break has to
+// clear, and it is known the moment the pullback is confirmed. runHi is then
+// restarted from here so that if price does make a NEW high before the
+// inducement is taken, the higher of the two wins — which is the doc's
+// "highest point within the relevant range", with the range correctly bounded.
 if bias > 0 and newLo and not idmTaken
     if na(chLvl) or pvLo > chLvl
-        idmLvl := pvLo
-        idmT := pvLoT
+        idmLvl   := pvLo
+        idmT     := pvLoT
+        bosCand  := pvHi
+        bosCandT := pvHiT
+        runHi    := high
+        runHiT   := time
 if bias < 0 and newHi and not idmTaken
     if na(chLvl) or pvHi < chLvl
-        idmLvl := pvHi
-        idmT := pvHiT
+        idmLvl   := pvHi
+        idmT     := pvHiT
+        bosCand  := pvLo
+        bosCandT := pvLoT
+        runLo    := low
+        runLoT   := time
 
 // ═════════════════════════ 5. DRAWING ═══════════════════════════════════════
 // ANCHORED IN TIME, NOT IN BAR INDEX. A structural level is the one drawing
@@ -349,8 +371,14 @@ if not isInside and bias != 0
             // break. This is the doc's "highest point within the relevant
             // range", and taking it HERE rather than at the next pivot is what
             // makes the level stable.
-            bosLvl := bias > 0 ? runHi : runLo
-            bosT   := bias > 0 ? runHiT : runLoT
+            // Whichever is further in the trade's favour: the swing high the
+            // pullback came from, or a newer high made before the inducement
+            // was taken. na-safe, because bosCand is empty until the first
+            // pullback confirms.
+            bool useRun = na(bosCand) or (bias > 0 ? runHi > bosCand
+                 : runLo < bosCand)
+            bosLvl := useRun ? (bias > 0 ? runHi : runLo) : bosCand
+            bosT   := useRun ? (bias > 0 ? runHiT : runLoT) : bosCandT
             // The BOS level is now fixed, so the opposite extreme restarts
             // HERE. What it collects between now and the break is the dip the
             // inducement caused, and the bottom of that dip is the low the
@@ -394,6 +422,7 @@ if not isInside and bias != 0
             idmLvl   := na
             idmTaken := false
             bosLvl   := na
+            bosCand  := na
             runHi    := high
             runHiT := time
             runLo    := low
@@ -423,6 +452,7 @@ if not isInside and bias != 0
         idmLvl   := na
         idmTaken := false
         bosLvl   := na
+        bosCand  := na
         chLvl    := newProt
         chT      := newProtT
         runHi    := high
