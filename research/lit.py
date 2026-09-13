@@ -21,6 +21,47 @@ riptide-indicator.pine, and every measurement in research/ depends on the two
 agreeing.
 
     PYTHONPATH=. python3 research/lit.py ZEC_USDT Min15
+
+──────────────────────────────────────────────────────────────────────────────
+WHAT THIS MEASURED, 13 Sep 2026 — THE CENTRAL CLAIM OF LIT IS A 60/40.
+
+The literature states the inducement sequence as near-deterministic: the first
+pullback after a break is the trap, its sweep collects the stops, and "the real
+institutional move" then delivers in the true direction. The entry rule that
+follows — never take the first pullback, wait for the sweep — is presented as
+the discipline that "eliminates the vast majority of inducement losses".
+
+Once the inducement is taken, does price reach the BOS level or the CHoCH level
+first? Eight symbols, Min15, ~2000 bars each:
+
+    symbol       IDM   ->BOS   ->CHoCH    BOS%
+    ZEC           21      11        9    52.4%
+    BTC           18       9        8    50.0%
+    ETH           12       5        7    41.7%
+    SOL           20      15        4    75.0%
+    DASH          34      19       14    55.9%
+    XLM           25      14       11    56.0%
+    ADA           21      13        7    61.9%
+    LINK          26      16        9    61.5%
+    ALL          177     102       69    57.6%
+
+97% resolve. Of those, 59.6% continue to the break and 40.4% go the other way.
+
+TWO INDEPENDENT IMPLEMENTATIONS AGREE ON THIS. The reference indicator's own
+statistics table reports 56.5% / 43.5% on ZEC — this engine reports 52.4/42.9
+on the same symbol and 59.6/40.4 pooled across eight. Nobody is disputing the
+number; the literature simply does not quote it.
+
+WHAT THAT MEANS, AND IT IS NOT NOTHING. A 60/40 edge is real and tradeable at
+2:1 — it is roughly what every honest edge in this repository looks like. What
+it is not is a trap-detector. "Wait for the sweep and the real move delivers"
+describes three trades in five. The other two sweep the inducement and keep
+going, which from inside the trade is indistinguishable until the CHoCH level
+is gone.
+
+So the structure is worth drawing and the sequence is worth knowing. The
+certainty the write-ups attach to it is not in the data — including in the data
+the reference tool prints on its own chart.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 
