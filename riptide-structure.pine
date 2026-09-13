@@ -683,6 +683,14 @@ statNear = input.float(0.25, "Statistics: 'near' band", minval = 0.05,
      maxval = 1.0, step = 0.05, group = gShow,
      tooltip = "How close to a level counts as 'near', as a fraction of the " +
      "BOS-to-CHoCH range. 0.25 means the outer quarter at each end.")
+statBars = input.int(2000, "Statistics: bars counted", minval = 200,
+     maxval = 20000, step = 500, group = gShow,
+     tooltip = "How far back the table counts. This matters more than it " +
+     "sounds: TradingView loads however much history it feels like, so the " +
+     "same chart on two machines gives two different totals and neither is " +
+     "comparable to anything. 2000 bars is a fixed window that can be quoted " +
+     "and reproduced — research/lit.py reads the same 2000 and agrees with " +
+     "this table.")
 
 var int nIdm     = 0
 var int nIdmBos  = 0
@@ -702,8 +710,15 @@ var bool  aHit  = false
 var bool  aNrB  = false
 var bool  aNrC  = false
 
+// A FIXED WINDOW, so the totals mean something. Counting every bar the
+// platform happened to load put 86 inducements in this table against the
+// reference's 23 on the same chart — not a different engine, a different
+// amount of history. research/lit.py sees 21 over 2000 bars, which is the
+// reference's 23 to within the noise of where a window starts.
+bool statOn = bar_index > last_bar_index - statBars
+
 // SCORE FIRST, against the captured levels.
-if not na(aBos) and not na(aCh)
+if statOn and not na(aBos) and not na(aCh)
     float sp = math.abs(aBos - aCh)
     bool tb = aBull ? high >= aBos : low <= aBos
     bool tc = aBull ? low <= aCh : high >= aCh
@@ -748,7 +763,7 @@ if not na(aBos) and not na(aCh)
         aCh  := na
 
 // THEN arm, so an inducement taken on this bar is never scored on it.
-if deep.sIdm
+if statOn and deep.sIdm
     nIdm += 1
     aBos  := deep.bos
     aCh   := deep.ch
