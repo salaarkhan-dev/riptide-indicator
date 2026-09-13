@@ -61,9 +61,24 @@ is a different place to find liquidity, not a rule about when to trade.
 **The one number that is wildly different is the grab→MSS window: 12 against
 Riptide's 50.** The tooltip says exactly what the parameter means and it is a
 speed requirement — *how fast the reversal must be*. Riptide allows the shift to
-arrive up to fifty bars after the raid; the reference allows twelve. That is not
-a cosmetic gap, it is a four-fold difference in how patient the pattern is
-allowed to be, and it has never been swept. See "What to test first" below.
+arrive up to fifty bars after the raid; the reference allows twelve.
+
+**This one is already settled and the answer is "it does not matter".**
+`max_bars_after_grab` was swept across six pre-registered values
+(MEASUREMENTS.md, "Engine parameters"):
+
+| cancel at | setups | R per setup |
+|---|---|---|
+| 10 bars | 759 | +0.038 ± 0.030 |
+| 20 bars | 1081 | +0.044 ± 0.025 |
+| 30 bars | 1178 | +0.039 ± 0.024 |
+| **50 bars** (shipped) | **1210** | **+0.045 ± 0.024** |
+| 75 bars | 1196 | +0.046 ± 0.024 |
+| 100 bars | 1183 | +0.047 ± 0.024 |
+
+The whole range spans 0.009 R against SEs of 0.025 — **0.3 SE end to end**.
+Raid age at the break has median 9 bars, p90 28. Cutting to the reference's 12
+would cost roughly 37% of alerts and buy nothing measurable. Kept at 50.
 
 ---
 
@@ -219,32 +234,51 @@ The panel was captured from the **Inputs** tab only, and not all of it. Missing:
 
 ## What to test first, once this is only a document
 
-Ranked by how large the divergence is and how cheap the test is. All three are
-config sweeps on the existing deep pipeline, not new indicators, and none is on
-the ban list.
+**Start by reading how much of this is already answered, because most of it
+is.** MEASUREMENTS.md, "Engine parameters": *"Six variants covering the
+reference indicator's own settings — `pivot_right`, `tol_atr`,
+`max_overshoot_atr`, `max_bars_after_grab` — all inside noise."* And
+`riptide-indicator.pine` ships an `ICT Trades (matched ref)` preset that swaps
+in the whole reference configuration at once; its tooltip records the result:
+*"Measured over 41.6 days the complete reference set is 0.071 R behind ours at
+1.4 SE, which is indistinguishable."*
 
-1. **`max_bars_after_grab`: 50 → 12.** The largest single divergence in the
-   panel, and the tooltip makes clear it is deliberate — the reference is
-   enforcing that the reversal be *fast*. A four-fold difference in patience,
-   and the one parameter here that `pivot_tune.py` did **not** sweep.
-2. **Cluster geometry: `max_cluster_span_atr` 0.80 → 0.2, `tol_atr` 0.25 →
-   0.1.** These two move together; sweep them as a pair, not separately. Both
-   were swept before but only down to 0.50 and 0.15 — extending the existing
-   grid downward is a smaller job than a new study, and `pivot_tune.py`'s
-   pre-registration and circular-shift null can be reused as they stand.
-3. **`TREND_INTERVAL` Hour8 → Day1 for the SuperTrend gate**, which `poi_tf.py`
-   did not test. One config line.
+So the reference's settings have been tested both one at a time and as a
+complete set, and neither reading separates them from Riptide's. That is the
+single most important thing in this file, and it means a divergence below is a
+curiosity unless it is named as untested.
 
-Two further items that are structural rather than a sweep:
+**Genuinely still open:**
 
-4. **Session H/L as a fourth pool source.** No counterpart in Riptide at all.
-   This is a new place to look for liquidity, not a filter on when to trade.
-5. **The 2-ATR displacement requirement on order blocks.** The order-block
-   entries that `entry_deep.py` rejected used the unqualified definition, so
-   the reference's stricter version is untested.
+1. **`TREND_INTERVAL` Hour8 → Day1 for the SuperTrend gate.** `poi_tf.py`
+   measured Day1 against Hour8 but held every grade at `poi=True`, so only the
+   POI label varied and the trend gate's own timeframe was never the thing
+   tested. One config line, and the SuperTrend is otherwise an exact match
+   (factor 5, length 14).
+2. **Cluster geometry at the reference's tighter end.** `tol_atr` was swept at
+   0.15/0.25/0.35/0.50 against the reference's 0.1, and `max_cluster_span_atr`
+   at 0.50/0.80/1.20 against the reference's 0.2 — both reference values sit
+   below the bottom of the grid. Extending the existing grid downward reuses
+   `pivot_tune.py`'s pre-registration and circular-shift null unchanged. Note
+   that the matched-ref preset above already ran these two together as part of
+   the complete set, so expect nothing; the value is in closing the range.
+3. **Session H/L as a fourth pool source.** No counterpart in Riptide's engine
+   at all — the Pine can draw session pools under the matched-ref preset, but
+   the bot cannot alert on them, so the chart marks pools no alert will ever
+   fire from. A session H/L *pool* is a place to look for liquidity, not a
+   filter on when to trade, so it is not the banned session filter.
+4. **The 2-ATR displacement requirement on order blocks.** `entry_deep.py`
+   rejected order-block entries using the unqualified definition, so the
+   reference's stricter version was not what lost.
 
-Finally, the honest caveat on the whole list: these are the reference
-indicator's defaults, not evidence. Riptide's values were mostly arrived at by
-measurement and several of them (`use_weekly`, `max_risk_atr`, `be_arm_r`,
+**Already answered, do not re-run:** `max_bars_after_grab` (six-value sweep,
+0.3 SE end to end), `pivot_right`, `max_overshoot_atr`, `min_pivots` (survived
+discovery then failed a circular-shift null and three fresh timeframes),
+`use_weekly` (295 weekly raids, zero setups), FVG mid / consequent encroachment
+(−1.8 SE), order block as an entry (−2.3 to −3.5 SE).
+
+Finally, the honest caveat: these are the reference indicator's defaults, not
+evidence. Several Riptide values (`use_weekly`, `max_risk_atr`, `be_arm_r`,
 `fvg_scan_from`, `entry_mode`) beat the reference's choice when tested. A
-divergence is a question, not a correction.
+divergence is a question, not a correction — and in this case a question that
+has mostly been asked.
