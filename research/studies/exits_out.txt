@@ -1,0 +1,33 @@
+EXIT POLICIES, PAIRED
+594 filled confirmed A/B trades, 492 bets, 333 days.
+every policy is scored on THE SAME trades, so the standard error below is on the
+per-bet DIFFERENCE against the control, not on two separate means.
+
+-- THE MFE LADDER (observational, target moved to 99R) -----------------------
+  of the trades that reached each level, how many went on:
+    reached 0.5R ( 455 trades):  1R  71%   1.5R  55%   2R  45%   2.5R  38%   3R  29%
+    reached 1R ( 322 trades):  1.5R  78%   2R  64%   2.5R  54%   3R  41%
+    reached 1.5R ( 250 trades):  2R  83%   2.5R  70%   3R  53%
+    reached 2R ( 207 trades):  2.5R  84%   3R  64%
+    reached 2.5R ( 174 trades):  3R  76%
+    never reached 0.5R: 23% of fills
+
+-- POLICIES -----------------------------------------------------------------
+  policy                          R/bet    win   total R  vs control  paired SE   |z|
+  CONTROL  2R                    +0.082    39%      45.5
+  target 1.5R                    +0.043    43%      24.4     -0.0383     0.0275  1.40
+  target 2.5R                    +0.112    36%      64.1     +0.0305     0.0269  1.14
+  target 3R                      +0.092    33%      34.6     +0.0099     0.0392  0.25
+  2R + BE at 1R -> 0             +0.049    33%      33.5     -0.0326     0.0219  1.49
+  2R + BE at 1R -> +0.3          +0.042    45%      29.0     -0.0393     0.0246  1.60
+  half at 1R, rest to 3R         +0.031    51%      18.5     -0.0502     0.0344  1.46
+  2R + swing trail               +0.007    33%      10.5     -0.0743     0.0388  1.92
+  3R + swing trail               +0.034    32%      18.6     -0.0479     0.0456  1.05
+  2R, out at 5 bars < 0.5R       +0.080    38%      43.8     -0.0021     0.0263  0.08
+  2R, out at 10 bars < 0.5R      +0.078    38%      40.1     -0.0033     0.0178  0.19
+  2R, out at 15 bars < 0.5R      +0.073    38%      41.8     -0.0084     0.0125  0.67
+  2R, out at 20 bars < 0.5R      +0.074    39%      41.2     -0.0074     0.0111  0.66
+  2R, out at 10 bars < 1R        +0.055    41%      19.9     -0.0270     0.0316  0.85
+
+  control absolute: +0.082 +/- 0.063 R/bet (unpaired, for scale)
+  a paired SE near 0.02 resolves effects an unpaired tercile at 0.35 could not.

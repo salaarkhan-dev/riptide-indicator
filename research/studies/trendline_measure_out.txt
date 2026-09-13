@@ -1,0 +1,260 @@
+Liquidity Trendline With Signals — full universe
+60 symbols · market entry at the breakout close · stop 1.5 x ATR(14) · fees 0.02/0.06%
+
+========================================================================================================
+Min30   83 days x 60 symbols, split in half   (4210 signals, 12990 control)
+========================================================================================================
+
+  DISCOVERY (newer half)   — 'need' is the win rate to break even after fees
+                                  n   /day   win   need   risk  R/signal     SE  total R
+  trendline, 2R                2198   0.88   31%    36%  1.43%    -0.182  0.030   -400.6
+  CONTROL random entries       6284   2.51   33%    36%  1.50%    -0.127  0.018   -797.0
+  EDGE over the control                                           -0.055  0.035   -1.6 SE
+
+  THE RR LADDER — the win rate is the target, not the model
+                                  n   /day   win   need   risk  R/signal     SE  total R
+    target 1.5R                2198   0.88   38%    43%  1.43%    -0.166  0.026   -364.1
+    target 2R                  2198   0.88   31%    36%  1.43%    -0.182  0.030   -400.6
+    target 3R                  2198   0.88   23%    27%  1.43%    -0.172  0.036   -378.4
+    target 4R                  2198   0.88   16%    22%  1.43%    -0.198  0.040   -436.0
+
+  SPLITS at 2R
+    symbols A              n=1086   -0.184 ± 0.043
+    symbols B              n=1112   -0.181 ± 0.042
+    longs                  n=1086   -0.099 ± 0.044
+    shorts                 n=1112   -0.263 ± 0.041
+
+  QUALITY VARIABLES (disc) — pre-registered, five of them
+    break distance past the line, ATR
+      low                    n=732    win 29%   -0.220 ± 0.051
+      mid                    n=733    win 32%   -0.166 ± 0.052
+      high                   n=733    win 32%   -0.160 ± 0.052
+    channel age, bars
+      low                    n=710    win 30%   -0.203 ± 0.052
+      mid                    n=733    win 31%   -0.175 ± 0.052
+      high                   n=755    win 31%   -0.169 ± 0.051
+    slope, ATR per bar
+      low                    n=732    win 31%   -0.187 ± 0.052
+      mid                    n=733    win 30%   -0.203 ± 0.051
+      high                   n=733    win 32%   -0.157 ± 0.052
+    4h trend agrees
+      against/flat           n=1584   win 30%   -0.215 ± 0.035
+      agrees                 n=614    win 34%   -0.098 ± 0.058
+    daily trend agrees
+      against/flat           n=1395   win 27%   -0.283 ± 0.036
+      agrees                 n=803    win 37%   -0.007 ± 0.052
+
+  HELD OUT (older half)   — 'need' is the win rate to break even after fees
+                                  n   /day   win   need   risk  R/signal     SE  total R
+  trendline, 2R                2012   0.81   33%    36%  1.37%    -0.120  0.032   -242.1
+  CONTROL random entries       6706   2.68   33%    36%  1.42%    -0.119  0.017   -800.7
+  EDGE over the control                                           -0.001  0.036   -0.0 SE
+
+  THE RR LADDER — the win rate is the target, not the model
+                                  n   /day   win   need   risk  R/signal     SE  total R
+    target 1.5R                2012   0.81   40%    43%  1.37%    -0.113  0.028   -228.0
+    target 2R                  2012   0.81   33%    36%  1.37%    -0.120  0.032   -242.1
+    target 3R                  2012   0.81   24%    27%  1.37%    -0.131  0.038   -264.1
+    target 4R                  2012   0.81   16%    22%  1.37%    -0.181  0.042   -363.3
+
+  SPLITS at 2R
+    symbols A              n=1033   -0.089 ± 0.045
+    symbols B              n=979    -0.154 ± 0.045
+    longs                  n=1008   -0.147 ± 0.045
+    shorts                 n=1004   -0.094 ± 0.045
+
+  QUALITY VARIABLES (held) — pre-registered, five of them
+    break distance past the line, ATR
+      low                    n=670    win 31%   -0.166 ± 0.054
+      mid                    n=671    win 32%   -0.133 ± 0.055
+      high                   n=671    win 35%   -0.062 ± 0.056
+    channel age, bars
+      low                    n=665    win 33%   -0.096 ± 0.056
+      mid                    n=669    win 29%   -0.220 ± 0.054
+      high                   n=678    win 35%   -0.046 ± 0.056
+    slope, ATR per bar
+      low                    n=670    win 35%   -0.029 ± 0.056
+      mid                    n=671    win 31%   -0.185 ± 0.054
+      high                   n=671    win 32%   -0.147 ± 0.055
+    4h trend agrees
+      against/flat           n=1491   win 33%   -0.103 ± 0.037
+      agrees                 n=521    win 31%   -0.169 ± 0.062
+    daily trend agrees
+      against/flat           n=1369   win 33%   -0.110 ± 0.039
+      agrees                 n=643    win 32%   -0.142 ± 0.056
+
+  VERDICT — the pre-registered primary
+    held-out, 2R: -0.120 ± 0.032   -3.8 SE
+    => FAILS — the bar was POSITIVE at 2 SE, fixed before the run
+
+========================================================================================================
+Min15   83 days x 60 symbols, split in half   (8834 signals, 27255 control)
+========================================================================================================
+
+  DISCOVERY (newer half)   — 'need' is the win rate to break even after fees
+                                  n   /day   win   need   risk  R/signal     SE  total R
+  trendline, 2R                4503   1.80   32%    37%  1.01%    -0.192  0.021   -862.4
+  CONTROL random entries      13188   5.27   33%    37%  1.04%    -0.167  0.013  -2198.6
+  EDGE over the control                                           -0.025  0.025   -1.0 SE
+
+  THE RR LADDER — the win rate is the target, not the model
+                                  n   /day   win   need   risk  R/signal     SE  total R
+    target 1.5R                4503   1.80   40%    44%  1.01%    -0.162  0.019   -728.2
+    target 2R                  4503   1.80   32%    37%  1.01%    -0.192  0.021   -862.4
+    target 3R                  4503   1.80   24%    28%  1.01%    -0.196  0.026   -880.6
+    target 4R                  4503   1.80   19%    22%  1.01%    -0.204  0.030   -916.6
+
+  SPLITS at 2R
+    symbols A              n=2263   -0.183 ± 0.030
+    symbols B              n=2240   -0.200 ± 0.030
+    longs                  n=2171   -0.143 ± 0.031
+    shorts                 n=2332   -0.237 ± 0.029
+
+  QUALITY VARIABLES (disc) — pre-registered, five of them
+    break distance past the line, ATR
+      low                    n=1501   win 33%   -0.164 ± 0.037
+      mid                    n=1501   win 31%   -0.235 ± 0.037
+      high                   n=1501   win 33%   -0.176 ± 0.037
+    channel age, bars
+      low                    n=1501   win 34%   -0.122 ± 0.038
+      mid                    n=1451   win 32%   -0.213 ± 0.037
+      high                   n=1551   win 31%   -0.238 ± 0.036
+    slope, ATR per bar
+      low                    n=1501   win 30%   -0.244 ± 0.036
+      mid                    n=1501   win 33%   -0.182 ± 0.037
+      high                   n=1501   win 34%   -0.149 ± 0.037
+    4h trend agrees
+      against/flat           n=3110   win 31%   -0.220 ± 0.025
+      agrees                 n=1393   win 35%   -0.128 ± 0.039
+    daily trend agrees
+      against/flat           n=2790   win 30%   -0.252 ± 0.027
+      agrees                 n=1713   win 36%   -0.093 ± 0.035
+
+  HELD OUT (older half)   — 'need' is the win rate to break even after fees
+                                  n   /day   win   need   risk  R/signal     SE  total R
+  trendline, 2R                4331   1.73   31%    37%  0.95%    -0.216  0.022   -936.5
+  CONTROL random entries      14067   5.63   33%    37%  0.98%    -0.170  0.012  -2385.4
+  EDGE over the control                                           -0.047  0.025   -1.9 SE
+
+  THE RR LADDER — the win rate is the target, not the model
+                                  n   /day   win   need   risk  R/signal     SE  total R
+    target 1.5R                4331   1.73   38%    44%  0.95%    -0.210  0.019   -910.2
+    target 2R                  4331   1.73   31%    37%  0.95%    -0.216  0.022   -936.5
+    target 3R                  4331   1.73   24%    28%  0.95%    -0.216  0.026   -934.0
+    target 4R                  4331   1.73   19%    22%  0.95%    -0.225  0.030   -973.7
+
+  SPLITS at 2R
+    symbols A              n=2115   -0.231 ± 0.031
+    symbols B              n=2216   -0.202 ± 0.030
+    longs                  n=2142   -0.330 ± 0.030
+    shorts                 n=2189   -0.105 ± 0.031
+
+  QUALITY VARIABLES (held) — pre-registered, five of them
+    break distance past the line, ATR
+      low                    n=1443   win 33%   -0.181 ± 0.038
+      mid                    n=1444   win 31%   -0.232 ± 0.037
+      high                   n=1444   win 31%   -0.236 ± 0.037
+    channel age, bars
+      low                    n=1334   win 32%   -0.207 ± 0.039
+      mid                    n=1502   win 30%   -0.248 ± 0.036
+      high                   n=1495   win 32%   -0.193 ± 0.037
+    slope, ATR per bar
+      low                    n=1443   win 32%   -0.200 ± 0.037
+      mid                    n=1444   win 32%   -0.189 ± 0.038
+      high                   n=1444   win 30%   -0.260 ± 0.037
+    4h trend agrees
+      against/flat           n=3077   win 32%   -0.202 ± 0.026
+      agrees                 n=1254   win 30%   -0.252 ± 0.040
+    daily trend agrees
+      against/flat           n=2835   win 31%   -0.232 ± 0.027
+      agrees                 n=1496   win 32%   -0.187 ± 0.037
+
+  VERDICT — the pre-registered primary
+    held-out, 2R: -0.216 ± 0.022   -10.0 SE
+    => FAILS — the bar was POSITIVE at 2 SE, fixed before the run
+
+========================================================================================================
+Min5   83 days x 60 symbols, split in half   (25073 signals, 77388 control)
+========================================================================================================
+
+  DISCOVERY (newer half)   — 'need' is the win rate to break even after fees
+                                  n   /day   win   need   risk  R/signal     SE  total R
+  trendline, 2R               12375   4.95   33%    39%  0.58%    -0.300  0.013  -3709.8
+  CONTROL random entries      37971  15.18   33%    39%  0.57%    -0.315  0.008 -11975.0
+  EDGE over the control                                           +0.016  0.015   +1.0 SE
+
+  THE RR LADDER — the win rate is the target, not the model
+                                  n   /day   win   need   risk  R/signal     SE  total R
+    target 1.5R               12375   4.95   40%    47%  0.58%    -0.289  0.012  -3571.4
+    target 2R                 12375   4.95   33%    39%  0.58%    -0.300  0.013  -3709.8
+    target 3R                 12375   4.95   24%    30%  0.58%    -0.332  0.016  -4103.9
+    target 4R                 12375   4.95   19%    24%  0.58%    -0.356  0.018  -4410.2
+
+  SPLITS at 2R
+    symbols A              n=6141   -0.285 ± 0.019
+    symbols B              n=6234   -0.314 ± 0.019
+    longs                  n=6087   -0.278 ± 0.019
+    shorts                 n=6288   -0.321 ± 0.019
+
+  QUALITY VARIABLES (disc) — pre-registered, five of them
+    break distance past the line, ATR
+      low                    n=4125   win 35%   -0.257 ± 0.023
+      mid                    n=4125   win 32%   -0.331 ± 0.023
+      high                   n=4125   win 33%   -0.311 ± 0.023
+    channel age, bars
+      low                    n=4100   win 33%   -0.293 ± 0.023
+      mid                    n=4016   win 35%   -0.265 ± 0.024
+      high                   n=4259   win 32%   -0.340 ± 0.023
+    slope, ATR per bar
+      low                    n=4125   win 33%   -0.321 ± 0.023
+      mid                    n=4125   win 33%   -0.299 ± 0.023
+      high                   n=4125   win 34%   -0.279 ± 0.023
+    4h trend agrees
+      against/flat           n=8033   win 33%   -0.313 ± 0.017
+      agrees                 n=4342   win 34%   -0.275 ± 0.023
+    daily trend agrees
+      against/flat           n=7599   win 33%   -0.306 ± 0.017
+      agrees                 n=4776   win 33%   -0.291 ± 0.021
+
+  HELD OUT (older half)   — 'need' is the win rate to break even after fees
+                                  n   /day   win   need   risk  R/signal     SE  total R
+  trendline, 2R               12698   5.08   34%    40%  0.53%    -0.271  0.013  -3437.4
+  CONTROL random entries      39417  15.76   34%    40%  0.55%    -0.276  0.007 -10888.8
+  EDGE over the control                                           +0.006  0.015   +0.4 SE
+
+  THE RR LADDER — the win rate is the target, not the model
+                                  n   /day   win   need   risk  R/signal     SE  total R
+    target 1.5R               12698   5.08   41%    48%  0.53%    -0.267  0.012  -3385.0
+    target 2R                 12698   5.08   34%    40%  0.53%    -0.271  0.013  -3437.4
+    target 3R                 12698   5.08   26%    30%  0.53%    -0.274  0.016  -3478.1
+    target 4R                 12698   5.08   21%    24%  0.53%    -0.278  0.018  -3536.3
+
+  SPLITS at 2R
+    symbols A              n=6362   -0.259 ± 0.019
+    symbols B              n=6336   -0.283 ± 0.019
+    longs                  n=6273   -0.309 ± 0.019
+    shorts                 n=6425   -0.233 ± 0.019
+
+  QUALITY VARIABLES (held) — pre-registered, five of them
+    break distance past the line, ATR
+      low                    n=4232   win 35%   -0.256 ± 0.023
+      mid                    n=4233   win 34%   -0.280 ± 0.023
+      high                   n=4233   win 34%   -0.276 ± 0.023
+    channel age, bars
+      low                    n=4133   win 34%   -0.276 ± 0.023
+      mid                    n=4238   win 34%   -0.288 ± 0.023
+      high                   n=4327   win 35%   -0.249 ± 0.023
+    slope, ATR per bar
+      low                    n=4232   win 34%   -0.277 ± 0.023
+      mid                    n=4233   win 34%   -0.273 ± 0.023
+      high                   n=4233   win 34%   -0.262 ± 0.023
+    4h trend agrees
+      against/flat           n=8579   win 33%   -0.294 ± 0.016
+      agrees                 n=4119   win 36%   -0.222 ± 0.023
+    daily trend agrees
+      against/flat           n=8433   win 34%   -0.269 ± 0.016
+      agrees                 n=4265   win 34%   -0.273 ± 0.023
+
+  VERDICT — the pre-registered primary
+    held-out, 2R: -0.271 ± 0.013   -20.5 SE
+    => FAILS — the bar was POSITIVE at 2 SE, fixed before the run

@@ -1,0 +1,38 @@
+IS Min15 WORTH SCANNING — on the signals actually SENT
+60 symbols · 42 days of Min30 history · POI required, grade B+ · target 2R
+drawdown is the UNCAPPED R equity curve, so it is deterministic
+
+TRAFFIC  1289 sent signals · Min15 is 709 of them (55%)
+
+ALL — everything the engine finds, both gates OFF
+                                          n    win    risk     R/sig     SE  total R   maxDD   R/DD
+  Min30 early                          2977    37%   1.79%    +0.027  0.025    +79.7    95.2   0.84
+  Min30 confirmed                       478    39%   2.05%    +0.064  0.064    +30.6    45.1   0.68
+  Min15 early                          2834    35%   1.52%    -0.013  0.026    -37.0   102.7  -0.36
+  Min15 confirmed                       420    36%   1.60%    +0.030  0.069    +12.7    29.0   0.44
+  Min30 ALONE (both kinds)             3455    37%   1.82%    +0.032  0.023   +110.3   102.2   1.08
+  Min30 + Min15 COMBINED               6709    37%   1.68%    +0.013  0.017    +86.1   140.8   0.61
+  adding Min15 changes                                                     -24.2   +38.6  -0.47
+
+SENT — POI required, grade B+ (RIPTIDE_MIN_GRADE)
+                                          n    win    risk     R/sig     SE  total R   maxDD   R/DD
+  Min30 early                           498    38%   1.74%    +0.070  0.063    +34.8    32.3   1.08
+  Min30 confirmed                        82    50%   1.89%    +0.458  0.166    +37.5    14.3   2.63
+  Min15 early                           623    37%   1.49%    +0.046  0.056    +28.6    57.9   0.49
+  Min15 confirmed                        86    37%   1.58%    +0.070  0.156     +6.0     9.8   0.62
+  Min30 ALONE (both kinds)              580    40%   1.76%    +0.125  0.059    +72.4    35.0   2.06
+  Min30 + Min15 COMBINED               1289    38%   1.62%    +0.083  0.039   +107.0    84.6   1.27
+  adding Min15 changes                                                     +34.7   +49.5  -0.80
+
+SENT · HELD OUT (older half) — the pre-registered panel (grade B+)
+                                          n    win    risk     R/sig     SE  total R   maxDD   R/DD
+  Min30 early                           181    35%   1.29%    -0.044  0.101     -7.9    20.2  -0.39
+  Min30 confirmed                        23   too few
+  Min15 early                           333    34%   1.55%    +0.007  0.076     +2.4    57.9   0.04
+  Min15 confirmed                        46    35%   1.66%    -0.022  0.209     -1.0     9.8  -0.11
+  Min30 ALONE (both kinds)              204    38%   1.30%    +0.051  0.098    +10.5    17.8   0.59
+  Min30 + Min15 COMBINED                583    36%   1.47%    +0.020  0.058    +11.9    59.8   0.20
+  adding Min15 changes                                                      +1.4   +42.0  -0.39
+
+PRE-REGISTERED: among SENT signals on the HELD-OUT half, Min30+Min15
+must beat Min30 alone on TOTAL R. If it does not, Min15 is costing money.

@@ -1,0 +1,48 @@
+WHAT A HIGHER WIN RATE COSTS — Riptide's own signals, target 2R
+3771 early · 696 confirmed
+'R per win pt' = net R given up for each percentage point of win rate bought.
+Lower is cheaper. Negative would mean free, which would be suspicious.
+
+EARLY — all   n=3771
+                             filled    win  full SL  R/signal     SE  vs plain  R per win pt
+  plain, target 2R             3006    37%      61%    -0.027  0.025
+  half at 0.5R, rest 2R        3006    65%      34%    -0.076  0.015    -0.049        0.0018
+  half at 1R, rest 2R          3006    51%      48%    -0.055  0.019    -0.028        0.0020
+  half at 1R, rest 3R          3006    51%      48%    -0.048  0.020    -0.021        0.0015
+  half at 1R, stop to +0.2R    3006    51%      48%    -0.056  0.019    -0.028        0.0020
+  break-even at 1R             3006    31%      53%    -0.044  0.023    -0.016             —
+  break-even at 1.5R           3006    36%      59%    -0.033  0.025    -0.006             —
+
+EARLY — HELD OUT (older half)   n=1769
+                             filled    win  full SL  R/signal     SE  vs plain  R per win pt
+  plain, target 2R             1382    38%      59%    -0.031  0.037
+  half at 0.5R, rest 2R        1382    64%      34%    -0.104  0.022    -0.073        0.0028
+  half at 1R, rest 2R          1382    52%      46%    -0.069  0.028    -0.038        0.0027
+  half at 1R, rest 3R          1382    52%      46%    -0.059  0.030    -0.028        0.0020
+  half at 1R, stop to +0.2R    1382    52%      46%    -0.063  0.028    -0.032        0.0023
+  break-even at 1R             1382    30%      52%    -0.065  0.034    -0.035             —
+  break-even at 1.5R           1382    36%      58%    -0.046  0.036    -0.016             —
+
+CONFIRMED — all   n=696
+                             filled    win  full SL  R/signal     SE  vs plain  R per win pt
+  plain, target 2R              474    38%      60%    +0.018  0.064
+  half at 0.5R, rest 2R         474    64%      35%    -0.080  0.037    -0.099        0.0039
+  half at 1R, rest 2R           474    50%      50%    -0.060  0.049    -0.078        0.0069
+  half at 1R, rest 3R           474    50%      50%    -0.035  0.053    -0.054        0.0047
+  half at 1R, stop to +0.2R     474    50%      50%    -0.070  0.048    -0.088        0.0077
+  break-even at 1R              474    32%      56%    -0.038  0.061    -0.056             —
+  break-even at 1.5R            474    37%      59%    +0.012  0.063    -0.006             —
+
+CONFIRMED — HELD OUT (older half)   n=306
+                             filled    win  full SL  R/signal     SE  vs plain  R per win pt
+  plain, target 2R              215    38%      60%    -0.019  0.094
+  half at 0.5R, rest 2R         215    60%      39%    -0.148  0.057    -0.128        0.0060
+  half at 1R, rest 2R           215    48%      51%    -0.125  0.072    -0.106        0.0108
+  half at 1R, rest 3R           215    48%      51%    -0.108  0.077    -0.089        0.0091
+  half at 1R, stop to +0.2R     215    48%      51%    -0.128  0.071    -0.109        0.0111
+  break-even at 1R              215    28%      55%    -0.104  0.087    -0.085             —
+  break-even at 1.5R            215    37%      59%    -0.028  0.093    -0.009             —
+
+WHY AN EXIT AND NOT A FILTER — how far losers got before dying
+  early       1884 losers   never green 0%   reached 0.5R 62%   reached 1R 26%   median peak 0.63R
+  confirmed    292 losers   never green 0%   reached 0.5R 59%   reached 1R 25%   median peak 0.60R

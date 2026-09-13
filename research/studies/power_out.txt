@@ -1,0 +1,38 @@
+PART 1 — WHAT THIS SAMPLE CAN RESOLVE
+minimum detectable effect, two arms, 5% significance and 80% power.
+anything smaller than the MDE is a coin toss no matter how carefully
+the study is designed.
+
+  population                           bets    sd R   MDE R/bet
+  all tradeable                        2395    1.32       0.152
+    ... split discovery / OOS          1198               0.214
+    ... then a tercile inside each      399               0.371
+  confirmed only                        489    1.39       0.351
+    ... split discovery / OOS           244               0.496
+    ... then a tercile inside each       82               0.860
+  confirmed, stop 1.2-2.6%              252    1.41       0.497
+    ... split discovery / OOS           126               0.703
+    ... then a tercile inside each       42               1.218
+
+  for scale, the largest effects this project has ever measured:
+    the surviving stop band, in-vs-out       +0.292 R/bet
+    the whole strategy against zero          +0.031 R/bet
+
+
+PART 2 — MARKET EVENTS, AND WHAT CAPPING THEM COSTS
+  4239 trades collapse into 2416 same-bar same-direction events
+  event size: median 1.0, mean 1.8, max 20, 142 events of 5 or more
+
+  does a bigger event trade worse? (the plan's hypothesis H12)
+    size 1       1596 events  37% win   +0.040 +/- 0.035 R
+    size 2        466 events  47% win   +0.067 +/- 0.058 R
+    size 3-4      212 events  36% win   -0.082 +/- 0.075 R
+    size 5-9      121 events  39% win   -0.059 +/- 0.093 R
+    size 10-+      21 events  67% win   +0.452 +/- 0.180 R
+
+  THE PORTFOLIO COMPARISON. Same trades, same order, same exits —
+  only how risk is allocated changes.
+    1 unit per TRADE                      4239 units   +150.5 R  max drawdown  131.8 R  recovery  1.14  under water  60%
+    1 unit per EVENT, split across it     2416 units    +80.4 R  max drawdown   70.9 R  recovery  1.13  under water  32%
+  The per-event row is what /stats already computes as a 'bet'. The
+  edge is identical by construction; only the risk profile differs.

@@ -1,0 +1,55 @@
+MEXC PUBLIC SURFACE — no API key, no signature, probed 2026-09-12
+
+============================================================================================
+HAS HISTORY — backtestable today
+============================================================================================
+  OK  funding rate history      dict ['currentPage', 'pageSize', 'resultList', 'totalCount', 'totalPage']
+  OK  index price kline         dict ['amount', 'close', 'high', 'low', 'open', 'realClose', 'realHigh', 'realLow', 'realOpen', '
+  OK  fair price kline          dict ['amount', 'close', 'high', 'low', 'open', 'realClose', 'realHigh', 'realLow', 'realOpen', '
+  OK  price kline (in use)      dict ['amount', 'close', 'high', 'low', 'open', 'realClose', 'realHigh', 'realLow', 'realOpen', '
+
+============================================================================================
+LIVE ONLY — log forward or nothing
+============================================================================================
+  OK  ticker (in use)           list[1200] ['amount24', 'ask1', 'bid1', 'contractId', 'fairPrice', 'fundingRate', 'high24Price', 
+  OK  contract detail (in use)  list[1192] ['amountScale', 'apiAllowed', 'appraisal', 'askLimitPriceRate', 'automaticDelivery', '
+  OK  order book depth          dict ['asks', 'bids', 'cts', 'timestamp', 'version']
+  OK  depth commits             list[5] ['asks', 'bids', 'cts', 'version']
+  OK  recent trades             list[100] ['M', 'O', 'T', 'cts', 'i', 'p', 't', 'v']
+  OK  funding rate now          dict ['collectCycle', 'fairPrice', 'fundingRate', 'idxPrice', 'maxFundingRate', 'minFundingRate',
+  OK  index price               dict ['indexPrice', 'symbol', 'timestamp']
+  OK  fair price                dict ['fairPrice', 'symbol', 'timestamp']
+  OK  insurance fund            list[1200] ['available', 'currency', 'symbol', 'timestamp']
+  OK  support currencies        list[45] ['STETH']
+
+============================================================================================
+ABSENT — confirmed 404/error
+============================================================================================
+  no  open interest history     HTTP 404 · Not Found
+  no  open interest history 2   HTTP 404 · Not Found
+  no  hold_vol history          HTTP 404 · Not Found
+  no  hold_vol kline            HTTP 404 · Not Found
+  no  tiered fee rate           HTTP 404 · Not Found
+
+============================================================================================
+FUNDING HISTORY DEPTH
+============================================================================================
+  1618 settlements on BTC_USDT · 539 days (2025-03-22 -> 2026-09-12)
+  Longer than the 333-day window every study here runs on, so it
+  joins to existing rows directly. riptide/market.py said this
+  was impossible until 12 Sep; it never was.
+
+============================================================================================
+FEES AND MINIMUMS ACROSS THE SCANNED UNIVERSE (120 symbols)
+============================================================================================
+  maker rates: [(0, 118), (0.0001, 2)]
+  taker rates: [(0, 82), (0.0001, 5), (0.0002, 31), (0.0004, 2)]
+  ZERO taker fee: 82/120 = 68%
+  Every study here charges 0.02/0.06 maker/taker, so the measured
+  numbers are a FLOOR. They cannot simply be rerun at zero: today's
+  schedule says nothing about the 333-day window, and promotional
+  zero-fee zones end.
+
+  minimum order notional: cheapest SHIB_USDT $0.0053 · median $1.03 · dearest PONS_USDT $60.62
+  needing over $10: 13 · over $50: 2
+  So a small account can place nearly the whole universe.

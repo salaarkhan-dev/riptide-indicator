@@ -1,0 +1,41 @@
+A TRENDLINE AS THE STOP — Riptide early signals, target 2R
+3773 early signals · buffer 0.25 ATR under the line · fixed, not swept
+
+COVERAGE — the rule only exists when a line is under the trade
+  early signals                              3773
+  ...with a live line on the correct side    699   (19%)
+  ...with any line at all on that side       700   (19%)
+
+ALL SIGNALS WITH A LINE   n=699
+                              filled    win  full SL     risk R/signal     SE
+  plain fixed stop               554    41%      58%    1.78%   +0.067  0.060
+  C  trail up the line           554    36%      51%    1.78%   +0.065  0.053
+  B  initial stop AT the line    554    44%      48%    3.10%   +0.020  0.053
+  B+C  at the line, trailed      554    38%      48%    3.10%   +0.011  0.047
+  C vs plain                                                    -0.001  0.080   -0.0 SE
+  B vs plain                                                    -0.046  0.080   -0.6 SE
+  B+C vs plain                                                  -0.055  0.076   -0.7 SE
+
+DISCOVERY (newer half)   n=433
+                              filled    win  full SL     risk R/signal     SE
+  plain fixed stop               332    39%      60%    2.04%   +0.017  0.076
+  C  trail up the line           332    35%      54%    2.04%   +0.005  0.068
+  B  initial stop AT the line    332    42%      48%    3.83%   -0.037  0.066
+  B+C  at the line, trailed      332    38%      48%    3.83%   -0.044  0.057
+  C vs plain                                                    -0.012  0.102   -0.1 SE
+  B vs plain                                                    -0.054  0.100   -0.5 SE
+  B+C vs plain                                                  -0.061  0.095   -0.6 SE
+
+HELD OUT (older half) — this is the pre-registered one   n=266
+                              filled    win  full SL     risk R/signal     SE
+  plain fixed stop               222    42%      55%    1.38%   +0.141  0.096
+  C  trail up the line           222    37%      47%    1.38%   +0.155  0.085
+  B  initial stop AT the line    222    45%      47%    2.01%   +0.106  0.089
+  B+C  at the line, trailed      222    38%      48%    2.01%   +0.094  0.080
+  C vs plain                                                    +0.014  0.128   +0.1 SE
+  B vs plain                                                    -0.035  0.131   -0.3 SE
+  B+C vs plain                                                  -0.046  0.125   -0.4 SE
+
+PRE-REGISTERED: an arm passes only by beating the PLAIN stop on the
+held-out half at 2 SE. Beating zero is not the test; the plain stop is
+what it would replace.

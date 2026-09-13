@@ -1,0 +1,69 @@
+SWEEP + FVG + TRENDLINE BREAKOUT — confluence, not an exit
+3773 early signals · break must fire AT OR BEFORE the signal bar
+window 10 bars = CFG.early_max_bars, fixed in advance
+
+COVERAGE  128/3773  (3%) of early signals had a same-direction
+          break within 10 bars
+
+ALL   n=3773
+                                   n    win  R/signal     SE
+    all signals in this panel   3773    30%    -0.015  0.020
+    WITH a break <= 10 bars      128    35%    +0.183  0.109
+    without one                 3645    30%    -0.022  0.020
+    difference                                 +0.206  0.111   +1.9 SE
+    placebo floor (25 seeds)     128           +0.018
+    vs the floor                               +0.165
+    break the OTHER way          648    29%    -0.021  0.048
+
+DISCOVERY (newer half)   n=1996
+                                   n    win  R/signal     SE
+    all signals in this panel   1996    30%    -0.023  0.027
+    WITH a break <= 10 bars       68    37%    +0.246  0.146
+    without one                 1928    30%    -0.032  0.028
+    difference                                 +0.279  0.149   +1.9 SE
+    placebo floor (25 seeds)      68           +0.003
+    vs the floor                               +0.243
+    break the OTHER way          368    29%    -0.050  0.063
+
+HELD OUT (older half) — this is the pre-registered one   n=1777
+                                   n    win  R/signal     SE
+    all signals in this panel   1777    30%    -0.007  0.029
+    WITH a break <= 10 bars       60    33%    +0.112  0.164
+    without one                 1717    30%    -0.011  0.029
+    difference                                 +0.123  0.167   +0.7 SE
+    placebo floor (25 seeds)      60           +0.005
+    vs the floor                               +0.107
+    break the OTHER way          280    30%    +0.016  0.074
+
+SENSITIVITY — other windows, NOT candidates. Printed so the pre-registered
+  choice can be seen in context rather than trusted blind.
+    window   kept  % kept    R with  R without     diff     SE
+         3     45     1%    +0.109     -0.017   +0.126  0.182
+         5     58     2%    +0.160     -0.018   +0.178  0.167
+        10    128     3%    +0.183     -0.022   +0.206  0.111
+        20    388    10%    +0.032     -0.021   +0.052  0.066
+        40    991    26%    -0.017     -0.015   -0.002  0.045
+
+====================================================================
+REPLICATION ON CONFIRMED SETUPS — a different signal, same filter
+====================================================================
+COVERAGE  63/694  (9%)
+
+ALL confirmed   n=694
+                                   n    win  R/signal     SE
+    all signals in this panel    694    26%    +0.014  0.043
+    WITH a break <= 10 bars       63    33%    +0.155  0.152
+    without one                  631    25%    +0.000  0.045
+    difference                                 +0.154  0.159   +1.0 SE
+    placebo floor (25 seeds)      63           +0.070
+    vs the floor                               +0.085
+    break the OTHER way           78    31%    +0.069  0.137
+
+HELD OUT confirmed   n=305
+                                   n    win  R/signal     SE
+    all signals in this panel    305    27%    -0.017  0.067
+    without one                  287    26%    -0.018  0.068
+    break the OTHER way           31    26%    -0.104  0.205
+
+PRE-REGISTERED: WITH must beat WITHOUT on the HELD-OUT half at 2 SE
+and clear the placebo floor. Both, not either.

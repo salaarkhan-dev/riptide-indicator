@@ -1,0 +1,83 @@
+PHASE 2 — WHICH RULE SHOULD THE BOT TRADE?
+59 symbols · 333 days · Min15+Min30+Min60 · 300 USDT · 10x · maker/taker fees
+9071 signals sent · 2905 would carry a 🎯 (32%)
+
+'fed' is how many rows the rule handed the account; 'taken' how
+many it had room for. 'blocked' is the gap — the cost of the cap.
+
+================================================================================================
+RISK 0.5% PER TRADE   <- what phase 2 will run
+================================================================================================
+  arm                                   fed   taken   win     ret  maxDD  ret/DD  blocked
+  1  everything, no rules              9071    8832   36%     -29%    89%   -0.33      239
+  2  slots: max 8                      9071    5734   36%     -12%    74%   -0.16     3337
+  3  slots: max 8 + 3 confd            9071    4281   35%     -51%    70%   -0.72     4790
+  4  PICK only, no cap                 2905    2905   38%    +164%    15%   10.99        0
+  5  PICK + max 8                      2905    2896   38%    +175%    15%   11.74        9
+  6  PICK + max 8 + 3 confd            2905    2749   38%    +143%    16%    8.77      156
+  7  PICK + max 8, no 15m              1051    1051   39%     +53%    13%    4.14        0
+  8  slots max 8 + 3 confd, no 15m     4449    2494   36%      -1%    50%   -0.03     1955
+
+  best by return per unit of drawdown:
+    5  PICK + max 8                     +175% / 15% DD  = 11.74  on 2896 trades
+    4  PICK only, no cap                +164% / 15% DD  = 10.99  on 2905 trades
+    6  PICK + max 8 + 3 confd           +143% / 16% DD  = 8.77  on 2749 trades
+
+================================================================================================
+RISK 1% PER TRADE
+================================================================================================
+  arm                                   fed   taken   win     ret  maxDD  ret/DD  blocked
+  1  everything, no rules              9071    7419   36%     -90%    99%   -0.91     1652
+  2  slots: max 8                      9071    5662   36%     -67%    95%   -0.71     3409
+  3  slots: max 8 + 3 confd            9071    4269   35%     -85%    94%   -0.90     4802
+  4  PICK only, no cap                 2905    2893   38%    +508%    28%   18.00       12
+  5  PICK + max 8                      2905    2887   38%    +540%    28%   19.13       18
+  6  PICK + max 8 + 3 confd            2905    2744   38%    +411%    30%   13.48      161
+  7  PICK + max 8, no 15m              1051    1051   39%    +120%    25%    4.81        0
+  8  slots max 8 + 3 confd, no 15m     4449    2494   36%     -24%    77%   -0.31     1955
+
+  best by return per unit of drawdown:
+    5  PICK + max 8                     +540% / 28% DD  = 19.13  on 2887 trades
+    4  PICK only, no cap                +508% / 28% DD  = 18.00  on 2893 trades
+    6  PICK + max 8 + 3 confd           +411% / 30% DD  = 13.48  on 2744 trades
+
+================================================================================================
+BOTH HALVES — an edge living in one half is a non-result
+================================================================================================
+
+  -- FIRST half, risk 0.5% --
+  arm                                   fed   taken   win     ret  maxDD  ret/DD  blocked
+  1  everything, no rules              4536    4396   34%     -71%    89%   -0.80      140
+  2  slots: max 8                      4536    2840   34%     -51%    74%   -0.69     1696
+  3  slots: max 8 + 3 confd            4536    2170   33%     -57%    69%   -0.83     2366
+  4  PICK only, no cap                 1424    1424   38%     +65%    14%    4.70        0
+  5  PICK + max 8                      1424    1419   38%     +69%    12%    5.54        5
+  6  PICK + max 8 + 3 confd            1424    1368   38%     +45%    16%    2.81       56
+  7  PICK + max 8, no 15m               522     522   36%      -2%    13%   -0.13        0
+  8  slots max 8 + 3 confd, no 15m     2216    1256   34%     -36%    50%   -0.71      960
+
+  -- SECOND half, risk 0.5% --
+  arm                                   fed   taken   win     ret  maxDD  ret/DD  blocked
+  1  everything, no rules              4535    4436   38%    +142%    57%    2.49       99
+  2  slots: max 8                      4535    2894   38%     +78%    52%    1.50     1641
+  3  slots: max 8 + 3 confd            4535    2112   37%     +15%    48%    0.31     2423
+  4  PICK only, no cap                 1481    1481   38%     +60%    15%    4.04        0
+  5  PICK + max 8                      1481    1477   39%     +63%    15%    4.22        4
+  6  PICK + max 8 + 3 confd            1481    1381   39%     +68%    16%    4.16      100
+  7  PICK + max 8, no 15m               529     529   42%     +55%     8%    6.63        0
+  8  slots max 8 + 3 confd, no 15m     2233    1238   38%     +53%    31%    1.75      995
+
+================================================================================================
+THE 15m QUESTION — a bot cannot quietly skip one
+================================================================================================
+  stream                      n   net R/trade
+  Min15 sent               4622        -0.024
+  Min15 PICKED             1854        +0.064
+  Min30 sent               2798        +0.030
+  Min30 PICKED              634        +0.070
+  Min60 sent               1651        +0.048
+  Min60 PICKED              417        +0.112
+
+  fee_key.out, sent stream: 15m gross +0.0064 net -0.0268;
+  30m +0.0486/+0.0255; 1h +0.0594/+0.0435. If 15m picks are
+  negative too, the bot must not be given that timeframe at all.

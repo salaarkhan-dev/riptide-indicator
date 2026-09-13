@@ -1,0 +1,13 @@
+[Unit]
+Description=Riptide auto-update check
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/riptide-src
+ExecStart=/home/ubuntu/riptide-src/deploy/update.sh
+# A failed check is not fatal — the timer tries again on the next tick.
+SuccessExitStatus=0 1
+TimeoutStartSec=300

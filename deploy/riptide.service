@@ -7,6 +7,9 @@ After=network-online.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/riptide
 EnvironmentFile=/home/ubuntu/riptide/.env
+# Settings from the repo, applied after .env so editing riptide.conf on GitHub
+# takes effect. Optional (the leading -) so an install without it still starts.
+EnvironmentFile=-/home/ubuntu/riptide/riptide.conf
 ExecStart=/home/ubuntu/riptide/.venv/bin/python riptide_bot.py
 Restart=always
 RestartSec=10

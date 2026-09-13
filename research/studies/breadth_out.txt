@@ -1,0 +1,47 @@
+BREADTH — how many symbols fired the same way on the same close
+4449 signals over 60 symbols · bars of Min30
+
+HOW WIDE DOES IT ACTUALLY GET — if this is almost always 1, the idea is
+dead on arrival whatever the R says.
+  same-direction signals on one close        share
+  alone                                        16%
+  2-3 together                                 27%
+  4-7 together                                 24%
+  8+ together                                  33%
+  widest single close: 32 signals
+
+EARLY — all   n=3756
+                                   n    win  R/signal     SE
+    all signals                 3756    30%    -0.016  0.020
+    alone                        619    28%    -0.039  0.048
+    2-3 together                 975    28%    -0.061  0.039
+    4-7 together                 909    28%    -0.091  0.041
+    8+ together                 1253    34%    +0.084  0.035
+    widest minus alone                         +0.123  0.060   +2.1 SE   NOT monotone   placebo -0.012
+
+EARLY — HELD OUT (older half), the pre-registered one   n=1766
+                                   n    win  R/signal     SE
+    all signals                 1766    30%    -0.018  0.029
+    alone                        343    28%    -0.065  0.065
+    2-3 together                 568    29%    -0.033  0.052
+    4-7 together                 426    28%    -0.102  0.059
+    8+ together                  429    34%    +0.122  0.058
+    widest minus alone                         +0.187  0.087   +2.1 SE   NOT monotone   placebo -0.027
+
+CONFIRMED — all   n=693
+                                   n    win  R/signal     SE
+    all signals                  693    26%    +0.020  0.044
+    alone                         73    26%    +0.011  0.132
+    2-3 together                 230    30%    +0.101  0.079
+    4-7 together                 174    23%    -0.166  0.086
+    8+ together                  216    25%    +0.088  0.075
+    widest minus alone                         +0.077  0.152   +0.5 SE   NOT monotone   placebo +0.034
+
+CONFIRMED — HELD OUT   n=303
+                                   n    win  R/signal     SE
+    all signals                  303    28%    +0.001  0.067
+    alone                         35    29%    +0.009  0.185
+    2-3 together                 125    33%    +0.118  0.114
+    4-7 together                  71    23%    -0.256  0.133
+    8+ together                   72    24%    +0.048  0.122
+    widest minus alone                         +0.039  0.221   +0.2 SE   NOT monotone   placebo -0.034

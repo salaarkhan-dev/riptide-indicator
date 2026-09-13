@@ -1,0 +1,42 @@
+RSI DIVERGENCE AS A FILTER — the concept, not the strategy
+RSI 9 · pivots 1/3 · previous pivot 5-60 bars back · window 10
+3759 early · 693 confirmed
+
+COVERAGE  agreeing regular divergence within 10 bars: 354/3759 (9%)
+
+EARLY — all   n=3759
+                                       n    win  R/signal     SE
+    all signals                     3759    30%    -0.016  0.020
+    REGULAR div agreeing             354    29%    -0.066  0.065
+      vs the rest                                  -0.055  0.068   -0.8 SE   placebo -0.026
+    regular div CONTRADICTING        201    33%    +0.085  0.089
+      vs the rest                                  +0.107  0.091   +1.2 SE   placebo -0.027
+    hidden div agreeing              338    27%    -0.031  0.066
+      vs the rest                                  -0.016  0.070   -0.2 SE   placebo -0.017
+
+EARLY — HELD OUT (older half), the pre-registered one   n=1769
+                                       n    win  R/signal     SE
+    all signals                     1769    30%    -0.018  0.029
+    REGULAR div agreeing             150    31%    +0.007  0.100
+      vs the rest                                  +0.028  0.104   +0.3 SE   placebo -0.058
+    regular div CONTRADICTING         86    34%    +0.048  0.139
+      vs the rest                                  +0.070  0.143   +0.5 SE   placebo -0.009
+    hidden div agreeing              146    29%    -0.035  0.104
+      vs the rest                                  -0.018  0.108   -0.2 SE   placebo -0.034
+
+CONFIRMED — all   n=693
+                                       n    win  R/signal     SE
+    all signals                      693    26%    +0.020  0.044
+    REGULAR div agreeing              74    23%    -0.190  0.132
+      vs the rest                                  -0.235  0.140   -1.7 SE   placebo +0.068
+    regular div CONTRADICTING         44    30%    -0.017  0.187
+      vs the rest                                  -0.040  0.192   -0.2 SE   placebo +0.070
+    hidden div agreeing              103    20%    -0.108  0.109
+      vs the rest                                  -0.150  0.119   -1.3 SE   placebo +0.035
+
+========================================================================
+DIVERGENCE AS A TRADE OF ITS OWN — market at the confirming close, 2R
+========================================================================
+                                       n    win  R/signal     SE
+    regular                         1394    32%    -0.144  0.038
+    hidden                          2944    34%    -0.097  0.026

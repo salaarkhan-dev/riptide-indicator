@@ -1,0 +1,84 @@
+After the signal: HTF bias, and waiting for an FVG
+30 symbols · stop 1.5 x ATR(14) from whatever the entry is · target 2R · gap window 10 bars · proximal edge
+
+====================================================================================================
+Min30   83 days across 30 symbols, split in half
+====================================================================================================
+
+  DISCOVERY (newer half)
+  arm                       n   fill   win   risk  R/signal     SE  R/filled  vs base
+  base                   1475   100%   33%  1.20%    -0.122  0.037    -0.122        —
+  + 4h bias               500   100%   38%  1.33%    +0.012  0.066    +0.012   +0.134
+  + daily bias            570   100%   36%  1.29%    -0.037  0.061    -0.037   +0.084
+  FVG market             1475    69%   23%  1.19%    -0.086  0.031    -0.125   +0.036
+  FVG retest             1475    54%   18%  1.17%    -0.058  0.027    -0.108   +0.063
+  FVG retest + 4h         500    49%   17%  1.28%    -0.007  0.046    -0.015   +0.114
+  FVG retest + daily      570    53%   19%  1.23%    +0.015  0.045    +0.029   +0.137
+    -- what the retest arm's gain actually is (disc) --
+       base, all 1475 signals            -0.122
+       base, only the 801 the retest filled  -0.084   <- SELECTION: +0.037
+       retest, those same 801 signals        -0.108   <- ENTRY: -0.023 ± 0.045 paired (-0.5 SE)
+    4h bias, agree vs AGAINST (disc)                agree +0.012 (n=500)  against -0.190 (n=975)  diff +0.203 ± 0.080 (+2.5 SE)
+    daily bias, agree vs AGAINST (disc)             agree -0.037 (n=570)  against -0.175 (n=905)  diff +0.138 ± 0.077 (+1.8 SE)
+
+  HELD OUT (older half)
+  arm                       n   fill   win   risk  R/signal     SE  R/filled  vs base
+  base                   1701   100%   33%  1.15%    -0.114  0.035    -0.114        —
+  + 4h bias               597   100%   34%  1.14%    -0.095  0.059    -0.095   +0.019
+  + daily bias            527   100%   35%  1.09%    -0.065  0.064    -0.065   +0.049
+  FVG market             1701    68%   22%  1.19%    -0.088  0.028    -0.130   +0.026
+  FVG retest             1701    54%   18%  1.20%    -0.043  0.026    -0.078   +0.071
+  FVG retest + 4h         597    53%   16%  1.20%    -0.096  0.041    -0.182   +0.017
+  FVG retest + daily      527    56%   17%  1.15%    -0.085  0.046    -0.153   +0.029
+    -- what the retest arm's gain actually is (held) --
+       base, all 1701 signals            -0.114
+       base, only the 926 the retest filled  -0.042   <- SELECTION: +0.072
+       retest, those same 926 signals        -0.078   <- ENTRY: -0.037 ± 0.044 paired (-0.8 SE)
+    4h bias, agree vs AGAINST (held)                agree -0.095 (n=597)  against -0.124 (n=1104)  diff +0.029 ± 0.073 (+0.4 SE)
+    daily bias, agree vs AGAINST (held)             agree -0.065 (n=527)  against -0.136 (n=1174)  diff +0.071 ± 0.076 (+0.9 SE)
+
+====================================================================================================
+Min15   83 days across 30 symbols, split in half
+====================================================================================================
+
+  DISCOVERY (newer half)
+  arm                       n   fill   win   risk  R/signal     SE  R/filled  vs base
+  base                   2983   100%   32%  0.85%    -0.210  0.026    -0.210        —
+  + 4h bias              1048   100%   34%  0.92%    -0.151  0.045    -0.151   +0.059
+  + daily bias           1158   100%   35%  0.89%    -0.132  0.043    -0.132   +0.079
+  FVG market             2983    67%   23%  0.86%    -0.117  0.022    -0.174   +0.093
+  FVG retest             2983    58%   20%  0.85%    -0.052  0.020    -0.091   +0.158
+  FVG retest + 4h        1048    59%   20%  0.93%    -0.061  0.034    -0.103   +0.149
+  FVG retest + daily     1158    60%   21%  0.91%    -0.025  0.033    -0.042   +0.186
+    -- what the retest arm's gain actually is (disc) --
+       base, all 2983 signals            -0.210
+       base, only the 1722 the retest filled  -0.077   <- SELECTION: +0.134
+       retest, those same 1722 signals        -0.091   <- ENTRY: -0.014 ± 0.033 paired (-0.4 SE)
+    4h bias, agree vs AGAINST (disc)                agree -0.151 (n=1048)  against -0.242 (n=1935)  diff +0.091 ± 0.056 (+1.6 SE)
+    daily bias, agree vs AGAINST (disc)             agree -0.132 (n=1158)  against -0.260 (n=1825)  diff +0.129 ± 0.054 (+2.4 SE)
+
+  HELD OUT (older half)
+  arm                       n   fill   win   risk  R/signal     SE  R/filled  vs base
+  base                   3209   100%   34%  0.81%    -0.149  0.026    -0.149        —
+  + 4h bias              1002   100%   35%  0.83%    -0.111  0.046    -0.111   +0.037
+  + daily bias            985   100%   33%  0.79%    -0.176  0.046    -0.176   -0.027
+  FVG market             3209    68%   22%  0.82%    -0.119  0.021    -0.175   +0.030
+  FVG retest             3209    58%   19%  0.82%    -0.050  0.019    -0.087   +0.098
+  FVG retest + 4h        1002    58%   19%  0.82%    -0.065  0.035    -0.111   +0.084
+  FVG retest + daily      985    59%   19%  0.78%    -0.077  0.035    -0.131   +0.072
+    -- what the retest arm's gain actually is (held) --
+       base, all 3209 signals            -0.149
+       base, only the 1851 the retest filled  -0.024   <- SELECTION: +0.125
+       retest, those same 1851 signals        -0.087   <- ENTRY: -0.063 ± 0.032 paired (-2.0 SE)
+    4h bias, agree vs AGAINST (held)                agree -0.111 (n=1002)  against -0.166 (n=2207)  diff +0.055 ± 0.055 (+1.0 SE)
+    daily bias, agree vs AGAINST (held)             agree -0.176 (n=985)  against -0.137 (n=2224)  diff -0.039 ± 0.055 (-0.7 SE)
+
+====================================================================================================
+  THE PRE-REGISTERED BAR: an arm must beat `base` on R per signal in ALL FOUR panels
+====================================================================================================
+  + 4h bias            +0.134  +0.019  +0.059  +0.037   4/4   PASSES
+  + daily bias         +0.084  +0.049  +0.079  -0.027   3/4   fails
+  FVG market           +0.036  +0.026  +0.093  +0.030   4/4   PASSES
+  FVG retest           +0.063  +0.071  +0.158  +0.098   4/4   PASSES
+  FVG retest + 4h      +0.114  +0.017  +0.149  +0.084   4/4   PASSES
+  FVG retest + daily   +0.137  +0.029  +0.186  +0.072   4/4   PASSES

@@ -1,0 +1,175 @@
+"""Open interest and funding, recorded per bar so they can be tested later.
+
+This module answers a question nothing else in the bot can. Every strategy
+input so far comes from OHLC — and thirteen families of variation on it have
+come back inside noise. Open interest is different information: it says
+whether the contracts behind a price move were being OPENED or CLOSED.
+
+That distinction is exactly the one the strategy rests on and cannot currently
+see. When price runs a liquidity pool:
+
+    OI falling   positions are being closed — forced exits, a stop run. The
+                 raid is what the strategy assumes it is, and a reversal is
+                 the reasonable read.
+    OI rising    new money is positioning into the move. That is a breakout
+                 with participation, and the reversal is wrong.
+
+Two identical-looking candles, opposite meanings. The volume work already
+hinted at this from the outside: sweep-to-setup conversion falls monotonically
+from 26% to 6.5% as sweep volume rises (+15.6 SE), which says loud raids are
+breakouts. Open interest would say so directly.
+
+WHY THIS IS A LOGGER AND NOT A FILTER. MEXC serves holdVol only as a live
+snapshot from contract/ticker. OPEN INTEREST HAS NO HISTORY ENDPOINT — probed
+12 Sep across five candidate paths, all 404 — so it cannot be backtested at
+all, not with more effort and not with a better script. The only way it ever
+becomes measurable is to start recording now and wait. Six weeks of this file
+is the difference between testing the idea and guessing at it.
+
+    THIS FILE USED TO SAY THE SAME OF FUNDING, AND THAT WAS WRONG.
+    /api/v1/contract/funding_rate/history is public, needs no key, and carries
+    1618 settlements per symbol — 539 DAYS on BTC_USDT, longer than the 333-day
+    window every study here runs on. Funding was backtestable the whole time
+    and this docstring said it was not, which is worse than saying nothing:
+    it closed a door that was open. Corrected 12 Sep.
+
+    The same probe found index-price and fair-price KLINES are public too,
+    which makes the basis (last - index) a full candle history rather than a
+    snapshot. That is the finer-grained version of the funding signal and it
+    is also testable today. Neither has been measured yet, and the prior is
+    poor — 21 entry filters have failed in this project — but "unmeasured" and
+    "unmeasurable" are different words and only one of them was true.
+
+Nothing here can affect an alert. It writes to its own table, is wrapped so a
+failure is logged and swallowed, and no other module reads it yet. There is
+still no exchange key and no order path anywhere in the bot — contract/ticker
+is a public, unsigned GET.
+"""
+
+from __future__ import annotations
+
+import time
+
+from .config import (BASE, LOG_MARKET, MARKET_KEEP_DAYS,
+                     MARKET_MIN_VOL, log)
+from .exchange import get_json
+from .tracker import last_closed_bar
+
+
+def init(db) -> None:
+    """Created alongside the other tables, so an existing riptide.db picks it
+    up on the next restart with no migration."""
+    db.execute("""CREATE TABLE IF NOT EXISTS market(
+        symbol TEXT, t INT,
+        hold_vol REAL,      -- open interest, in contracts
+        funding REAL,       -- funding rate at the snapshot
+        price REAL,         -- last price, to convert OI to notional later
+        amount24 REAL,      -- 24h quote turnover, for context
+        PRIMARY KEY(symbol, t))""")
+    db.execute("CREATE INDEX IF NOT EXISTS market_t ON market(t)")
+    db.commit()
+
+
+def _num(v) -> float | None:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+async def snapshot(sess, db, symbols) -> int:
+    """
+    Record one row per symbol for the bar that just closed.
+
+    Stamped with last_closed_bar() rather than wall-clock time so rows line up
+    with the candles they will eventually be joined against, and so a re-scan
+    within the same bar overwrites rather than duplicating — the primary key
+    does that, and INSERT OR REPLACE keeps the freshest reading of the bar.
+
+    ONE request for all of them — contract/ticker returns every symbol in a
+    single response, and the rows are filtered from it locally. The previous
+    sentence here said "one request for every symbol", which was wrong and
+    cost an hour of chasing a rate-limit theory that could not have been true.
+    Returns how many rows were written.
+
+    IT NO LONGER FILTERS TO THE SCANNED SYMBOLS, and the reason is the whole
+    point of the module. The first export of this table — 6328 rows, 2.8 days
+    — showed 94 distinct symbols but only 20 with a series covering more than
+    95% of the bars. The scanned set is the top TOP_N by turnover, refreshed
+    every six hours, and symbols near that line rotate in and out constantly.
+    So the file was accumulating a lot of short, broken series rather than
+    fewer long ones, and a broken series is close to worthless here: the
+    quantity being tested is the CHANGE in open interest across the raid, which
+    needs the bar before as well as the bar itself.
+
+    Meanwhile the response already contained 1196 contracts and 1136 of them
+    were being thrown away. Keeping more of it costs nothing — same single
+    request, same cadence — and buys three things: no rotation holes, a sample
+    that fills roughly three times faster, and history already in place for a
+    symbol on the day it rotates INTO the scanned set.
+
+    The floor is turnover, well below the scan threshold rather than at it, so
+    anything that could plausibly become scannable is already being recorded.
+    At the defaults that is about 180 symbols against 106 currently eligible
+    to scan — real headroom, and roughly 1.5M rows over the full 180-day
+    retention, which is tens of megabytes. RIPTIDE_MARKET_MIN_VOL is the lever
+    if that is ever too many; MARKET_KEEP_DAYS is the other one.
+    """
+    if not LOG_MARKET:
+        return 0
+
+    d = await get_json(sess, f"{BASE}/api/v1/contract/ticker")
+    rows = (d or {}).get("data") or []
+    if not rows:
+        log.debug("market: ticker unavailable this cycle, nothing logged")
+        return 0
+
+    # Always keep the scanned symbols, whatever their turnover says — those
+    # are the ones a signal can actually come from, and a symbol dropping
+    # under the floor mid-window must not put a hole in its own series.
+    want = set(symbols or ())
+    t = last_closed_bar()
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        sym = r.get("symbol")
+        hold = _num(r.get("holdVol"))
+        if not sym or hold is None:
+            continue                      # no open interest, nothing to log
+        if sym not in want and (_num(r.get("amount24")) or 0) < MARKET_MIN_VOL:
+            continue
+        out.append((sym, t, hold, _num(r.get("fundingRate")),
+                    _num(r.get("lastPrice")), _num(r.get("amount24"))))
+
+    if not out:
+        log.debug("market: ticker carried nothing above the turnover floor")
+        return 0
+
+    db.executemany("INSERT OR REPLACE INTO market VALUES(?,?,?,?,?,?)", out)
+    db.commit()
+    return len(out)
+
+
+def prune(db) -> int:
+    """Drop snapshots past the retention window. Cheap, and keeps a database
+    that is otherwise append-forever from growing without bound."""
+    if MARKET_KEEP_DAYS <= 0:
+        return 0
+    cur = db.execute("DELETE FROM market WHERE t < ?",
+                     (int(time.time()) - MARKET_KEEP_DAYS * 86400,))
+    if cur.rowcount:
+        db.commit()
+        log.info("market: pruned %d snapshots past %d days",
+                 cur.rowcount, MARKET_KEEP_DAYS)
+    return cur.rowcount
+
+
+def coverage(db) -> tuple[int, int, float]:
+    """(rows, symbols, days spanned) — what /status reports so the sample is
+    visible while it accumulates rather than being discovered later."""
+    row = db.execute("SELECT COUNT(*), COUNT(DISTINCT symbol), "
+                     "MIN(t), MAX(t) FROM market").fetchone()
+    n, syms, lo, hi = row or (0, 0, None, None)
+    days = ((hi - lo) / 86400.0) if (lo and hi) else 0.0
+    return n or 0, syms or 0, days

@@ -1,0 +1,170 @@
+The stop: where to put it, and what to do with it
+30 symbols · target 2R · riptide uses its own limit entry and raid-extreme stop, lez a market entry at the close with 1.5 x ATR(14)
+
+====================================================================================================
+Min30   83 days across 30 symbols, split in half
+====================================================================================================
+
+  ---- riptide: 638 signals ----
+
+  A. THE RISK FLOOR — riptide, Min30
+  risk_pct bucket          n   win   risk    fee    R net     SE  R gross
+    -- disc --
+    0.00-0.78%            61   23%  0.56%  0.094   -0.111  0.153   -0.017
+    0.78-1.10%            61   30%  0.94%  0.050   +0.110  0.164   +0.160
+    1.10-1.47%            61   34%  1.29%  0.037   +0.242  0.170   +0.279
+    1.47-2.10%            61   36%  1.79%  0.023   +0.332  0.159   +0.354
+    >2.10%                61   33%  2.96%  0.014   +0.297  0.162   +0.311
+      net not monotone   ·   gross does not
+    -- held --
+    0.00-0.86%            66   24%  0.65%  0.090   -0.120  0.156   -0.030
+    0.86-1.17%            67   21%  1.00%  0.044   -0.074  0.141   -0.030
+    1.17-1.51%            66   23%  1.33%  0.033   -0.042  0.139   -0.009
+    1.51-1.95%            67   19%  1.70%  0.033   -0.270  0.133   -0.237
+    >1.95%                67   21%  2.55%  0.019   -0.108  0.130   -0.089
+      net not monotone   ·   gross does not
+
+  B. STOP MANAGEMENT — riptide, Min30, target 2R
+  rule                           n   win   FULL  losses    R net     SE  vs plain
+    -- disc --
+    plain (fixed stop)         305   31%    119     39%   +0.174  0.072         —
+    BE at 1R, lock 0           305   25%    107     35%   +0.091  0.066    -0.084
+    BE at 1R, lock +0.1R       305   33%    107     35%   +0.076  0.065    -0.098
+    BE at 1.5R, lock +0.1R     305   32%    116     38%   +0.159  0.071    -0.015
+    half at 1R, rest to tgt    305   40%     94     31%   +0.071  0.054    -0.103
+    half at 1R, lock +0.1R     305   40%     94     31%   +0.063  0.053    -0.111
+    -- held --
+    plain (fixed stop)         333   22%    160     48%   -0.123  0.062         —
+    BE at 1R, lock 0           333   17%    143     43%   -0.145  0.058    -0.022
+    BE at 1R, lock +0.1R       333   25%    143     43%   -0.135  0.058    -0.012
+    BE at 1.5R, lock +0.1R     333   23%    156     47%   -0.117  0.062    +0.006
+    half at 1R, rest to tgt    333   31%    129     39%   -0.146  0.047    -0.023
+    half at 1R, lock +0.1R     333   31%    129     39%   -0.137  0.048    -0.014
+
+  VERDICTS (riptide, Min30)
+    A  risk floor: NOT SUPPORTED  (net monotone both halves, and not merely setup quality)
+    B  management: nothing beats the plain fixed stop in both halves
+
+  ---- lez: 3197 signals ----
+
+  A. THE RISK FLOOR — lez, Min30
+  risk_pct bucket          n   win   risk    fee    R net     SE  R gross
+    -- disc --
+    0.00-0.65%           299   31%  0.47%  0.255   -0.332  0.083   -0.077
+    0.65-0.88%           299   36%  0.77%  0.138   -0.065  0.085   +0.074
+    0.88-1.18%           299   35%  1.02%  0.105   -0.051  0.084   +0.054
+    1.18-1.61%           299   36%  1.37%  0.078   +0.006  0.084   +0.084
+    >1.61%               300   29%  2.37%  0.050   -0.174  0.079   -0.125
+      net not monotone   ·   gross does not
+    -- held --
+    0.00-0.73%           340   33%  0.57%  0.199   -0.208  0.079   -0.008
+    0.73-0.93%           340   34%  0.83%  0.129   -0.110  0.078   +0.019
+    0.93-1.17%           340   35%  1.04%  0.102   -0.043  0.079   +0.059
+    1.17-1.50%           340   34%  1.31%  0.081   -0.063  0.078   +0.018
+    >1.50%               341   30%  2.01%  0.056   -0.144  0.075   -0.088
+      net not monotone   ·   gross does not
+
+  B. STOP MANAGEMENT — lez, Min30, target 2R
+  rule                           n   win   FULL  losses    R net     SE  vs plain
+    -- disc --
+    plain (fixed stop)        1496   33%    994     66%   -0.123  0.037         —
+    BE at 1R, lock 0          1496   28%    861     58%   -0.133  0.034    -0.010
+    BE at 1R, lock +0.1R      1496   34%    860     57%   -0.127  0.034    -0.004
+    BE at 1.5R, lock +0.1R    1496   34%    968     65%   -0.129  0.037    -0.006
+    half at 1R, rest to tgt   1496   50%    748     50%   -0.140  0.028    -0.017
+    half at 1R, lock +0.1R    1496   50%    748     50%   -0.137  0.028    -0.014
+    -- held --
+    plain (fixed stop)        1701   33%   1131     66%   -0.114  0.035         —
+    BE at 1R, lock 0          1701   29%    988     58%   -0.126  0.032    -0.012
+    BE at 1R, lock +0.1R      1701   34%    988     58%   -0.122  0.032    -0.008
+    BE at 1.5R, lock +0.1R    1701   34%   1106     65%   -0.119  0.034    -0.006
+    half at 1R, rest to tgt   1701   50%    843     50%   -0.121  0.026    -0.007
+    half at 1R, lock +0.1R    1701   50%    843     50%   -0.116  0.026    -0.003
+
+  VERDICTS (lez, Min30)
+    A  risk floor: NOT SUPPORTED  (net monotone both halves, and not merely setup quality)
+    B  management: nothing beats the plain fixed stop in both halves
+
+====================================================================================================
+Min15   83 days across 30 symbols, split in half
+====================================================================================================
+
+  ---- riptide: 1081 signals ----
+
+  A. THE RISK FLOOR — riptide, Min15
+  risk_pct bucket          n   win   risk    fee    R net     SE  R gross
+    -- disc --
+    0.00-0.53%           107   23%  0.37%  0.170   -0.198  0.125   -0.028
+    0.53-0.73%           107   24%  0.62%  0.086   -0.142  0.122   -0.056
+    0.73-1.02%           107   16%  0.87%  0.052   -0.211  0.103   -0.159
+    1.02-1.41%           107   29%  1.22%  0.049   -0.066  0.128   -0.017
+    >1.41%               108   35%  2.14%  0.025   +0.253  0.129   +0.278
+      net not monotone   ·   gross does not
+    -- held --
+    0.00-0.54%           109   21%  0.41%  0.134   -0.235  0.117   -0.101
+    0.54-0.76%           109   21%  0.65%  0.084   -0.231  0.116   -0.147
+    0.76-0.99%           109   16%  0.87%  0.065   -0.367  0.105   -0.303
+    0.99-1.38%           109   25%  1.14%  0.050   -0.133  0.122   -0.083
+    >1.38%               109   20%  1.88%  0.031   -0.196  0.113   -0.165
+      net not monotone   ·   gross does not
+
+  B. STOP MANAGEMENT — riptide, Min15, target 2R
+  rule                           n   win   FULL  losses    R net     SE  vs plain
+    -- disc --
+    plain (fixed stop)         536   26%    270     50%   -0.072  0.055         —
+    BE at 1R, lock 0           536   20%    232     43%   -0.118  0.049    -0.046
+    BE at 1R, lock +0.1R       536   26%    232     43%   -0.123  0.048    -0.051
+    BE at 1.5R, lock +0.1R     536   26%    263     49%   -0.080  0.054    -0.008
+    half at 1R, rest to tgt    536   37%    209     39%   -0.107  0.041    -0.035
+    half at 1R, lock +0.1R     536   37%    209     39%   -0.105  0.041    -0.033
+    -- held --
+    plain (fixed stop)         545   21%    311     57%   -0.232  0.051         —
+    BE at 1R, lock 0           545   17%    264     48%   -0.225  0.047    +0.008
+    BE at 1R, lock +0.1R       545   26%    264     48%   -0.230  0.046    +0.003
+    BE at 1.5R, lock +0.1R     545   21%    300     55%   -0.232  0.050    +0.001
+    half at 1R, rest to tgt    545   34%    239     44%   -0.204  0.039    +0.028
+    half at 1R, lock +0.1R     545   34%    239     44%   -0.203  0.039    +0.029
+
+  VERDICTS (riptide, Min15)
+    A  risk floor: NOT SUPPORTED  (net monotone both halves, and not merely setup quality)
+    B  management: nothing beats the plain fixed stop in both halves
+
+  ---- lez: 6220 signals ----
+
+  A. THE RISK FLOOR — lez, Min15
+  risk_pct bucket          n   win   risk    fee    R net     SE  R gross
+    -- disc --
+    0.00-0.45%           602   29%  0.33%  0.368   -0.490  0.058   -0.123
+    0.45-0.61%           603   34%  0.53%  0.201   -0.178  0.059   +0.023
+    0.61-0.81%           602   32%  0.71%  0.152   -0.181  0.058   -0.028
+    0.81-1.16%           603   33%  0.96%  0.112   -0.117  0.058   -0.005
+    >1.16%               603   33%  1.74%  0.069   -0.096  0.057   -0.027
+      net not monotone   ·   gross does not
+    -- held --
+    0.00-0.50%           641   37%  0.39%  0.281   -0.158  0.059   +0.123
+    0.50-0.64%           641   33%  0.57%  0.188   -0.201  0.057   -0.012
+    0.64-0.81%           642   34%  0.72%  0.148   -0.129  0.057   +0.019
+    0.81-1.07%           641   34%  0.92%  0.116   -0.086  0.057   +0.030
+    >1.07%               642   31%  1.42%  0.080   -0.167  0.055   -0.087
+      net not monotone   ·   gross does not
+
+  B. STOP MANAGEMENT — lez, Min15, target 2R
+  rule                           n   win   FULL  losses    R net     SE  vs plain
+    -- disc --
+    plain (fixed stop)        3013   32%   2038     68%   -0.212  0.026         —
+    BE at 1R, lock 0          3013   27%   1770     59%   -0.221  0.024    -0.009
+    BE at 1R, lock +0.1R      3013   30%   1762     58%   -0.216  0.024    -0.003
+    BE at 1.5R, lock +0.1R    3013   32%   1974     66%   -0.211  0.026    +0.002
+    half at 1R, rest to tgt   3013   48%   1539     51%   -0.221  0.020    -0.009
+    half at 1R, lock +0.1R    3013   48%   1539     51%   -0.217  0.020    -0.005
+    -- held --
+    plain (fixed stop)        3207   34%   2122     66%   -0.148  0.026         —
+    BE at 1R, lock 0          3207   29%   1841     57%   -0.154  0.024    -0.006
+    BE at 1R, lock +0.1R      3207   30%   1838     57%   -0.158  0.024    -0.010
+    BE at 1.5R, lock +0.1R    3207   33%   2063     64%   -0.153  0.025    -0.005
+    half at 1R, rest to tgt   3207   49%   1626     51%   -0.180  0.019    -0.031
+    half at 1R, lock +0.1R    3207   49%   1626     51%   -0.180  0.019    -0.032
+
+  VERDICTS (lez, Min15)
+    A  risk floor: NOT SUPPORTED  (net monotone both halves, and not merely setup quality)
+    B  management: nothing beats the plain fixed stop in both halves

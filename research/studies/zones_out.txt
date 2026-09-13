@@ -1,0 +1,40 @@
+ZONES AND GAPS
+594 confirmed A/B trades, 492 bets, 333 days.
+MDE on this population: 0.350 R/bet. largest effect ever measured here: +0.292.
+
+item 7   pool span / ATR   (594 trades, MDE 0.350 R/bet)
+    <= 0.0614391      149 tr  134 bets  38% win  +0.013±0.115  boot5th -0.128
+    <= 0.152473       149 tr  142 bets  40% win  +0.164±0.121  boot5th +0.007  OK
+    <= 0.240278       148 tr  135 bets  33% win  -0.010±0.120  boot5th -0.169
+    > 0.240278        148 tr  142 bets  40% win  +0.142±0.119  boot5th -0.009
+    spread +0.175 vs MDE 0.350 [FAIL — unreadable]   best bucket bootstrap [pass]   split-half [holds]   ->  no
+
+item 11  entry FVG size / ATR   (594 trades, MDE 0.350 R/bet)
+    <= 0.181759       149 tr  142 bets  38% win  +0.092±0.118  boot5th -0.058
+    <= 0.363783       149 tr  134 bets  36% win  +0.049±0.123  boot5th -0.108
+    <= 0.610897       148 tr  133 bets  41% win  +0.144±0.123  boot5th -0.006
+    > 0.610897        148 tr  128 bets  37% win  +0.032±0.120  boot5th -0.107
+    spread +0.112 vs MDE 0.350 [FAIL — unreadable]   best bucket bootstrap [FAIL — few symbols]   split-half [holds]   ->  no
+
+item 12  FVG ordinal in the leg   (594 trades, MDE 0.350 R/bet)
+    first gap         594 tr  492 bets  38% win  +0.082±0.063  boot5th -0.002
+    later gap           0 tr — thin
+
+item 9   depth into the daily POI   (594 trades, MDE 0.350 R/bet)
+    <= 0.18           149 tr  140 bets  39% win  +0.103±0.119  boot5th -0.048
+    <= 0.413495       149 tr  142 bets  38% win  +0.039±0.117  boot5th -0.089
+    <= 0.672727       148 tr  135 bets  36% win  +0.046±0.118  boot5th -0.117
+    > 0.672727        148 tr  132 bets  39% win  +0.185±0.125  boot5th +0.015  OK
+    spread +0.146 vs MDE 0.350 [FAIL — unreadable]   best bucket bootstrap [pass]   split-half [holds]   ->  no
+
+item 9b  daily POI age, days   (594 trades, MDE 0.350 R/bet)
+    <= 4              193 tr  158 bets  37% win  +0.083±0.111  boot5th -0.056
+    <= 8              130 tr  117 bets  37% win  +0.041±0.128  boot5th -0.103
+    <= 14             132 tr  117 bets  40% win  +0.142±0.131  boot5th +0.004  OK
+    > 14              139 tr  128 bets  37% win  +0.050±0.125  boot5th -0.102
+    spread +0.101 vs MDE 0.350 [FAIL — unreadable]   best bucket bootstrap [pass]   split-half [holds]   ->  no
+
+item 10  daily POI kind   (594 trades, MDE 0.350)
+    FVG               410 tr  344 bets  39% win  +0.095±0.075  boot5th +0.002  OK
+    OB                131 tr  123 bets  37% win  +0.047±0.126  boot5th -0.118
+    BOTH               53 tr   50 bets  32% win  -0.012±0.198  boot5th -0.294

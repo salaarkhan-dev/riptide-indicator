@@ -1,0 +1,36 @@
+ENTRY GEOMETRY ON THE DEEP WINDOW
+9863 A/B signals, 112 symbols, 333 days.
+R PER SIGNAL — an unfilled entry scores 0.0, so a deeper price pays for the fills it misses.
+
+  entry                            n   fill    risk   R/fill   R/signal
+  FVG near edge (deployed)      9863    77%   1.47%    0.014     +0.011
+  FVG far edge                  9858    63%   1.10%   -0.017     -0.010
+  FVG mid                       9863    70%   1.29%   -0.001     -0.001
+  Fib 0.5 of the leg            9863    66%   1.22%   -0.014     -0.009
+  Fib 0.618 of the leg          9863    54%   0.93%   -0.056     -0.030
+  Fib 0.786 of the leg          9785    40%   0.52%   -0.132     -0.053
+  MSS bar extreme               1471    58%   1.42%    0.002     +0.001
+  MSS close (market)            1521    95%   2.60%   -0.023     -0.022
+  order block extreme           5084    65%   1.05%   -0.022     -0.014
+  order block mid               8065    63%   1.00%   -0.076     -0.048
+  the swept level               7400    55%   0.84%   -0.099     -0.055
+  volumetric OB extreme         2908    62%   1.02%   -0.032     -0.020
+  volumetric OB mid             6014    58%   0.93%   -0.089     -0.052
+
+  PAIRED against the deployed entry, on R PER SIGNAL
+  (only signals where BOTH entries exist, so the difference is the same trade twice)
+    FVG mid                       -0.012  ±0.007   -1.8 SE  (9863 pairs)
+    Fib 0.5 of the leg            -0.020  ±0.009   -2.3 SE  (9863 pairs)
+    FVG far edge                  -0.022  ±0.009   -2.4 SE  (9858 pairs)
+    volumetric OB extreme         -0.023  ±0.016   -1.4 SE  (2908 pairs)
+    order block extreme           -0.027  ±0.012   -2.3 SE  (5084 pairs)
+    MSS bar extreme               -0.030  ±0.019   -1.6 SE  (1471 pairs)
+    volumetric OB mid             -0.037  ±0.017   -2.2 SE  (6014 pairs)
+    Fib 0.618 of the leg          -0.041  ±0.011   -3.9 SE  (9863 pairs)
+    order block mid               -0.048  ±0.014   -3.5 SE  (8065 pairs)
+    MSS close (market)            -0.058  ±0.025   -2.3 SE  (1521 pairs)
+    the swept level               -0.062  ±0.013   -4.7 SE  (7400 pairs)
+    Fib 0.786 of the leg          -0.066  ±0.013   -5.0 SE  (9785 pairs)
+
+  best is FVG mid at -0.012 ± 0.007. the 42-day run resolved
+  nothing below about 0.11 R; this one resolves 0.013.

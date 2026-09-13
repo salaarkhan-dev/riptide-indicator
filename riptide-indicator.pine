@@ -15,10 +15,18 @@
 //
 //  Implementation notes
 //  --------------------
-//  Non-repainting. No request.security, no lookahead, no future references.
+//  Non-repainting. No lookahead, no future references. The only
+//  request.security is the optional higher-timeframe trend filter, which
+//  reads the last CLOSED bar of that timeframe with lookahead_off — a value
+//  that cannot change once the chart bar has printed. Lower-timeframe
+//  request.security is still avoided: it needs intrabar history, which is
+//  capped by subscription tier.
 //  All state mutation happens inside the `if engineOk` block, which with
-//  confirmOnBarClose runs once per closed bar. Drawings are never deleted;
-//  set_x2 / set_right only extend existing lines and boxes.
+//  confirmOnBarClose runs once per closed bar. No drawing the ENGINE makes is
+//  ever deleted; set_x2 / set_right only extend existing lines and boxes.
+//  The one exception is the "All imbalances" context layer, which recycles its
+//  own boxes on a fixed budget — it carries no state, feeds nothing, and every
+//  signal is identical whether it is on or off.
 //
 //  A pivot is only recognised after pivotRight bars have closed. That delay is
 //  inherent to swing detection.
@@ -46,24 +54,41 @@ indicator("Riptide - Liquidity Sweep & Reversal Engine", "Riptide",
 
 // ═════════════════════════════ 1. INPUTS ════════════════════════════════════
 // Sections 1-4 cover normal use. Section 9 holds calibration thresholds.
+gPreset = "Preset"
 gSrc   = "1. What creates a signal"
 gSess  = "2. Trading sessions"
 gSens  = "3. Sensitivity"
 gTrade = "4. Entry, stop and targets"
 gLook  = "5. Appearance"
-gTrend = "6. Trend line (display only)"
+gTrend = "6. Higher-timeframe context"
 gAlert = "7. Alerts"
 gStats = "8. Performance stats"
 gAdv   = "9. Advanced tuning"
 gEng   = "10. Engine and debug"
 
+// ── Preset ──────────────────────────────────────────────────────────────────
+// Declared before everything else so TradingView floats it to the top of the
+// panel: it changes what the four sensitivity values below are, so reading it
+// after them is reading them wrong.
+//
+// This picks the DETECTION rules only. It deliberately touches nothing in
+// section 5 — an earlier version forced three drawing checkboxes off and the
+// boxes stayed ticked while doing nothing, which silently blanked the raid
+// dots (where ⚡ EARLY fires), the imbalance layer and the trend line with no
+// way to get them back. Whatever you tick under Appearance is what you get,
+// under either preset.
+markStyle      = input.string("Riptide", "Preset",
+     options = ["Riptide", "ICT Trades (matched ref)", "Riptide + ICT"],
+     group = gPreset,
+     tooltip = "Which detection rules run.\n\n'Riptide' — this indicator's own, tuned here and matching riptide.conf on the bot. Use this to trade.\n\n'ICT Trades (matched ref)' — swaps in the reference indicator's values so the two charts mark the same events: pivot look-back/forward 1, max pool range 0.2 ATR, max tested range 0.1 ATR, grab-to-shift window 12 bars, all four liquidity types including weekly and session, and its GMT+0 session windows (08:00-17:00, 13:00-22:00, 00:00-09:00). Its 12-bar grab window is stricter than Riptide's 50, so it produces FEWER setups — that is detection, not drawing. Session pools are chart-only, since the bot's engine has no session source, so the chart can mark a pool no alert will ever fire from.\n\n'Riptide + ICT' — Riptide detection, unchanged, so every mark still matches your alerts; on top of it the swings the reference's looser pivot rule sees and Riptide's does not, in the pale colours. Nothing is added to the engine and no signal changes: it is a comparison layer. It needs 'Swing markers (diamonds)' ticked under Appearance, which is OFF by default — those pale marks are swing markers, so that checkbox switches them off too. If you pick this preset and see nothing new, that is the reason.\n\nEverything drawn — live raids in progress, imbalances, order blocks, breaker blocks, the trend line — stays exactly as you set it under Appearance, under all three. Measured over 41.6 days the complete reference set is 0.071 R behind ours at 1.4 SE, which is indistinguishable, so this is a viewing choice and not a claim either way. The bot is unaffected: it reads riptide.conf, not this panel.")
+
 // ── 1. What creates a signal ────────────────────────────────────────────────
 usePivotLiq   = input.bool(true,  "Swing highs / lows", group = gSrc,
      tooltip = "The main source. Two or more swing points at roughly the same price form a liquidity pool — a shelf of stop orders. The indicator waits for price to run that shelf and then reverse.")
-useDailyLiq   = input.bool(true,  "Yesterday's high / low", group = gSrc,
-     tooltip = "Treats the previous day's extremes as liquidity in their own right. These are watched by a lot of traders, so they get raided often.")
-useWeeklyLiq  = input.bool(true,  "Last week's high / low", group = gSrc,
-     tooltip = "Same idea on a weekly scale. Fewer signals, but the levels carry more weight.")
+useDailyLiq   = input.bool(true,  "Previous days' highs / lows", group = gSrc,
+     tooltip = "Treats each day's extremes as liquidity in their own right — watched by a lot of traders, so they get raided often.\n\nNote it is not only YESTERDAY'S, which is what this said before and was wrong. A daily level stays live until price takes it, so on any given bar several unswept past days can be in play at once, and one of them may be days old.\n\nThat matters for reading the raid, not for whether it is real. The level a shift has to break is the opposing extreme measured all the way back from the bar that SET the level, so the older a level is, the further away its shift level has drifted. Measured over 41.6 days on 23 symbols, day raids need a 4.56% move to confirm against a swing pool's 2.59%, and 6.4% of them ever do against 19.5%. The raid is still a real raid and the early entry off it measures the same as any other — it is the confirmed setup that is unlikely, which is why the sweep alert now prints how far the level is and how often raids that far out have confirmed.")
+useWeeklyLiq  = input.bool(false, "Previous weeks' highs / lows", group = gSrc,
+     tooltip = "Same idea on a weekly scale. Off by default, and off in the alert bot: over 41.6 days weekly levels were raided 295 times and produced zero complete setups — price takes the level and simply keeps going rather than shifting structure. Left as a switch because 0 of 295 bounds the rate, it does not prove it is zero in a regime this window did not contain.")
 useSessionLiq = input.bool(false, "Session highs / lows", group = gSrc,
      tooltip = "Uses the high and low of each finished session below. Leave off until the timezone in section 2 matches how you actually trade — otherwise the levels are arbitrary.")
 showLongs     = input.bool(true,  "Show long setups",  inline = "dir", group = gSrc)
@@ -106,12 +131,12 @@ entryMode = input.string("Proximal", "Where in the gap to enter",
      tooltip = "Proximal = the near edge, the first price touched on the pullback: fills most often, widest stop. Midpoint = halfway in. Distal = the far edge: best price and tightest stop, but price often turns before reaching it and you miss the trade.")
 slBufferATR = input.float(0.0, "Extra room beyond the stop (x ATR)", minval = 0.0, step = 0.01, group = gTrade,
      tooltip = "The stop sits just past the candle that raided the liquidity — the one marked with an X. This adds breathing room beyond that wick. 0 puts it exactly on the wick.")
-maxRiskATR  = input.float(4.0, "Skip setups risking more than (x ATR)", minval = 0.0, step = 0.1, group = gTrade,
+maxRiskATR  = input.float(2.5, "Skip setups risking more than (x ATR)", minval = 0.0, step = 0.1, group = gTrade,
      tooltip = "Protects you from setups where the entry is a long way from the stop. One trade risking 8 ATR carries the size of eight normal ones and will dominate your results whichever way it goes. 0 turns the check off.")
 maxFvgSizeATR = input.float(2.0, "Skip gaps bigger than (x ATR)", minval = 0.0, step = 0.1, group = gTrade,
      tooltip = "A gap torn open by one huge candle is not an entry zone — its far edge can sit several ATR from the stop. 0 turns the check off.")
-beArmR = input.float(1.5, "Move stop to break-even at (R)", minval = 0.0, step = 0.1, group = gTrade,
-     tooltip = "Once the trade is this many R in profit the stop moves up to entry, so it can no longer lose. R means one unit of risk: if your stop is 100 points away, 1.5R is 150 points of profit. Set 0 to leave the stop where it is. Worth testing both — protecting a trade also caps the ones that would have run much further.")
+beArmR = input.float(0.0, "Move stop to break-even at (R)", minval = 0.0, step = 0.1, group = gTrade,
+     tooltip = "OFF by default, and that is a measured decision rather than a preference. It shipped at 1.5R for months without ever being tested; when it was, it lost money at every arm level on both signal types — against no break-even at a 2R target, arming at 1.0R cost 0.074 R per setup (2.5 SE), 1.5R cost 0.019, 1.75R cost 0.008. It converts trades that would have reached target into small scratches, and 26% of confirmed setups reach 3R.\n\nOnce the trade is this many R in profit the stop moves up to entry, so it can no longer lose. R means one unit of risk: if your stop is 100 points away, 1.5R is 150 points of profit. Set 0 to leave the stop where it is. Worth testing both — protecting a trade also caps the ones that would have run much further.")
 beLockR = input.float(0.1, "Break-even stop locks in (R)", minval = 0.0, step = 0.05, group = gTrade,
      tooltip = "Where that moved stop actually goes. 0 is exactly entry, which is really a small loss live once fees are paid. 0.1R puts it just into profit. Note it also sits slightly tighter, so it stops you out marginally sooner.")
 
@@ -119,28 +144,90 @@ beLockR = input.float(0.1, "Break-even stop locks in (R)", minval = 0.0, step = 
 drawMode = input.string("On MSS confirmation", "When to draw a pattern",
      options = ["On MSS confirmation", "Live (as they form)"], group = gLook,
      tooltip = "On MSS confirmation: nothing appears until the whole sequence completes, then the full pattern is drawn back over the bars where it happened. Clean, and nothing on screen ever turns out to be a false start. Live: watch pools and raids form in real time — useful for trading it, much busier.")
-showLiquidity  = input.bool(true,  "Liquidity levels (dotted)",      group = gLook)
-showPivots     = input.bool(true,  "Swing markers (diamonds)",       group = gLook)
+showLiquidity  = input.bool(false, "Liquidity levels (dotted)",      group = gLook,
+     tooltip = "Off by default. The dotted level is the pool the raid marker already sits on, so it mostly restates the X while striping the chart.")
+showPivots     = input.bool(false, "Swing markers (diamonds)",       group = gLook,
+     tooltip = "Off by default. A pool needs two swings, so every pool carries at least two diamonds and they are the densest thing on the chart. The raid marker and the structure label already say where the pattern is.")
+hideDeadPivots = input.bool(true,  "  drop them once the pool dies",  group = gLook,
+     tooltip = "Drops the swing markers of a pool that DIED having produced nothing — raided and never shifted, or expired untouched. Pools still waiting, and pools that went on to shift structure, keep theirs: a diamond group beside an X and an MSS label is the whole pattern and is the part worth seeing. Measured over 41.6 days this takes a 3.5-day screen from about 36 markers to 16, against roughly 14 for the reference indicator. Off keeps every diamond ever drawn, which is what this used to do because the label handle was discarded at draw time and nothing could ever delete it.")
 showGrab       = input.bool(true,  "Raid marker (X)",                group = gLook)
-showGrabTag    = input.bool(true,  "Label on the raid marker",       group = gLook,
+showGrabTag    = input.bool(false, "Label on the raid marker",       group = gLook,
      tooltip = "The small dark tag under the X naming what got raided: Pivot, Day, Week or a session name.")
-showMSS        = input.bool(true,  "Structure break level + label",  group = gLook)
+showMSS        = input.bool(true,  "Structure break label",          group = gLook)
+showStructLine = input.bool(true,  "Structure break level (dashed)", group = gLook,
+     tooltip = "The dashed line price had to break for the shift to confirm. Separate from the label above, which used to share this switch — so wanting the MSS marked without the line across the chart was not possible.")
+setupLevelKeep = input.int(3,     "Keep levels for the last N setups", minval = 1,
+     maxval = 50, group = gLook,
+     tooltip = "Entry, stop and target lines are drawn per setup and used to stay forever, so a long chart ended up striped with levels from trades that closed days ago. Only the most recent this-many setups keep theirs.")
+showRaidDot    = input.bool(true,  "Mark raids in progress",         group = gLook,
+     tooltip = "A hollow dot on a raid that has taken liquidity but has NOT produced a structure shift yet — the state the bot's ⚡ EARLY alerts fire in. It follows the raid to each new extreme, becomes the solid X if the shift confirms, and disappears if the raid dies.\n\nMOST RAIDS DIE, and the numbers are worth carrying. Measured over 8984 daily-POI raids on 30m, by how far price still had to travel back for the shift to confirm:\n\n  under 1% away   24% become a setup\n  1-2%            13%\n  2-4%             6%\n  4-8%             2%\n  over 8%          1%\n\nSo the distance to the shift level is the whole story on whether a raid is worth watching, and 40% of all raids sit beyond 4%. The bot's sweep alert prints both the distance and the rate for exactly this reason, and sends only raids under 3% away.\n\nWHAT THE DISTANCE DOES NOT TELL YOU is whether the setup will be any good. That is the daily POI, and the two are independent: conversion tracks the distance and ignores the zone, while R tracks the zone and ignores the distance. Raids inside a daily zone produce setups worth +0.141 R; those outside produce -0.055. A near raid outside a zone converts often into something that loses money, and a far raid inside one almost never converts at all.")
+raidDotKeep    = input.int(2,     "  how many in progress",  minval = 1, maxval = 20,
+     group = gLook,
+     tooltip = "Only the most recent this-many unresolved raids keep a dot. Older ones are dropped even if still technically alive, so the chart shows what is live rather than every raid of the session.")
 showFVGs       = input.bool(true,  "Entry zones (gaps)",             group = gLook)
 showFvgMidline = input.bool(true,  "Centre line in entry zones",     group = gLook)
+showAllFvg     = input.bool(true,  "All imbalances (context only)",  group = gLook,
+     tooltip = "Every three-bar imbalance on the chart, drawn faintly and independently of the setup logic. These are NOT entry zones: the strategy only ever enters at a gap that passed the sweep, risk and 'Look for entry zones from' filters, and those keep their own solid boxes. Turn this on to read structure and see the imbalances the entry rules skipped over.")
+allFvgMinATR   = input.float(0.10, "  min size (ATR)", minval = 0, step = 0.05, group = gLook,
+     tooltip = "Context imbalances smaller than this are ignored. Zero draws every one, which on a low-volatility chart is a lot of boxes.")
+allFvgKeep     = input.int(5,     "  how many to keep", minval = 5, maxval = 200, group = gLook,
+     tooltip = "Only the most recent this-many context imbalances stay on the chart. TradingView allows 500 drawings in total and entry zones, liquidity lines and labels share that budget.")
+allFvgFill     = input.int(85,    "  transparency", minval = 50, maxval = 99, group = gLook)
+allFvgRemove   = input.string("Body close", "  mitigated when",
+     options = ["Body close", "50% (CE)", "Wick", "Touched", "Never"], group = gLook,
+     tooltip = "How much of the gap price must take back before the box goes.\n\nBody close: a candle BODY closes through the far edge. Ignores wicks, so a single spike through the zone does not kill it — the steadiest reading and the default.\n\n50% (CE): consequent encroachment, the midpoint. The classic ICT reading of a mitigated gap.\n\nWick: any wick through the far edge. Strictest, and the noisiest.\n\nTouched: price merely entered the zone.\n\nNever: keep every box until the count above recycles it.")
+allFvgOverlap  = input.bool(true, "  hide overlapping", group = gLook,
+     tooltip = "When a new imbalance overlaps an older one in price, drop the older box. Stacked half-transparent boxes are what turns this layer into a smear; one box per price area keeps it readable.")
+showOB         = input.bool(true,  "Order block (yellow)",           group = gLook,
+     tooltip = "The last candle closing AGAINST the move before the entry gap — where the move that made the gap was loaded. Identical rule to last_opposing() in engine.py, same 20-bar cap, so the block drawn here is the one the alert's confluence score counts.")
+showBreaker    = input.bool(true,  "Breaker block (orange)",         group = gLook,
+     tooltip = "The last opposing candle at or before the extreme the structure break went through. It needs a break, so an EARLY signal never has one — which is why an early alert can only score 0 or 1 on confluence while a confirmed setup can score 2.")
+blockLevel     = input.string("Proximal edge", "  block line at",
+     options = ["Mean threshold", "Proximal edge", "Distal edge"], group = gLook,
+     tooltip = "Which single price the block's line is drawn at. Mean threshold is the midpoint of the candle body, the usual one-line convention. Proximal is the edge price meets first coming back; distal is the far side. The reference indicator draws one line per block and its convention is not published, so this is a choice rather than a match — a Data Window reading off that indicator would settle it.")
+blockBars      = input.int(8, "  block bar length (bars)", minval = 1, maxval = 100, group = gLook)
+blockWidth     = input.int(3, "  block bar thickness", minval = 1, maxval = 8, group = gLook)
+obCol          = input.color(#ffd54f, "  order block", inline = "blk", group = gLook)
+bbCol          = input.color(#ff8f00, "  breaker",     inline = "blk", group = gLook)
+showEarly      = input.bool(true,  "Early entry zone (before the shift)", group = gLook,
+     tooltip = "The bot's ⚡ EARLY signal, drawn. Until now the chart marked the raid with a dot and then showed nothing until the shift confirmed, so an early alert arrived with no zone on screen to put an entry against — you got a price in Telegram and a blank chart.\n\nThis draws the first imbalance inside the window below, at low opacity: the zone, the stop beyond the raid extreme, and the order block behind it. No entry line and no price tag — under Proximal and Distal the entry is an edge of the zone itself, and the exact price is on the alert. Faint on purpose — nothing has confirmed a reversal, and it must not read like a completed setup.\n\nNo breaker block is drawn here and none can be: a breaker is an opposing candle that a structure break traded through, so before the shift there is nothing for it to have broken. That is also why an early alert scores at most 1 on confluence where a confirmed setup can score 2.\n\nHOW IT ACTUALLY SCORES, over 42 days: an early signal inside a daily POI and with the daily trend is grade B — 25 a day, 81% of them fill, 44% of the fills reach 2R, and it returns +0.173 R per signal. Inside a POI but against the trend it is grade C, +0.012, which the bot no longer sends. Outside a POI it is not sent at all.\n\nAn early is a DIFFERENT BET from a confirmed setup, not an earlier version of the same one. Nothing has confirmed the reversal, so the raid may simply be a trend continuing. What it buys is the stop sitting a few candles away at the raid extreme instead of a whole leg back — and every B you get is an early signal, because the confirmed half of band B needs the trend without the POI, which the POI filter removes.")
+earlyMaxBars   = input.int(10, "  gap must form within (bars of the raid)",
+     minval = 1, maxval = 100, group = gLook,
+     tooltip = "Matches RIPTIDE_EARLY_MAX_BARS on the bot, so the zone the chart draws is the one the alert fired on. Raise it and the chart will draw zones no alert was sent for.")
+earlyFade      = input.int(60, "  opacity", minval = 0, maxval = 95, group = gLook,
+     tooltip = "How solid the early marks are. Higher is fainter.")
+earlyMaxRiskATR = input.float(4.0, "  skip early risking more than (x ATR)",
+     minval = 0.0, step = 0.1, group = gLook,
+     tooltip = "The early signal's own risk cap, separate from the confirmed setup's above it because the two measured in OPPOSITE directions.\n\nConfirmed setups prefer 2.5: 242 signals at +0.260 R against 544 at +0.110, same sign on all four splits. Early signals prefer 4.0 — tightening them costs total R the whole way down (4.0 +153.4, 3.0 +151.3, 2.5 +143.2, 1.5 +105.0) while R per signal rises, which is what a filter deleting winners looks like.\n\nMatches RIPTIDE_EARLY_MAX_RISK_ATR on the bot.")
+earlyKeep      = input.int(2, "  how many zones to keep", minval = 1, maxval = 20,
+     group = gLook,
+     tooltip = "Early zones are pruned on their OWN budget, not the confirmed setups' one. Sharing it would let three early zones — most of which never become anything — evict the entry and stop lines of a setup that did confirm.")
 showEntryLine  = input.bool(true,  "Entry line",                     group = gLook)
 showStopLoss   = input.bool(true,  "Stop loss line",                 group = gLook,
      tooltip = "Drawn from the raid candle itself and extended right, so you can see which bar the stop comes from.")
-showSetupLabels= input.bool(false, "LONG / SHORT labels",            group = gLook)
+showSetupLabels= input.bool(false, "LONG / SHORT labels",            group = gLook,
+     tooltip = "The direction beside each entry zone, and — with grading on in section 6 — the letter with it.\n\nA CONFIRMED setup is the full sequence: pool, raid, structure shift, then the first imbalance after the shift. The shift is what separates it from an early signal, and it is the single largest effect measured in this project: +0.250 R per confirmed setup against +0.020 for the no-shift version on the same raids.\n\nOver 42 days, confirmed setups that also sit in a daily POI and agree with the daily trend are grade A: about 4.5 a day, 72% fill, 47% of fills reach 2R, +0.251 R per signal. In a POI but against the trend, or with neither, they grade C at +0.100 and are not sent.\n\nWHY A 47% WIN RATE IS ENOUGH: the realised reward-to-risk is 1.82, so break-even is a 35.5% win rate. Winners average +1.89 R and losers -1.03 R. You lose more often than you win and still make money, which is the whole point of a 2R target against a 1R stop. Do not read the win rate on its own — it flatters anything that fills rarely.")
 showPrevDayHL  = input.bool(false, "Draw yesterday's high / low",    group = gLook)
 showPrevWeekHL = input.bool(false, "Draw last week's high / low",    group = gLook)
 showSessionBox = input.bool(false, "Draw session ranges",            group = gLook)
 fvgExtendBars  = input.int(6, "Entry zone width (bars)", minval = 1, group = gLook)
+fadeUsedFvg    = input.bool(false, "Fade entry zones once price returns", group = gLook,
+     tooltip = "An entry zone price has already come back to has done its job — that was the fill. Until now it kept the same solid box as a zone still waiting, so live and used were indistinguishable at a glance. Fading and dashing the used ones leaves only the live zones reading as actionable.\n\nNote this is a different question from the one the context imbalance layer answers: there you care whether a gap has been FILLED, here whether a zone has been USED, so the two deliberately test different things.")
 extendFVG      = input.bool(false, "Stretch zones until price returns", group = gLook,
      tooltip = "Off keeps each zone at a fixed width. On stretches it rightwards until price comes back — tidy in theory, but a zone price never revisits ends up as a band across the screen.")
 setupExtendBars  = input.int(20, "Entry / stop line length (bars)", minval = 1, maxval = 200, group = gLook)
 staticExtendBars = input.int(96, "Day / week level length (bars)",  minval = 2, group = gLook)
 bullCol   = input.color(#26a69a, "Bullish", inline = "c1", group = gLook)
 bearCol   = input.color(#ef5350, "Bearish", inline = "c1", group = gLook)
+// The "Riptide + ICT" comparison layer. Same two hues as Riptide's own marks,
+// two steps lighter — Material 200 against Riptide's 400 — so an ICT-only
+// swing reads as the same kind of thing making a weaker claim, rather than as
+// a third category competing for attention. Riptide's own colours above are
+// untouched, which is the whole point: the marks that match your alerts must
+// not change appearance because a comparison layer was switched on.
+ictBullCol = input.color(#a5d6a7, "ICT-only bullish", inline = "c2", group = gLook,
+     tooltip = "Colour of the swing LOWS the reference's looser pivot rule finds and Riptide's does not. Only drawn under the 'Riptide + ICT' preset.")
+ictBearCol = input.color(#ef9a9a, "ICT-only bearish", inline = "c2", group = gLook)
 structCol = input.color(#787b86, "Structure break line", group = gLook)
 liqDirCol = input.bool(true, "Colour liquidity lines by direction", group = gLook)
 liqCol    = input.color(color.gray, "Liquidity colour when not by direction", group = gLook)
@@ -150,11 +237,60 @@ fvgFill   = input.int(85, "Entry zone transparency", minval = 0, maxval = 100, g
 // Display only. A sweep plus a structure break is the reversal, so a trailing
 // trend line still points the old way when the signal fires; filtering on it
 // would remove the setups this looks for.
-trendMode = input.string("SuperTrend", "Trend line", options = ["Off", "SuperTrend", "EMA"], group = gTrend,
-     tooltip = "Context only. Some traders prefer taking setups that agree with the wider trend — this shows you which those are. Switching it NEVER changes which signals appear.")
-stFactor  = input.float(3.0, "SuperTrend factor", minval = 0.5, step = 0.1, group = gTrend)
-stAtrLen  = input.int(10, "SuperTrend length", minval = 1, group = gTrend)
-emaLen    = input.int(50, "EMA length", minval = 1, group = gTrend)
+trendMode = input.string("SuperTrend", "Trend line",
+     options = ["Off", "SuperTrend", "EMA"], group = gTrend,
+     tooltip = "Context only — switching it NEVER changes which signals appear.\n\n'SuperTrend' draws the higher-timeframe line the FILTER decides on, read from the timeframe and settings below, so what you see and what would be suppressed are the same line. It used to be a second SuperTrend computed on the chart timeframe with its own duplicate factor and length, which meant the panel carried two of everything and the line on screen disagreed with the filter under it. Those duplicates are gone and the old 'Filter trend' option with them: there is one SuperTrend now and this is it.\n\n'EMA' is still a CHART-timeframe average and is unrelated to the filter — it is a different question, not a second opinion on the same one.")
+emaLen    = input.int(50, "EMA length (chart timeframe)", minval = 1, group = gTrend)
+trendWidth    = input.int(1, "Trend line width", minval = 1, maxval = 4, group = gTrend)
+showTrendFill = input.bool(true, "Shade between the line and price", group = gTrend,
+     tooltip = "A soft band from the trend line to price, fading out as the two separate. It reads as a regime at a glance where a bare line reads as a level, which is the whole difference between the two on a chart this dense.")
+showTrendTag  = input.bool(true, "Trend tag in the corner", group = gTrend,
+     tooltip = "One chip in the bottom-right saying which way the trend points right now — BUY or SELL.\n\nIt reads whichever series 'Trend line' selects, and it keeps working when that is set to Off: hiding the line is a request for a cleaner chart, not for less information, so Off gives you the direction with none of the ink. With the line off the chip falls back to the higher-timeframe SuperTrend, which is the one the filter decides on. Hover it to see which series it is reading.")
+trendTagSize  = input.string("Normal", "Trend tag size",
+     options = ["Small", "Normal", "Large", "Huge"], group = gTrend)
+
+// The trend line above is display only, and the note above it is right about
+// it: a chart-timeframe SuperTrend flips at the reversal you are trading, so
+// filtering on it removes nothing useful. Measured over 50 symbols and 41.6
+// days, 1961 setups, target 1R:
+//
+//   chart Min30 (10, 3)  with +0.039  against +0.084   -1.0 SE, no separation
+//
+// A slow trend on a HIGHER timeframe is a different measurement — a regime,
+// not a trailing stop — and it does separate the signals:
+//
+//   daily (14, 5)        with +0.111  against -0.018   +4.2 SE, meaningful
+//
+// Which is why the chart-timeframe SuperTrend is no longer drawn at all. It
+// existed as a display line with its own factor and length, sitting directly
+// above the filter's factor and length in the panel — two near-identical pairs
+// of inputs for two different lines, and the one on screen was the one that
+// separates nothing. Drawing the filter's line under the name "SuperTrend"
+// removes the duplicate inputs and the disagreement in one go.
+//
+// The filter still matches RIPTIDE_TREND_FILTER in the bot, so both agree on
+// which setups survive.
+trendFilter    = input.bool(false, "Only take setups with the higher-timeframe trend",
+     group = gTrend,
+     tooltip = "Suppresses setups and raid markers that face against a slow trend on a higher timeframe. This is NOT the trend line above — that one is display only and filtering on it does nothing. Measured on the DAILY when that was the setting: with the trend +0.111 R per setup, against it -0.018, 4.2 SE over 1961 setups in one 41.6-day window. The timeframe moved to 8h on 9 Sep and this filter has not been re-measured on it — the 8h evidence is about the GRADE, which does not suppress anything. Off by default; turning it on roughly halves the signals.")
+trendFilterTf  = input.timeframe("480", "Higher timeframe", group = gTrend,
+     tooltip = "The timeframe the SuperTrend above is read from, and the one the filter judges on. One setting, because they are now one line.\n\n8 HOURS since 9 Sep, replacing the daily. Four intervals were compared on the bot's own setups with its own entry and stop: 8h was the only one whose with-trend minus against-trend gap kept one sign across all four panels, and it did so under both conventions. It was then held out on days 83-166 back, which nothing had looked at, and came back positive in all four cells and better than the daily in 4 of 4 — while on that same window the DAILY reading went NEGATIVE on 30m (-0.117), meaning setups agreeing with the daily trend scored worse than those against it.\n\n4h FAILED, and an earlier version of this tooltip argued for the daily over 4h on a weaker comparison. Both readings were of the wrong pair: 8h was never in that test.\n\nIndividual cells are 1.4 to 3.2 SE, not overwhelming, and no test on different symbols was possible — the turnover floor leaves only about 65 tradeable perpetuals, so there is no second universe to hold out.\n\nThis matches RIPTIDE_TREND_INTERVAL on the bot, and the bot's RIPTIDE_DI_INTERVAL moved with it: the grade ANDs the SuperTrend with the DI, they are separate keys, and the tested arm had both on 8h.")
+trendFilterFac = input.float(5.0, "SuperTrend factor", minval = 0.5, step = 0.1,
+     group = gTrend)
+trendFilterLen = input.int(14, "SuperTrend length", minval = 1, group = gTrend)
+
+// The daily point of interest, and the grade built on it. See the block above
+// dailyCtx() for what these mean and what they measured.
+poiOn        = input.bool(true, "Grade signals on the daily point of interest",
+     group = gTrend,
+     tooltip = "Adds a letter to every entry label — A, B, C or D — from two daily readings the bot also uses.\n\nPOI: did the RAID land inside a daily order block or fair value gap less than 30 days old. This is the largest single separation measured in the project and the only filter to survive a pre-registered held-out test on symbols it was not found on. Setups born from a raid inside a daily zone score +0.141 R, those outside -0.055. It does NOT change how often a raid becomes a setup — 7.0% against 7.5% — only whether the setup that follows is worth taking.\n\nTREND: the daily SuperTrend and the daily DI both agreeing with the trade.\n\nThe two MULTIPLY rather than add. A confirmed setup with neither is +0.082 R, with the trend alone +0.206, with the POI alone +0.105, and with both +0.822 at a 76% win rate. That is why there is a table of cells rather than a points system.\n\nTurn this off and the chart goes back to marking every setup, which is what it did before and is now roughly twice what the bot alerts on.")
+chartMinGrade = input.string("Show all", "Signals to draw",
+     options = ["Show all", "B and better (matches the bot)", "A only"],
+     group = gTrend,
+     tooltip = "The bot sends B and better — RIPTIDE_MIN_GRADE=B — so 'Show all' draws roughly twice what actually alerts. Matching it makes the chart and the phone agree.\n\nMeasured over 2704 alerts in 42 days:\n  A   4.5/day   72% fill   47% win   RR 1.82   +0.251 R per signal\n  B  25.1/day   81% fill   44% win   RR 1.72   +0.173\n  C  35.4/day   78% fill   38% win   RR 1.70   +0.026\n\nGrade C is 54% of the traffic for 4% of the return, and its largest cell — 15m early C — measures NEGATIVE. Break-even at RR 1.7 is a 37% win rate, so C at 38% was working for free.\n\nLeave it on 'Show all' to study what the filter removes; set it to match the bot when you want the chart to be the alert feed.")
+poiMaxAgeDays = input.int(30, "  a daily zone stays live for (days)", minval = 1,
+     group = gTrend,
+     tooltip = "Older than this and a zone is not what anyone means by 'the level price is reacting to'.\n\nThis number is not cosmetic. With no age limit at all the test flags 90% of raids and measures NOTHING — a year of daily bars accumulates enough blocks and gaps to cover most of the price range, and its one nominal result pointed the WRONG way. Thirty days is what was measured and what riptide/engine.py uses.")
 
 // ── 7. Alerts ───────────────────────────────────────────────────────────────
 alertOnGrab  = input.bool(true, "Liquidity raided", group = gAlert,
@@ -210,9 +346,9 @@ maxBarsAfterGrab = input.int(50, "Cancel if no structure break within (bars)", m
      tooltip = "Counted from the first raid of the level. Without a limit, an old raid could produce an unrelated signal hours later.")
 mssCooldownBars  = input.int(5, "Min bars between same-direction signals", minval = 0, group = gAdv,
      tooltip = "Stops two overlapping pools printing what is really the same trade twice.")
-fvgScanFrom      = input.string("Grab candle", "Look for entry zones from",
+fvgScanFrom      = input.string("MSS candle only", "Look for entry zones from",
      options = ["Grab candle", "MSS candle only"], group = gAdv,
-     tooltip = "Grab candle marks every imbalance across the whole move from the raid to the structure break, including those formed before the break itself. MSS candle only looks at the break bar onwards.")
+     tooltip = "MSS candle only (default, and what the alert bot runs) looks at the break bar onwards. Grab candle also marks imbalances formed BEFORE the break, anywhere back to the raid — and because the stop is pinned at the raid extreme, newer gaps then fail the risk cap and the search walks back until one fits, which can hand you an entry from many bars ago, far below market. Measured over 41.6 days the two score the same per setup, but MSS-only fills 64-75% of the time against 40-60%: fewer entries left hanging where price never returns.")
 maxFvgPerSetup   = input.int(2, "Max entry zones per setup", minval = 1, maxval = 10, group = gAdv)
 skipOverlappingFvg = input.bool(true, "Skip overlapping zones", group = gAdv,
      tooltip = "In a fast move consecutive bars often gap over each other; this keeps the first and drops the stack.")
@@ -237,6 +373,11 @@ type LiqPivot
     int   bar
     float price
     bool  drawn = false
+    label mark                      // the diamond itself. Held so a pool that
+                                    // dies can take its markers with it —
+                                    // without this the handle is discarded at
+                                    // draw time and every diamond ever drawn
+                                    // stays on the chart forever.
 
 type Cluster
     int    id
@@ -250,6 +391,9 @@ type Cluster
     bool   swept        = false
     bool   mssConfirmed = false
     bool   setupDone    = false
+    bool   earlyDone    = false        // the early zone has been drawn, or the
+                                       // window closed without one. Mirrors
+                                       // Cluster.early_done in engine.py.
     bool   expired      = false
     bool   suppressed   = false        // MSS fired but muted by the cooldown
     int    sweepBar     = na        // FIRST bar that ran the level (clock)
@@ -269,9 +413,43 @@ type Cluster
     int    fvgCount     = 0
     float  lastFvgTop   = na
     float  lastFvgBot   = na
+    int    lastFvgBar   = na    // bar the entry gap closed on. The order block
+                                // is the last opposing candle BEFORE it, so
+                                // this is what locates it.
     array<LiqPivot> pivots
     line   liqLine
     line   mssLine
+    label  grabX                    // the confirmed raid X, drawn at MSS time
+    label  grabTagLbl               // and its dark tag
+    label  raidDot                  // provisional marker while the raid is
+                                    // still waiting for a shift
+    bool   markersDropped = false   // its diamonds have been retired
+
+// A context imbalance. Deliberately NOT an Fvg: the engine walks the Fvg array
+// for mitigation, extension and outcome tracking, and these must never reach
+// any of that. Top and bottom are kept only so the box can retire itself.
+// The entry, stop and target drawings of ONE setup, held together so the
+// whole set can be cleared as a unit once it is old enough.
+type LevelGroup
+    array<line>  lns
+    array<label> lbs
+    array<box>   bxs     // the early zone's box. Held here so it is deleted by
+                         // the same prune that clears the group's lines — a box
+                         // left behind when its entry line goes is a zone with
+                         // nothing to say what it was.
+    int          bar     // bar it was opened on, so drawSetup and openTrade
+                         // can share one. Held here rather than in a global
+                         // because Pine functions may mutate object fields
+                         // but may not assign to globals.
+
+type CtxFvg
+    box   bx
+    line  mid
+    float top
+    float bottom
+    float avg
+    bool  isBull
+    int   createdBar
 
 type Fvg
     int   id
@@ -351,6 +529,18 @@ type Counters
 // ═════════════════════════════ 3. STATE ═════════════════════════════════════
 var array<Cluster> clusters = array.new<Cluster>()
 var array<Fvg>     fvgs     = array.new<Fvg>()
+// Context imbalances: drawings only, with no state anyone reads. Deliberately
+// NOT Fvg objects and never pushed to `fvgs` — the engine walks that array for
+// mitigation and extension, and feeding it gaps the strategy never selected
+// would change behaviour rather than just the picture.
+var array<CtxFvg>  ctxFvgs  = array.new<CtxFvg>()
+// Raids that have taken liquidity but have no shift yet. Held so their
+// provisional dots can be retired the moment the raid resolves either way —
+// leaving a marker on a raid that died is what made Live mode unreadable.
+var array<Cluster> pendingRaids = array.new<Cluster>()
+var array<LevelGroup> lvlGroups = array.new<LevelGroup>()
+// Early zones get their own list. See earlyKeep.
+var array<LevelGroup> earlyGroups = array.new<LevelGroup>()
 var array<Trade>   trades   = array.new<Trade>()
 var Stats          stx      = Stats.new()
 var Counters       cnt      = Counters.new()
@@ -360,24 +550,249 @@ var Tracker        s1T      = Tracker.new()
 var Tracker        s2T      = Tracker.new()
 var Tracker        s3T      = Tracker.new()
 
+// Context-imbalance mitigation mode, resolved once. Pine will not take a
+// multi-line `switch` expression inside a nested local scope, and these do not
+// change bar to bar anyway.
+ctxBody  = allFvgRemove == "Body close"
+ctxCE    = allFvgRemove == "50% (CE)"
+ctxWick  = allFvgRemove == "Wick"
+ctxTouch = allFvgRemove == "Touched"
+
+// ── the reference preset, resolved once ─────────────────────────────────────
+// One place, so no consumer below has to know the preset exists. The four
+// engine values are the reference's own panel; measured over 41.6 days the
+// complete set is 0.071 R behind ours at 1.4 SE, which is to say
+// indistinguishable, so this is a viewing choice and not a claim either way.
+//
+// DETECTION ONLY. The preset used to veto three Appearance checkboxes, which
+// blanked the raid dots, the imbalance layer and the trend line while the
+// boxes stayed ticked — no switch could bring them back. It no longer touches
+// anything drawn: the three eff* aliases below are now pass-throughs, kept so
+// the consumers further down do not have to know whether a preset exists.
+bool  refMode      = markStyle == "ICT Trades (matched ref)"
+// "Riptide + ICT" leaves the engine alone and only adds a comparison layer,
+// so it is deliberately NOT part of refMode. Marks under it are Riptide's,
+// which is the point: the chart still matches the alerts.
+bool  dualMode     = markStyle == "Riptide + ICT"
+int   effPivotRight = refMode ? 1    : pivotRight
+float effTolATR     = refMode ? 0.2  : liquidityToleranceATR
+float effOvershoot  = refMode ? 0.1  : maxPivotOvershootATR
+int   effGrabBars   = refMode ? 12   : maxBarsAfterGrab
+bool  effAllFvg     = showAllFvg
+bool  effRaidDot    = showRaidDot
+string effTrendMode = trendMode
+// The reference ships FOUR liquidity types enabled — pivot, daily, weekly and
+// session — where Riptide ships two. Weekly is off here because 295 weekly
+// raids produced zero setups in 41.6 days, and session was never turned on at
+// all. That is marks their chart draws which ours cannot, and no amount of
+// tuning the pivot rules closes it, so the preset switches them on.
+bool  effUseWeekly  = refMode ? true : useWeeklyLiq
+// Session pools are PINE-ONLY. riptide/engine.py builds Day and Week levels
+// and has no session source at all, so with this on the chart draws pools the
+// bot can never alert on. That is the one place the preset knowingly breaks
+// the chart/bot correspondence, and it is why it is worth knowing that the
+// reference runs four types where the engine implements three.
+bool  effUseSession = refMode ? true : useSessionLiq
+// And their session windows are not ours: GMT+0 08:00-17:00, 13:00-22:00 and
+// 00:00-09:00, against Riptide's Asia/London/NY split. Same switch, or the
+// session pools land in different places and the comparison is meaningless.
+string effSess1     = refMode ? "0800-1700" : sess1Spec
+string effSess2     = refMode ? "1300-2200" : sess2Spec
+string effSess3     = refMode ? "0000-0900" : sess3Spec
+string effSessTz    = refMode ? "UTC" : sessTz
+
 // ═════════════════════════ 4. BAR-LEVEL SERIES ══════════════════════════════
 atr = ta.atr(atrLength)
-tol = atr * liquidityToleranceATR
+tol = atr * effTolATR
 
-ph = ta.pivothigh(high, pivotLeft, pivotRight)
-pl = ta.pivotlow(low,  pivotLeft, pivotRight)
+ph = ta.pivothigh(high, pivotLeft, effPivotRight)
+pl = ta.pivotlow(low,  pivotLeft, effPivotRight)
+
+// The reference's pivot rule, run alongside for the "Riptide + ICT" layer.
+// Unconditional, like every other ta.* call — it carries state.
+//
+// THE TWO SETS ARE NESTED, and that is worth knowing before reading the
+// chart. Both rules use the same look-back; they differ only in bars-after,
+// 1 against Riptide's 2. A bar that is the extreme of a 4-bar window is
+// necessarily the extreme of the 3-bar window inside it, so every Riptide
+// swing is also an ICT swing and ICT simply sees more. There is therefore no
+// such thing as a Riptide-only swing, and no colour is wasted on one: a
+// Riptide-coloured diamond already means both rules agree.
+ictPH = ta.pivothigh(high, pivotLeft, 1)
+ictPL = ta.pivotlow(low,  pivotLeft, 1)
 
 // ta.* calls are unconditional: they carry state and must run every bar.
-[stLine, stDir] = ta.supertrend(stFactor, stAtrLen)
 emaLine = ta.ema(close, emaLen)
 // ta.supertrend direction: -1 up, 1 down. Not read by the engine.
+
+// Higher-timeframe trend for the filter. request.security on a HIGHER
+// timeframe with lookahead_off, reading [1] — the last CLOSED bar of that
+// timeframe — is the non-repainting form: the value can never change once the
+// chart bar has printed. That is the same bar the bot picks, since its own
+// candle fetch drops the forming one, so the two agree.
+//
+// This is the only request.security in the file. The lower-timeframe kind is
+// still avoided: it needs intrabar history, which is capped by subscription
+// tier and would leave the chart patchy where it matters most.
+htfTrend() =>
+    [_l, _d] = ta.supertrend(trendFilterFac, trendFilterLen)
+    // [1] on both: the last CLOSED bar of the higher timeframe, which is what
+    // makes this non-repainting and what the bot reads.
+    [_l[1], _d[1]]
+// Called unconditionally. request.security belongs at global scope and is
+// evaluated whether or not a surrounding condition wants it, so gating the
+// call buys nothing and risks the conditional-execution surprises Pine is
+// known for. The toggle lives in trendOk instead, which is where it reads
+// clearly anyway.
+[htfLine, htfDir] = request.security(syminfo.tickerid, trendFilterTf, htfTrend(),
+                                     lookahead = barmerge.lookahead_off)
+
+// -1 is up. na means the higher timeframe has no value yet — early bars, or a
+// symbol with too little daily history — and nothing is suppressed then:
+// missing data must never silently remove signals. That matches the bot, which
+// keeps a setup when its daily lookup comes back empty.
+trendOk(bool isLong) =>
+    not trendFilter or na(htfDir) or (isLong ? htfDir < 0 : htfDir > 0)
+
+// ── The daily point of interest, and the grade ──────────────────────────────
+//
+// The raid has to land inside a daily order block or fair value gap. This is
+// the largest single separation measured in this project and the only filter
+// to pass a pre-registered held-out test on symbols it was not found on.
+// riptide/engine.py builds the same zones in daily_zones() and tests them in
+// in_zone(); the bot REQUIRES this, so a chart drawing every setup shows about
+// twice what the alerts do.
+//
+// A SECOND request.security — the note above about this file having only one
+// is now out of date. Same rules, and they are what make it safe: a HIGHER
+// timeframe, lookahead_off, and [1] everywhere so nothing but the last CLOSED
+// daily bar is ever read. The structure timeframe is untouched and still the
+// chart's own; nothing here introduces a timeframe setting for signals.
+dailyCtx() =>
+    [_dp, _dm, _adx] = ta.dmi(14, 14)
+    [_sl, _sd]       = ta.supertrend(trendFilterFac, trendFilterLen)
+    [open[1], high[1], low[1], close[1], ta.atr(atrLength)[1], time[1],
+     _dp[1], _dm[1], _sd[1]]
+
+[dOp, dHi, dLo, dCl, dAtr, dTm, dDiP, dDiM, dStD] = request.security(
+     syminfo.tickerid, "D", dailyCtx(), lookahead = barmerge.lookahead_off)
+
+// The last three CLOSED daily bars, kept by hand. request.security hands over
+// one bar at a time, and a zone needs three, so the history is accumulated
+// here rather than asked for again.
+var array<float> d3o = array.new<float>()
+var array<float> d3h = array.new<float>()
+var array<float> d3l = array.new<float>()
+var array<float> d3c = array.new<float>()
+var array<int>   d3t = array.new<int>()
+
+// Zones, oldest first. Pushed in time order, so expiry can shift from the
+// front and the array stays bounded however long the chart runs.
+var array<int>   zTm = array.new<int>()
+var array<bool>  zBl = array.new<bool>()
+var array<float> zLo = array.new<float>()
+var array<float> zHi = array.new<float>()
+
+pushZone(int t, bool bull, float lo, float hi) =>
+    zTm.push(t)
+    zBl.push(bull)
+    zLo.push(lo)
+    zHi.push(hi)
+
+// One pass per completed daily bar. The index arithmetic mirrors
+// engine.daily_zones exactly: bar 2 is the newest, and a zone is dated by the
+// bar it COMPLETED on, never the bar it started from — a three-candle gap is
+// not knowable until the third candle closes.
+if poiOn and not na(dTm) and (d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm)
+    d3o.push(dOp)
+    d3h.push(dHi)
+    d3l.push(dLo)
+    d3c.push(dCl)
+    d3t.push(dTm)
+    if d3t.size() > 3
+        d3o.shift()
+        d3h.shift()
+        d3l.shift()
+        d3c.shift()
+        d3t.shift()
+    if d3t.size() == 3 and not na(dAtr) and dAtr > 0
+        if d3l.get(2) > d3h.get(0)
+            pushZone(dTm, true, d3h.get(0), d3l.get(2))
+        else if d3h.get(2) < d3l.get(0)
+            pushZone(dTm, false, d3h.get(2), d3l.get(0))
+        // Order block: the last opposite-closing candle before a displacement
+        // of more than one ATR.
+        if d3c.get(2) - d3o.get(2) > dAtr and d3c.get(1) < d3o.get(1)
+            pushZone(dTm, true, d3l.get(1), d3h.get(1))
+        else if d3o.get(2) - d3c.get(2) > dAtr and d3c.get(1) > d3o.get(1)
+            pushZone(dTm, false, d3l.get(1), d3h.get(1))
+    while zTm.size() > 0 and (dTm - zTm.get(0)) > poiMaxAgeDays * 86400000
+        zTm.shift()
+        zBl.shift()
+        zLo.shift()
+        zHi.shift()
+
+// `price` is the raid extreme — the stop's own level, since the buffer is 0 —
+// because it is the RAID that has to be in the zone, not the entry, which is a
+// retracement away from it.
+inDailyPoi(float price, bool isLong) =>
+    bool hit = false
+    int  n   = poiOn and not na(price) ? zTm.size() : 0
+    if n > 0
+        // Each condition on its own line, as a plain assignment. A multi-line
+        // boolean inside a loop body is where Pine's indentation rules and a
+        // reader's intuition come apart.
+        for i = 0 to n - 1
+            bool aligned = zBl.get(i) == isLong
+            bool inside  = price >= zLo.get(i) and price <= zHi.get(i)
+            bool live    = (time - zTm.get(i)) <= poiMaxAgeDays * 86400000
+            if aligned and inside and live
+                hit := true
+    hit
+
+// Both daily readings agreeing, which is what the bot's grade means by "the
+// trend". Stricter than trendOk above, which is the SuperTrend alone and is a
+// FILTER rather than part of the letter.
+dailyTrendOk(bool isLong) =>
+    bool known = not na(dStD) and not na(dDiP) and not na(dDiM)
+    // ta.supertrend direction is -1 up, +1 down.
+    bool stOk  = known and ((dStD < 0) == isLong)
+    bool diOk  = known and ((dDiP > dDiM) == isLong)
+    known and stOk and diOk
+
+// Mirrors GRADES in riptide/engine.py, cell for cell.
+gradeOf(bool isEarly, bool poi, bool isLong) =>
+    bool tr = dailyTrendOk(isLong)
+    // if/else, not one ternary split over two lines. This shipped as
+    //
+    //     isEarly ? (...)
+    //             : (...)
+    //
+    // and TradingView answered CE10013. Elsewhere in this file a ternary IS
+    // split before its ":" and compiles — line 1589 and a dozen others — so
+    // the break is not the problem: those are all ASSIGNMENTS, where the
+    // continuation belongs to a statement. This one was the function's bare
+    // trailing return expression, and there Pine wants it on one line.
+    // Stacked branches read better than a long single line anyway.
+    string g = "C"
+    if isEarly
+        g := poi and tr ? "B" : (poi or tr) ? "C" : "D"
+    else
+        g := poi and tr ? "A" : tr ? "B" : "C"
+    g
+
+// Is this letter good enough to draw? "ABCD".indexOf is the same ordering the
+// bot uses for RIPTIDE_MIN_GRADE.
+gradeDrawn(string g) =>
+    string flr = chartMinGrade == "A only" ? "A" : chartMinGrade == "B and better (matches the bot)" ? "B" : "D"
+    not poiOn or str.pos("ABCD", g) <= str.pos("ABCD", flr)
 
 // Period boundaries and session membership, global scope for series consistency.
 newDay   = timeframe.change("D")
 newWeek  = timeframe.change("W")
-inSess1  = sess1On and not na(time(timeframe.period, sess1Spec, sessTz))
-inSess2  = sess2On and not na(time(timeframe.period, sess2Spec, sessTz))
-inSess3  = sess3On and not na(time(timeframe.period, sess3Spec, sessTz))
+inSess1  = sess1On and not na(time(timeframe.period, effSess1, effSessTz))
+inSess2  = sess2On and not na(time(timeframe.period, effSess2, effSessTz))
+inSess3  = sess3On and not na(time(timeframe.period, effSess3, effSessTz))
 
 // Seeds a new cluster's running extremes at its oldest pivot bar
 // (bar_index - pivotRight) without dynamic history indexing.
@@ -447,7 +862,7 @@ overshootOk(Cluster c, float price) =>
             for i = 1 to c.pivots.size() - 1
                 float p = c.pivots.get(i).price
                 ext := c.isHigh ? math.max(ext, p) : math.min(ext, p)
-        float allow = atr * maxPivotOvershootATR
+        float allow = atr * effOvershoot
         ok := c.isHigh ? price <= ext + allow : price >= ext - allow
     ok
 
@@ -465,7 +880,7 @@ spanOk(Cluster c, float price) =>
 // ═════════════════════════ 6. DRAWING ══════════════════════════════════════
 drawDiamond(Cluster c, LiqPivot p) =>
     if showPivots and not p.drawn
-        label.new(p.bar, p.price, "",
+        p.mark := label.new(p.bar, p.price, "",
              xloc    = xloc.bar_index,
              yloc    = c.isHigh ? yloc.abovebar : yloc.belowbar,
              style   = label.style_diamond,
@@ -489,7 +904,7 @@ drawLiqLine(Cluster c, int x2) =>
              width = 1)
 
 drawStructLine(Cluster c, int x2) =>
-    if showMSS and na(c.mssLine)
+    if showStructLine and na(c.mssLine)
         c.mssLine := line.new(c.structBar, c.structLevel, x2, c.structLevel,
              xloc  = xloc.bar_index,
              color = structCol,
@@ -497,9 +912,12 @@ drawStructLine(Cluster c, int x2) =>
              width = 1)
 
 // X-cross on the sweep extreme, plus the source tag beneath it.
+// The raid X. Idempotent: in Live draw mode this is called on the sweep bar
+// and the labels are then MOVED by moveGrab as the raid deepens, so calling
+// it again from renderPattern at MSS time must not stack a second X.
 drawGrab(Cluster c) =>
-    if showGrab
-        label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, "",
+    if showGrab and na(c.grabX)
+        c.grabX := label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, "",
              xloc    = xloc.bar_index,
              yloc    = yloc.price,
              style   = label.style_xcross,
@@ -509,8 +927,8 @@ drawGrab(Cluster c) =>
                        "\nlevel " + f2s(c.level) +
                        "\npivots " + str.tostring(c.pivots.size()) +
                        "\nMSS needed " + (c.isHigh ? "close < " : "close > ") + f2s(c.structLevel))
-    if showGrab and showGrabTag
-        label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, c.tag,
+    if showGrab and showGrabTag and na(c.grabTagLbl)
+        c.grabTagLbl := label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, c.tag,
              xloc      = xloc.bar_index,
              yloc      = c.isHigh ? yloc.abovebar : yloc.belowbar,
              style     = c.isHigh ? label.style_label_down : label.style_label_up,
@@ -530,6 +948,61 @@ drawMssLabel(Cluster c) =>
              tooltip   = "MSS #" + str.tostring(c.id) + (c.isHigh ? " bearish" : " bullish") +
                          "\nthreshold " + f2s(c.structLevel) +
                          "\nfrom oldest pivot @ bar " + str.tostring(c.oldestBar))
+
+// Follow the raid to its new extreme. Only Live mode needs this: in deferred
+// mode nothing is drawn until the extreme is already final.
+moveGrab(Cluster c) =>
+    float y = c.isHigh ? c.grabHigh : c.grabLow
+    if not na(c.grabX)
+        label.set_xy(c.grabX, c.grabBar, y)
+    if not na(c.grabTagLbl)
+        label.set_xy(c.grabTagLbl, c.grabBar, y)
+    if not na(c.raidDot)
+        label.set_xy(c.raidDot, c.grabBar, y)
+
+// The provisional mark on a raid with no shift yet. Hollow and faded on
+// purpose: most raids never become setups, so this is "something is
+// happening here", not "take this".
+drawRaidDot(Cluster c) =>
+    if effRaidDot and na(c.raidDot) and na(c.grabX)
+        c.raidDot := label.new(c.grabBar, c.isHigh ? c.grabHigh : c.grabLow, "",
+             xloc    = xloc.bar_index,
+             yloc    = yloc.price,
+             style   = label.style_circle,
+             color   = color.new(dirCol(c.isHigh), 45),
+             size    = size.tiny,
+             tooltip = "Raid in progress — " + c.tag + " liquidity @ " +
+                       f2s(c.level) + " taken.\nNo structure shift yet; needs " +
+                       (c.isHigh ? "close < " : "close > ") + f2s(c.structLevel))
+        pendingRaids.push(c)
+        // Only the most recent handful stay marked. An unresolved raid from
+        // forty bars ago is history, not context.
+        while pendingRaids.size() > raidDotKeep
+            Cluster old = pendingRaids.shift()
+            label.delete(old.raidDot)
+            old.raidDot := na
+
+dropRaidDot(Cluster c) =>
+    label.delete(c.raidDot)
+    c.raidDot := na
+
+// Retire a pool's swing markers.
+//
+// A diamond means "this swing is part of live liquidity". Once the pool has
+// been taken or has expired it is not liquidity any more, and leaving the
+// markers turns the chart into a field of diamonds from pools that stopped
+// mattering days ago — which is exactly what it did, because the label handle
+// was thrown away at draw time and nothing could ever delete it.
+//
+// Drawing only. The engine never reads these, so nothing here changes a
+// signal, an entry or an alert.
+dropDiamonds(Cluster c) =>
+    if c.pivots.size() > 0
+        for i = 0 to c.pivots.size() - 1
+            LiqPivot p = c.pivots.get(i)
+            label.delete(p.mark)
+            p.mark  := na
+            p.drawn := false
 
 // An FVG anchored at an arbitrary (possibly historical) left bar.
 newFvgAt(bool isBull, float top, float bottom, int lft) =>
@@ -556,6 +1029,48 @@ newFvgAt(bool isBull, float top, float bottom, int lft) =>
                  xloc = xloc.bar_index, color = bd, style = line.style_solid, width = 1)
     fvgs.push(f)
     f
+
+// A context imbalance: same three-bar geometry as an entry zone, drawn faintly
+// and forgotten. No id, no mitigation tracking, no effect on any signal —
+// purely so the chart shows the imbalances the entry rules passed over.
+// Drop every stored context box, drawings included.
+dropCtx(int i) =>
+    CtxFvg f = ctxFvgs.get(i)
+    box.delete(f.bx)
+    line.delete(f.mid)
+    ctxFvgs.remove(i)
+
+drawCtxFvg(bool isBull, float top, float bottom, int lft) =>
+    // Overlapping half-transparent boxes stack into a smear and stop reading
+    // as levels. One box per price area: the newer gap wins, since it is the
+    // one price has just left behind.
+    if allFvgOverlap and ctxFvgs.size() > 0
+        for i = ctxFvgs.size() - 1 to 0
+            CtxFvg o = ctxFvgs.get(i)
+            if not (bottom >= o.top or top <= o.bottom)
+                dropCtx(i)
+
+    color base = isBull ? bullCol : bearCol
+    float av = math.avg(top, bottom)
+    // No border. At this transparency a dotted outline reads as noise and
+    // fights the candles; a clean fill plus the midline defines the zone.
+    box b = box.new(lft, top, lft + fvgExtendBars, bottom,
+         xloc         = xloc.bar_index,
+         border_color = #00000000,
+         bgcolor      = color.new(base, allFvgFill))
+    // The midpoint is not decoration: it is where "50% (CE)" mitigates, and
+    // the level price most often reacts to inside a gap.
+    line m = na
+    if showFvgMidline
+        m := line.new(lft, av, lft + fvgExtendBars, av,
+             xloc = xloc.bar_index, style = line.style_dotted,
+             color = color.new(base, math.max(0, allFvgFill - 30)))
+    ctxFvgs.push(CtxFvg.new(bx = b, mid = m, top = top, bottom = bottom,
+         avg = av, isBull = isBull, createdBar = bar_index))
+    // Kept short so entry zones, liquidity lines and labels are not starved
+    // out of TradingView's 500-drawing budget by chart context.
+    while ctxFvgs.size() > allFvgKeep
+        dropCtx(0)
 
 // Entry price implied by entryMode, from a gap's two edges.
 entryOf(bool isLong, float top, float bot) =>
@@ -598,6 +1113,7 @@ scanLeg(Cluster c, int fromBar, int toBar) =>
                         newFvgAt(isBull, gTop, gBot, bar_index - off - 2)
                         c.lastFvgTop := gTop
                         c.lastFvgBot := gBot
+                        c.lastFvgBar := bar_index
                         c.fvgCount   += 1
 
 // Entry price implied by entryMode for a finished setup.
@@ -605,25 +1121,209 @@ entryFrom(Cluster c) =>
     entryOf(not c.isHigh, c.lastFvgTop, c.lastFvgBot)
 
 // Call after scanLeg: reads lastFvgTop/Bot, which the scan produces.
+// The drawing group for the setup being rendered on this bar. drawSetup and
+// openTrade both contribute and run back to back, so keying on bar_index lets
+// them share one group rather than each spending a slot.
+levelGroup() =>
+    bool fresh = lvlGroups.size() == 0
+    if not fresh
+        fresh := lvlGroups.get(lvlGroups.size() - 1).bar != bar_index
+    if fresh
+        lvlGroups.push(LevelGroup.new(lns = array.new<line>(),
+             lbs = array.new<label>(), bxs = array.new<box>(), bar = bar_index))
+        while lvlGroups.size() > setupLevelKeep
+            LevelGroup old = lvlGroups.shift()
+            for l in old.lns
+                line.delete(l)
+            for b in old.lbs
+                label.delete(b)
+            for bx in old.bxs
+                box.delete(bx)
+    lvlGroups.get(lvlGroups.size() - 1)
+
+// Same idea as levelGroup, on a separate budget. Not keyed on bar_index: two
+// clusters can produce an early zone on one bar and they are two zones, not
+// one drawing shared between them.
+earlyGroup() =>
+    earlyGroups.push(LevelGroup.new(lns = array.new<line>(),
+         lbs = array.new<label>(), bxs = array.new<box>(), bar = bar_index))
+    while earlyGroups.size() > earlyKeep
+        LevelGroup old = earlyGroups.shift()
+        for l in old.lns
+            line.delete(l)
+        for b in old.lbs
+            label.delete(b)
+        for bx in old.bxs
+            box.delete(bx)
+    earlyGroups.get(earlyGroups.size() - 1)
+
+// ── order block and breaker ─────────────────────────────────────────────────
+// Both mirror engine.py exactly, because the confluence score on every alert
+// is computed from these same two candles. If the chart drew one block and the
+// alert counted another, the letter on the message would be unexplainable from
+// the chart — which is the whole reason the engine and the Pine are kept in
+// step.
+//
+//   order block   last candle closing AGAINST the move, before the gap bar
+//   breaker       same rule, at or before the extreme the break went through
+//
+// Offsets, not bar indices: Pine reads history as close[n] where n counts back
+// from the current bar, and mixing the two is how off-by-one drawing bugs get
+// written.
+lastOpposingOffset(int fromOffset, bool isBull, int maxBack) =>
+    int found = -1
+    for k = fromOffset to fromOffset + maxBack - 1
+        if k < 0 or k > bar_index
+            break
+        if isBull ? close[k] < open[k] : close[k] > open[k]
+            found := k
+            break
+    found
+
+// The block price broke THROUGH — a breaker in the sense ICT means, and the
+// same rule as breaker_of() in engine.py.
+//
+// A breaker is an order block on the OPPOSITE side that failed. For a long the
+// decline into the raid was loaded by the last UP-close candle before it; when
+// the shift breaks back above that candle it flips from resistance to support.
+// Different polarity from the order block, so different candle by
+// construction.
+//
+// The rule this replaces looked for the SAME polarity near the break extreme
+// and landed on the identical candle 60% of the time over 244 setups — one
+// line drawn twice, and a confluence score where "2 of 2" often meant one
+// candle agreeing with itself.
+//
+// -1 when nothing opposite is found, or when the shift never traded through
+// it: an unbroken block is not a breaker, just an order block facing the
+// other way.
+breakerOffset(int grabBar, int mssBar, bool isBull) =>
+    int found = -1
+    if mssBar > grabBar
+        for k = bar_index - grabBar to bar_index - grabBar + 19
+            if k < 0 or k > bar_index
+                break
+            if isBull ? close[k] > open[k] : close[k] < open[k]
+                float lvl  = isBull ? high[k] : low[k]
+                float best = lvl
+                for m = bar_index - mssBar to k
+                    if m >= 0 and m <= bar_index
+                        best := isBull ? math.max(best, high[m])
+                                       : math.min(best, low[m])
+                if isBull ? best > lvl : best < lvl
+                    found := k
+                break
+    found
+
+// One price for a block. The reference draws a single line per block and does
+// not publish which price it is, so this is a stated choice, not a match.
+blockPrice(int off, bool isBull) =>
+    float o = open[off]
+    float c = close[off]
+    float body_hi = math.max(o, c)
+    float body_lo = math.min(o, c)
+    blockLevel == "Mean threshold" ? math.avg(o, c) :
+         blockLevel == "Proximal edge" ? (isBull ? body_hi : body_lo) :
+         (isBull ? body_lo : body_hi)
+
+// Drawn into the setup's own LevelGroup, so blocks are pruned with the entry
+// and stop lines rather than accumulating.
+drawBlock(LevelGroup g, int off, bool isBull, color col, string name) =>
+    if off >= 0
+        int   b = bar_index - off
+        float y = blockPrice(off, isBull)
+        g.lns.push(line.new(b, y, b + blockBars, y,
+             xloc  = xloc.bar_index,
+             color = col,
+             style = line.style_solid,
+             width = blockWidth))
+        g.lbs.push(label.new(b, y, "",
+             xloc      = xloc.bar_index,
+             yloc      = yloc.price,
+             style     = label.style_none,
+             size      = size.tiny,
+             tooltip   = name + "\nbar " + str.tostring(b) +
+                         "\nopen " + f2s(open[off]) + "  close " + f2s(close[off]) +
+                         "\nline at " + f2s(y) + " (" + blockLevel + ")"))
+
+// The ⚡ EARLY zone: sweep -> first imbalance, no shift. Mirrors the early
+// block in engine.py, including its window and its stop, so what is drawn is
+// what was alerted.
+//
+// Everything is faint. The point of the early signal is that NOTHING has
+// confirmed a reversal — it buys speed with a stop at the raid extreme rather
+// than a whole leg back — and a mark that looked like a completed setup would
+// be lying about which of the two it is.
+//
+// No breaker: a breaker is an opposing candle that a structure break traded
+// through, and before the shift there is nothing for it to have broken.
+drawEarly(Cluster c, float top, float bot, float sl) =>
+    bool isLong = not c.isHigh
+    // The raid extreme, which is what the zone test wants — see inDailyPoi.
+    bool poi    = inDailyPoi(c.isHigh ? c.grabHigh : c.grabLow, isLong)
+    string gr   = gradeOf(true, poi, isLong)
+    bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
+                  and trendOk(isLong) and gradeDrawn(gr)
+    if dirOk
+        color col   = color.new(isLong ? bullCol : bearCol, earlyFade)
+        int   x2    = bar_index + setupExtendBars
+        LevelGroup g = earlyGroup()
+        g.bxs.push(box.new(bar_index - 2, top, bar_index + fvgExtendBars, bot,
+             xloc         = xloc.bar_index,
+             border_color = col,
+             bgcolor      = color.new(isLong ? bullCol : bearCol,
+                                      math.min(99, earlyFade + 30))))
+        // No entry line and no price label here, unlike a confirmed setup.
+        // Under Proximal and Distal the entry IS an edge of the box just
+        // drawn, so a dotted line across the chart plus a price tag restates
+        // the zone and costs two more objects to do it. The exact price is on
+        // the alert. Only "Mid" puts the entry somewhere the box does not
+        // already show, and that is not the default.
+        if showStopLoss
+            g.lns.push(line.new(c.grabBar, sl, x2, sl,
+                 xloc = xloc.bar_index, color = col, style = line.style_dotted, width = 1))
+        // The order block behind it — the same last_opposing rule the confirmed
+        // setup uses, anchored on this gap instead of the post-shift one.
+        if showOB
+            int obOff = lastOpposingOffset(1, isLong, 20)
+            if obOff >= 0
+                float y = blockPrice(obOff, isLong)
+                g.lns.push(line.new(bar_index - obOff, y, bar_index - obOff + blockBars, y,
+                     xloc  = xloc.bar_index,
+                     color = color.new(obCol, earlyFade),
+                     style = line.style_solid,
+                     width = blockWidth))
+
 drawSetup(Cluster c) =>
     bool isLong = not c.isHigh
-    bool dirOk  = (isLong and showLongs) or (not isLong and showShorts)
+    bool poi    = inDailyPoi(c.isHigh ? c.grabHigh : c.grabLow, isLong)
+    string gr   = gradeOf(false, poi, isLong)
+    bool dirOk  = ((isLong and showLongs) or (not isLong and showShorts))
+                  and trendOk(isLong) and gradeDrawn(gr)
     if dirOk and c.fvgCount > 0
         color col   = isLong ? bullCol : bearCol
         float entry = entryFrom(c)
         float sl    = stopFrom(c)
         int   x2    = bar_index + setupExtendBars
+        LevelGroup g = levelGroup()
         if showEntryLine
-            line.new(c.mssBar, entry, x2, entry,
-                 xloc = xloc.bar_index, color = col, style = line.style_solid, width = 1)
-            label.new(x2, entry, "Entry " + f2s(entry),
+            g.lns.push(line.new(c.mssBar, entry, x2, entry,
+                 xloc = xloc.bar_index, color = col, style = line.style_solid, width = 1))
+            g.lbs.push(label.new(x2, entry, "Entry " + f2s(entry),
                  xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left,
-                 color = color.new(col, 75), textcolor = col, size = size.tiny)
+                 color = color.new(col, 75), textcolor = col, size = size.tiny))
+        // The two blocks behind this setup's confluence score.
+        if showOB and not na(c.lastFvgBar)
+            int obOff = lastOpposingOffset(bar_index - c.lastFvgBar + 1, isLong, 20)
+            drawBlock(g, obOff, isLong, obCol, "Order block")
+        if showBreaker and c.mssConfirmed and c.mssBar > c.grabBar
+            drawBlock(g, breakerOffset(c.grabBar, c.mssBar, isLong), isLong,
+                 bbCol, "Breaker block")
         if showStopLoss
             // Anchored on the grab bar so the line starts at the X.
-            line.new(c.grabBar, sl, x2, sl,
-                 xloc = xloc.bar_index, color = color.new(col, 20), style = line.style_dashed, width = 1)
-            label.new(x2, sl, "SL " + f2s(sl),
+            g.lns.push(line.new(c.grabBar, sl, x2, sl,
+                 xloc = xloc.bar_index, color = color.new(col, 20), style = line.style_dashed, width = 1))
+            g.lbs.push(label.new(x2, sl, "SL " + f2s(sl),
                  xloc      = xloc.bar_index,
                  yloc      = yloc.price,
                  style     = label.style_label_left,
@@ -633,9 +1333,10 @@ drawSetup(Cluster c) =>
                  tooltip   = "Stop beyond the grab candle @ bar " + str.tostring(c.grabBar) +
                              "\ngrab " + (isLong ? "low " : "high ") + f2s(isLong ? c.grabLow : c.grabHigh) +
                              "\nbuffer " + str.tostring(slBufferATR) + " x ATR" +
-                             "\nrisk " + f2s(math.abs(entry - sl)))
+                             "\nrisk " + f2s(math.abs(entry - sl))))
     if showSetupLabels and dirOk and c.fvgCount > 0
-        label.new(bar_index + 2, isLong ? c.lastFvgTop : c.lastFvgBot, isLong ? "LONG" : "SHORT",
+        label.new(bar_index + 2, isLong ? c.lastFvgTop : c.lastFvgBot,
+             (isLong ? "LONG" : "SHORT") + (poiOn ? "  " + gr : ""),
              xloc      = xloc.bar_index,
              yloc      = yloc.price,
              style     = label.style_label_left,
@@ -671,12 +1372,14 @@ openTrade(Cluster c) =>
             for mi = 0 to mults.size() - 1
                 float m  = mults.get(mi)
                 float tp = isLong ? e + r * m : e - r * m
-                line.new(bar_index, tp, bar_index + setupExtendBars, tp,
+                LevelGroup tg = levelGroup()
+                tg.lns.push(line.new(bar_index, tp, bar_index + setupExtendBars, tp,
                      xloc = xloc.bar_index, color = color.new(col, 55),
-                     style = line.style_dotted, width = 1)
-                label.new(bar_index + setupExtendBars, tp, str.tostring(m) + "R",
+                     style = line.style_dotted, width = 1))
+                tg.lbs.push(label.new(bar_index + setupExtendBars, tp,
+                     str.tostring(m) + "R",
                      xloc = xloc.bar_index, yloc = yloc.price, style = label.style_none,
-                     textcolor = color.new(col, 30), size = size.tiny)
+                     textcolor = color.new(col, 30), size = size.tiny))
 
 // ── period trackers ─────────────────────────────────────────────────────────
 trackerReset(Tracker t) =>
@@ -776,8 +1479,12 @@ registerPivot(bool isHigh, float price, int pbar, float tolerance) =>
             Cluster c = clusters.get(i)
             // src 0 only: a daily/weekly/session level is a fixed price, not
             // a pool that pivots may join.
-            bool open = c.src == 0 and not c.expired and not c.mssConfirmed and (not c.swept or allowJoinAfterSweep)
-            if open and c.isHigh == isHigh
+            // Named joinable, not `open`: `open` is a Pine built-in, and a
+            // local may only shadow one while the file never uses it. Drawing
+            // the order block reads open[], so this became CE10190 the moment
+            // that was added — a rename here, not a change of meaning.
+            bool joinable = c.src == 0 and not c.expired and not c.mssConfirmed and (not c.swept or allowJoinAfterSweep)
+            if joinable and c.isHigh == isHigh
                 float d = pivotDistance(c, price)
                 if na(nearD) or d < nearD
                     nearD := d
@@ -857,6 +1564,60 @@ engineOk = not confirmOnBarClose or barstate.isconfirmed
 
 if engineOk
 
+    // ── 8.0a chart context: every imbalance ─────────────────────────────────
+    // Every three-bar gap on the chart, independent of pools, sweeps, shifts
+    // and the "Look for entry zones from" setting. Runs before anything else
+    // and touches no engine state, so what the strategy does is identical
+    // whether this is on or off — only the chart changes.
+    // A provisional dot only lives while its raid is still waiting for a
+    // shift. Checking the cluster's own state here catches every way a raid
+    // can end — confirmed, timed out, suppressed by the cooldown, or
+    // superseded — without having to find and patch each of those sites.
+    if pendingRaids.size() > 0
+        for i = pendingRaids.size() - 1 to 0
+            Cluster pc = pendingRaids.get(i)
+            if pc.mssConfirmed or pc.expired or pc.suppressed or pc.setupDone
+                dropRaidDot(pc)
+                pendingRaids.remove(i)
+
+    // Retire mitigated boxes first, so a gap created below cannot retire
+    // itself on the bar that formed it. Backwards, because remove() shifts
+    // every index above it.
+    if ctxFvgs.size() > 0
+        for i = ctxFvgs.size() - 1 to 0
+            CtxFvg f = ctxFvgs.get(i)
+            if bar_index > f.createdBar
+                // A bullish gap is taken back from ABOVE, a bearish one from
+                // below, so each mode tests the far edge in the right
+                // direction. "Body close" uses the body rather than the wick:
+                // one spike through a zone is not the same as price accepting
+                // through it, and treating them alike deletes zones that are
+                // still live.
+                float body = f.isBull ? math.min(close, open)
+                     : math.max(close, open)
+                bool gone = ctxBody  ? (f.isBull ? body < f.bottom : body > f.top)
+                     : ctxCE    ? (f.isBull ? low  < f.avg    : high > f.avg)
+                     : ctxWick  ? (f.isBull ? low  < f.bottom : high > f.top)
+                     : ctxTouch ? (low <= f.top and high >= f.bottom)
+                     : false
+                if gone
+                    dropCtx(i)
+                // Still unmitigated: carry it forward to the current bar, so
+                // width reads as "how long this gap has gone unfilled" rather
+                // than a fixed stub.
+                if not gone and bar_index > f.createdBar + fvgExtendBars
+                    box.set_right(f.bx, bar_index)
+                    if not na(f.mid)
+                        line.set_x2(f.mid, bar_index)
+
+    if effAllFvg and bar_index > 2
+        bool ctxBull = low > high[2]
+        bool ctxBear = high < low[2]
+        float ctxTop = ctxBull ? low : low[2]
+        float ctxBot = ctxBull ? high[2] : high
+        if (ctxBull or ctxBear) and ctxTop - ctxBot >= atr * allFvgMinATR
+            drawCtxFvg(ctxBull, ctxTop, ctxBot, bar_index - 2)
+
     // ── 8.0 period liquidity: publish finished periods, track the live one ──
     if useDailyLiq
         if newDay
@@ -865,14 +1626,14 @@ if engineOk
         if not newDay
             trackerUpdate(dayT)
 
-    if useWeeklyLiq
+    if effUseWeekly
         if newWeek
             closePeriod(weekT, 2, "Week", showPrevWeekHL, "PWH", "PWL")
             trackerReset(weekT)
         if not newWeek
             trackerUpdate(weekT)
 
-    if useSessionLiq
+    if effUseSession
         // session 1
         if inSess1 and not inSess1[1]
             trackerReset(s1T)
@@ -944,6 +1705,30 @@ if engineOk
                 bool wasSwept  = c.swept
                 bool wasMss    = c.mssConfirmed
 
+                // Drop the markers of a pool that DIED HAVING PRODUCED
+                // NOTHING — expired unswept, expired mid-raid, or suppressed
+                // by a sibling. A pool that went on to shift structure keeps
+                // its diamonds: that group beside an X and an MSS label is the
+                // whole pattern, and it is what makes the chart readable.
+                //
+                // Measured on 5 symbols over 41.6 days, diamonds on a 3.5-day
+                // screen, per symbol:
+                //
+                //    36   every pool ever formed  (what this used to draw)
+                //    16   live + completed        (this rule)
+                //    14   completed only          (the reference's density)
+                //     2   dropping completed too  (a first attempt, far too
+                //         aggressive — it deletes exactly the groups worth
+                //         looking at)
+                //
+                // 36 was never a parameter problem: tightening the pool width
+                // and time span as far as the reference's own panel allows
+                // only reaches 27. The difference was always about WHICH
+                // pools deserve a marker, not how pools are built.
+                if hideDeadPivots and not c.markersDropped and (c.expired or c.suppressed)
+                    dropDiamonds(c)
+                    c.markersDropped := true
+
                 // Lone pivot, not liquidity yet. A shallow undercut must not
                 // kill it or a forming double bottom loses its first low.
                 if not wasActive
@@ -981,28 +1766,92 @@ if engineOk
                                   alert.freq_once_per_bar_close)
                         if not deferred
                             drawStructLine(c, bar_index)
+                        // Provisional mark on the raid itself, in EITHER draw
+                        // mode. Drawing the real X here instead was wrong:
+                        // most raids never produce a shift, so the chart
+                        // filled with X marks on patterns that never
+                        // completed. The dot says "in progress" and is
+                        // retired the moment the raid resolves either way.
+                        drawRaidDot(c)
 
                 // Swept, waiting for the opposing structure break.
                 if wasSwept and not wasMss and not c.expired
                     // Clock runs from the first sweep; reading the trailed
                     // grabBar would let each new extreme reset it.
-                    bool timedOut = bar_index - c.sweepBar > maxBarsAfterGrab
+                    bool timedOut = bar_index - c.sweepBar > effGrabBars
                     if timedOut
                         c.expired := true
                     if not timedOut
                         if not na(c.mssLine)
                             line.set_x2(c.mssLine, bar_index)
                         // Grab candle follows the deepest bar of the raid.
+                        bool trailed = false
                         if trailGrabExtreme and c.isHigh and high > c.grabHigh
                             c.grabBar   := bar_index
                             c.grabHigh  := high
                             c.grabLow   := low
                             c.grabClose := close
+                            trailed     := true
                         if trailGrabExtreme and not c.isHigh and low < c.grabLow
                             c.grabBar   := bar_index
                             c.grabLow   := low
                             c.grabHigh  := high
                             c.grabClose := close
+                            trailed     := true
+                        // Move whatever is on screen to the new extreme.
+                        //
+                        // This used to be guarded by `not deferred`, on the
+                        // reasoning that deferred mode has drawn nothing yet.
+                        // That was true of the X and its tag and false of the
+                        // raid DOT, which drawRaidDot puts on the chart in
+                        // EITHER mode — so on the default draw mode every dot
+                        // froze on the first bar of the raid while the raid
+                        // went on making new extremes. A raid that ran 1% past
+                        // its own dot read as a raid price had already
+                        // invalidated, which is the opposite of what the
+                        // engine thought: it was still tracking it, deeper.
+                        //
+                        // moveGrab is na-safe per handle, so the unguarded
+                        // call moves only what exists. In deferred mode that
+                        // is the dot alone; the X and tag are still na and are
+                        // drawn at their final position when the shift
+                        // confirms.
+                        if trailed
+                            moveGrab(c)
+                        // The early gap, before any shift. Runs AFTER the
+                        // trail above so grabHigh/grabLow are current for this
+                        // bar, and only ever looks at a gap ending on THIS bar
+                        // — the point is to catch it as it forms, not to hunt
+                        // backwards through the leg for one that fits.
+                        if showEarly and not c.earlyDone and bar_index > 2
+                            if bar_index - c.sweepBar > earlyMaxBars
+                                c.earlyDone := true
+                            else
+                                bool eBull = not c.isHigh
+                                float eTop = eBull ? low : low[2]
+                                float eBot = eBull ? high[2] : high
+                                bool  eOk  = eBull ? low > high[2] : high < low[2]
+                                float eSz  = eTop - eBot
+                                bool eFits = eOk and eSz >= atr * minFvgSizeATR
+                                     and (maxFvgSizeATR <= 0 or eSz <= atr * maxFvgSizeATR)
+                                if eFits
+                                    float eEnt = entryMode == "Proximal" ? (eBull ? eTop : eBot)
+                                         : entryMode == "Distal" ? (eBull ? eBot : eTop)
+                                         : (eTop + eBot) / 2
+                                    float eSl  = eBull ? c.grabLow - atr * slBufferATR
+                                         : c.grabHigh + atr * slBufferATR
+                                    float eRsk = math.abs(eEnt - eSl)
+                                    // A gap on the wrong side of the raid
+                                    // extreme gives a zero or inverted stop.
+                                    bool eSane = eBull ? eEnt > eSl : eEnt < eSl
+                                    // Both guards are engine.py's, not
+                                    // decoration: without them the chart draws
+                                    // zones no alert was ever sent for, which
+                                    // is worse than drawing nothing.
+                                    if eSane and eRsk > 0 and (earlyMaxRiskATR <= 0
+                                         or eRsk <= atr * earlyMaxRiskATR)
+                                        drawEarly(c, eTop, eBot, eSl)
+                                        c.earlyDone := true
                         bool broke = c.isHigh
                              ? (mssMode == "close" ? close < c.structLevel : low  < c.structLevel)
                              : (mssMode == "close" ? close > c.structLevel : high > c.structLevel)
@@ -1035,9 +1884,22 @@ if engineOk
                                 scanLeg(c, from, bar_index)
                                 if c.fvgCount > had and had == 0
                                     drawSetup(c)
-                                    if trackOutcomes
+                                    // trendOk here, not just inside
+                                    // drawSetup: the stats table is what the
+                                    // filter is judged BY, and openTrade was
+                                    // counting every setup regardless. Toggling
+                                    // the filter moved the alerts and the
+                                    // drawings and left the numbers identical,
+                                    // which is the one place that silence
+                                    // actually misleads.
+                                    //
+                                    // trendOk only, deliberately — showLongs
+                                    // and showShorts are viewing preferences
+                                    // and must not change a measurement. This
+                                    // matches what the alert path gates on.
+                                    if trackOutcomes and trendOk(not c.isHigh)
                                         openTrade(c)
-                                if c.fvgCount > had
+                                if c.fvgCount > had and trendOk(not c.isHigh)
                                     if c.isHigh
                                         sigSetupShort := true
                                     if not c.isHigh
@@ -1049,6 +1911,23 @@ if engineOk
                                               f2s(c.isHigh ? c.grabHigh : c.grabLow),
                                               alert.freq_once_per_bar_close)
 
+                // The grab candle stops trailing once the break confirms — the
+                // block above only runs while `not wasMss` — but the zone
+                // search below keeps going for maxBarsAfterMss bars. If price
+                // trades back through the raid extreme in that window, the
+                // stop is already breached, and a zone forming beyond it puts
+                // the stop on the WRONG SIDE of the entry: a long stopped
+                // above its own entry. Measured on the engine: 7 of 1219
+                // setups inverted that way, 37 more carried a taken stop.
+                //
+                // Expire rather than re-trail. For a long, price back below
+                // the swept low means that low was taken again and the
+                // reversal the break claimed did not hold; there is no setup
+                // left to re-price.
+                if c.mssConfirmed and not c.setupDone and not c.expired and not c.suppressed
+                    if bar_index > c.mssBar and (c.isHigh ? high > c.grabHigh : low < c.grabLow)
+                        c.expired := true
+
                 // Keep looking for zones for a few bars past the break.
                 if c.mssConfirmed and not c.setupDone and not c.expired and not c.suppressed
                     if bar_index > c.mssBar
@@ -1056,9 +1935,10 @@ if engineOk
                         scanLeg(c, bar_index, bar_index)
                         if c.fvgCount > had2 and had2 == 0
                             drawSetup(c)
-                            if trackOutcomes
+                            // Same gate as the first scan above.
+                            if trackOutcomes and trendOk(not c.isHigh)
                                 openTrade(c)
-                        if c.fvgCount > had2
+                        if c.fvgCount > had2 and trendOk(not c.isHigh)
                             if c.isHigh
                                 sigSetupShort := true
                             if not c.isHigh
@@ -1170,8 +2050,22 @@ if engineOk
             if not f.tested
                 bool mitigated = bar_index > f.createdBar and low <= f.top and high >= f.bottom
                 if mitigated
-                    // First mitigation: state only, the drawing is kept.
+                    // The zone is kept — it is the record of where a setup
+                    // entered — but it must stop looking like one that is
+                    // still waiting.
                     f.tested := true
+                    if fadeUsedFvg
+                        color fbase = f.isBull ? bullCol : bearCol
+                        int   fade  = math.min(97, fvgFill + (100 - fvgFill) / 2)
+                        if not na(f.bx)
+                            box.set_bgcolor(f.bx, color.new(fbase, fade))
+                            box.set_border_color(f.bx,
+                                 color.new(fbase, math.max(0, fade - 12)))
+                            box.set_border_style(f.bx, line.style_dashed)
+                        if not na(f.mid)
+                            line.set_color(f.mid,
+                                 color.new(fbase, math.max(0, fade - 12)))
+                            line.set_style(f.mid, line.style_dashed)
                 if not mitigated and extendFVG
                     int want = math.min(f.createdBar + fvgMaxExtendBars,
                                         math.max(bar_index, f.left + fvgExtendBars))
@@ -1183,10 +2077,19 @@ if engineOk
                             line.set_x2(f.mid, f.right)
 
     // ── 8.4 object budget ───────────────────────────────────────────────────
-    // Oldest state objects are dropped. Drawings persist and are recycled by
-    // the max_*_count budgets in indicator().
+    // Oldest state objects are dropped. Their LINES go with them: leaving
+    // them behind is what striped the chart with dotted pool levels and
+    // dashed structure lines belonging to pools evicted long ago. Only
+    // TradingView's 500-drawing cap was clearing them, which is a recycling
+    // policy, not a display decision.
+    //
+    // The raid markers are deliberately kept — an X is a record of what
+    // happened, and the provisional dots are already retired by their own
+    // housekeeping the moment a raid resolves.
     while clusters.size() > maxLiquidityClusters
-        clusters.shift()
+        Cluster gone = clusters.shift()
+        line.delete(gone.liqLine)
+        line.delete(gone.mssLine)
     while fvgs.size() > maxFVGs
         fvgs.shift()
     while trades.size() > maxTrades
@@ -1194,10 +2097,94 @@ if engineOk
 
 // ═════════════════════════ 9. TREND PLOT + ALERTS ══════════════════════════
 // plot() and alertcondition() are global scope only, hence the flags above.
-plot(trendMode == "SuperTrend" ? stLine : na, "SuperTrend",
-     color = stDir < 0 ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
-plot(trendMode == "EMA" ? emaLine : na, "EMA",
+// The line the filter actually decides on. Drawn whether or not the filter is
+// switched on, so its behaviour can be judged before committing to it. It
+// steps rather than slopes, because one higher-timeframe value spans many
+// chart bars — that is the line being honest about its resolution.
+bool  trendOn  = effTrendMode == "SuperTrend"
+bool  trendUp  = htfDir < 0                      // -1 is up, per htfTrend()
+color trendCol = trendUp ? bullCol : bearCol
+
+trendPlot = plot(trendOn ? htfLine : na, "SuperTrend",
+     color = color.new(trendCol, 15), style = plot.style_linebr,
+     linewidth = trendWidth)
+
+// The second edge of the band. display.none because it is scaffolding for the
+// fill and not a line anyone wants drawn over the candles.
+pricePlot = plot(trendOn and showTrendFill ? close : na, "Trend fill edge",
+     display = display.none)
+
+// Strong against the line, fading toward price. The two ends swap with
+// direction: in an uptrend the line is BELOW price, so the solid end is the
+// bottom; in a downtrend it is above, so the solid end is the top. Painting
+// both the same way would put the weight on the wrong side half the time.
+fill(trendPlot, pricePlot,
+     math.max(htfLine, close), math.min(htfLine, close),
+     trendUp ? color.new(bullCol, 95) : color.new(bearCol, 78),
+     trendUp ? color.new(bullCol, 78) : color.new(bearCol, 95),
+     title = "Trend shading")
+
+plot(effTrendMode == "EMA" ? emaLine : na, "EMA",
      color = close > emaLine ? bullCol : bearCol, style = plot.style_linebr, linewidth = 1)
+
+// One chip, bottom right. Written only on the last bar: a table cell is not
+// per-bar state, and rewriting it across history would be wasted work for a
+// value only the live edge can be about.
+//
+// It follows the SELECTED series rather than always reading htfDir, so the
+// chip and the line can never say different things. Deliberately NOT gated on
+// trendOn: switching the line off is a request for a cleaner chart, not for
+// less information, and the chip is the cheapest possible way to keep the
+// direction. With the line off it falls back to the higher-timeframe
+// SuperTrend, which is the one the filter actually decides on.
+bool  emaMode = effTrendMode == "EMA"
+bool  tagOk   = emaMode ? not na(emaLine) : not na(htfDir)
+bool  tagUp   = emaMode ? close > emaLine : htfDir < 0
+string tagSrc = emaMode ? "EMA " + str.tostring(emaLen) + " on the chart timeframe"
+     : "SuperTrend " + str.tostring(trendFilterLen) + ", " +
+       str.tostring(trendFilterFac) + " on " + trendFilterTf
+
+var table trendTag = table.new(position.bottom_right, 1, 1)
+if barstate.islast and showTrendTag and tagOk
+    table.cell(trendTag, 0, 0, tagUp ? "Trend: BUY" : "Trend: SELL",
+         bgcolor    = color.new(tagUp ? bullCol : bearCol, 10),
+         text_color = color.white,
+         text_size  = trendTagSize == "Small" ? size.small
+             : trendTagSize == "Large" ? size.large
+             : trendTagSize == "Huge" ? size.huge : size.normal,
+         tooltip    = "Reading " + tagSrc)
+
+// ── the "Riptide + ICT" comparison layer ────────────────────────────────────
+// Drawn with plotshape rather than labels on purpose: TradingView's 500-object
+// budget is shared by liquidity lines, entry zones and every diamond the
+// engine draws, and a comparison layer has no business competing for it. A
+// plot costs nothing from that budget.
+//
+// Both series are lined up on the SAME bar before being compared. `ph` at this
+// bar describes the bar effPivotRight back; `ictPH` describes the bar one
+// back, so reading it effPivotRight-1 bars ago points at that same bar. Get
+// this wrong and the layer marks swings that are merely nearby, which looks
+// almost right and is worthless.
+// Gated on BOTH the preset and showPivots. Briefly it was gated on the preset
+// alone, on the reasoning that picking the comparison preset is the request to
+// see the comparison — and that reasoning put marks on a chart whose owner had
+// unticked "Swing markers (diamonds)". These ARE swing markers. A checkbox
+// that names a thing has to switch off every source of that thing, or its
+// label is a lie, and a stray mark nothing on the panel can remove is worse
+// than a preset that quietly draws nothing.
+//
+// The failure mode that motivated ungating it is real but is a documentation
+// problem, not a behaviour one: the preset's tooltip says the layer needs
+// diamonds on. That is a sentence to read, not a mark to hunt.
+int   cmpBack   = effPivotRight
+bool  ictOnlyPH = dualMode and showPivots and not na(ictPH[cmpBack - 1]) and na(ph)
+bool  ictOnlyPL = dualMode and showPivots and not na(ictPL[cmpBack - 1]) and na(pl)
+plotshape(ictOnlyPH ? high[cmpBack] : na, "ICT-only swing high",
+     style = shape.diamond, location = location.absolute, color = ictBearCol,
+     size = size.tiny, offset = -cmpBack)
+plotshape(ictOnlyPL ? low[cmpBack] : na, "ICT-only swing low",
+     style = shape.diamond, location = location.absolute, color = ictBullCol,
+     size = size.tiny, offset = -cmpBack)
 
 // Named conditions for the alert dropdown. Static text; the alert() calls
 // above carry the level and direction.
@@ -1311,7 +2298,7 @@ if debugMode and barstate.islast
     table.clear(dbg, 0, 0, 8, 12)
     table.cell(dbg, 0, 12, "ATR "  + f2s(atr),                        bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
     table.cell(dbg, 2, 12, "tol "  + f2s(tol),                        bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
-    table.cell(dbg, 4, 12, "over " + f2s(atr * maxPivotOvershootATR), bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
+    table.cell(dbg, 4, 12, "over " + f2s(atr * effOvershoot), bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
     table.cell(dbg, 6, 12, "span " + f2s(atr * maxClusterSpanATR),    bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
     table.cell(dbg, 0, 0, "#",       bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)
     table.cell(dbg, 1, 0, "dir",     bgcolor = #2a2e39, text_color = color.white, text_size = size.tiny)

@@ -1,0 +1,80 @@
+TIER 1, MEASURED
+4247 filled A/B trades (2420 bets) · 590 confirmed (488 bets) · 333 days
+MDE: 0.151 R/bet on the full stream, 0.351 on confirmed alone.
+the largest effect this project has ever measured is +0.292 R/bet.
+
+H1  sweep penetration / ATR   (4247 trades, MDE 0.151 R/bet)
+    <= 0.230651      1062 tr  767 bets  35% win  +0.003±0.050  boot5th -0.065
+    <= 0.60933       1062 tr  807 bets  37% win  +0.087±0.049  boot5th +0.006  OK
+    <= 1.13819       1062 tr  825 bets  37% win  -0.010±0.047  boot5th -0.059
+    > 1.13819        1061 tr  799 bets  37% win  +0.032±0.047  boot5th -0.026
+    spread +0.097 vs MDE 0.151 [FAIL — unreadable]   best bucket bootstrap [pass]   split-half [holds]   ->  no
+
+H3  raid rejection (close location)   (4247 trades, MDE 0.151 R/bet)
+    <= 0.35          1063 tr  778 bets  35% win  +0.012±0.049  boot5th -0.061
+    <= 0.60274       1061 tr  778 bets  41% win  +0.133±0.050  boot5th +0.077  OK
+    <= 0.835616      1062 tr  804 bets  35% win  -0.028±0.047  boot5th -0.089
+    > 0.835616       1061 tr  752 bets  37% win  -0.008±0.049  boot5th -0.056
+    spread +0.161 vs MDE 0.151 [pass]   best bucket bootstrap [pass]   split-half [holds]   ->  SURVIVES
+
+H3b raid body / range   (4247 trades, MDE 0.151 R/bet)
+    <= 0.211009      1062 tr  786 bets  37% win  +0.033±0.049  boot5th -0.030
+    <= 0.4           1063 tr  800 bets  37% win  +0.048±0.049  boot5th -0.013
+    <= 0.603639      1061 tr  787 bets  39% win  +0.064±0.049  boot5th -0.004
+    > 0.603639       1061 tr  785 bets  34% win  -0.032±0.048  boot5th -0.101
+    spread +0.096 vs MDE 0.151 [FAIL — unreadable]   best bucket bootstrap [FAIL — few symbols]   split-half [holds]   ->  no
+
+H7  pool age, bars   (4247 trades, MDE 0.151 R/bet)
+    <= 10            1104 tr  772 bets  36% win  +0.005±0.049  boot5th -0.057
+    <= 19            1054 tr  782 bets  35% win  -0.011±0.048  boot5th -0.066
+    <= 43            1029 tr  786 bets  40% win  +0.088±0.049  boot5th +0.024  OK
+    > 43             1060 tr  780 bets  37% win  +0.023±0.048  boot5th -0.040
+    spread +0.099 vs MDE 0.151 [FAIL — unreadable]   best bucket bootstrap [pass]   split-half [holds]   ->  no
+
+H8  pivot count   (4247 trades, MDE 0.151 R/bet)
+    <= 2             2705 tr 1734 bets  36% win  -0.001±0.032  boot5th -0.044
+    <= 3             1005 tr  762 bets  38% win  +0.098±0.050  boot5th +0.034  OK
+    > 3               537 tr  422 bets  37% win  +0.063±0.067  boot5th -0.026
+    spread +0.098 vs MDE 0.151 [FAIL — unreadable]   best bucket bootstrap [pass]   split-half [holds]   ->  no
+
+H2  sweep to MSS, bars   (590 trades, MDE 0.351 R/bet)
+    <= 3              164 tr  146 bets  35% win  +0.016±0.116  boot5th -0.148
+    <= 6              146 tr  133 bets  45% win  +0.313±0.126  boot5th +0.159  OK
+    <= 10             134 tr  125 bets  31% win  -0.041±0.123  boot5th -0.223
+    > 10              146 tr  130 bets  38% win  +0.018±0.119  boot5th -0.112
+    spread +0.354 vs MDE 0.351 [pass]   best bucket bootstrap [pass]   split-half [holds]   ->  SURVIVES
+
+H4  displacement range / ATR   (590 trades, MDE 0.351 R/bet)
+    <= 1.03695        148 tr  137 bets  32% win  -0.047±0.118  boot5th -0.189
+    <= 1.44571        148 tr  139 bets  40% win  +0.173±0.121  boot5th +0.032  OK
+    <= 1.963          147 tr  137 bets  39% win  +0.084±0.120  boot5th -0.120
+    > 1.963           147 tr  117 bets  39% win  +0.128±0.127  boot5th -0.054
+    spread +0.220 vs MDE 0.351 [FAIL — unreadable]   best bucket bootstrap [pass]   split-half [holds]   ->  no
+
+H4b displacement body / range   (590 trades, MDE 0.351 R/bet)
+    <= 0.540639       148 tr  138 bets  38% win  +0.088±0.121  boot5th -0.075
+    <= 0.703704       148 tr  140 bets  37% win  +0.083±0.120  boot5th -0.074
+    <= 0.819672       147 tr  133 bets  39% win  +0.107±0.122  boot5th -0.032
+    > 0.819672        147 tr  124 bets  36% win  +0.020±0.122  boot5th -0.160
+    spread +0.087 vs MDE 0.351 [FAIL — unreadable]   best bucket bootstrap [FAIL — few symbols]   split-half [FLIPS]   ->  no
+
+H9  MSS to FVG, bars   (590 trades, MDE 0.351 R/bet)
+    <= 0              276 tr  241 bets  36% win  +0.027±0.090  boot5th -0.084
+    <= 1              237 tr  206 bets  39% win  +0.139±0.098  boot5th +0.013  OK
+    > 1                77 tr   73 bets  38% win  +0.034±0.159  boot5th -0.180
+    spread +0.112 vs MDE 0.351 [FAIL — unreadable]   best bucket bootstrap [pass]   split-half [FLIPS]   ->  no
+
+liquidity source   (4247 trades, MDE 0.151)
+    Pivot            3412 tr 2040 bets  37% win  +0.033±0.030  boot5th -0.017
+    Day               835 tr  617 bets  37% win  +0.045±0.054  boot5th -0.016
+
+TRANSFER TEST — H2's 4-6 bar bucket, pre-registered   (794 Min15 confirmed trades)
+    in    209 tr  33% win  -0.087±0.098   bootstrap 5th -0.208
+    out   585 tr  37% win  +0.032±0.060
+    difference -0.120  |z| 1.04   ->  FAILS — WRONG SIGN
+    Min15 shape, for comparison with Min30's:
+      1-3      224 tr  35% win  -0.055±0.095
+      4-6      209 tr  33% win  -0.087±0.098
+      7-11     193 tr  35% win  -0.076±0.101
+      12-20    115 tr  43% win  +0.248±0.137
+      >20       53 tr  42% win  +0.167±0.195

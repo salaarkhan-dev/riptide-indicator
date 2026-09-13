@@ -1,0 +1,25 @@
+300 USDT · 10x · target 2R · 41.6 days · maker/taker fees
+'ret/DD' is return divided by max drawdown — the column that matters.
+
+  rules                              trades   win      end     ret  maxDD  ret/DD lose run  blocked
+  everything, no rules                  982   40%      562    +87%    34%    2.54       23      333
+  max 12 open                           859   39%      544    +81%    27%    3.00       16      456
+  max 8 open                            634   40%      469    +56%    28%    1.98       14      681
+  max 5 open                            435   38%      307     +2%    39%    0.06        9      880
+  max 3 open                            265   39%      326     +9%    20%    0.43       12     1050
+  max 8, max 5 same direction           619   40%      514    +71%    18%    3.95       12      696
+  max 8, max 3 same direction           462   39%      394    +31%    15%    2.09       11      853
+  max 8, 3 slots for confirmed          491   43%      667   +122%    32%    3.83       10      824
+  max 8, early needs BTC                517   39%      424    +41%    37%    1.12       15      798
+  max 8, stop day at -4%                547   41%      567    +89%    18%    4.90       11      768
+  max 8, stop day at -6%                600   41%      608   +103%    18%    5.64       14      715
+  max 8, stop day at -10%               625   40%      515    +72%    25%    2.89       14      690
+  ALL RULES                             305   39%      376    +25%    28%    0.90       13     1010
+  ALL RULES, flat sizing                310   39%      365    +22%    21%    1.02       13     1005
+  ALL RULES, risk 2%                    250   43%      649   +116%    36%    3.24        9     1065
+  ALL RULES, risk 0.5%                  324   38%      316     +5%    17%    0.31       13      991
+
+  best by return per unit of drawdown:
+    max 8, stop day at -6%              +103% / 18% DD  = 5.64
+    max 8, stop day at -4%               +89% / 18% DD  = 4.90
+    max 8, max 5 same direction          +71% / 18% DD  = 3.95

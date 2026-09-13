@@ -277,10 +277,19 @@ regions. In rough order of effectiveness:
    `oci compute instance launch` until it succeeds. Not required, and not
    something to leave running unattended for days.
 
-An x86 `VM.Standard.E2.1.Micro` Always Free instance is almost always
-available as a fallback. It would run this bot fine — but `install.sh`
-asserts `aarch64`, so tell me if you go that route and I will adjust the
-check.
+**The x86 fallback is fine.** `VM.Standard.E2.1.Micro` (1/8 OCPU, 1 GB) is
+Always Free, almost always available, and not subject to the A1 capacity
+fight. `install.sh` accepts it and warns rather than failing.
+
+The bot is pure Python with no ARM-specific anything, and the workload is
+tiny — measured: **9 ms of engine CPU per symbol** and **36 MB RSS**. Even
+the full ~1000-symbol market projects to roughly a minute of engine CPU on a
+throttled burstable core, against a 30-minute bar. The A1 shape buys headroom
+you will not use.
+
+Two caveats on the micro: at 1 GB, add swap before widening
+`RIPTIDE_SYMBOLS` to the whole market, and idle reclamation still applies to
+Always Free accounts regardless of shape.
 
 ### Idle instance reclamation — relevant to this bot
 

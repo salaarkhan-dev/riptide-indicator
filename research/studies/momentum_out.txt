@@ -1,0 +1,90 @@
+Break-and-retest — the momentum mirror of Liquidity Entry Zones
+30 symbols · daily trend REQUIRED, not filtered · 24 descriptive cells, one pre-declared primary
+
+====================================================================================================
+Min30   83 days across 30 symbols, split in half
+====================================================================================================
+  discovery 1979 signals / 5765 control      held out 1773 / 5147
+  median retest depth 0.34 ATR below the breakout close
+
+  ALL 24 CELLS on the discovery half, by EDGE (descriptive — the primary below is what counts)
+  cell                           n   win   risk ctl risk    R/sig  control     EDGE     SE
+  market struct 3R  POI        425   28%  0.87%    0.51%   -0.079   -0.383   +0.304  +2.9  RISK MISMATCH
+  market struct 2R  POI        425   34%  0.87%    0.51%   -0.170   -0.381   +0.210  +2.4  RISK MISMATCH
+  market struct 3R  ---       1975   27%  0.98%    0.62%   -0.129   -0.283   +0.154  +3.1  RISK MISMATCH
+  market struct 2R  ---       1975   34%  0.98%    0.62%   -0.169   -0.317   +0.148  +3.6  RISK MISMATCH
+  retest struct 2R  POI        366   27%  0.60%    0.51%   -0.172   -0.310   +0.138  +1.4  RISK MISMATCH
+  retest struct 3R  ---       1691   23%  0.68%    0.61%   -0.106   -0.233   +0.127  +2.2  RISK MISMATCH
+  retest struct 2R  ---       1691   29%  0.68%    0.61%   -0.151   -0.276   +0.125  +2.7  RISK MISMATCH
+  retest struct 3R  POI        366   21%  0.60%    0.51%   -0.133   -0.223   +0.090  +0.7  RISK MISMATCH
+  market 1.5    3R  POI        426   32%  1.13%    1.14%   +0.119   +0.039   +0.079  +0.8  
+  retest 1.5    3R  POI        426   27%  1.14%    1.14%   +0.176   +0.113   +0.063  +0.7  
+  retest 1.0    3R  ---       1979   24%  0.86%    0.89%   +0.020   -0.030   +0.049  +1.1  
+  market 1.0    3R  ---       1979   29%  0.85%    0.89%   -0.023   -0.067   +0.045  +0.9  
+  retest 1.0    2R  ---       1979   31%  0.86%    0.89%   -0.015   -0.059   +0.044  +1.2  
+  retest 1.5    3R  ---       1979   25%  1.28%    1.34%   +0.088   +0.058   +0.030  +0.7  
+  retest 1.5    2R  ---       1979   32%  1.28%    1.34%   +0.047   +0.029   +0.018  +0.5  
+  market 1.0    2R  ---       1979   36%  0.85%    0.89%   -0.105   -0.114   +0.010  +0.2  
+  market 1.5    2R  ---       1979   37%  1.28%    1.33%   +0.001   -0.008   +0.009  +0.2  
+  market 1.0    3R  POI        426   30%  0.76%    0.76%   -0.006   -0.014   +0.007  +0.1  
+  market 1.5    3R  ---       1979   29%  1.28%    1.33%   +0.034   +0.029   +0.005  +0.1  <- PRIMARY
+  retest 1.5    2R  POI        426   33%  1.14%    1.14%   +0.098   +0.104   -0.006  -0.1  
+  market 1.5    2R  POI        426   38%  1.13%    1.14%   +0.030   +0.055   -0.025  -0.3  
+  market 1.0    2R  POI        426   34%  0.76%    0.76%   -0.167   -0.098   -0.069  -0.9  
+  retest 1.0    3R  POI        426   23%  0.76%    0.76%   +0.003   +0.100   -0.096  -1.0  
+  retest 1.0    2R  POI        426   28%  0.76%    0.76%   -0.073   +0.034   -0.107  -1.4  
+
+  NOISE FLOOR — the same 24 questions asked of the control, one half against the other:
+    best cell scores EDGE +0.250  (retest struct 3R  POI)
+
+  HELD OUT — the older half, one shot, on the PRE-DECLARED primary cell only
+    cell        market entry, 1.5 ATR stop, 3R, no POI
+    n           1773   win 23%
+    R/signal    -0.201 ± 0.040
+    control     -0.140
+    EDGE        -0.062 ± 0.047   -1.3 SE
+    => FAILS — the bar was EDGE > 0 AND R/signal > 0, fixed before the run
+
+====================================================================================================
+Min15   83 days across 30 symbols, split in half
+====================================================================================================
+  discovery 4013 signals / 11686 control      held out 3508 / 10169
+  median retest depth 0.35 ATR below the breakout close
+
+  ALL 24 CELLS on the discovery half, by EDGE (descriptive — the primary below is what counts)
+  cell                           n   win   risk ctl risk    R/sig  control     EDGE     SE
+  market struct 2R  POI        790   36%  0.58%    0.36%   -0.215   -0.425   +0.211  +3.2  RISK MISMATCH
+  market struct 3R  POI        790   26%  0.58%    0.36%   -0.257   -0.414   +0.157  +2.0  RISK MISMATCH
+  market struct 2R  ---       4003   32%  0.67%    0.45%   -0.324   -0.465   +0.142  +4.8  RISK MISMATCH
+  retest struct 2R  POI        655   29%  0.40%    0.35%   -0.256   -0.394   +0.138  +1.8  RISK MISMATCH
+  market struct 3R  ---       4003   25%  0.67%    0.45%   -0.322   -0.452   +0.130  +3.6  RISK MISMATCH
+  retest struct 3R  POI        655   22%  0.40%    0.35%   -0.235   -0.339   +0.104  +1.1  RISK MISMATCH
+  retest struct 2R  ---       3314   28%  0.47%    0.43%   -0.322   -0.368   +0.046  +1.3  
+  retest struct 3R  ---       3314   21%  0.47%    0.43%   -0.315   -0.318   +0.002  +0.1  
+  market 1.5    3R  POI        795   29%  0.78%    0.80%   -0.034   +0.002   -0.036  -0.5  
+  retest 1.0    2R  ---       4013   30%  0.60%    0.63%   -0.145   -0.101   -0.043  -1.7  
+  market 1.0    2R  POI        795   34%  0.52%    0.53%   -0.239   -0.194   -0.045  -0.7  
+  retest 1.0    2R  POI        795   30%  0.52%    0.54%   -0.098   -0.040   -0.058  -1.0  
+  retest 1.5    3R  ---       4013   24%  0.90%    0.94%   -0.048   +0.012   -0.060  -1.9  
+  retest 1.5    3R  POI        795   24%  0.78%    0.80%   +0.006   +0.069   -0.063  -0.9  
+  retest 1.0    3R  ---       4013   22%  0.60%    0.63%   -0.143   -0.065   -0.079  -2.5  
+  retest 1.5    2R  ---       4013   30%  0.90%    0.94%   -0.093   -0.011   -0.082  -3.3  
+  market 1.5    3R  ---       4013   26%  0.90%    0.94%   -0.124   -0.041   -0.083  -2.5  <- PRIMARY
+  market 1.5    2R  ---       4013   34%  0.90%    0.94%   -0.158   -0.075   -0.083  -3.1  
+  market 1.0    2R  ---       4013   33%  0.60%    0.63%   -0.288   -0.199   -0.089  -3.3  
+  market 1.0    3R  ---       4013   25%  0.60%    0.63%   -0.264   -0.168   -0.096  -2.9  
+  retest 1.5    2R  POI        795   30%  0.78%    0.80%   -0.067   +0.029   -0.096  -1.7  
+  retest 1.0    3R  POI        795   23%  0.52%    0.54%   -0.115   -0.004   -0.111  -1.6  
+  market 1.5    2R  POI        795   34%  0.78%    0.80%   -0.145   -0.032   -0.113  -1.9  
+  market 1.0    3R  POI        795   26%  0.52%    0.53%   -0.249   -0.132   -0.117  -1.6  
+
+  NOISE FLOOR — the same 24 questions asked of the control, one half against the other:
+    best cell scores EDGE +0.183  (retest struct 2R  POI)
+
+  HELD OUT — the older half, one shot, on the PRE-DECLARED primary cell only
+    cell        market entry, 1.5 ATR stop, 3R, no POI
+    n           3508   win 24%
+    R/signal    -0.212 ± 0.029
+    control     -0.199
+    EDGE        -0.013 ± 0.034   -0.4 SE
+    => FAILS — the bar was EDGE > 0 AND R/signal > 0, fixed before the run

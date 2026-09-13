@@ -1,0 +1,43 @@
+THIRTY-ONE FEATURES, WITH AN EMPIRICAL NULL
+3766 early signals · 31 features · 300 random controls
+signal timeframe Min30 · higher timeframes Hour4, Hour8, Day1
+
+THE NULL — |SE| from 300 random features on this same data:
+  median 0.63   p90 1.59   p95 1.79   p99 2.33   max 2.93
+  2% of PURE NOISE features clear 2 SE. That is why 2 SE is not the bar here.
+
+  feature                                    kept     diff     SE   held out    
+  close vs EMA100 with  [Hour8]              46%   +0.108   +2.7    +1.0 SE  <-- beats null p95
+  close vs EMA200 with  [Hour4]              46%   +0.098   +2.4    +0.4 SE  <-- beats null p95
+  close vs EMA51 with  [Day1]                49%   +0.093   +2.3    +1.3 SE  <-- beats null p95
+  close vs EMA21 with  [Day1]                48%   +0.089   +2.2    +0.3 SE  <-- beats null p95
+  close vs EMA51 with  [Hour8]               46%   +0.078   +2.0    +0.3 SE  <-- beats null p95
+  close vs EMA100 with  [Hour4]              44%   +0.075   +1.9    +0.3 SE  <-- beats null p95
+  close vs EMA200 with  [Hour8]              47%   +0.070   +1.7    +1.7 SE
+  3+ bars into the raid  [Min30]             29%   -0.068   -1.5    +0.5 SE
+  SuperTrend(10,1.8) with  [Day1]            48%   +0.062   +1.5    +0.1 SE
+  SuperTrend(10,1.8) with  [Hour8]           48%   +0.059   +1.5    +0.3 SE
+  close vs EMA200 with  [Min30]              41%   +0.056   +1.3    +1.4 SE
+  close vs VWAP with  [Min30]                61%   +0.044   +1.1    +0.5 SE
+  ADX(14,14) > 20  [Hour8]                   71%   +0.046   +1.0    +0.3 SE
+  close vs EMA100 with  [Day1]               49%   +0.039   +1.0    +1.6 SE
+  ADX(14,14) > 20  [Day1]                    69%   +0.039   +0.9    +0.8 SE
+  close vs EMA21 with  [Min30]               57%   +0.032   +0.8    +0.2 SE
+  SuperTrend(10,1.8) with  [Min30]           45%   +0.029   +0.7    +0.5 SE
+  close vs EMA21 with  [Hour8]               43%   +0.029   +0.7    +0.4 SE
+  close vs EMA100 with  [Min30]              41%   +0.020   +0.5    +0.6 SE
+  entry past 50% of the raid leg  [Min30]    97%   -0.055   -0.5    -0.8 SE
+  close vs EMA51 with  [Hour4]               40%   +0.018   +0.4    -0.7 SE
+  MACD hist with  [Hour4]                    43%   +0.016   +0.4    -0.2 SE
+  close vs EMA51 with  [Min30]               44%   +0.013   +0.3    -0.3 SE
+  close vs EMA200 with  [Day1]               50%   -0.012   -0.3    +1.6 SE
+  MACD hist with  [Min30]                    46%   +0.009   +0.2    +0.4 SE
+  MACD hist with  [Hour8]                    47%   +0.009   +0.2    -0.6 SE
+  MACD hist with  [Day1]                     48%   +0.006   +0.1    -0.6 SE
+  close vs EMA21 with  [Hour4]               35%   -0.005   -0.1    +0.7 SE
+  SuperTrend(10,1.8) with  [Hour4]           44%   +0.005   +0.1    +0.8 SE
+  ADX(14,14) > 20  [Hour4]                   65%   -0.004   -0.1    +0.4 SE
+  ADX(14,14) > 20  [Min30]                   62%   +0.003   +0.1    +0.4 SE
+
+PRE-REGISTERED: clear the null's p95 (1.79 SE) on the full panel AND
+hold the sign on the held-out half. Both.

@@ -1,0 +1,45 @@
+THE CIRCULAR-SHIFT NULL — the strict one
+3766 early signals · 300 rotations per feature
+
+  feature                                      SE  null p95  null max   held out
+  close vs EMA21 with  [Hour4]               -0.1      1.97      3.57    +0.7 SE
+  close vs EMA51 with  [Hour4]               +0.4      2.13      3.43    -0.7 SE
+  close vs EMA100 with  [Hour4]              +1.9      1.92      3.32    +0.3 SE
+  close vs EMA200 with  [Hour4]              +2.4      1.90      3.16    +0.4 SE  <-- clears
+  close vs EMA21 with  [Hour8]               +0.7      2.06      2.92    +0.4 SE
+  close vs EMA51 with  [Hour8]               +2.0      1.83      3.05    +0.3 SE  <-- clears
+  close vs EMA100 with  [Hour8]              +2.7      1.98      2.74    +1.0 SE  <-- clears
+  close vs EMA200 with  [Hour8]              +1.7      1.76      2.97    +1.7 SE
+  close vs EMA21 with  [Day1]                +2.2      1.87      3.08    +0.3 SE  <-- clears
+  close vs EMA51 with  [Day1]                +2.3      1.92      2.61    +1.3 SE  <-- clears
+  close vs EMA100 with  [Day1]               +1.0      1.92      2.65    +1.6 SE
+  close vs EMA200 with  [Day1]               -0.3      1.77      2.85    +1.6 SE
+  SuperTrend(10,1.8) with  [Hour8]           +1.5      2.04      2.55    +0.3 SE
+
+CONDITIONAL ON THE DEPLOYED FILTER — the grade already requires the Hour8
+trend to agree, so a survivor must still separate INSIDE each bucket.
+
+  close vs EMA200 with  [Hour4]
+                                     n     diff     SE
+    Hour8 trend AGREES            1226   +0.102   +1.6
+    Hour8 trend against            492   +0.084   +1.3
+
+  close vs EMA51 with  [Hour8]
+                                     n     diff     SE
+    Hour8 trend AGREES            1335   +0.058   +0.9
+    Hour8 trend against            388   +0.075   +1.1
+
+  close vs EMA100 with  [Hour8]
+                                     n     diff     SE
+    Hour8 trend AGREES            1245   +0.124   +2.0
+    Hour8 trend against            505   +0.088   +1.4
+
+  close vs EMA21 with  [Day1]
+                                     n     diff     SE
+    Hour8 trend AGREES            1306   +0.074   +1.1
+    Hour8 trend against            490   +0.097   +1.5
+
+  close vs EMA51 with  [Day1]
+                                     n     diff     SE
+    Hour8 trend AGREES            1224   +0.098   +1.6
+    Hour8 trend against            604   +0.078   +1.3

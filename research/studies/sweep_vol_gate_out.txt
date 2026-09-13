@@ -1,0 +1,23 @@
+SWEEP VOLUME AS THE HEADS-UP GATE
+9419 sweeps · 60 symbols · 42 days
+conversion = a confirmed setup or an early signal came off the SAME raid
+
+1. REPRODUCTION — conversion by raid-bar volume quintile
+   (context.py: 26.4% -> 6.5%, monotone, +15.6 SE over 7869 sweeps)
+                                          n   share    per day   converts     SE
+  Q1  rvol 0.00-0.98                   1883     20%        0.8      14.3%    0.8
+  Q2  rvol 0.98-1.55                   1884     20%        0.8       9.7%    0.7
+  Q3  rvol 1.55-2.37                   1882     20%        0.8       6.1%    0.5
+  Q4  rvol 2.37-4.12                   1885     20%        0.8       4.6%    0.5
+  Q5  rvol 4.12-inf                    1885     20%        0.8       2.4%    0.4
+  Q1 minus Q5                                                     +11.9pp   +13.5 SE   monotone
+
+2. GATES HEAD TO HEAD — the two numbers a heads-up lives by
+                                          n   share    per day   converts     SE
+  every sweep                          9419    100%        3.8       7.4%    0.3
+  distance only (<3%, live rule)       4308     46%        1.7      13.3%    0.5
+  volume only (rvol < 0.98)            1883     20%        0.8      14.3%    0.8
+  both                                 1240     13%        0.5      18.0%    1.1
+
+  'per day' is per SYMBOL-day; multiply by 60 for the chat.
+  A gate is better if it converts more at the same or fewer messages.

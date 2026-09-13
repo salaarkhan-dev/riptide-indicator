@@ -1,0 +1,22 @@
+PATH-DEPENDENT EXITS
+9699 A/B signals, 110 symbols, 333 days.
+5656 reached 1R (58%); median 7 bars to get there, median give-back 0.96 R.
+
+-- the conditional probabilities, observational -----------------------------
+  fast to 1R (<= 7 bars)        2969   reach 2R  57%   reach 3R  41%
+  slow to 1R (> 7 bars)         2687   reach 2R  29%   reach 3R  17%
+  clean (give-back <= 0.96R)    2829   reach 2R  60%   reach 3R  41%
+  choppy (give-back > 0.96R)    2828   reach 2R  28%   reach 3R  19%
+
+-- policies, paired on all 9699 signals ---------------------------
+  policy                         R/sig    vs 2R               
+  CONTROL  plain 2R             +0.012   +0.000  ±0.000   +0.0 SE
+  flat 3R                       +0.028   +0.016  ±0.008   +2.1 SE   BEATS IT
+  2R -> lock 2R, run 3R         +0.023   +0.010  ±0.005   +1.9 SE
+  2R -> lock 1.5R, run 3R       +0.022   +0.009  ±0.006   +1.6 SE
+  fast to 1R -> 3R              +0.025   +0.013  ±0.007   +1.9 SE
+  clean to 1R -> 3R             +0.022   +0.009  ±0.007   +1.5 SE
+  fast AND clean -> 3R          +0.023   +0.011  ±0.006   +1.8 SE
+  slow to 1R -> take 1R         +0.003   -0.009  ±0.005   -1.9 SE
+  choppy to 1R -> take 1R       +0.002   -0.010  ±0.005   -2.2 SE   worse
+  fast to 1R -> lock 2R run 3R  +0.018   +0.006  ±0.005   +1.2 SE
