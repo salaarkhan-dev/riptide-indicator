@@ -1,0 +1,261 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0
+// ══════════════════════════════════════════════════════════════════════════════════════════════════ //
+//  Riptide Scalper STRATEGY — LSR-4 + 5m trend agreement
+//
+//  The backtestable twin of riptide-scalper.pine. Same model, same defaults,
+//  but it places orders so TradingView can score it.
+//
+//  WHAT IT TRADES. Price dips below the previous completed 5-minute bar's low,
+//  closes back above it, the first 1-minute fair-value gap after that reclaim
+//  is the limit entry, and the stop goes beyond the raid. Mirrored for shorts.
+//  One filter: the 5-minute supertrend must agree with the trade.
+//
+//  WHAT WAS MEASURED, in research/studies/, over 14 liquid zero-fee symbols and
+//  30 days of 1m data — the whole history MEXC serves at that resolution:
+//
+//      base model, 0.6% stop floor, 2R     held out  +0.199 R net
+//      + 5m trend agreement                held out  +0.42  R net, 46% of trades
+//      traded backwards (control)                    -0.28  R
+//
+//      the trend filter was chosen on one half and read once on the other, and
+//      EMA and supertrend — two separate measures of the same thing — both held
+//      at about the same size with symmetric losing counter-sides.
+//
+//  THREE THINGS THIS BACKTEST WILL NOT AGREE WITH, and none are bugs:
+//
+//   1. ONE SYMBOL AT A TIME. The research number is an average over fourteen.
+//      Any single symbol will land somewhere either side of it.
+//   2. MEXC CHARGES MAKER ON THE ENTRY AND THE TARGET. Both rest as limits and
+//      never cross the book; only the stop is a market order. TradingView
+//      applies one commission to every fill, so the default below OVERSTATES
+//      the cost — which is the safe direction to be wrong in.
+//   3. IT IS NOT A SCALP. Median time to resolve is 58 minutes and a third of
+//      trades reach neither side inside two hours. A 0.6% stop on a symbol
+//      whose 1-minute bar moves 0.04% is fifteen times its 1m ATR. This is a
+//      one-hour mean-reversion trade triggered by a 1-minute pattern, and it
+//      should be judged as one.
+//
+//  NOT DEPLOYED. Riptide's Min30 strategy is frozen and remains the control.
+//  30 days is a short window, the halves are 15 days each, and nothing here has
+//  been through an account simulator where ~460 signals a day meets a slot cap.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════ //
+//@version=6
+strategy('Riptide Scalper Strategy', 'RIPTIDE SCALP S', overlay = true,
+   initial_capital = 300,
+   default_qty_type = strategy.percent_of_equity, default_qty_value = 100,
+   commission_type = strategy.commission.percent, commission_value = 0.02,
+   slippage = 2,
+   process_orders_on_close = false,
+   calc_on_every_tick = false,
+   max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500)
+
+// ─────────────────────────────────────────────────────────────────────── inputs
+
+g_setup = 'Setup'
+g_risk  = 'Risk & Targets'
+g_filt  = 'Filter — the only one that held out'
+g_disp  = 'Display'
+
+htf = input.timeframe('5', 'Liquidity timeframe', group = g_setup, tooltip = 'Which timeframe supplies the level being raided. The measured model used the previous COMPLETED 5-minute bar, read on a 1-minute chart.')
+maxWaitRaid = input.int(240, 'Bars a level stays live', minval = 10, maxval = 1000, group = g_setup)
+maxWaitFvg  = input.int(25, 'Bars to find the gap', minval = 3, maxval = 100, group = g_setup)
+fillBars    = input.int(10, 'Bars the limit waits', minval = 1, maxval = 60, group = g_setup, tooltip = 'How long the limit works before it is cancelled. 10 bars, the same rule Riptide\'s tracker uses. A setup that has not pulled back in ten minutes has moved on without you.')
+
+riskPctInput = input.float(0.5, 'Risk per trade (%)', minval = 0.1, maxval = 5, step = 0.1, group = g_risk, tooltip = 'Percent of equity risked per trade. Position size is derived from this and the stop distance — notional = equity x risk% / stop%. Sizing by a fixed notional instead is what makes a wide stop feel punishing: it is not a worse trade, it is a bigger one.')
+rTarget    = input.float(2.0, 'Target (R)', minval = 0.25, maxval = 5, step = 0.25, group = g_risk, tooltip = 'Measured gross R per trade: 0.75R +0.094, 1.5R +0.152, 2.0R +0.202. Monotone in this sample. Win rate falls to 42% at 2R and it is still the best column.')
+stopPad    = input.float(0.05, 'Stop padding (%)', minval = 0, maxval = 1, step = 0.01, group = g_risk)
+minStopPct = input.float(0.6, 'Minimum stop (%)', minval = 0, maxval = 3, step = 0.05, group = g_risk, tooltip = 'A floor on the stop distance. 0.6% is what was measured and it is doing real work: cost in R is spread / stop%, so the floor is what stops the spread deciding the trade. It also makes the hold about an hour — see the header.')
+
+useTrend  = input.bool(true, 'Require 5m trend agreement', group = g_filt, tooltip = 'The one filter that survived a held-out test. Six families were tried — direction, EMA, funding, RVOL, ADX, supertrend — on a pre-registered list, chosen on one half and read once on the other.\n\nEMA and supertrend, two separate measures of the same thing, BOTH held:\n  EMA with trend    +0.211      against  -0.174\n  ST  agrees        +0.196      opposes  -0.165\n\nFunding (+0.001) and RVOL (+0.005) were flat, which is what tells you the table can still show a null.\n\nThe mechanism in one line: this is a mean-reversion entry and it should not be used to fade a trending 5m move.')
+stFactor  = input.float(3.0, 'Supertrend factor', minval = 1, maxval = 10, step = 0.5, group = g_filt)
+stPeriod  = input.int(10, 'Supertrend ATR period', minval = 2, maxval = 50, group = g_filt)
+
+showLevels = input.bool(true, 'Liquidity levels', group = g_disp)
+showTrade  = input.bool(true, 'Trade zones', group = g_disp)
+colLong    = input.color(#26a69a, 'Long', inline = 'c', group = g_disp)
+colShort   = input.color(#ef5350, 'Short', inline = 'c', group = g_disp)
+
+// ──────────────────────────────────────────────────────── the liquidity levels
+
+// lookahead_off AND the [1] offset are both required. Without them this reads a
+// bar that has not finished, and the result is a strategy that backtests
+// beautifully and cannot be traded.
+htfHigh = request.security(syminfo.tickerid, htf, high[1], lookahead = barmerge.lookahead_off)
+htfLow  = request.security(syminfo.tickerid, htf, low[1],  lookahead = barmerge.lookahead_off)
+newHtf  = ta.change(htfHigh) != 0 or ta.change(htfLow) != 0
+
+// THE SUPERTREND SIGN IS THE ONE THING TO GET RIGHT HERE. Pine's ta.supertrend
+// returns direction = -1 for an UPTREND and +1 for a downtrend, which is the
+// opposite of what the name suggests. This project already lost a conclusion to
+// exactly that inversion once — a sign bug flipped the label on every BTC
+// measurement it ever made — so it is written out rather than inlined.
+[_stLine, stDir] = ta.supertrend(stFactor, stPeriod)
+stUpRaw = stDir < 0
+stUp = request.security(syminfo.tickerid, htf, stUpRaw, lookahead = barmerge.lookahead_off)
+
+var float liqHigh   = na
+var int   liqHighAt = na
+var float liqLow    = na
+var int   liqLowAt  = na
+if newHtf
+    liqHigh   := htfHigh
+    liqHighAt := bar_index
+    liqLow    := htfLow
+    liqLowAt  := bar_index
+
+// ────────────────────────────────────────────────────────────── state machines
+
+var int   lState = 0
+var float lStop  = na
+var float lEntry = na
+var int   lSince = 0
+var int   sState = 0
+var float sStop  = na
+var float sEntry = na
+var int   sSince = 0
+
+// A raid is a wick THROUGH the level with a close back on the original side.
+// Through without a reclaim is a breakout; a reclaim without a wick through
+// never took the liquidity at all.
+raidLong  = not na(liqLow)  and bar_index - liqLowAt  <= maxWaitRaid and low  < liqLow  and close > liqLow
+raidShort = not na(liqHigh) and bar_index - liqHighAt <= maxWaitRaid and high > liqHigh and close < liqHigh
+
+bullGap = low > high[2]
+bearGap = high < low[2]
+
+if lState == 0 and raidLong
+    lState := 1
+    lSince := 0
+    lStop  := low
+else if lState == 1
+    lSince += 1
+    lStop  := math.min(lStop, low)
+    if bullGap
+        lState := 2
+        lSince := 0
+        lEntry := low
+    else if lSince > maxWaitFvg
+        lState := 0
+else if lState == 2
+    lSince += 1
+    if low <= lEntry or lSince > fillBars
+        lState := 0
+
+if sState == 0 and raidShort
+    sState := 1
+    sSince := 0
+    sStop  := high
+else if sState == 1
+    sSince += 1
+    sStop  := math.max(sStop, high)
+    if bearGap
+        sState := 2
+        sSince := 0
+        sEntry := high
+    else if sSince > maxWaitFvg
+        sState := 0
+else if sState == 2
+    sSince += 1
+    if high >= sEntry or sSince > fillBars
+        sState := 0
+
+// ────────────────────────────────────────────────────────── prices and sizing
+
+f_stopFor(bool isLong, float entry, float raw) =>
+    float s = isLong ? raw - raw * stopPad / 100 : raw + raw * stopPad / 100
+    if minStopPct > 0
+        float d = entry * minStopPct / 100
+        s := isLong ? math.min(s, entry - d) : math.max(s, entry + d)
+    s
+
+// SIZE BY RISK, NEVER BY MARGIN. notional = equity x risk% / stop%, so the
+// dollar loss at the stop is the same whatever the stop distance. Leverage does
+// not enter this calculation at all — it sets the margin required, not the risk
+// taken, which is the single most common confusion about it.
+f_qty(float entry, float stop) =>
+    float dist = math.abs(entry - stop)
+    dist > 0 ? (strategy.equity * riskPctInput / 100) / dist : 0.0
+
+armLong  = lState == 2 and lState[1] != 2 and (not useTrend or stUp)
+armShort = sState == 2 and sState[1] != 2 and (not useTrend or not stUp)
+
+// ────────────────────────────────────────────────────────────────────── orders
+
+if armLong
+    e = lEntry
+    s = f_stopFor(true, e, lStop)
+    q = f_qty(e, s)
+    if q > 0
+        strategy.entry('L', strategy.long, qty = q, limit = e)
+        strategy.exit('Lx', from_entry = 'L', stop = s, limit = e + (e - s) * rTarget)
+
+if armShort
+    e = sEntry
+    s = f_stopFor(false, e, sStop)
+    q = f_qty(e, s)
+    if q > 0
+        strategy.entry('S', strategy.short, qty = q, limit = e)
+        strategy.exit('Sx', from_entry = 'S', stop = s, limit = e - (s - e) * rTarget)
+
+// The limit does not rest forever. Ten bars, then it is cancelled — a setup
+// that has not pulled back has moved on, and chasing it is the most expensive
+// habit this project has measured.
+if lState == 0 and lState[1] == 2
+    strategy.cancel('L')
+if sState == 0 and sState[1] == 2
+    strategy.cancel('S')
+
+// ────────────────────────────────────────────────────────────────────── drawing
+//
+// Objects, not plot(). plot(..., style_linebr) on a level draws one step per
+// HTF bar across the whole history, which on a 1m chart is a staircase over
+// every candle. One line, moved and deleted.
+
+EXT   = 10
+LOOKB = 60
+var line hiLn = na
+var line loLn = na
+
+f_level(line ln, float px, int since, color c, bool show) =>
+    line out = ln
+    if show and not na(px)
+        int left = math.max(since, bar_index - LOOKB)
+        if na(out)
+            out := line.new(left, px, bar_index + EXT, px, color = c, width = 1, style = line.style_dotted)
+        else
+            line.set_xy1(out, left, px)
+            line.set_xy2(out, bar_index + EXT, px)
+    else if not na(out)
+        line.delete(out)
+        out := na
+    out
+
+hiAlive = showLevels and not na(liqHigh) and bar_index - liqHighAt <= maxWaitRaid and sState == 0
+loAlive = showLevels and not na(liqLow) and bar_index - liqLowAt <= maxWaitRaid and lState == 0
+hiLn := f_level(hiLn, liqHigh, liqHighAt, color.new(colShort, 40), hiAlive)
+loLn := f_level(loLn, liqLow, liqLowAt, color.new(colLong, 40), loAlive)
+
+plotshape(showTrade and armLong, 'Long armed', shape.triangleup, location.belowbar, colLong, size = size.tiny)
+plotshape(showTrade and armShort, 'Short armed', shape.triangledown, location.abovebar, colShort, size = size.tiny)
+
+// A trade blocked purely by the filter, so its cost is visible rather than
+// invisible. The filter keeps 46% of setups; this is the other 54%.
+blockedL = lState == 2 and lState[1] != 2 and useTrend and not stUp
+blockedS = sState == 2 and sState[1] != 2 and useTrend and stUp
+plotshape(showTrade and (blockedL or blockedS), 'Filtered out', shape.xcross, location.absolute, color.new(color.gray, 55), size = size.tiny)
+
+// ──────────────────────────────────────────────────────────────────── dashboard
+
+var table dash = table.new(position.top_right, 2, 5, border_width = 0, frame_width = 1, frame_color = #2a2e39)
+
+f_row(int r, string k, string v, color vc) =>
+    table.cell(dash, 0, r, k, text_color = #787b86, bgcolor = #131722, text_size = size.normal, text_halign = text.align_left)
+    table.cell(dash, 1, r, v, text_color = vc, bgcolor = #131722, text_size = size.normal, text_halign = text.align_right)
+
+if barstate.islast
+    pf = strategy.grossLoss > 0 ? strategy.grossProfit / strategy.grossLoss : na
+    f_row(0, 'RIPTIDE SCALP', htf + ' → ' + timeframe.period, #d1d4dc)
+    f_row(1, 'trades', str.tostring(strategy.closedtrades), #d1d4dc)
+    f_row(2, 'net', str.tostring(strategy.netprofit, '#.##'), strategy.netprofit >= 0 ? #26a69a : #f23645)
+    f_row(3, 'profit factor', na(pf) ? '—' : str.tostring(pf, '#.##'), na(pf) ? #787b86 : pf >= 1 ? #26a69a : #f23645)
+    f_row(4, 'trend filter', useTrend ? 'ON' : 'off', useTrend ? #26a69a : #787b86)

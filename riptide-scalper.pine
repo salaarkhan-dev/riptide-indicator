@@ -159,6 +159,9 @@ riskPx   = isLive ? math.abs(entryPx - stopPx) : na
 targetPx = isLive ? (liveLong ? entryPx + riskPx * rTarget : entryPx - riskPx * rTarget) : na
 riskPct  = isLive and entryPx > 0 ? 100 * riskPx / entryPx : na
 costR    = isLive and riskPct > 0 ? spreadPct / riskPct : na
+// Declared here with the other derived values. It lived in the drawing
+// section until that block was rewritten, which is how it went missing.
+tradeCol = liveLong ? colLong : colShort
 
 // ────────────────────────────────────────────────────────────────────── drawing
 //
