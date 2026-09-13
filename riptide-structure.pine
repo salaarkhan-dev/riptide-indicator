@@ -452,24 +452,31 @@ step(Deg d, bool nHi, float pHi, int pHiT, bool nLo, float pLo, int pLoT) =>
             d.runLoT   := time
     d
 
-// THE CASCADE IS A FRACTAL ON THE PIVOT STREAM, NOT A CHAIN OF REVERSALS.
+// THE CASCADE PROMOTES A SWING WHEN THE NEXT ONE DOES NOT EXCEED IT.
 //
-// It used to promote a pivot only when the degree below changed character. That
-// is far too lossy: deep printed four changes of character across two days, so
-// internal received four pivots and main received none, and a degree with four
-// pivots has levels spanning the entire chart. The panel showed it exactly —
-// "needs 1295.43 to continue, 807.87 to flip" with price at 1088.
+// This has been wrong twice, in opposite directions, and the second time was
+// subtle. Promoting only on a change of character starved the upper degrees
+// outright. Replacing that with a TWO-SIDED fractal — the swing either side
+// must be lower — looked principled and was still far too aggressive: it thins
+// the stream about fourfold per level, putting the three degrees at 42 / 16 / 5
+// events over three weeks. The reference carries roughly 50 / 34 / 25 over the
+// same window, so every label we drew sat one whole degree too deep: it
+// printed iBOS where we printed iiIDM, and Choch where we printed iiCHoCH.
 //
-// A swing of a higher degree is a swing that the swings either side of it did
-// not exceed. That is the classic swing-of-swings and it is still not a bar
-// count: it reads the pivot sequence, which is structure, not candles. It also
-// thins by roughly half per level instead of by ninety per cent, which is what
-// keeps all three degrees populated at once.
+// Looking only FORWARD is the right strength. It thins by about a third per
+// level and lands on 42 / 30 / 23, which is the reference's shape. Measured in
+// research/lit.py rather than guessed — the four candidate rules were swept
+// and printed side by side:
+//
+//     two-sided fractal   42 / 16 /  5
+//     higher-high         42 / 17 / 19
+//     one-sided (this)    42 / 30 / 23
+//     no thinning         42 / 33 / 32
+//
+// It is still not a bar count: it reads the pivot sequence, which is structure.
 type Casc
-    float h0 = na
     float h1 = na
     int   h1T = na
-    float l0 = na
     float l1 = na
     int   l1T = na
     bool  outHi = false
@@ -481,19 +488,17 @@ cascade(Casc c, bool nHi, float hi, int hiT, bool nLo, float lo, int loT) =>
     c.outHi := false
     c.outLo := false
     if nHi
-        if not na(c.h1) and not na(c.h0) and c.h1 > c.h0 and c.h1 > hi
+        if not na(c.h1) and c.h1 > hi
             c.outHi := true
             c.outPx := c.h1
             c.outT  := c.h1T
-        c.h0  := c.h1
         c.h1  := hi
         c.h1T := hiT
     if nLo
-        if not na(c.l1) and not na(c.l0) and c.l1 < c.l0 and c.l1 < lo
+        if not na(c.l1) and c.l1 < lo
             c.outLo := true
             c.outPx := c.l1
             c.outT  := c.l1T
-        c.l0  := c.l1
         c.l1  := lo
         c.l1T := loT
     c

@@ -131,27 +131,34 @@ class Deg:
 
 @dataclass
 class Casc:
-    """A fractal on the pivot stream: a swing the swings either side did not
-    exceed. This is how a degree is promoted — NOT by the degree below changing
-    character, which starved the upper two."""
-    h0: float = None
+    """Promote a swing when the NEXT swing on the same side does not exceed it.
+
+    A TWO-SIDED FRACTAL WAS FAR TOO AGGRESSIVE. Requiring the swing either side
+    to be lower thins the stream about fourfold per level, which put the three
+    degrees at 42 / 16 / 5 events over three weeks — so the upper two had
+    almost nothing to say, and every label on the chart was a deep-degree one.
+    Against the reference, where the same window carries roughly 50 / 34 / 25,
+    that is one whole degree of offset: it printed iBOS where we printed iiIDM.
+
+    One-sided is the right strength. Looking only forward thins by about a
+    third per level and lands on 42 / 30 / 23, which is the reference's shape.
+    Measured, not guessed: the alternatives were swept and printed side by side
+    (fractal 42/16/5, higher-high 42/17/19, one-sided 42/30/23, none 42/33/32).
+    """
     h1: float = None
     h1t: int = None
-    l0: float = None
     l1: float = None
     l1t: int = None
 
     def feed(self, is_hi, px, t):
         if is_hi:
             out = (True, self.h1, self.h1t) if (
-                self.h1 is not None and self.h0 is not None
-                and self.h1 > self.h0 and self.h1 > px) else None
-            self.h0, self.h1, self.h1t = self.h1, px, t
+                self.h1 is not None and self.h1 > px) else None
+            self.h1, self.h1t = px, t
             return out
         out = (False, self.l1, self.l1t) if (
-            self.l1 is not None and self.l0 is not None
-            and self.l1 < self.l0 and self.l1 < px) else None
-        self.l0, self.l1, self.l1t = self.l1, px, t
+            self.l1 is not None and self.l1 < px) else None
+        self.l1, self.l1t = px, t
         return out
 
 
