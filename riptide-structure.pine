@@ -1,910 +1,261 @@
-// Riptide Structure — LIT market structure at three nested degrees.
-//
-// WHY THREE. A single structure degree is either too coarse to trade or too
-// noisy to read, and which one it is depends on the chart. The fix is not a
-// sensitivity slider — it is to run the SAME engine at three degrees at once
-// and let the reader pick which one they are working in:
-//
-//     MAIN            the slow skeleton.        labels: BOS   Choch   IDM
-//     INTERNAL        the leg you trade.        labels: iBOS  iChoch  iIDM
-//     DEEP INTERNAL   the entry-timing detail.  labels: iiBOS iiChoch iiIDM
-//
-// THE DEGREES ARE NOT THREE SETTINGS OF ONE THING. They are a cascade. The
-// deep-internal engine reads the candles. Every time it changes character, the
-// extreme it came from becomes a PIVOT for the internal engine. Every time the
-// internal engine changes character, its extreme becomes a pivot for the main
-// engine. So a main-degree swing is, by construction, a move that contained a
-// complete internal reversal — which is what "higher degree" actually means,
-// and it needs no numeric input to say so.
-//
-// EVERYTHING ELSE IS IDENTICAL AT ALL THREE. Same inducement rule, same break
-// confirmation, same hidden-shadow handling. Only the pivot SOURCE differs.
-//
-// ── the rest of the design, unchanged from the single-degree version ────────
-//
-//   NO PIVOT LENGTH INPUT. There is no "5 left, 5 right" anywhere in this
-//   file. A pivot is the extreme of a completed PULLBACK: a swing high
-//   confirms when price breaks the LOW of the candle that made it, because
-//   that break IS the pullback. Two traders on the same chart see the same
-//   structure, which a numeric pivot setting is the reason they normally do
-//   not.
-//
-//   INSIDE BARS, PROPERLY. Once a candle sets a range, EVERY candle that stays
-//   inside it is noise until that range breaks — not just the next one. A
-//   five-candle coil is five inside bars; comparing each candle only to its
-//   predecessor calls three of them structure.
-//
-//   THE INDUCEMENT GATES THE BREAK. Price must collect the liquidity under the
-//   last pullback (the IDM) before a break of the high means anything. A high
-//   taken with the inducement still sitting there is the trap, and it is drawn
-//   as one rather than as a BOS.
-//
-//   HIDDEN SHADOW. A body can close beyond a level and be back inside it one
-//   candle later; on a higher timeframe that is a wick. Body breaks therefore
-//   wait one candle, and candles that turn out to be hidden shadows are
-//   painted purple.
-//
-// Nothing here predicts anything. It reads what price has already done and
-// draws it the same way every time.
+//@version=5
+indicator("Market Structure Inducements ICT CHoch BOS Sweeps", "Market Structure" , overlay = true , max_bars_back = 5000, max_lines_count = 500, max_labels_count = 500)
+//Logical Inputs
+LongP         = input.int(30, 'ChoCh Detector Period', minval = 1, group = 'Logical Setting')
+ShortP        = input.int(1, 'BoS & Liquidity Detector Period', minval = 1, group = 'Logical Setting')
+InducementP   = input.int(3, 'Inducement Detector Period', minval = 1, group = 'Logical Setting')
+FTD           = input.bool(true, 'Fast Trend Detector', group = 'Logical Setting')
+IDMT_Type     = input.string('Sweeps', 'Inducement Type Detector', ['Total', 'Sweeps'], group = 'Logical Setting')
+//ChoCh Display Inputs
+Show_ChoCh    = input.bool(true, 'Show ChoCh Level', group = 'ChoCh Display')
+Color_BuChoCh = input.color(#005503, 'Bull', group = 'ChoCh Display', inline = 'ChoCh')
+Color_BeChoCh = input.color(#630000  , 'Bear', group = 'ChoCh Display', inline = 'ChoCh')
+Size_ChoCh    = input.string(size.small, 'ChoCh Label Size', [size.tiny, size.small, size.normal, size.large, size.auto], group = 'ChoCh Display')
+//BoS & LQDY Inputs
+Show_BoS      = input.bool(true, 'Show BoS & Liquidity Level', group = 'BoS & LQDY Display')
+Color_BuBoS   = input.color(#006bc2, 'Bull', group = 'BoS & LQDY Display', inline = 'BoS')
+Color_BeBoS   = input.color(#e79e01  , 'Bear', group = 'BoS & LQDY Display', inline = 'BoS')
+Color_LQDY    = input.color(#7905af  , 'LQDY', group = 'BoS & LQDY Display', inline = 'BoS')
+Size_BoS      = input.string(size.small, 'BoS & LQDY Label Size', [size.tiny, size.small, size.normal, size.large, size.auto], group = 'BoS & LQDY Display')
+//Inducement Display Inputs
+Show_IDMT     = input.bool(true, 'Show Inducement Level', group = 'Inducement Display', inline = 'IDMT')
+Color_IDMT    = input.color(#666566  , '', group = 'Inducement Display', inline = 'IDMT')
+Size_IDMT     = input.string(size.small, 'Inducement Label Size', [size.tiny, size.small, size.normal, size.large, size.auto], group = 'Inducement Display')
 
-//@version=6
-indicator("Riptide Structure — LIT", "Riptide Structure",
-     overlay          = true,
-     max_lines_count  = 500,
-     max_labels_count = 500,
-     max_boxes_count  = 500,
-     max_bars_back    = 5000)
+//Market Structure Detector Function
+Structure(LongP, ShortP, InducementP, FTD, LQDY_Type, Show_ChoCh, Color_BuChoCh, Color_BeChoCh, Size_ChoCh, Show_BoS, Color_BuBoS, Color_BeBoS, Color_LQDY, Size_BoS, Show_IDMT, Color_IDMT, Size_IDMT) => 
+    ATR = ta.atr(50)
+    // ChoCh Period 
+    LHP = ta.pivothigh(FTD ? int(LongP/2) : LongP, LongP)
+    LLP = ta.pivotlow(FTD  ? int(LongP/2) : LongP, LongP)
+    // BoS Period
+    SHP = ta.pivothigh(ShortP, ShortP)
+    SLP = ta.pivotlow(ShortP , ShortP)
+    // Inducement Period
+    IHP = ta.pivothigh(InducementP, InducementP)
+    ILP = ta.pivotlow(InducementP , InducementP)
+    // ChoCh Variable
+    var string Trend           = ''
+        //Bullish ChoCh
+    var float  BuChoCh_P       = 0.0
+    var int    BuChoCh_I       = 0
+    var int    BuChoCh_IB      = 0
+    var int    BuCount         = 0
+    var string BuChoCh_B       = ''
+    var string BuChoCh_BB      = ''
+    var line BuChoCh_Line      = na
+    var label BuChoCh_Label    = na
+        //Bearish ChoCh
+    var float  BeChoCh_P       = 0.0
+    var int    BeChoCh_I       = 0
+    var int    BeChoCh_IB      = 0
+    var int    BeCount         = 0   
+    var string BeChoCh_B       = ''
+    var string BeChoCh_BB      = ''
+    var line BeChoCh_Line      = na   
+    var label BeChoCh_Label    = na 
+    //Inducement Variable
+    var line Inducement_Line   = na 
+    var label Inducement_Label = na
+    var bool IDM_Permit        = true
+    //BoS & Liquidity Variable
+    var float High             = 0.0
+    var float Low              = 0.0
+    var int Index              = 0
+    var line BoS_Line          = na 
+    var label BoS_Label        = na
+    var bool BoS_Permit        = true
+    //   \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\/////////////////////////////////////////////////
+    //    ||||||||||||||||||||||||||||||||||||||||ChoCh Block||||||||||||||||||||||||||||||||||||||||||
+    //   //////////////////////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    //Set Point Bullish ChoCh
+    if nz(LHP) != 0 
+        if Trend == '' or Trend == 'Down Trend'
+            BuChoCh_P := LHP
+            BuChoCh_I := bar_index[LongP]
+        else if Trend == 'Up Trend'
+            if LHP > BuChoCh_P
+                BuChoCh_P := LHP
+                BuChoCh_I := bar_index[LongP]
 
-// ═════════════════════════════ INPUTS ═══════════════════════════════════════
-gDeg   = "Degrees"
-gBreak = "Break confirmation"
-gShow  = "What to draw"
-gCol   = "Colours"
-
-showMain = input.bool(true, "Main structure          BOS / Choch / IDM",
-     group = gDeg, tooltip = "The slow skeleton. A main-degree swing is one " +
-     "that contained a complete internal reversal, so there are few of them " +
-     "and they mark the moves that actually turned the market.")
-showInt  = input.bool(true, "Internal              iBOS / iChoch / iIDM",
-     group = gDeg, tooltip = "The leg most people trade. Driven by changes of " +
-     "character in the deep-internal engine below it.")
-showDeep = input.bool(true, "Deep internal      iiBOS / iiChoch / iiIDM",
-     group = gDeg, tooltip = "Entry-timing detail, read straight off the " +
-     "candles. Densest of the three — turn it off once you know where the " +
-     "internal structure is.")
-
-modePb = input.string("Shadow", "Pullback detection",
-     options = ["Shadow", "Body", "Body & Sweep"], group = gBreak,
-     tooltip = "What confirms a pullback has ENDED, and therefore that a " +
-     "pivot exists. Shadow is the right default here: a pullback is a wick " +
-     "away from the extreme, and demanding a close makes every pivot late.")
-modeIdm = input.string("Shadow", "IDM break",
-     options = ["Shadow", "Body", "Body & Sweep"], group = gBreak,
-     tooltip = "Taking the inducement is a liquidity event, and liquidity is " +
-     "taken by a WICK. Shadow by default for that reason.")
-modeBos = input.string("Body & Sweep", "BOS break",
-     options = ["Shadow", "Body", "Body & Sweep"], group = gBreak,
-     tooltip = "A break of structure should be expensive to claim. Body & " +
-     "Sweep wants the level poked and rejected first, then closed through.")
-modeCh  = input.string("Body & Sweep", "Choch break",
-     options = ["Shadow", "Body", "Body & Sweep"], group = gBreak,
-     tooltip = "A change of character rewrites the trend, so it gets the " +
-     "strictest confirmation of the four.")
-
-hidBos = input.bool(true, "Hidden Shadow on BOS", group = gBreak,
-     tooltip = "A body can close beyond a level and be back inside it one " +
-     "candle later — on a higher timeframe that is a wick, not a break. With " +
-     "this on, the break waits one candle; if price returns inside, the break " +
-     "is cancelled and the candle is painted purple.\n\nHas no effect while " +
-     "the break type above is Shadow: a wick break is already a wick break.")
-hidCh  = input.bool(true, "Hidden Shadow on Choch", group = gBreak)
-
-labSize = input.string("Small", "Label size",
-     options = ["Tiny", "Small", "Normal", "Large"], group = gShow,
-     tooltip = "Sets the MAIN degree's label size. Internal and deep internal " +
-     "step down from it automatically, so the three degrees stay telling " +
-     "apart at a glance rather than all rendering the same.\n\n" +
-     "Tiny -> small / tiny / tiny\nSmall -> normal / small / tiny\n" +
-     "Normal -> large / normal / small\nLarge -> huge / large / normal\n\n" +
-     "Note that even the smallest setting keeps the MAIN labels at Pine's " +
-     "'small' rather than 'tiny': the top degree has to stay readable.")
-
-showPb     = input.bool(false, "Pullback zones",        group = gShow,
-     tooltip = "OFF by default. Shading every pullback buries the structure " +
-     "under boxes, which is the opposite of what a structure tool is for — " +
-     "the lines and their labels already say where the pullback was. Turn it " +
-     "on only if you specifically want the supply/demand areas filled in.")
-showTrap   = input.bool(true,  "Breaks with no IDM taken", group = gShow,
-     tooltip = "The LIT trap: a level broken while the inducement below is " +
-     "still untouched. Drawn dotted and labelled 'x'. Structure does NOT " +
-     "advance on it. Leave this on while learning — the contrast between a " +
-     "valid break and a trap is the most useful thing on the chart.")
-showSwing  = input.bool(true,  "Swing labels (HH/HL/LH/LL)", group = gShow)
-showX      = input.bool(true,  "X where liquidity was taken", group = gShow,
-     tooltip = "Marks the BAR the inducement was swept, at the price it was " +
-     "swept from — which is a different fact from the IDM line, and the more " +
-     "actionable one. The line says where the liquidity is; the X says it has " +
-     "been collected and the break that follows is now live.\n\nThis is our " +
-     "reading of the reference's X, which it does not document. Its marks sit " +
-     "at inducement prices on sweep bars, which is what this draws.")
-showWeak   = input.bool(true,  "Strong / weak extremes", group = gShow,
-     tooltip = "The extreme the structure PROTECTS is strong; the one it has " +
-     "to take is weak. In a bullish main structure the low that produced the " +
-     "break is strong and the high above it is weak — that high is where the " +
-     "liquidity sits, and it is the one price is drawn to.")
-showInside = input.bool(false, "Colour inside bars",    group = gShow)
-showPanel  = input.bool(true,  "Trend panel",           group = gShow)
-showStats  = input.bool(true,  "LIT statistics table",  group = gShow,
-     tooltip = "What actually happened after each structural event on this " +
-     "chart, counted rather than asserted. Measured on the deep-internal " +
-     "degree, which has enough events to mean something.\n\nIDM -> BOS / " +
-     "Choch touch: once the inducement is taken, which level does price " +
-     "reach first.\n\nNear -> break or opposite pullback: once price is " +
-     "within a quarter of the range of a level, does it break it or turn " +
-     "back to the other side.")
-
-// Mapped one-for-one onto the reference indicator's own Theme & Colors panel,
-// in its order, so a palette copied from there lands on the right rows here.
-cBull   = input.color(#26a69a, "Bullish BOS / CHoCH",  group = gCol)
-cBear   = input.color(#f06292, "Bearish BOS / CHoCH",  group = gCol)
-cIdmLo  = input.color(#64b5f6, "Bullish IDM (Low)",    group = gCol)
-cIdmHi  = input.color(#ffca28, "Bearish IDM (High)",   group = gCol)
-cDemand = input.color(#4db6ac, "Demand Pullback",      group = gCol)
-cSupply = input.color(#f48fb1, "Supply Pullback",      group = gCol)
-// Not in the reference's list — these three mark states it has no equivalent
-// of, so they sit below the mapped block rather than inside it.
-cTrap   = input.color(#787b86, "Invalid break",        group = gCol)
-cHidden = input.color(#9c27b0, "Hidden Shadow",        group = gCol)
-cInside = input.color(#b2b5be, "Inside bar",           group = gCol)
-
-// MAIN solid, INTERNAL dashed, DEEP dotted, and the label size stepping down
-// with it. Two independent cues for depth means neither has to be read
-// carefully: weight says which degree, style confirms it.
-lad(int i) =>
-    i <= 0 ? size.tiny : i == 1 ? size.small : i == 2 ? size.normal
-     : i == 3 ? size.large : size.huge
-int baseIdx = labSize == "Tiny" ? 1 : labSize == "Small" ? 2
-     : labSize == "Normal" ? 3 : 4
-string szMain = lad(baseIdx)
-string szInt  = lad(baseIdx - 1)
-string szDeep = lad(baseIdx - 2)
-
-// ═════════════════════════ 1. INSIDE BARS ═══════════════════════════════════
-// A candle sets a range. Every candle that stays within it is an inside bar,
-// until the range's high or low is broken — at which point the breaking candle
-// becomes the new range. Structure ignores inside bars entirely.
-var float rngHi = na
-var float rngLo = na
-bool isInside = false
-if na(rngHi)
-    rngHi := high
-    rngLo := low
-else if high <= rngHi and low >= rngLo
-    isInside := true
-else
-    rngHi := high
-    rngLo := low
-
-// ══════════════════════ 2. BREAK CONFIRMATION ═══════════════════════════════
-// Ten hidden-shadow slots: three per degree (IDM, BOS, Choch) plus one for the
-// raw pivot rule. A Pine function may not assign a global scalar but MAY
-// mutate a global array, because an array is a reference — which is why the
-// pending state and the hidden flag both live in arrays.
-var pendOn  = array.new<bool>(10, false)
-var pendLvl = array.new<float>(10, na)
-var pendUp  = array.new<bool>(10, false)
-var hidFlag = array.new<bool>(10, false)
-// The SWEEP LEVEL: how far a wick has poked through this level and failed, and
-// which level that memory belongs to so it resets when the level moves.
-var swLvl = array.new<float>(10, na)
-var swFor = array.new<float>(10, na)
-array.fill(hidFlag, false)
-
-// "Body & Sweep" USED TO REQUIRE THAT A SWEEP HAD HAPPENED, and that was a
-// deadlock, not a filter. If price jumps a level in one candle there is no
-// failed wick, so the break could never confirm — ever. The internal degree
-// pinned a level at 425 while price traded at 1087 and sat there for the
-// whole chart, because the break it was waiting for was unreachable by
-// construction rather than by market behaviour.
-//
-// The reference's own diagram shows what it actually means: a wick that pokes
-// through and closes back RAISES the bar, and the body must then close beyond
-// THAT. With no failed wick there is nothing to raise, so it degrades to plain
-// Body — strict when price has probed the level, ordinary when it has not.
-rawBreak(int slot, float lvl, bool up, string mode) =>
-    bool r = false
-    if mode == "Shadow"
-        r := up ? high > lvl : low < lvl
-    else if mode == "Body"
-        r := up ? close > lvl : close < lvl
-    else
-        float sl  = array.get(swLvl, slot)
-        float eff = na(sl) ? lvl : (up ? math.max(lvl, sl) : math.min(lvl, sl))
-        r := up ? close > eff : close < eff
-    r
-
-wickOnly(float lvl, bool up) =>
-    up ? (high > lvl and close <= lvl) : (low < lvl and close >= lvl)
-
-// True only on the bar the break becomes FINAL.
-confirmBreak(int slot, float lvl, bool up, string mode, bool useHidden) =>
-    bool done = false
-    if not na(lvl)
-        // The sweep memory belongs to ONE level. When the level moves, the
-        // wicks that failed against the old one say nothing about the new one.
-        float sf = array.get(swFor, slot)
-        if na(sf) or sf != lvl
-            array.set(swFor, slot, lvl)
-            array.set(swLvl, slot, na)
-        if wickOnly(lvl, up)
-            float cur = array.get(swLvl, slot)
-            float w   = up ? high : low
-            array.set(swLvl, slot, na(cur) ? w
-                 : (up ? math.max(cur, w) : math.min(cur, w)))
-        if array.get(pendOn, slot)
-            float pl = array.get(pendLvl, slot)
-            bool  pu = array.get(pendUp, slot)
-            array.set(pendOn, slot, false)
-            if pu ? close <= pl : close >= pl
-                array.set(hidFlag, slot, true)   // it was a shadow after all
-            else
-                done := true
-        else if rawBreak(slot, lvl, up, mode)
-            if useHidden and mode != "Shadow"
-                array.set(pendOn, slot, true)
-                array.set(pendLvl, slot, lvl)
-                array.set(pendUp, slot, up)
-            else
-                done := true
-    done
-
-// ═══════════════════ 3. RAW PIVOTS, FROM PULLBACKS ══════════════════════════
-// No bar count. A swing high confirms when price breaks the LOW of the candle
-// that made it — that break IS the pullback, and the pullback is what proves
-// the high was a high.
-var int   seek   = 1
-var float extPx  = na
-var int   extT   = na
-var float extOpp = na
-
-float rawHi  = na
-int   rawHiT = na
-float rawLo  = na
-int   rawLoT = na
-
-if not isInside
-    if na(extPx)
-        extPx  := seek > 0 ? high : low
-        extT   := time
-        extOpp := seek > 0 ? low : high
-    else if seek > 0
-        if high > extPx
-            extPx  := high
-            extT   := time
-            extOpp := low
-        if confirmBreak(9, extOpp, false, modePb, false)
-            rawHi  := extPx
-            rawHiT := extT
-            seek   := -1
-            extPx  := low
-            extT   := time
-            extOpp := high
-    else
-        if low < extPx
-            extPx  := low
-            extT   := time
-            extOpp := high
-        if confirmBreak(9, extOpp, true, modePb, false)
-            rawLo  := extPx
-            rawLoT := extT
-            seek   := 1
-            extPx  := high
-            extT   := time
-            extOpp := low
-
-// ═══════════════════ 4. ONE LIT ENGINE, THREE INSTANCES ═════════════════════
-type Deg
-    int    slot      = 0
-    int    bias      = 0
-    float  idm       = na
-    int    idmT      = na
-    bool   idmTaken  = false
-    float  bos       = na
-    int    bosT      = na
-    float  bosCand   = na
-    int    bosCandT  = na
-    float  ch        = na
-    int    chT       = na
-    float  runHi     = na
-    int    runHiT    = na
-    float  runLo     = na
-    int    runLoT    = na
-    float  pvHi      = na
-    int    pvHiT     = na
-    float  pvLo      = na
-    int    pvLoT     = na
-    float  oldHi     = na
-    float  oldLo     = na
-    // per-bar events
-    bool   sIdm      = false
-    bool   sBos      = false
-    bool   sCh       = false
-    bool   sTrap     = false
-    bool   sHi       = false
-    bool   sLo       = false
-    // what this degree hands UP to the next one on a change of character
-    bool   outHi     = false
-    bool   outLo     = false
-    float  outPx     = na
-    int    outT      = na
-
-// One step of the LIT machine. `nHi`/`nLo` are this degree's pivot feed: raw
-// candle pivots for the deep degree, the change-of-character extremes of the
-// degree below for the other two.
-step(Deg d, bool nHi, float pHi, int pHiT, bool nLo, float pLo, int pLoT) =>
-    d.sIdm := false
-    d.sBos := false
-    d.sCh := false
-    d.sTrap := false
-    d.sHi := false
-    d.sLo := false
-    d.outHi := false
-    d.outLo := false
-
-    if nHi
-        d.oldHi := d.pvHi
-        d.pvHi  := pHi
-        d.pvHiT := pHiT
-        d.sHi   := true
-    if nLo
-        d.oldLo := d.pvLo
-        d.pvLo  := pLo
-        d.pvLoT := pLoT
-        d.sLo   := true
-
-    if not isInside
-        if na(d.runHi) or high > d.runHi
-            d.runHi  := high
-            d.runHiT := time
-        if na(d.runLo) or low < d.runLo
-            d.runLo  := low
-            d.runLoT := time
-
-    // Bootstrap. The first bias is a guess and the first change of character
-    // corrects it, which is exactly what a change of character is for.
-    if d.bias == 0 and not na(d.pvHi) and not na(d.pvLo)
-        d.bias  := d.pvHiT > d.pvLoT ? 1 : -1
-        d.ch    := d.bias > 0 ? d.pvLo : d.pvHi
-        d.chT   := d.bias > 0 ? d.pvLoT : d.pvHiT
-        d.runHi := high
-        d.runHiT := time
-        d.runLo := low
-        d.runLoT := time
-
-    // A new pullback becomes the inducement, replacing any older one, and
-    // pins the swing it came from as the level a break must clear. Pinning it
-    // HERE is what keeps the level local: read at break time from a running
-    // extreme it becomes the high of the whole chart.
-    if d.bias > 0 and d.sLo and not d.idmTaken and (na(d.ch) or d.pvLo > d.ch)
-        d.idm      := d.pvLo
-        d.idmT     := d.pvLoT
-        d.bosCand  := d.pvHi
-        d.bosCandT := d.pvHiT
-        d.runHi    := high
-        d.runHiT   := time
-    if d.bias < 0 and d.sHi and not d.idmTaken and (na(d.ch) or d.pvHi < d.ch)
-        d.idm      := d.pvHi
-        d.idmT     := d.pvHiT
-        d.bosCand  := d.pvLo
-        d.bosCandT := d.pvLoT
-        d.runLo    := low
-        d.runLoT   := time
-
-    if d.bias != 0
-        // step 2 — the inducement is collected
-        if not d.idmTaken and not na(d.idm)
-            if confirmBreak(d.slot * 3, d.idm, d.bias < 0, modeIdm, false)
-                d.idmTaken := true
-                d.sIdm := true
-                bool useRun = na(d.bosCand) or (d.bias > 0 ? d.runHi > d.bosCand
-                     : d.runLo < d.bosCand)
-                d.bos  := useRun ? (d.bias > 0 ? d.runHi : d.runLo) : d.bosCand
-                d.bosT := useRun ? (d.bias > 0 ? d.runHiT : d.runLoT)
-                     : d.bosCandT
-                if d.bias > 0
-                    d.runLo  := low
-                    d.runLoT := time
-                else
-                    d.runHi  := high
-                    d.runHiT := time
-
-        // step 3 — the break
-        if not na(d.bos) and confirmBreak(d.slot * 3 + 1, d.bos, d.bias > 0,
-             modeBos, hidBos)
-            if d.idmTaken
-                d.sBos := true
-                // The inducement becomes the protected level: it is a real
-                // pivot, it is local, and a break of it is exactly what "the
-                // inducement failed" means.
-                d.ch       := na(d.idm) ? (d.bias > 0 ? d.runLo : d.runHi) : d.idm
-                d.chT      := na(d.idm) ? (d.bias > 0 ? d.runLoT : d.runHiT) : d.idmT
-                d.idm      := na
-                d.idmTaken := false
-                d.bos      := na
-                d.bosCand  := na
-                d.runHi    := high
-                d.runHiT   := time
-                d.runLo    := low
-                d.runLoT   := time
-            else
-                d.sTrap := true
-
-        // step 4 — character changes, and the degree above hears about it
-        if not na(d.ch) and confirmBreak(d.slot * 3 + 2, d.ch, d.bias < 0,
-             modeCh, hidCh)
-            d.sCh := true
-            // The extreme price came FROM is this degree's contribution to the
-            // degree above: a swing that contained a whole reversal down here.
-            d.outPx := d.bias > 0 ? (na(d.pvHi) ? d.runHi : d.pvHi)
-                 : (na(d.pvLo) ? d.runLo : d.pvLo)
-            d.outT  := d.bias > 0 ? (na(d.pvHi) ? d.runHiT : d.pvHiT)
-                 : (na(d.pvLo) ? d.runLoT : d.pvLoT)
-            d.outHi := d.bias > 0
-            d.outLo := d.bias < 0
-            d.bias     := -d.bias
-            d.idm      := na
-            d.idmTaken := false
-            d.bos      := na
-            d.bosCand  := na
-            d.ch       := d.outPx
-            d.chT      := d.outT
-            d.runHi    := high
-            d.runHiT   := time
-            d.runLo    := low
-            d.runLoT   := time
-    d
-
-// THE CASCADE PROMOTES A SWING WHEN THE NEXT ONE DOES NOT EXCEED IT.
-//
-// This has been wrong twice, in opposite directions, and the second time was
-// subtle. Promoting only on a change of character starved the upper degrees
-// outright. Replacing that with a TWO-SIDED fractal — the swing either side
-// must be lower — looked principled and was still far too aggressive: it thins
-// the stream about fourfold per level, putting the three degrees at 42 / 16 / 5
-// events over three weeks. The reference carries roughly 50 / 34 / 25 over the
-// same window, so every label we drew sat one whole degree too deep: it
-// printed iBOS where we printed iiIDM, and Choch where we printed iiCHoCH.
-//
-// Looking only FORWARD is the right strength. It thins by about a third per
-// level and lands on 42 / 30 / 23, which is the reference's shape. Measured in
-// research/lit.py rather than guessed — the four candidate rules were swept
-// and printed side by side:
-//
-//     two-sided fractal   42 / 16 /  5
-//     higher-high         42 / 17 / 19
-//     one-sided (this)    42 / 30 / 23
-//     no thinning         42 / 33 / 32
-//
-// It is still not a bar count: it reads the pivot sequence, which is structure.
-type Casc
-    float h1 = na
-    int   h1T = na
-    float l1 = na
-    int   l1T = na
-    bool  outHi = false
-    bool  outLo = false
-    float outPx = na
-    int   outT = na
-
-cascade(Casc c, bool nHi, float hi, int hiT, bool nLo, float lo, int loT) =>
-    c.outHi := false
-    c.outLo := false
-    if nHi
-        if not na(c.h1) and c.h1 > hi
-            c.outHi := true
-            c.outPx := c.h1
-            c.outT  := c.h1T
-        c.h1  := hi
-        c.h1T := hiT
-    if nLo
-        if not na(c.l1) and c.l1 < lo
-            c.outLo := true
-            c.outPx := c.l1
-            c.outT  := c.l1T
-        c.l1  := lo
-        c.l1T := loT
-    c
-
-var Deg  deep = Deg.new(slot = 0)
-var Deg  intl = Deg.new(slot = 1)
-var Deg  main = Deg.new(slot = 2)
-var Casc c1   = Casc.new()
-var Casc c2   = Casc.new()
-
-step(deep, not na(rawHi), rawHi, rawHiT, not na(rawLo), rawLo, rawLoT)
-cascade(c1, not na(rawHi), rawHi, rawHiT, not na(rawLo), rawLo, rawLoT)
-step(intl, c1.outHi, c1.outPx, c1.outT, c1.outLo, c1.outPx, c1.outT)
-cascade(c2, c1.outHi, c1.outPx, c1.outT, c1.outLo, c1.outPx, c1.outT)
-step(main, c2.outHi, c2.outPx, c2.outT, c2.outLo, c2.outPx, c2.outT)
-
-// ═════════════════════════ 5. DRAWING ═══════════════════════════════════════
-// Anchored in TIME, never in bar_index: a structural level legitimately sits
-// thousands of bars back, and line.new refuses a bar_index further behind than
-// max_bars_back (RE10026). xloc.bar_time has no such limit.
-lvlLine(float y, int x1, color c, int w, string st) =>
-    line.new(x1, y, time, y, xloc = xloc.bar_time, color = c, width = w,
-         style = st)
-
-// CENTRED ON THE LINE, and plain text rather than a bubble. A bubble at the
-// left end competes with the price action it is drawn over; the text at the midpoint
-// of the level reads as part of the line instead of as an annotation stuck to
-// one end of it.
-tag(float y, int x1, string txt, color c, string sz) =>
-    label.new(x1 + (time - x1) / 2, y, txt, xloc = xloc.bar_time,
-         style = label.style_none, textcolor = c, size = sz)
-
-// One degree's drawings. Width and label size carry the hierarchy: the main
-// structure is meant to be readable at a glance and the deep degree is meant
-// to recede.
-draw(Deg d, bool on, string pfx, int w, string sz, string st) =>
-    if on
-        color bc = d.bias > 0 ? cBull : cBear
-        if d.sIdm
-            color ic = d.bias > 0 ? cIdmLo : cIdmHi
-            lvlLine(d.idm, d.idmT, ic, 1, st)
-            tag(d.idm, d.idmT, pfx + "IDM", ic, sz)
-            if showPb and not na(d.bosCand)
-                float top = d.bias > 0 ? d.bosCand : d.idm
-                float bot = d.bias > 0 ? d.idm : d.bosCand
-                int   lft = d.bias > 0 ? d.bosCandT : d.idmT
-                if not na(top) and not na(bot) and not na(lft) and top > bot
-                    box.new(lft, top, time, bot, xloc = xloc.bar_time,
-                         border_color = color.new(d.bias > 0 ? cDemand
-                             : cSupply, 75),
-                         bgcolor = color.new(d.bias > 0 ? cDemand : cSupply, 90))
-        if d.sBos
-            lvlLine(d.bos, d.bosT, bc, w, st)
-            tag(d.bos, d.bosT, pfx + "BOS", bc, sz)
-        if d.sCh
-            // bias has already flipped, so the colour of the move that BROKE
-            // is the new one
-            lvlLine(d.ch, d.chT, d.bias > 0 ? cBull : cBear, w, st)
-            tag(d.ch, d.chT, pfx + "CHoCH", d.bias > 0 ? cBull : cBear, sz)
-        if d.sTrap and showTrap
-            lvlLine(d.bos, d.bosT, cTrap, 1, line.style_dotted)
-            tag(d.bos, d.bosT, "x", cTrap, szDeep)
-        // X — the liquidity was collected HERE, at the price it was resting
-        // at. Drawn on the sweep bar rather than at the level's origin,
-        // because the actionable fact is when it happened, not where the line
-        // starts.
-        if d.sIdm and showX
-            label.new(time, d.idm, "X", xloc = xloc.bar_time,
-                 style     = label.style_none,
-                 textcolor = color.new(d.bias > 0 ? cIdmLo : cIdmHi, 20),
-                 size      = sz)
-
-draw(deep, showDeep, "ii", 1, szDeep, line.style_dotted)
-draw(intl, showInt,  "i",  2, szInt,  line.style_dashed)
-draw(main, showMain, "",   3, szMain, line.style_solid)
-
-// ── THE LEVELS THAT ARE STILL LIVE ──────────────────────────────────────────
-// The missing half of the picture. Drawing only the moment a level BREAKS
-// leaves the right-hand side of the chart empty and answers the wrong
-// question: a trader looking at the hard edge wants to know what price has to
-// do NEXT, not what it did last Tuesday.
-//
-// So every degree also projects the levels it is currently waiting on — the
-// BOS it must clear to continue, the CHoCH that would flip it, the inducement
-// still sitting untaken — extended to the current bar and relabelled at the
-// right edge, which is where the reference puts them and where the eye
-// already is.
-type Live
-    line  ln = na
-    label lb = na
-
-live(Live v, bool on, float y, int x1, string txt, color c, int w, string st,
-     string sz) =>
-    if not on or na(y) or na(x1)
-        line.delete(v.ln)
-        label.delete(v.lb)
-        v.ln := na
-        v.lb := na
-    else if na(v.ln)
-        v.ln := line.new(x1, y, time, y, xloc = xloc.bar_time, color = c,
-             width = w, style = st)
-        v.lb := label.new(time, y, txt, xloc = xloc.bar_time,
-             style = label.style_none, textcolor = c, size = sz)
-    else
-        line.set_xy1(v.ln, x1, y)
-        line.set_xy2(v.ln, time, y)
-        line.set_color(v.ln, c)
-        label.set_xy(v.lb, time, y)
-        label.set_text(v.lb, txt)
-        label.set_textcolor(v.lb, c)
-    // CE10235. An if/else chain that is the LAST expression of a function is
-    // that function's return value, so Pine type-checks the branches against
-    // each other — and these ended on `label`, `label` and void. Returning the
-    // object turns the chain back into a plain statement and makes the
-    // function consistent with step() and cascade(), which also hand their
-    // object back.
-    v
-
-var Live lvBosD = Live.new()
-var Live lvChD  = Live.new()
-var Live lvIdmD = Live.new()
-var Live lvBosI = Live.new()
-var Live lvChI  = Live.new()
-var Live lvIdmI = Live.new()
-var Live lvBosM = Live.new()
-var Live lvChM  = Live.new()
-var Live lvIdmM = Live.new()
-
-// Pending levels are dimmed against the confirmed ones: a level that has not
-// been reached yet is a question, and it should not shout as loudly as an
-// answer already on the chart.
-liveSet(Deg d, Live vb, Live vc, Live vi, bool on, string pfx, int w,
-     string sz, string st) =>
-    color bc = d.bias > 0 ? cBull : cBear
-    color cc = d.bias > 0 ? cBear : cBull
-    color ic = d.bias > 0 ? cIdmLo : cIdmHi
-    live(vb, on and d.idmTaken, d.bos, d.bosT, pfx + "BOS",
-         color.new(bc, 35), w, st, sz)
-    live(vc, on, d.ch, d.chT, pfx + "CHoCH", color.new(cc, 35), w, st, sz)
-    live(vi, on and not d.idmTaken, d.idm, d.idmT, pfx + "IDM",
-         color.new(ic, 25), 1, st, sz)
-
-liveSet(deep, lvBosD, lvChD, lvIdmD, showDeep, "ii", 1, szDeep,
-     line.style_dotted)
-liveSet(intl, lvBosI, lvChI, lvIdmI, showInt, "i", 2, szInt,
-     line.style_dashed)
-liveSet(main, lvBosM, lvChM, lvIdmM, showMain, "", 3, szMain,
-     line.style_solid)
-
-// Swing labels come off the deep degree, the only one that sees every turn.
-if showSwing and deep.sHi and not na(deep.pvHi)
-    label.new(deep.pvHiT, deep.pvHi,
-         na(deep.oldHi) ? "H" : deep.pvHi > deep.oldHi ? "HH" : "LH",
-         xloc = xloc.bar_time, style = label.style_label_down,
-         color = color.new(cBear, 100), textcolor = cBear, size = szDeep)
-if showSwing and deep.sLo and not na(deep.pvLo)
-    label.new(deep.pvLoT, deep.pvLo,
-         na(deep.oldLo) ? "L" : deep.pvLo < deep.oldLo ? "LL" : "HL",
-         xloc = xloc.bar_time, style = label.style_label_up,
-         color = color.new(cBull, 100), textcolor = cBull, size = szDeep)
-
-// STRONG AND WEAK, ON THE EXTREMES THEMSELVES.
-//
-// THIS WAS BACKWARDS AND PRICE SETTLED IT. The protected low was labelled
-// "Strong Low" on the reasoning that the structure defends it — and price then
-// went straight through it, while the reference had called the same pivot a
-// WEAK low. The reference was right and the definition was wrong.
-//
-// Strong and weak are not about what the structure would LIKE to defend. They
-// are about whether the liquidity resting at that extreme has been collected:
-//
-//   WEAK    nothing has broken through it yet, so the stops are still sitting
-//           there and price is drawn to them. Most extremes are weak.
-//   STRONG  a break of structure came off it. The liquidity below a strong low
-//           was already spent producing that break, so there is less reason
-//           for price to return.
-//
-// Read that way the low at 1055 was weak: no break of structure ever came off
-// it, so the stops under it were untouched — which is exactly why they got
-// taken.
-//
-// Drawn on the extremes of the MAIN degree, with the swing name alongside in
-// the reference's own format ("LL | Weak Low"), and only on the last bar so it
-// tracks the live structure instead of littering history.
-var label lbHiX = na
-var label lbLoX = na
-if showWeak and barstate.islast
-    label.delete(lbHiX)
-    label.delete(lbLoX)
-    // An extreme is STRONG only if it is the level the current structure was
-    // actually built from — the inducement a break came off. Everything else
-    // still has its liquidity intact.
-    bool loStrong = not na(main.ch) and not na(main.pvLo) and main.bias > 0
-         and math.abs(main.pvLo - main.ch) < syminfo.mintick
-    bool hiStrong = not na(main.ch) and not na(main.pvHi) and main.bias < 0
-         and math.abs(main.pvHi - main.ch) < syminfo.mintick
-    lbHiX := na(main.pvHi) ? na
-         : label.new(main.pvHiT, main.pvHi,
-             (na(deep.oldHi) or main.pvHi > deep.oldHi ? "HH" : "LH") + " | " +
-             (hiStrong ? "Strong High" : "Weak High"),
-             xloc = xloc.bar_time, style = label.style_none,
-             textcolor = color.new(cBear, hiStrong ? 0 : 25), size = szInt)
-    lbLoX := na(main.pvLo) ? na
-         : label.new(main.pvLoT, main.pvLo,
-             (na(deep.oldLo) or main.pvLo < deep.oldLo ? "LL" : "HL") + " | " +
-             (loStrong ? "Strong Low" : "Weak Low"),
-             xloc = xloc.bar_time, style = label.style_none,
-             textcolor = color.new(cBull, loStrong ? 0 : 25), size = szInt)
-
-bool hiddenNow = array.includes(hidFlag, true)
-barcolor(showInside and isInside ? cInside : hiddenNow ? cHidden : na,
-     title = "Inside / Hidden Shadow")
-
-// ═══════════════════════ 6. LIT STATISTICS ══════════════════════════════════
-// What actually happened after each structural event ON THIS CHART, counted
-// rather than asserted. Measured on the deep degree, the only one with enough
-// events for a rate to mean anything.
-//
-// THE LEVELS ARE CAPTURED WHEN THE INDUCEMENT IS TAKEN, NOT READ BACK LATER,
-// and that is the whole fix. This block runs AFTER the step() calls, and a BOS
-// clears deep.bos on the very bar it fires — so the level being scored had
-// already been erased by the time the old code looked for it, and every break
-// row read 0%. Verified against research/lit.py, which reproduces the
-// reference's inducement row on ZEC 15m (21 events against its 23, splitting
-// 52.4/42.9 against its 56.5/43.5).
-//
-// A "BREAK" MEANS A CONFIRMED STRUCTURAL BREAK, not price touching the level.
-// The port had this wrong first and it put 77.8% where the reference has
-// 33.3%: touching a level measures how often price ARRIVES, which is a
-// different and much easier question than how often it gets THROUGH.
-//
-// The "near" band below is OURS. The reference's is not published, and a sweep
-// in the port showed no single threshold can reproduce both of its rows — at
-// 0.75 the BOS row lands close and the CHoCH row does not — so what remains is
-// a structural difference in the definition, not a parameter. Fitting a free
-// threshold to an undocumented number is the failure mode MEASUREMENTS.md is a
-// record of, so this is stated as our own measure rather than tuned to theirs.
-statNear = input.float(0.25, "Statistics: 'near' band", minval = 0.05,
-     maxval = 1.0, step = 0.05, group = gShow,
-     tooltip = "How close to a level counts as 'near', as a fraction of the " +
-     "BOS-to-CHoCH range. 0.25 means the outer quarter at each end.")
-statBars = input.int(2000, "Statistics: bars counted", minval = 200,
-     maxval = 20000, step = 500, group = gShow,
-     tooltip = "How far back the table counts. This matters more than it " +
-     "sounds: TradingView loads however much history it feels like, so the " +
-     "same chart on two machines gives two different totals and neither is " +
-     "comparable to anything. 2000 bars is a fixed window that can be quoted " +
-     "and reproduced — research/lit.py reads the same 2000 and agrees with " +
-     "this table.")
-
-var int nIdm     = 0
-var int nIdmBos  = 0
-var int nIdmCh   = 0
-var int nBosNear = 0
-var int nBosBrk  = 0
-var int nBosOpp  = 0
-var int nChNear  = 0
-var int nChBrk   = 0
-var int nChOpp   = 0
-// The captured cycle: the two levels that were live when the inducement was
-// taken, plus which side the structure was on.
-var float aBos  = na
-var float aCh   = na
-var bool  aBull = false
-var bool  aHit  = false
-var bool  aNrB  = false
-var bool  aNrC  = false
-
-// A FIXED WINDOW, so the totals mean something. Counting every bar the
-// platform happened to load put 86 inducements in this table against the
-// reference's 23 on the same chart — not a different engine, a different
-// amount of history. research/lit.py sees 21 over 2000 bars, which is the
-// reference's 23 to within the noise of where a window starts.
-bool statOn = bar_index > last_bar_index - statBars
-
-// SCORE FIRST, against the captured levels.
-if statOn and not na(aBos) and not na(aCh)
-    float sp = math.abs(aBos - aCh)
-    bool tb = aBull ? high >= aBos : low <= aBos
-    bool tc = aBull ? low <= aCh : high >= aCh
-    if not aHit and (tb or tc)
-        aHit := true
-        if tb
-            nIdmBos += 1
+    //Set Point Bearish ChoCh
+    if nz(LLP) != 0
+        if Trend == '' or Trend == 'Up Trend'
+            BeChoCh_P := LLP
+            BeChoCh_I := bar_index[LongP]
+        else if Trend == 'Down Trend'
+            if LLP < BeChoCh_P
+                BeChoCh_P := LLP
+                BeChoCh_I := bar_index[LongP]
+    //Break
+    if BuChoCh_P > 0 and BeChoCh_P > 0
+        //Bullish ChoCh
+        if ta.crossover(close , BuChoCh_P) and (Trend == 'Down Trend' or Trend == '')
+            Trend     := 'Up Trend'
+            BuChoCh_B := 'Break'
+            BuChoCh_BB := 'Break'
+            BuChoCh_IB := line.get_x1(BuChoCh_Line)
+            BuCount := 0
         else
-            nIdmCh += 1
-    if sp > 0
-        bool inB = aBull ? high >= aBos - sp * statNear
-             : low <= aBos + sp * statNear
-        bool inC = aBull ? low <= aCh + sp * statNear
-             : high >= aCh - sp * statNear
-        if not aNrB and inB
-            aNrB := true
-            nBosNear += 1
-        if not aNrC and inC
-            aNrC := true
-            nChNear += 1
-        // Re-armable: scored once per APPROACH rather than once per cycle,
-        // because price can leave the band and come back before the level
-        // resolves. The reference's counts exceed its own inducement count,
-        // which a per-cycle counter cannot do.
-        if aNrB
-            if deep.sBos
-                nBosBrk += 1
-                aNrB := false
-            else if tc
-                nBosOpp += 1
-                aNrB := false
-        if aNrC
-            if deep.sCh
-                nChBrk += 1
-                aNrC := false
-            else if tb
-                nChOpp += 1
-                aNrC := false
-    // A confirmed structural event ends the cycle.
-    if deep.sBos or deep.sCh
-        aBos := na
-        aCh  := na
+            BuChoCh_B := ''
+        //Bearish ChoCh
+        if ta.crossunder(close , BeChoCh_P) and (Trend == 'Up Trend' or Trend == '')
+            Trend     := 'Down Trend'
+            BeChoCh_B := 'Break' 
+            BeChoCh_BB := 'Break'
+            BeChoCh_IB := line.get_x1(BeChoCh_Line)
+            BeCount := 0
+        else 
+            BeChoCh_B := ''   
+    //Clear BoS When ChoCh Formation
+    if (BeChoCh_B == 'Break' or BuChoCh_B == 'Break')
+        if BoS_Permit == true
+            line.delete(BoS_Line), label.delete(BoS_Label)
+    //Next ChoCh Line
+        // Bullish ChoCh Line
+    if BuChoCh_I != BuChoCh_I[1] and Trend == 'Down Trend'
+        BuChoCh_BB := ''
+        BuCount := BuCount + 1 
+        if Trend[1] == 'Down Trend' and BuCount > 1
+            line.delete(BuChoCh_Line[1]), label.delete(BuChoCh_Label[1])
+        if Show_ChoCh
+            BuChoCh_Line  := line.new(BuChoCh_I , BuChoCh_P, bar_index, BuChoCh_P, color = color.new(Color_BuChoCh, 30) , style = line.style_solid)
+            BuChoCh_Label := label.new(int(math.avg(BuChoCh_I,bar_index)),BuChoCh_P + (ATR * 0.1) , 'Bullish ChoCh' , color = na, 
+             textcolor = Color_BuChoCh , style = label.style_label_down , size = Size_ChoCh)
+        // Bearish ChoCh Line
+    if BeChoCh_I != BeChoCh_I[1] and Trend == 'Up Trend'
+        BeChoCh_BB := ''
+        BeCount := BeCount + 1 
+        if Trend[1] == 'Up Trend' and BeCount > 1
+            line.delete(BeChoCh_Line[1]), label.delete(BeChoCh_Label[1]) 
+        if Show_ChoCh       
+            BeChoCh_Line  := line.new(BeChoCh_I , BeChoCh_P, bar_index, BeChoCh_P, color = color.new(Color_BeChoCh, 30)   , style = line.style_solid)
+            BeChoCh_Label := label.new(int(math.avg(BeChoCh_I,bar_index)),BeChoCh_P - (ATR * 0.5) , 'Bearish ChoCh' , color = na,  
+             textcolor = Color_BeChoCh , style = label.style_label_up , size = Size_ChoCh)  
+    // First ChoCh Line
+        // Bullish ChoCh Line
+    if BuCount == 0 and BeChoCh_B ==  'Break' and BuChoCh_IB !=  BuChoCh_I 
+        BuCount := BuCount + 1 
+        if Show_ChoCh
+            BuChoCh_Line  := line.new((bar_index-Index) > LongP ? BuChoCh_I : Index, (bar_index-Index) > LongP ? BuChoCh_P : high[bar_index-Index],
+             bar_index, (bar_index-Index) > LongP ? BuChoCh_P : high[bar_index-Index], color = color.new(Color_BuChoCh, 30) , style = line.style_solid)
+            BuChoCh_Label := label.new(int(math.avg((bar_index-Index) > LongP ? BuChoCh_I : Index,bar_index)),(bar_index-Index) > LongP ? BuChoCh_P + (ATR * 0.1) : high[bar_index-Index] + (ATR * 0.1) , 'Bullish ChoCh' , color = na,  
+             textcolor = Color_BuChoCh , style = label.style_label_down , size = Size_ChoCh)
+        // Bearish ChoCh Line
+    if BeCount == 0 and BuChoCh_B ==  'Break' and BeChoCh_IB !=  BeChoCh_I 
+        BeCount := BeCount + 1 
+        if Show_ChoCh
+            BeChoCh_Line  := line.new((bar_index-Index) > LongP ? BeChoCh_I : Index, (bar_index-Index) > LongP ? BeChoCh_P : low[bar_index-Index],
+             bar_index, (bar_index-Index) > LongP ? BeChoCh_P : low[bar_index-Index], color = color.new(Color_BeChoCh, 30)   , style = line.style_solid)
+            BeChoCh_Label := label.new(int(math.avg((bar_index-Index) > LongP ? BeChoCh_I : Index,bar_index)),(bar_index-Index) > LongP ? BeChoCh_P- (ATR * 0.5) : low[bar_index-Index] - (ATR * 0.5) , 'Bearish ChoCh' , color = na,  
+             textcolor = Color_BeChoCh , style = label.style_label_up , size = Size_ChoCh)                                    
+    // Reset ChoCh Line
+        // Bullish ChoCh Line    
+    if (BuChoCh_I == BuChoCh_I[1] and Trend == 'Down Trend' and BuCount > 0) 
+        line.set_x2(BuChoCh_Line , bar_index + 1), label.set_x(BuChoCh_Label, int(math.avg(line.get_x1(BuChoCh_Line),bar_index)))
+        // Bearish ChoCh Line
+    if (BeChoCh_I == BeChoCh_I[1] and Trend == 'Up Trend' and BeCount > 0)  
+        line.set_x2(BeChoCh_Line , bar_index + 1), label.set_x(BeChoCh_Label, int(math.avg(line.get_x1(BeChoCh_Line),bar_index)))
+    //   \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\/////////////////////////////////////////////////
+    //    |||||||||||||||||||||||||||||||||||BoS & Liquidity Block|||||||||||||||||||||||||||||||||||||
+    //   //////////////////////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    //BoS & Liquidity in Up Trend
+    if Trend == 'Up Trend'
+        Low := 0.0
+        if nz(SHP) != 0 
+            if  High ==  0.0 ? High ==  0.0 : High <= high[ShortP]
+                High := high[ShortP]
+                Index :=bar_index[ShortP]
+                BoS_Permit := true
+                if Show_BoS
+                    BoS_Line := line.new(bar_index[ShortP], high[ShortP], bar_index, high[ShortP] , color = color.new(Color_BuBoS, 30) , style = line.style_dashed)
+                    BoS_Label:= label.new(int((bar_index[ShortP] + bar_index) / 2), high[ShortP]  + (ATR * 0.1), 'BoS', color = na, textcolor = Color_BuBoS , 
+                     size = Size_BoS , style = label.style_label_center)
+                if BoS_Permit[1] == true
+                    line.delete(BoS_Line[1]), label.delete(BoS_Label[1])
+        // Reset BoS & Liquidity Line
+        if nz(SHP) == 0 and (BoS_Permit )
+            line.set_x2(BoS_Line, bar_index), label.set_x(BoS_Label, int((line.get_x1(BoS_Line) + bar_index) / 2))
+        // Mitigated BoS Line
+        if close > line.get_y1(BoS_Line) and (BoS_Permit )
+            BoS_Permit := false
+        // Mitigated and Set Liquidity Line
+        if close < line.get_y1(BoS_Line) and high > line.get_y1(BoS_Line) and (BoS_Permit )
+            BoS_Permit := false
+            line.set_color(BoS_Line, color.new(Color_LQDY, 30)), line.set_style(BoS_Line, line.style_dotted), label.set_text(BoS_Label, 'LQDT'), label.set_textcolor(BoS_Label, Color_LQDY)
+    // BoS & Liquidity in Down Trend
+    if Trend == 'Down Trend'
+        High := 0.0
+        if nz(SLP) != 0 
+            if  Low == 0.0 ? Low == 0.0 : Low >= low[ShortP]
+                Low := low[ShortP]
+                Index :=bar_index[ShortP]
+                BoS_Permit := true
+                if Show_BoS
+                    BoS_Line := line.new(bar_index[ShortP], low[ShortP], bar_index, low[ShortP] , color = color.new(Color_BeBoS, 30) , style = line.style_dashed)
+                    BoS_Label:= label.new(int((bar_index[ShortP] + bar_index) / 2), low[ShortP]  - (ATR * 0.4), 'BoS', color = na, textcolor = Color_BeBoS , 
+                     size = Size_BoS , style = label.style_label_center)
+                if BoS_Permit[1] == true
+                    line.delete(BoS_Line[1]), label.delete(BoS_Label[1])
+        // Reset BoS & Liquidity Line
+        if nz(SLP) == 0 and (BoS_Permit )
+            line.set_x2(BoS_Line, bar_index), label.set_x(BoS_Label, int((line.get_x1(BoS_Line) + bar_index) / 2))
+        // Mitigated BoS Line
+        if close < line.get_y1(BoS_Line) and (BoS_Permit )
+            BoS_Permit := false
+        // Mitigated and Set Liquidity Line
+        if close > line.get_y1(BoS_Line) and low < line.get_y1(BoS_Line) and (BoS_Permit )
+            BoS_Permit := false
+            line.set_color(BoS_Line, color.new(Color_LQDY, 30)), line.set_style(BoS_Line, line.style_dotted), label.set_text(BoS_Label, 'LQDT'), label.set_textcolor(BoS_Label, Color_LQDY)        
+    //   \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\/////////////////////////////////////////////////
+    //    |||||||||||||||||||||||||||||||||||||||Inducement Block||||||||||||||||||||||||||||||||||||||
+    //   //////////////////////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    // Inducement in Up Trend
+    if Trend == 'Up Trend'
+        if nz(ILP) != 0 
+            IDM_Permit := true
+            if Show_IDMT
+                Inducement_Line := line.new(bar_index[InducementP], low[InducementP], bar_index, low[InducementP] , color = color.new(Color_IDMT, 30) , style = line.style_dotted)
+                Inducement_Label := label.new(int((bar_index[InducementP] + bar_index) / 2), low[InducementP]  - (ATR * 0.4), 'IDMT', color = na, textcolor = Color_IDMT , 
+                 size = Size_IDMT , style = label.style_label_center)
+            if IDM_Permit[1] == true
+                line.delete(Inducement_Line[1]), label.delete(Inducement_Label[1])
+        // Reset Inducement Line
+        if nz(ILP) == 0 and IDM_Permit == true
+            line.set_x2(Inducement_Line, bar_index ), label.set_x(Inducement_Label, int((line.get_x1(Inducement_Line) + bar_index) / 2))
+        // Mitigated Inducement Line
+        if IDMT_Type == 'Total' 
+            if low < line.get_y1(Inducement_Line)  
+                IDM_Permit := false
+        if IDMT_Type == 'Sweeps'
+            if low < line.get_y1(Inducement_Line) and close > line.get_y1(Inducement_Line)
+                IDM_Permit := false
+            if close < line.get_y1(Inducement_Line)
+                line.delete(Inducement_Line)
+                label.delete(Inducement_Label)
 
-// THEN arm, so an inducement taken on this bar is never scored on it.
-if statOn and deep.sIdm
-    nIdm += 1
-    aBos  := deep.bos
-    aCh   := deep.ch
-    aBull := deep.bias > 0
-    aHit  := false
-    aNrB  := false
-    aNrC  := false
-
-// ═══════════════════════════ 7. PANELS ══════════════════════════════════════
-trendTxt(Deg d) =>
-    d.bias > 0 ? "Bullish" : d.bias < 0 ? "Bearish" : "—"
-
-waitTxt(Deg d) =>
-    na(d.idm) and na(d.bos) ? "waiting for a pullback"
-     : not d.idmTaken ? "inducement at " + str.tostring(d.idm, format.mintick) +
-         " not yet taken"
-     : na(d.bos) ? "inducement taken"
-     : "inducement taken — needs " + str.tostring(d.bos, format.mintick) +
-         " to continue, " + str.tostring(d.ch, format.mintick) + " to flip"
-
-var table pan = table.new(position.top_right, 2, 5, border_width = 1,
-     frame_width = 1, frame_color = color.new(#787b86, 60))
-if showPanel and barstate.islast
-    table.cell(pan, 0, 0, "LIT", text_color = #787b86, text_size = size.small)
-    table.cell(pan, 1, 0, "market structure", text_color = #787b86,
-         text_size = size.small)
-    table.cell(pan, 0, 1, "Main", text_size = size.small,
-         text_color = #787b86)
-    table.cell(pan, 1, 1, trendTxt(main), text_size = size.small,
-         text_color = main.bias > 0 ? cBull : main.bias < 0 ? cBear : #787b86)
-    table.cell(pan, 0, 2, "Internal", text_size = size.small,
-         text_color = #787b86)
-    table.cell(pan, 1, 2, trendTxt(intl), text_size = size.small,
-         text_color = intl.bias > 0 ? cBull : intl.bias < 0 ? cBear : #787b86)
-    table.cell(pan, 0, 3, "Deep internal", text_size = size.small,
-         text_color = #787b86)
-    table.cell(pan, 1, 3, trendTxt(deep), text_size = size.small,
-         text_color = deep.bias > 0 ? cBull : deep.bias < 0 ? cBear : #787b86)
-    table.cell(pan, 0, 4, "Internal now", text_size = size.tiny,
-         text_color = #787b86)
-    table.cell(pan, 1, 4, waitTxt(intl), text_size = size.tiny,
-         text_color = #787b86)
-
-var table stat = table.new(position.bottom_right, 4, 7, border_width = 1,
-     frame_width = 1, frame_color = color.new(#787b86, 60))
-row(int r, string lab, int tot, int cnt) =>
-    table.cell(stat, 0, r, lab, text_color = #787b86, text_size = size.tiny)
-    table.cell(stat, 1, r, str.tostring(tot), text_size = size.tiny,
-         text_color = #787b86)
-    table.cell(stat, 2, r, str.tostring(cnt), text_size = size.tiny,
-         text_color = #787b86)
-    table.cell(stat, 3, r, tot > 0 ? str.tostring(100.0 * cnt / tot, "#.#") +
-         "%" : "—", text_size = size.tiny,
-         text_color = tot > 0 and cnt * 2 > tot ? cBull : cBear)
-
-if showStats and barstate.islast
-    table.cell(stat, 0, 0, "Deep-degree statistic", text_color = #787b86,
-         text_size = size.tiny)
-    table.cell(stat, 1, 0, "Total", text_color = #787b86, text_size = size.tiny)
-    table.cell(stat, 2, 0, "Count", text_color = #787b86, text_size = size.tiny)
-    table.cell(stat, 3, 0, "Rate", text_color = #787b86, text_size = size.tiny)
-    row(1, "IDM → BOS touch",        nIdm, nIdmBos)
-    row(2, "IDM → Choch touch",      nIdm, nIdmCh)
-    row(3, "BOS near → BOS break",   nBosNear, nBosBrk)
-    row(4, "BOS near → opp PB",      nBosNear, nBosOpp)
-    row(5, "Choch near → Choch brk", nChNear, nChBrk)
-    row(6, "Choch near → opp PB",    nChNear, nChOpp)
-
-// ═══════════════════════════ 8. ALERTS ══════════════════════════════════════
-alertcondition(main.sBos, "Main BOS",   "Main structure: break of structure")
-alertcondition(main.sCh,  "Main Choch", "Main structure: change of character")
-alertcondition(intl.sBos, "Internal BOS", "Internal: break of structure")
-alertcondition(intl.sCh,  "Internal Choch", "Internal: change of character")
-alertcondition(intl.sIdm, "Internal IDM taken", "Internal: inducement collected")
-alertcondition(deep.sIdm, "Deep IDM taken", "Deep internal: inducement collected")
+    // Inducement in Down Trend
+    if Trend == 'Down Trend'
+        if nz(IHP) != 0 
+            IDM_Permit := true
+            if Show_IDMT
+                Inducement_Line := line.new(bar_index[InducementP], high[InducementP], bar_index, high[InducementP] , color = color.new(Color_IDMT, 30) , style = line.style_dotted)
+                Inducement_Label := label.new(int((bar_index[InducementP] + bar_index) / 2), high[InducementP]  + (ATR * 0.1), 'IDMT', color = na, textcolor = Color_IDMT , 
+                 size = Size_IDMT , style = label.style_label_center)
+            if IDM_Permit[1] == true
+                line.delete(Inducement_Line[1]), label.delete(Inducement_Label[1])
+        // Reset Inducement Line
+        if nz(IHP) == 0 and IDM_Permit 
+            line.set_x2(Inducement_Line, bar_index ), label.set_x(Inducement_Label, int((line.get_x1(Inducement_Line) + bar_index) / 2))
+        // Mitigated Inducement Line
+        if IDMT_Type == 'Total' 
+            if high > line.get_y1(Inducement_Line)  
+                IDM_Permit := false
+        if IDMT_Type == 'Sweeps'
+            if high > line.get_y1(Inducement_Line) and close < line.get_y1(Inducement_Line)
+                IDM_Permit := false
+            if close > line.get_y1(Inducement_Line)
+                line.delete(Inducement_Line)
+                label.delete(Inducement_Label)
+//Call Function
+Structure(LongP, ShortP, InducementP, FTD, IDMT_Type, Show_ChoCh, Color_BuChoCh, Color_BeChoCh, Size_ChoCh, Show_BoS, Color_BuBoS, Color_BeBoS, Color_LQDY, Size_BoS, Show_IDMT, Color_IDMT, Size_IDMT)
