@@ -53,6 +53,59 @@ WHAT THIS RUN ADDS, FIXED BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. RIPTIDE_MIN_GRADE=B RIPTIDE_DEEP_CACHE=/tmp/deep \\
         python3 research/studies/lit_trend_conf.py
+
+──────────────────────────────────────────────────────────────────────────────
+RESULT — 1261 confirmed A/B signals of 27040, 59 symbols, 333 days, Min30.
+Full output in lit_trend_conf.out.
+
+IT SURVIVED ALL FOUR FALSIFIERS, AND THE RECORDED EXPECTATION ABOVE WAS WRONG
+ON BOTH COUNTS.
+
+  plain null        p95 2.0   real 3.1   p 0.003
+  FAMILY-WISE null  p95 2.7   real 3.1   p 0.018      <- the one that settles it
+  bootstrap         [+0.103, +0.424]  median +0.259, entirely above zero
+  half 1            +0.158 kept vs -0.092 cut   |SE| 2.0   +15.6R   alerts -27%
+  half 2            +0.145 kept vs -0.123 cut   |SE| 2.3   +27.9R   alerts -36%
+  all               +0.152 kept vs -0.110 cut   |SE| 3.1   +43.5R   alerts -31%
+
+I expected the family-wise null to fail, on the argument that 3.1 is not far
+past a max-of-four distribution when the single-arm p95 was 2.1. It is past
+it: at 2000 rotations the exceedance rate is 0.018, so this is not a threshold
+scraped by a rounding. I also expected one of the two halves to show a
+non-negative cut group at n≈200. Both halves cut a LOSING group, at almost
+identical effect size — +0.250 and +0.268 — which is the most convincing line
+in the table and the one the flat-3R finding failed.
+
+WHY THIS ONE IS DIFFERENT FROM EVERY OTHER FILTER TESTED HERE. The group it
+excludes makes -0.110. Twenty-odd filters have separated by keeping the better
+half of a pool that was positive throughout, which buys nothing: a prediction
+is not a decision. This is the first that removes signals which lose money.
+The arithmetic is therefore a gain and not a cost, in both halves
+independently.
+
+WHAT IT IS WORTH, SCALED TO THE DEPLOYED 120 SYMBOLS. Confirmed A/B alerts run
+7.7/day; the gate cuts 2.4/day and adds about +88R over 333 days. It touches
+only 14% of the A/B stream, because confirmed signals are 1261 of 9159 — this
+is a narrow instrument, not a rewrite of the grade.
+
+FOUR THINGS THAT SHOULD TEMPER IT, NONE OF THEM FATAL.
+  n on the cut side is 395, and 169/226 per half. Small.
+  The family-wise null spans the four arms read in lit_trend.py. It does NOT
+  span every filter tested across this project; each study is pre-registered
+  separately, which is the standard being applied, but a reader who wants the
+  project-wide correction will not find it here.
+  There is no mechanism. lit_trend.py predicted the effect on EARLY signals
+  and it landed on CONFIRMED ones, so the story that motivated the test is not
+  the story the data tells. A surviving finding without a mechanism is still
+  only a finding.
+  It has never run forward. Everything above is in-sample over one 333-day
+  window on one timeframe.
+
+SO THE RECOMMENDATION IS SHADOW MODE, NOT A SHIPPED GATE: label confirmed
+alerts with whether the structural trend agrees, change nothing about which
+alerts are sent, and compare the two groups forward until the live n on the
+cut side reaches the low hundreds. That is the only test left that this
+window cannot fake.
 """
 import research.env  # noqa: F401  (must precede riptide.config)
 
@@ -74,7 +127,7 @@ from research.studies.poi_tf import collect, context, universe  # noqa: E402
 from research.studies.lit_trend import INTERVAL, gap, split  # noqa: E402
 from research.studies.lit_trend import trend_series     # noqa: E402
 
-SHIFTS = 300
+SHIFTS = 2000
 BOOT = 2000
 CACHE = "/tmp/lit_trend_rows.json"
 
@@ -211,8 +264,12 @@ def main():
             continue
         dist.sort()
         p95 = dist[int(0.95 * (len(dist) - 1))]
+        # The exact exceedance rate, not just the p95 verdict. Clearing a p95
+        # by 0.2 and clearing it by 1.0 are different findings and the
+        # threshold hides which one this is.
+        pv = sum(1 for v in dist if v >= real) / len(dist)
         print(f"  {name:<42} p95 {p95:>4.1f}   max {dist[-1]:>4.1f}   "
-              f"real {real:>4.1f}   "
+              f"real {real:>4.1f}   p {pv:>6.3f}   "
               f"{'CLEARS' if real > p95 else 'FAILS - inside the null'}")
 
     print(f"\n{'=' * 100}\nSYMBOL BOOTSTRAP — {BOOT} draws\n{'=' * 100}")
