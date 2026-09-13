@@ -43,8 +43,19 @@
 strategy('Riptide Scalper Strategy', 'RIPTIDE SCALP S', overlay = true,
    initial_capital = 300,
    default_qty_type = strategy.percent_of_equity, default_qty_value = 100,
-   commission_type = strategy.commission.percent, commission_value = 0.02,
-   slippage = 2,
+   // COSTS. MEXC charges MAKER on the entry and the target — both rest as
+   // limits and never cross the book — and taker only on the stop. TradingView
+   // applies one rate to every fill, so 0.02 on all of them roughly doubles the
+   // true cost. 0.01 is the honest average; raise it in Properties to see the
+   // pessimistic case.
+   //
+   // SLIPPAGE IS 0 HERE ON PURPOSE, and that is not laziness. TradingView counts
+   // slippage in TICKS, which is a different fraction of price on every symbol:
+   // 2 ticks on ZEC at 1138 is 0.002%, and 2 ticks on a coin priced 0.01 is
+   // 0.2% — a third of the whole 0.6% stop. A fixed tick count silently makes
+   // cheap symbols look terrible. Set it per symbol in Properties.
+   commission_type = strategy.commission.percent, commission_value = 0.01,
+   slippage = 0,
    process_orders_on_close = false,
    calc_on_every_tick = false,
    max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500)
@@ -59,6 +70,7 @@ g_disp  = 'Display'
 htf = input.timeframe('5', 'Liquidity timeframe', group = g_setup, tooltip = 'Which timeframe supplies the level being raided. The measured model used the previous COMPLETED 5-minute bar, read on a 1-minute chart.')
 maxWaitRaid = input.int(240, 'Bars a level stays live', minval = 10, maxval = 1000, group = g_setup)
 maxWaitFvg  = input.int(25, 'Bars to find the gap', minval = 3, maxval = 100, group = g_setup)
+cooldownBars = input.int(30, 'Cooldown between trades (bars)', minval = 0, maxval = 200, group = g_setup, tooltip = 'Minimum bars between two trades in the SAME direction on this symbol.\n\n30 is what the research used, and it is load-bearing rather than cosmetic: without it price oscillating around one 5m low re-arms on every poke through it, and one market move becomes a burst of correlated trades. A backtest without this fires several times more often than the one that was measured.')
 fillBars    = input.int(10, 'Bars the limit waits', minval = 1, maxval = 60, group = g_setup, tooltip = 'How long the limit works before it is cancelled. 10 bars, the same rule Riptide\'s tracker uses. A setup that has not pulled back in ten minutes has moved on without you.')
 
 riskPctInput = input.float(0.5, 'Risk per trade (%)', minval = 0.1, maxval = 5, step = 0.1, group = g_risk, tooltip = 'Percent of equity risked per trade. Position size is derived from this and the stop distance — notional = equity x risk% / stop%. Sizing by a fixed notional instead is what makes a wide stop feel punishing: it is not a worse trade, it is a bigger one.')
@@ -69,6 +81,13 @@ minStopPct = input.float(0.6, 'Minimum stop (%)', minval = 0, maxval = 3, step =
 useTrend  = input.bool(true, 'Require 5m trend agreement', group = g_filt, tooltip = 'The one filter that survived a held-out test. Six families were tried — direction, EMA, funding, RVOL, ADX, supertrend — on a pre-registered list, chosen on one half and read once on the other.\n\nEMA and supertrend, two separate measures of the same thing, BOTH held:\n  EMA with trend    +0.211      against  -0.174\n  ST  agrees        +0.196      opposes  -0.165\n\nFunding (+0.001) and RVOL (+0.005) were flat, which is what tells you the table can still show a null.\n\nThe mechanism in one line: this is a mean-reversion entry and it should not be used to fade a trending 5m move.')
 stFactor  = input.float(3.0, 'Supertrend factor', minval = 1, maxval = 10, step = 0.5, group = g_filt)
 stPeriod  = input.int(10, 'Supertrend ATR period', minval = 2, maxval = 50, group = g_filt)
+
+g_adx = 'ADX filter — tested and REJECTED, here so you can see why'
+useAdx   = input.bool(false, 'Require ADX above cut', group = g_adx, tooltip = 'OFF BY DEFAULT BECAUSE IT FAILED ITS OWN TEST, and the failure is worth seeing rather than being told about.\n\nADX was tried at three smoothings on top of the trend filter, each chosen on one half of the data and read on the other:\n\n  ADX(7)  trending   +0.022\n  ADX(14) trending   -0.071\n  ADX(21) trending   +0.238\n\nOne length out of three works and the other two are flat or negative. That is a parameter search landing on a lucky value, not a property of the market — and the study said so in writing BEFORE the run.\n\nCompare the supertrend filter above, which is real: EMA and supertrend are DIFFERENT indicators measuring the same idea and both held at the same size with symmetric losing counter-sides.\n\nTurn this on and sweep the length. If it only pays at one value, you have reproduced the finding — that it is fitting.')
+adxLen   = input.int(14, 'ADX length', minval = 2, maxval = 50, group = g_adx)
+adxSmooth = input.int(14, 'ADX smoothing', minval = 2, maxval = 50, group = g_adx)
+adxCut   = input.float(25, 'ADX cut', minval = 5, maxval = 60, step = 1, group = g_adx)
+adxAbove = input.bool(true, 'Above the cut (off = below)', group = g_adx, tooltip = 'Which side of the cut to keep. "Above" is the conventional trending filter; "below" keeps the ranging half, which scored better at ADX(14) in round one.')
 
 showLevels = input.bool(true, 'Liquidity levels', group = g_disp)
 showTrade  = input.bool(true, 'Trade zones', group = g_disp)
@@ -103,6 +122,17 @@ f_stUp() =>
     dir < 0
 stUp = request.security(syminfo.tickerid, htf, f_stUp(), lookahead = barmerge.lookahead_off)
 
+// Evaluated INSIDE request.security for the same reason as the supertrend: a
+// chart-resolution ADX sampled every five minutes is a 1m ADX, not a 5m one.
+f_adx() =>
+    [_p, _m, a] = ta.dmi(adxLen, adxSmooth)
+    a
+adxVal = request.security(syminfo.tickerid, htf, f_adx(), lookahead = barmerge.lookahead_off)
+// Parenthesised rather than trusting ternary precedence. Pine binds ?: loosely
+// enough that this reads correctly either way, but a filter that silently
+// inverts is the most expensive kind of typo in this file.
+adxOk = (not useAdx or na(adxVal)) ? true : (adxAbove ? adxVal >= adxCut : adxVal < adxCut)
+
 var float liqHigh   = na
 var int   liqHighAt = na
 var float liqLow    = na
@@ -124,6 +154,20 @@ var float sStop  = na
 var float sEntry = na
 var int   sSince = 0
 
+// THE TWO GUARDS THE RESEARCH MODEL HAS, and the first version of this file did
+// not — which is why it fired far more often than the backtest it claims to
+// reproduce, and the extra trades are the marginal ones.
+//
+//   COOLDOWN: one trade per direction per N bars, so a single move is one
+//   trade rather than a burst of re-entries down the same leg.
+//   ONE ATTEMPT PER LEVEL: a level that has already been raided does not arm
+//   again. Without this, price oscillating around one 5m low re-arms on every
+//   poke through it.
+var int   lastFireL = -99999
+var int   lastFireS = -99999
+var float lastLvlL  = na
+var float lastLvlS  = na
+
 // A raid is a wick THROUGH the level with a close back on the original side.
 // Through without a reclaim is a breakout; a reclaim without a wick through
 // never took the liquidity at all.
@@ -133,10 +177,13 @@ raidShort = not na(liqHigh) and bar_index - liqHighAt <= maxWaitRaid and high > 
 bullGap = low > high[2]
 bearGap = high < low[2]
 
-if lState == 0 and raidLong
+canLong = bar_index - lastFireL >= cooldownBars and (na(lastLvlL) or liqLow != lastLvlL)
+if lState == 0 and raidLong and canLong
     lState := 1
     lSince := 0
     lStop  := low
+    lastFireL := bar_index
+    lastLvlL  := liqLow
 else if lState == 1
     lSince += 1
     lStop  := math.min(lStop, low)
@@ -151,10 +198,13 @@ else if lState == 2
     if low <= lEntry or lSince > fillBars
         lState := 0
 
-if sState == 0 and raidShort
+canShort = bar_index - lastFireS >= cooldownBars and (na(lastLvlS) or liqHigh != lastLvlS)
+if sState == 0 and raidShort and canShort
     sState := 1
     sSince := 0
     sStop  := high
+    lastFireS := bar_index
+    lastLvlS  := liqHigh
 else if sState == 1
     sSince += 1
     sStop  := math.max(sStop, high)
@@ -186,8 +236,8 @@ f_qty(float entry, float stop) =>
     float dist = math.abs(entry - stop)
     dist > 0 ? (strategy.equity * riskPctInput / 100) / dist : 0.0
 
-armLong  = lState == 2 and lState[1] != 2 and (not useTrend or stUp)
-armShort = sState == 2 and sState[1] != 2 and (not useTrend or not stUp)
+armLong  = lState == 2 and lState[1] != 2 and (not useTrend or stUp) and adxOk
+armShort = sState == 2 and sState[1] != 2 and (not useTrend or not stUp) and adxOk
 
 // ────────────────────────────────────────────────────────────────────── orders
 
