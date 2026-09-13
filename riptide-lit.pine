@@ -1,0 +1,981 @@
+//@version=6
+// =============================================================================
+//  Riptide LIT Structure - v0.1
+// -----------------------------------------------------------------------------
+//  A reverse-engineered implementation of the documented LIT / Liquidity
+//  Inducement Theorem market-structure model.
+//
+//      Inside Bars -> Pullbacks -> Pivots -> IDM -> BOS -> CHoCH -> Trend
+//
+//  This is a SEPARATE strategy family. It shares no state, no filters and no
+//  assumptions with the Riptide liquidity-sweep engine. It is a research and
+//  visual-validation tool: it marks structure and nothing else.
+//
+//  NO FIXED SWING LENGTHS. There is no pivot length, no left/right bars, no
+//  zigzag percentage and no fractal size anywhere in this file. A pivot exists
+//  only because a pullback completed. That is the whole point of the model:
+//  two traders on the same chart read the same structure.
+//
+//  NON-REPAINTING. Every level is set from bars that had already closed when
+//  it was set. There is no lookahead, no security() and no future reference.
+//  The only delays are the ones the rules themselves require - waiting for a
+//  pullback to break out, waiting for a body close, waiting for a Hidden
+//  Shadow to resolve. Engine state mutates only on confirmed bars; drawings
+//  extend to the live bar but never change what was decided.
+//
+//  SOURCE-DERIVED vs INFERRED. Rules taken from the reference material are
+//  marked [SRC]. Decisions made where the reference is silent are marked
+//  [INF] and are the first things to revisit if the chart disagrees with the
+//  references. They are listed together at the bottom of this header.
+//
+//  THE THREE INFERRED DECISIONS THAT MATTER MOST
+//  ---------------------------------------------
+//  1. LEG RESET. [SRC] says the structural leg start survives IDM migration
+//     and that BOS is the highest high from the leg start through the IDM
+//     break. Taken literally with a leg that never resets, BOS becomes the
+//     all-time high of the trend and can never break - the structure
+//     deadlocks. Resolved here as: the leg start survives IDM migration, and
+//     resets on a BOS break and on a trend flip. The new leg starts at the
+//     CHoCH point, which is the base the next leg is measured from.
+//
+//  2. SCOPE HIERARCHY. The reference says the three depths differ by scope
+//     rather than by pivot length, but never says how a child scope is bounded
+//     or when it restarts. Resolved here as: all three depths consume ONE
+//     pullback-pivot stream, and a child resets to direction UNDEFINED
+//     whenever its parent resolves a boundary - Internal on a Main BOS or
+//     CHoCH break, Deep on an Internal one. This is the decision most likely
+//     to need correction in v0.2.
+//
+//  3. OUTSIDE-BOTH-SIDES CANDLE. When one candle takes out both sides of the
+//     tracking range, OHLC cannot say which side went first and this file does
+//     not guess. The pullback start wins, because a break of the tracking low
+//     in a bullish leg is a correction whichever order it happened in. Counted
+//     and shown in the debug panel so the frequency is visible rather than
+//     silent.
+//
+//  Other inferred points: exact equality is NOT a break; the Body & Sweep
+//  active level is preserved after a Hidden Shadow rejection rather than
+//  reset; direction bootstraps from the first confirmed pullback rather than
+//  from any average or candle colour.
+// =============================================================================
+
+indicator("Riptide LIT Structure", "Riptide LIT",
+     overlay          = true,
+     max_lines_count  = 500,
+     max_labels_count = 500,
+     max_boxes_count  = 500,
+     max_bars_back    = 5000)
+
+// ═══════════════════════════ CONSTANTS ══════════════════════════════════════
+// Readable names instead of magic numbers, so the state transitions below read
+// as sentences.
+int DIR_NONE = 0
+int DIR_BULL = 1
+int DIR_BEAR = -1
+
+int PH_IDLE  = 0   // no IDM published - discovering one
+int PH_TRACK = 1   // IDM active, waiting for it to be taken
+int PH_SEEK  = 2   // IDM taken, BOS locked, no opposing CHoCH yet
+int PH_LOCK  = 3   // BOS and CHoCH both active - boundary lock
+
+int BRK_SHADOW = 0
+int BRK_BODY   = 1
+int BRK_SWEEP  = 2
+
+int PB_NONE    = 0   // nothing tracked yet
+int PB_IMPULSE = 1   // riding the impulse, no correction yet
+int PB_ACTIVE  = 2   // correction under way, waiting for confirmation
+
+int D_MAIN = 0
+int D_INT  = 1
+int D_DEEP = 2
+
+// ═══════════════════════════ 1. INPUTS ══════════════════════════════════════
+string gEng  = "1. Engine"
+string gBrk  = "2. Breakout rules"
+string gHS   = "3. Hidden Shadow"
+string gShow = "4. What to draw"
+string gPB   = "5. Pullback zones"
+string gCol  = "6. Appearance"
+string gPanel = "7. Panels and debug"
+
+// ── 1. Engine ───────────────────────────────────────────────────────────────
+bool cfgConfirm = input.bool(true, "Only update structure on closed bars",
+     group = gEng,
+     tooltip = "On: the engine reads a bar once it has closed, which is the only way the chart can promise that what you see now is what it would have said then.\n\nOff: levels can move inside a forming bar and settle differently when it closes. Useful for watching a break happen, misleading for judging history.")
+
+bool cfgStrictIn = input.bool(true, "Strict inside bars",
+     group = gEng,
+     tooltip = "[INFERRED] The reference says 'moves past'. Strict means a candle whose high EQUALS the mother high has broken out; non-strict means it is still inside.\n\nRiptide's other structure indicator uses non-strict. This one defaults to strict because the LIT source language is about breaking, and equality is not breaking. Flip it if the reference screenshots disagree.")
+
+// ── 2. Breakout rules ───────────────────────────────────────────────────────
+// [SRC] One reusable break engine serves pullback confirmation, IDM, BOS and
+// CHoCH, so all four get the same three modes.
+string mPB = input.string("Shadow", "Pullback confirmation", group = gBrk,
+     options = ["Shadow", "Body", "Body & Sweep"],
+     tooltip = "How a correction proves it is over.\n\nShadow: a wick back through the level is enough.\n\nBody: the candle must close beyond it.\n\nBody & Sweep: the candle must close beyond the SWEEP LEVEL - the furthest a wick has pushed through and failed. With no failed wick this behaves exactly as Body, so it can never deadlock on a level price jumped straight over.")
+string mIDM = input.string("Shadow", "IDM break", group = gBrk,
+     options = ["Shadow", "Body", "Body & Sweep"],
+     tooltip = "Taking inducement IS a wick event - the stops sitting under that low get filled whether or not the candle closes there - which is why this defaults to Shadow.")
+string mBOS = input.string("Body & Sweep", "BOS break", group = gBrk,
+     options = ["Shadow", "Body", "Body & Sweep"])
+string mCH = input.string("Body & Sweep", "CHoCH break", group = gBrk,
+     options = ["Shadow", "Body", "Body & Sweep"])
+
+// ── 3. Hidden Shadow ────────────────────────────────────────────────────────
+// [SRC] A body close beyond a level that is back inside one candle later is a
+// wick on the timeframe above. Hidden Shadow re-judges the break against a
+// synthetic candle spanning the candidate and its resolver.
+bool hsPB = input.bool(false, "Hidden Shadow on pullback", group = gHS,
+     tooltip = "No effect while the matching break mode is Shadow: a wick break is already a wick break.")
+bool hsIDM = input.bool(false, "Hidden Shadow on IDM", group = gHS,
+     tooltip = "No effect while IDM break is set to Shadow.")
+bool hsBOS = input.bool(true, "Hidden Shadow on BOS", group = gHS)
+bool hsCH = input.bool(true, "Hidden Shadow on CHoCH", group = gHS)
+
+// ── 4. What to draw ─────────────────────────────────────────────────────────
+bool showMain = input.bool(true, "Main structure", group = gShow)
+bool showInt = input.bool(true, "Internal structure", group = gShow)
+bool showDeep = input.bool(false, "Deep internal structure", group = gShow,
+     tooltip = "[SRC] Deep only runs while Internal is on, matching the reference UI.")
+bool showIDM = input.bool(true, "IDM levels", group = gShow, inline = "lvl")
+bool showBOS = input.bool(true, "BOS levels", group = gShow, inline = "lvl")
+bool showCH = input.bool(true, "CHoCH levels", group = gShow, inline = "lvl")
+bool showSW = input.bool(true, "Strong / Weak labels", group = gShow,
+     tooltip = "[SRC] Display semantics only. In a bullish structure the continuation-side high is WEAK and the reversal-side low is STRONG. Nothing in the engine reads these.")
+bool showInside = input.bool(true, "Tint inside bars", group = gShow)
+bool showHSbar = input.bool(true, "Tint Hidden Shadow candles", group = gShow)
+
+int histMain = input.int(20, "Main history", minval = 1, maxval = 60,
+     group = gShow, inline = "h",
+     tooltip = "How many retired levels of each depth stay on the chart. TradingView caps a script at 500 lines and 500 labels; these three numbers are what keeps this script inside that.")
+int histInt = input.int(30, "Internal", minval = 1, maxval = 60,
+     group = gShow, inline = "h")
+int histDeep = input.int(30, "Deep", minval = 1, maxval = 60,
+     group = gShow, inline = "h")
+
+// ── 5. Pullback zones ───────────────────────────────────────────────────────
+bool showPB = input.bool(true, "Draw pullback zones", group = gPB,
+     tooltip = "One set of zones, not three. All three depths read the same pullback stream - they differ in which of those pullbacks they treat as an inducement, a BOS or a CHoCH, not in where the pullbacks are. A separate 'internal pullbacks' toggle would imply a distinction this engine does not have.")
+int histPB = input.int(30, "Pullback history", minval = 1, maxval = 80,
+     group = gPB)
+string pbEdge = input.string("Initial level", "Zone boundary", group = gPB,
+     options = ["Initial level", "Final swept level"],
+     tooltip = "[SRC] Visual only. It moves the edge of the box and changes nothing about the pivot or the structure state.\n\nInitial level: the extreme of the candle that began the correction.\n\nFinal swept level: the furthest a wick pushed through before the correction confirmed.")
+
+// ── 6. Appearance ───────────────────────────────────────────────────────────
+// Riptide's palette, taken from riptide-indicator.pine so the three charts read
+// as one product: teal for bullish, rose for bearish, neutral grey for
+// structure that is neither.
+color cBull = input.color(#26a69a, "Bullish", group = gCol, inline = "c1")
+color cBear = input.color(#ef5350, "Bearish", group = gCol, inline = "c1")
+color cIDM = input.color(#787b86, "Inducement", group = gCol, inline = "c2")
+color cHS = input.color(#9c27b0, "Hidden Shadow", group = gCol, inline = "c2")
+color cIn = input.color(#b0bec5, "Inside bar", group = gCol, inline = "c2")
+string szMain = input.string(size.small, "Main label size", group = gCol,
+     options = [size.tiny, size.small, size.normal])
+string szSub = input.string(size.tiny, "Internal / Deep label size",
+     group = gCol, options = [size.tiny, size.small, size.normal])
+
+// ── 7. Panels and debug ─────────────────────────────────────────────────────
+bool showPanel = input.bool(false, "Guidance panel", group = gPanel)
+bool showStats = input.bool(false, "Structure statistics", group = gPanel,
+     tooltip = "First-passage rates. After an IDM is taken, which gets touched first - the BOS or the CHoCH? A bar that touches both is counted as ambiguous and excluded rather than resolved by guessing intrabar order.")
+bool showDbg = input.bool(false, "Debug panel", group = gPanel)
+
+// ═══════════════════════════ 2. TYPES ═══════════════════════════════════════
+// [SRC] One break engine, four users. Each instance owns the level it is
+// watching, its Body & Sweep migration state and its Hidden Shadow pending
+// state, so the four never interfere.
+type Brk
+    float base = na          // the structural level as first set
+    float act = na           // Body & Sweep: the migrating threshold
+    int dir = 0              // +1 break upward, -1 break downward
+    int mode = 0
+    bool useHS = false
+    bool pend = false        // a body break is waiting on Hidden Shadow
+    float hsLvl = na
+    float hsOpen = na
+    float hsHi = na
+    float hsLo = na
+    float hsMomHi = na       // candidate candle's own range - the HS mother
+    float hsMomLo = na
+    bool fired = false       // Hidden Shadow rejected a break on this bar
+
+// [SRC] A correction, tracked from the impulse that precedes it to the break
+// that ends it. One parent pullback may contain many internal swings; it stays
+// one object, and emits exactly one pivot.
+type PB
+    int state = 0
+    int dir = 0              // +1 a dip in an up leg, -1 a rally in a down leg
+    int startBar = na
+    float trkHi = na
+    float trkLo = na
+    float conf = na          // the level whose break confirms it
+    float rngHi = na
+    float rngLo = na
+    float swept = na         // furthest failed wick, for the zone boundary
+    int rngHiBar = na
+    int rngLoBar = na
+    Brk b
+
+// One structural context. Three of these run side by side.
+type Ctx
+    int depth = 0
+    int dir = 0
+    int phase = 0
+    int legBar = na
+    float legPx = na
+    float idmPx = na
+    int idmBar = na
+    bool idmOn = false
+    float bosPx = na
+    int bosBar = na
+    bool bosOn = false
+    float chPx = na
+    int chBar = na
+    bool chOn = false
+    float legHi = na
+    int legHiBar = na
+    float legLo = na
+    int legLoBar = na
+    float phHi = na
+    int phHiBar = na
+    float phLo = na
+    int phLoBar = na
+    Brk bIdm
+    Brk bBos
+    Brk bCh
+    float latDem = na        // [SRC] latent pullbacks, reused after a boundary
+    int latDemBar = na
+    float latSup = na
+    int latSupBar = na
+    line lnIdm
+    label lbIdm
+    line lnBos
+    label lbBos
+    line lnCh
+    label lbCh
+    array<line> junkL
+    array<label> junkB
+    // first-passage race, for the statistics table
+    bool racing = false
+    bool sawBos = false
+    bool sawCh = false
+
+// ═══════════════════════════ 3. BREAK ENGINE ════════════════════════════════
+modeOf(string s) =>
+    s == "Shadow" ? BRK_SHADOW : s == "Body" ? BRK_BODY : BRK_SWEEP
+
+// Point a break engine at a level. [INF] act starts at base; Body & Sweep
+// migrates it upward (or downward) from there as wicks fail.
+arm(Brk b, float lvl, int dir, int mode, bool useHS) =>
+    b.base := lvl
+    b.act := lvl
+    b.dir := dir
+    b.mode := mode
+    b.useHS := useHS
+    b.pend := false
+    b.fired := false
+    b.hsLvl := na
+
+disarm(Brk b) =>
+    b.base := na
+    b.act := na
+    b.pend := false
+    b.fired := false
+
+// One bar of the break engine. Returns true on the bar the break CONFIRMS,
+// which for a Hidden Shadow candidate is the resolver bar and not the
+// candidate bar. Everything it reads is from the bar that just closed.
+//
+// `ok` is the inside-bar gate. [SRC] An inside bar never independently breaks
+// a structural level, so it is not offered one. It is passed in rather than
+// read as a global because this function is declared above the normalizer.
+step(Brk b, bool ok) =>
+    bool done = false
+    b.fired := false
+    if not na(b.base) and ok
+        bool up = b.dir > 0
+        if b.pend
+            // [SRC] Hidden Shadow. Candles contained by the candidate's own
+            // range cannot resolve it - wait for the first one that escapes.
+            bool contained = high < b.hsMomHi and low > b.hsMomLo
+            if not contained
+                float synHi = math.max(b.hsHi, high)
+                float synLo = math.min(b.hsLo, low)
+                // The synthetic candle opens where the candidate opened and
+                // closes where the resolver closed; only that close judges it.
+                b.hsHi := synHi
+                b.hsLo := synLo
+                b.pend := false
+                if up ? close > b.hsLvl : close < b.hsLvl
+                    done := true
+                else
+                    // Rejected. [INF] The level stays active and Body & Sweep
+                    // keeps whatever threshold it had already migrated to.
+                    b.fired := true
+        else
+            bool raw = false
+            if b.mode == BRK_SHADOW
+                // [SRC] Strict: touching the level is not passing it.
+                raw := up ? high > b.base : low < b.base
+            else if b.mode == BRK_BODY
+                raw := up ? close > b.base : close < b.base
+            else
+                // [SRC] Body & Sweep. A wick through that closes back inside
+                // has swept, not broken - the threshold moves to that wick and
+                // only a close beyond the NEW threshold counts.
+                if up and high > b.act and close <= b.act
+                    b.act := high
+                else if not up and low < b.act and close >= b.act
+                    b.act := low
+                raw := up ? close > b.act : close < b.act
+            if raw
+                if b.useHS and b.mode != BRK_SHADOW
+                    b.pend := true
+                    b.hsLvl := b.mode == BRK_SWEEP ? b.act : b.base
+                    b.hsOpen := open
+                    b.hsHi := high
+                    b.hsLo := low
+                    b.hsMomHi := high
+                    b.hsMomLo := low
+                else
+                    done := true
+    done
+
+// ═══════════════════════════ 4. INSIDE BARS ═════════════════════════════════
+// [SRC] A candle sets a range and EVERY candle that stays inside it is noise
+// until that range breaks - not merely the next one. Comparing each candle
+// only with its predecessor calls three bars of a five-bar coil real
+// structure. Inside bars keep their OHLC and their bar index; they are simply
+// never shown to the detectors below.
+//
+// [SRC] The range exit is geometric and has nothing to do with the Shadow /
+// Body / Body & Sweep modes above. Those judge STRUCTURE. This judges
+// containment.
+var float momHi = na
+var float momLo = na
+var int nOutBoth = 0
+
+bool inside = false
+if na(momHi)
+    momHi := high
+    momLo := low
+else
+    bool over = cfgStrictIn ? high >= momHi : high > momHi
+    bool under = cfgStrictIn ? low <= momLo : low < momLo
+    if over and under
+        // [INF] Both sides gone in one candle. OHLC cannot say which went
+        // first and this file does not invent an order; the candle simply
+        // becomes the new mother and the close orients what follows.
+        nOutBoth += 1
+        momHi := high
+        momLo := low
+    else if over or under
+        momHi := high
+        momLo := low
+    else
+        inside := true
+
+// The series every detector actually reads. Inside bars carry the last real
+// bar forward, so nothing downstream has to know they existed.
+var float fh = na
+var float fl = na
+fh := inside ? nz(fh[1], high) : high
+fl := inside ? nz(fl[1], low) : low
+bool real = not inside
+
+// ═══════════════════════════ 5. PULLBACK DETECTOR ═══════════════════════════
+// [SRC] No candle counting anywhere. A pullback is tracked in two phases:
+//
+//   Phase A - ride the impulse. While each new real candle makes a higher high
+//             without a lower low, both tracking levels move with it.
+//   Phase B - the tracking low breaks. That IS the correction starting. The
+//             level that will confirm it is fixed at the trigger candle's high
+//             and stops moving.
+//
+// When the correction confirms, the pivot is the LOWEST low of the whole
+// correction - not the trigger candle's low - so a complex pullback with
+// several internal swings still emits exactly one pivot.
+//
+// Two trackers run at once, one assuming an up leg and one a down leg, because
+// a depth whose direction is still undefined has no trend to assume. Between
+// them they produce the single pivot stream all three depths read.
+var PB dem = PB.new(dir = DIR_BULL, b = Brk.new())
+var PB sup = PB.new(dir = DIR_BEAR, b = Brk.new())
+
+float pivLo = na          // a demand pullback confirmed: emit its low
+int pivLoBar = na         // the bar that low printed on, not the break bar
+int pivLoFrom = na        // where the correction began, for the zone
+float pivLoEdge = na
+float pivHi = na          // a supply pullback confirmed: emit its high
+int pivHiBar = na
+int pivHiFrom = na
+float pivHiEdge = na
+
+int pbMode = modeOf(mPB)
+
+if real
+    // ── demand: a dip inside an up leg, confirmed by breaking back up ───────
+    if dem.state == PB_NONE
+        dem.state := PB_IMPULSE
+        dem.trkHi := fh
+        dem.trkLo := fl
+    else if dem.state == PB_IMPULSE
+        if fl < dem.trkLo
+            // [SRC] The correction begins here and the confirmation level is
+            // this candle's high, fixed from now on.
+            dem.state := PB_ACTIVE
+            dem.startBar := bar_index
+            dem.conf := fh
+            dem.rngHi := fh
+            dem.rngHiBar := bar_index
+            dem.rngLo := fl
+            dem.rngLoBar := bar_index
+            dem.swept := na
+            arm(dem.b, fh, 1, pbMode, hsPB)
+        else if fh > dem.trkHi
+            dem.trkHi := fh
+            dem.trkLo := fl
+    else
+        // [SRC] One parent pullback, however many internal swings it contains.
+        if fh > dem.rngHi
+            dem.rngHi := fh
+            dem.rngHiBar := bar_index
+        if fl < dem.rngLo
+            // [CORRECTION to the reference text] The level that confirms a low
+            // is the high of the candle that MADE that low, so it tracks down
+            // as the correction deepens. The reference fixes it at the candle
+            // the correction BEGAN on; measured over 8 symbols and 120 days of
+            // Min15 that starves the engine - one correction stayed open 9200
+            // bars and the whole structure went with it. 25 pivots against
+            // 1632. Riptide's other structure indicator already migrates this
+            // level, and that is the behaviour kept here.
+            dem.rngLo := fl
+            dem.rngLoBar := bar_index
+            dem.conf := fh
+            dem.swept := na
+            arm(dem.b, fh, 1, pbMode, hsPB)
+        if high > dem.conf and close <= dem.conf
+            dem.swept := na(dem.swept) ? high : math.max(dem.swept, high)
+        if step(dem.b, true)
+            pivLo := dem.rngLo
+            pivLoBar := dem.rngLoBar
+            pivLoFrom := dem.startBar
+            pivLoEdge := pbEdge == "Initial level" or na(dem.swept) ?
+                 dem.conf : dem.swept
+            dem.state := PB_IMPULSE
+            dem.trkHi := fh
+            dem.trkLo := fl
+            disarm(dem.b)
+
+    // ── supply: a rally inside a down leg, confirmed by breaking back down ──
+    if sup.state == PB_NONE
+        sup.state := PB_IMPULSE
+        sup.trkHi := fh
+        sup.trkLo := fl
+    else if sup.state == PB_IMPULSE
+        if fh > sup.trkHi
+            sup.state := PB_ACTIVE
+            sup.startBar := bar_index
+            sup.conf := fl
+            sup.rngHi := fh
+            sup.rngHiBar := bar_index
+            sup.rngLo := fl
+            sup.rngLoBar := bar_index
+            sup.swept := na
+            arm(sup.b, fl, -1, pbMode, hsPB)
+        else if fl < sup.trkLo
+            sup.trkHi := fh
+            sup.trkLo := fl
+    else
+        if fl < sup.rngLo
+            sup.rngLo := fl
+            sup.rngLoBar := bar_index
+        if fh > sup.rngHi
+            // Mirrored - see the note in the demand branch above.
+            sup.rngHi := fh
+            sup.rngHiBar := bar_index
+            sup.conf := fl
+            sup.swept := na
+            arm(sup.b, fl, -1, pbMode, hsPB)
+        if low < sup.conf and close >= sup.conf
+            sup.swept := na(sup.swept) ? low : math.min(sup.swept, low)
+        if step(sup.b, true)
+            pivHi := sup.rngHi
+            pivHiBar := sup.rngHiBar
+            pivHiFrom := sup.startBar
+            pivHiEdge := pbEdge == "Initial level" or na(sup.swept) ?
+                 sup.conf : sup.swept
+            sup.state := PB_IMPULSE
+            sup.trkHi := fh
+            sup.trkLo := fl
+            disarm(sup.b)
+
+// ═══════════════════════════ 6. STATE MACHINE ═══════════════════════════════
+newCtx(int d) =>
+    Ctx.new(depth = d, bIdm = Brk.new(), bBos = Brk.new(), bCh = Brk.new(),
+         junkL = array.new<line>(), junkB = array.new<label>())
+
+// Park a finished drawing on the depth's bounded history and delete the
+// oldest when it overflows. [SRC] Never create unbounded chart objects.
+retire(Ctx c, line ln, label lb, int cap) =>
+    if not na(ln)
+        array.push(c.junkL, ln)
+        if array.size(c.junkL) > cap
+            line.delete(array.shift(c.junkL))
+    if not na(lb)
+        array.push(c.junkB, lb)
+        if array.size(c.junkB) > cap
+            label.delete(array.shift(c.junkB))
+
+// A new directional leg starts here. [INF] Resets the running extremes that
+// the next BOS will be measured from - see note 1 in the header.
+legStart(Ctx c, float px, int bar) =>
+    c.legPx := px
+    c.legBar := bar
+    c.legHi := fh
+    c.legHiBar := bar_index
+    c.legLo := fl
+    c.legLoBar := bar_index
+
+// One bar of one depth. `resetMe` comes from the parent depth and is the only
+// way a child's direction is ever cleared.
+// Returns true when THIS depth resolved a boundary, which is what resets its
+// own child.
+run(Ctx c, bool resetMe, int capHist) =>
+    bool resolved = false
+    if resetMe
+        // [INF] Scope hierarchy. A child restarts inside its parent's new
+        // range with no inherited direction - never forced to agree with it.
+        c.dir := DIR_NONE
+        c.phase := PH_IDLE
+        c.idmOn := false
+        c.bosOn := false
+        c.chOn := false
+        c.racing := false
+        disarm(c.bIdm)
+        disarm(c.bBos)
+        disarm(c.bCh)
+        retire(c, c.lnIdm, c.lbIdm, capHist)
+        retire(c, c.lnBos, c.lbBos, capHist)
+        retire(c, c.lnCh, c.lbCh, capHist)
+        c.lnIdm := na
+        c.lbIdm := na
+        c.lnBos := na
+        c.lbBos := na
+        c.lnCh := na
+        c.lbCh := na
+
+    // Running extremes. The leg extreme feeds the BOS lock; the phase extreme
+    // feeds the CHoCH created on a BOS break.
+    if real
+        if na(c.legHi) or fh > c.legHi
+            c.legHi := fh
+            c.legHiBar := bar_index
+        if na(c.legLo) or fl < c.legLo
+            c.legLo := fl
+            c.legLoBar := bar_index
+        if c.phase == PH_SEEK or c.phase == PH_LOCK
+            if na(c.phHi) or fh > c.phHi
+                c.phHi := fh
+                c.phHiBar := bar_index
+            if na(c.phLo) or fl < c.phLo
+                c.phLo := fl
+                c.phLoBar := bar_index
+
+    // [SRC] Latent pullbacks are recorded whether or not the structure is
+    // currently able to publish an IDM, so a boundary resolution can activate
+    // one immediately instead of waiting for the next correction.
+    if not na(pivLo)
+        c.latDem := pivLo
+        c.latDemBar := pivLoBar
+    if not na(pivHi)
+        c.latSup := pivHi
+        c.latSupBar := pivHiBar
+
+    // ── bootstrap ───────────────────────────────────────────────────────────
+    // [INF] Direction comes from the first confirmed pullback and from nothing
+    // else - no average, no candle colour. A demand pullback confirms by
+    // breaking upward, so it opens a bullish context.
+    if c.dir == DIR_NONE
+        if not na(pivLo)
+            c.dir := DIR_BULL
+            legStart(c, pivLo, pivLoBar)
+        else if not na(pivHi)
+            c.dir := DIR_BEAR
+            legStart(c, pivHi, pivHiBar)
+
+    // ── IDM: publish and migrate ────────────────────────────────────────────
+    // [SRC] Only one IDM per depth is ever active, and it migrates to each
+    // newer pullback until it is taken. [SRC] Migration does NOT move the leg
+    // start.
+    if c.dir != DIR_NONE and c.phase != PH_LOCK
+        float cand = c.dir == DIR_BULL ? pivLo : pivHi
+        int candBar = c.dir == DIR_BULL ? pivLoBar : pivHiBar
+        if not na(cand)
+            if c.idmOn
+                retire(c, c.lnIdm, c.lbIdm, capHist)
+                c.lnIdm := na
+                c.lbIdm := na
+            c.idmPx := cand
+            c.idmBar := candBar
+            c.idmOn := true
+            c.phase := PH_TRACK
+            arm(c.bIdm, cand, c.dir == DIR_BULL ? -1 : 1, modeOf(mIDM), hsIDM)
+
+    // ── IDM break: inducement taken, BOS locks ──────────────────────────────
+    // [SRC] A taken IDM is liquidity collected. It never flips the trend.
+    if c.idmOn and step(c.bIdm, real)
+        c.idmOn := false
+        disarm(c.bIdm)
+        retire(c, c.lnIdm, c.lbIdm, capHist)
+        c.lnIdm := na
+        c.lbIdm := na
+        // [SRC] BOS is the extreme of the whole leg through this break, not
+        // of the latest pullback.
+        if c.bosOn
+            retire(c, c.lnBos, c.lbBos, capHist)
+            c.lnBos := na
+            c.lbBos := na
+        c.bosPx := c.dir == DIR_BULL ? c.legHi : c.legLo
+        c.bosBar := c.dir == DIR_BULL ? c.legHiBar : c.legLoBar
+        c.bosOn := true
+        arm(c.bBos, c.bosPx, c.dir == DIR_BULL ? 1 : -1, modeOf(mBOS), hsBOS)
+        c.phHi := fh
+        c.phHiBar := bar_index
+        c.phLo := fl
+        c.phLoBar := bar_index
+        // [SRC] With an opposing CHoCH already live, price is trapped between
+        // the two and no new parent IDM is published until one of them goes.
+        c.phase := c.chOn ? PH_LOCK : PH_SEEK
+        c.racing := c.chOn
+        c.sawBos := false
+        c.sawCh := false
+
+    // ── the race, for the statistics table ──────────────────────────────────
+    if c.racing and real
+        bool tBos = c.dir == DIR_BULL ? high >= c.bosPx : low <= c.bosPx
+        bool tCh = c.dir == DIR_BULL ? low <= c.chPx : high >= c.chPx
+        if tBos and tCh
+            // [SRC] One bar touching both cannot be resolved from OHLC.
+            c.racing := false
+        else if tBos
+            c.sawBos := true
+            c.racing := false
+        else if tCh
+            c.sawCh := true
+            c.racing := false
+
+    // ── BOS break: continuation, and a CHoCH is born ────────────────────────
+    if c.bosOn and step(c.bBos, real)
+        c.bosOn := false
+        disarm(c.bBos)
+        retire(c, c.lnBos, c.lbBos, capHist)
+        c.lnBos := na
+        c.lbBos := na
+        if c.chOn
+            retire(c, c.lnCh, c.lbCh, capHist)
+            c.lnCh := na
+            c.lbCh := na
+        // [SRC] The CHoCH is the far side of the move that broke the BOS.
+        c.chPx := c.dir == DIR_BULL ? c.phLo : c.phHi
+        c.chBar := c.dir == DIR_BULL ? c.phLoBar : c.phHiBar
+        c.chOn := true
+        arm(c.bCh, c.chPx, c.dir == DIR_BULL ? -1 : 1, modeOf(mCH), hsCH)
+        // [INF] That CHoCH point is also where the next leg is measured from -
+        // the resolution of the deadlock described in note 1 of the header.
+        legStart(c, c.chPx, c.chBar)
+        c.phase := PH_IDLE
+        resolved := true
+        // [SRC] Reuse a correction that already formed rather than waiting for
+        // a fresh one.
+        float lat = c.dir == DIR_BULL ? c.latDem : c.latSup
+        int latBar = c.dir == DIR_BULL ? c.latDemBar : c.latSupBar
+        if not na(lat) and latBar > c.chBar
+            c.idmPx := lat
+            c.idmBar := latBar
+            c.idmOn := true
+            c.phase := PH_TRACK
+            arm(c.bIdm, lat, c.dir == DIR_BULL ? -1 : 1, modeOf(mIDM), hsIDM)
+
+    // ── CHoCH break: the trend flips ────────────────────────────────────────
+    if c.chOn and step(c.bCh, real)
+        c.chOn := false
+        disarm(c.bCh)
+        retire(c, c.lnCh, c.lbCh, capHist)
+        c.lnCh := na
+        c.lbCh := na
+        int was = c.dir
+        c.dir := -was
+        // [SRC] The old BOS is still the valid external extreme. It is not
+        // discarded - it is retyped as the CHoCH that would flip back.
+        float oldBos = c.bosOn ? c.bosPx : (was == DIR_BULL ? c.legHi : c.legLo)
+        int oldBar = c.bosOn ? c.bosBar : (was == DIR_BULL ? c.legHiBar : c.legLoBar)
+        if c.bosOn
+            retire(c, c.lnBos, c.lbBos, capHist)
+            c.lnBos := na
+            c.lbBos := na
+            c.bosOn := false
+            disarm(c.bBos)
+        c.chPx := oldBos
+        c.chBar := oldBar
+        c.chOn := true
+        arm(c.bCh, oldBos, was == DIR_BULL ? 1 : -1, modeOf(mCH), hsCH)
+        legStart(c, oldBos, oldBar)
+        c.idmOn := false
+        disarm(c.bIdm)
+        retire(c, c.lnIdm, c.lbIdm, capHist)
+        c.lnIdm := na
+        c.lbIdm := na
+        c.phase := PH_IDLE
+        resolved := true
+    resolved
+
+// ═══════════════════════════ 7. RENDER ══════════════════════════════════════
+float atr = ta.atr(50)
+
+// [SRC] One owner per level. Active levels are EXTENDED every bar, never
+// redrawn, which is what keeps the object count flat.
+draw(line cur, int x1, float y, color col, int w, string st) =>
+    line out = cur
+    if na(out)
+        out := line.new(x1, y, bar_index, y, xloc = xloc.bar_index,
+             color = col, style = st, width = w)
+    else
+        line.set_x2(out, bar_index)
+    out
+
+tag(label cur, float y, string txt, color col, string sz, bool up) =>
+    label out = cur
+    float yy = y + (up ? atr * 0.18 : -atr * 0.18)
+    if na(out)
+        out := label.new(bar_index, yy, txt, xloc = xloc.bar_index,
+             yloc = yloc.price, style = label.style_none, color = na,
+             textcolor = col, size = sz)
+    else
+        label.set_xy(out, bar_index, yy)
+    out
+
+// Depth styling. [SRC] Internal must never compete with Main, Deep never with
+// Internal, so each step down is thinner, fainter and shorter-named.
+paint(Ctx c, bool on, string pre, int w, int fade, string sz) =>
+    if on
+        color bu = color.new(cBull, fade)
+        color be = color.new(cBear, fade)
+        color idc = color.new(cIDM, fade)
+        if c.idmOn and showIDM
+            c.lnIdm := draw(c.lnIdm, c.idmBar, c.idmPx, idc, w,
+                 line.style_dotted)
+            c.lbIdm := tag(c.lbIdm, c.idmPx, pre + "IDM", idc, sz,
+                 c.dir == DIR_BEAR)
+        if c.bosOn and showBOS
+            color col = c.dir == DIR_BULL ? bu : be
+            c.lnBos := draw(c.lnBos, c.bosBar, c.bosPx, col, w,
+                 line.style_dashed)
+            c.lbBos := tag(c.lbBos, c.bosPx, pre + "BOS", col, sz,
+                 c.dir == DIR_BULL)
+        if c.chOn and showCH
+            color col = c.dir == DIR_BULL ? be : bu
+            c.lnCh := draw(c.lnCh, c.chBar, c.chPx, col, w, line.style_solid)
+            c.lbCh := tag(c.lbCh, c.chPx, pre + "CHoCH", col, sz,
+                 c.dir == DIR_BEAR)
+    0
+
+// ═══════════════════════════ 8. RUN ═════════════════════════════════════════
+var Ctx mainC = newCtx(D_MAIN)
+var Ctx intC = newCtx(D_INT)
+var Ctx deepC = newCtx(D_DEEP)
+var array<box> pbBoxes = array.new<box>()
+
+// [SRC] Structure is decided once per closed bar. Drawings still follow the
+// live bar, but nothing they show can change after the fact.
+bool engineOk = cfgConfirm ? barstate.isconfirmed : true
+
+if engineOk
+    bool rMain = run(mainC, false, histMain)
+    bool rInt = false
+    if showInt
+        rInt := run(intC, rMain, histInt)
+        if showDeep
+            run(deepC, rInt, histDeep)
+
+    // Pullback zones. [SRC] Soft, translucent and sparse - they mark where a
+    // correction lived, they are not a signal.
+    if not na(pivLo) and showPB
+        box b = box.new(pivLoFrom, pivLoEdge, bar_index, pivLo,
+             xloc = xloc.bar_index, border_color = color.new(cBull, 70),
+             bgcolor = color.new(cBull, 92))
+        array.push(pbBoxes, b)
+    if not na(pivHi) and showPB
+        box b = box.new(pivHiFrom, pivHi, bar_index, pivHiEdge,
+             xloc = xloc.bar_index, border_color = color.new(cBear, 70),
+             bgcolor = color.new(cBear, 92))
+        array.push(pbBoxes, b)
+    while array.size(pbBoxes) > histPB
+        box.delete(array.shift(pbBoxes))
+
+paint(mainC, showMain, "", 2, 20, szMain)
+paint(intC, showInt, "i", 1, 45, szSub)
+paint(deepC, showInt and showDeep, "ii", 1, 65, szSub)
+
+// [SRC] Strong / Weak are derived display semantics and feed nothing. In a
+// bullish structure the continuation-side high is WEAK - price is expected
+// through it - and the reversal-side low is STRONG.
+var label swHi = na
+var label swLo = na
+if showSW and showMain and barstate.islast and mainC.dir != DIR_NONE
+    label.delete(swHi)
+    label.delete(swLo)
+    bool bull = mainC.dir == DIR_BULL
+    if mainC.bosOn
+        swHi := label.new(bar_index + 3, mainC.bosPx, bull ? "Weak High" :
+             "Weak Low", xloc = xloc.bar_index, yloc = yloc.price,
+             style = label.style_none, color = na,
+             textcolor = color.new(bull ? cBull : cBear, 35), size = size.tiny)
+    if mainC.chOn
+        swLo := label.new(bar_index + 3, mainC.chPx, bull ? "Strong Low" :
+             "Strong High", xloc = xloc.bar_index, yloc = yloc.price,
+             style = label.style_none, color = na,
+             textcolor = color.new(bull ? cBear : cBull, 35), size = size.tiny)
+
+// Candle tints. Inside bars are the noise the engine skipped; Hidden Shadow
+// candles are breaks that were withdrawn.
+bool anyHS = mainC.bIdm.fired or mainC.bBos.fired or mainC.bCh.fired or
+     intC.bBos.fired or intC.bCh.fired or dem.b.fired or sup.b.fired
+barcolor(showHSbar and anyHS ? cHS : showInside and inside ?
+     color.new(cIn, 55) : na, title = "Structure tint")
+
+// ═══════════════════════════ 9. PANELS ══════════════════════════════════════
+dirTxt(int d) =>
+    d == DIR_BULL ? "Bullish" : d == DIR_BEAR ? "Bearish" : "—"
+
+phTxt(int p) =>
+    p == PH_IDLE ? "seeking IDM" : p == PH_TRACK ? "IDM active" :
+     p == PH_SEEK ? "BOS locked" : "boundary lock"
+
+var table panel = table.new(position.top_right, 2, 6,
+     bgcolor = color.new(color.black, 85), border_width = 1,
+     border_color = color.new(#787b86, 70))
+if showPanel and barstate.islast
+    table.cell(panel, 0, 0, "Riptide LIT", text_color = color.new(#d1d4dc, 0),
+         text_size = size.small)
+    table.cell(panel, 1, 0, phTxt(mainC.phase),
+         text_color = color.new(#787b86, 0), text_size = size.small)
+    table.cell(panel, 0, 1, "Main", text_color = color.new(#787b86, 0),
+         text_size = size.small)
+    table.cell(panel, 1, 1, dirTxt(mainC.dir), text_size = size.small,
+         text_color = mainC.dir == DIR_BULL ? cBull :
+         mainC.dir == DIR_BEAR ? cBear : color.gray)
+    table.cell(panel, 0, 2, "Internal", text_color = color.new(#787b86, 0),
+         text_size = size.small)
+    table.cell(panel, 1, 2, showInt ? dirTxt(intC.dir) : "off",
+         text_size = size.small, text_color = intC.dir == DIR_BULL ? cBull :
+         intC.dir == DIR_BEAR ? cBear : color.gray)
+    table.cell(panel, 0, 3, "Deep", text_color = color.new(#787b86, 0),
+         text_size = size.small)
+    table.cell(panel, 1, 3, showInt and showDeep ? dirTxt(deepC.dir) : "off",
+         text_size = size.small, text_color = deepC.dir == DIR_BULL ? cBull :
+         deepC.dir == DIR_BEAR ? cBear : color.gray)
+    table.cell(panel, 0, 4, "BOS", text_color = color.new(#787b86, 0),
+         text_size = size.small)
+    table.cell(panel, 1, 4, mainC.bosOn ? str.tostring(mainC.bosPx,
+         format.mintick) : "—", text_color = color.new(#d1d4dc, 0),
+         text_size = size.small)
+    table.cell(panel, 0, 5, "CHoCH", text_color = color.new(#787b86, 0),
+         text_size = size.small)
+    table.cell(panel, 1, 5, mainC.chOn ? str.tostring(mainC.chPx,
+         format.mintick) : "—", text_color = color.new(#d1d4dc, 0),
+         text_size = size.small)
+
+// [SRC] First-passage statistics. After the inducement is taken, does the move
+// continue to the BOS or turn and take the CHoCH? Counted once per race, never
+// "both eventually", and a bar that touches both is dropped rather than
+// resolved by guessing which tick came first.
+var int nBos = 0
+var int nCh = 0
+if engineOk
+    if mainC.sawBos
+        nBos += 1
+        mainC.sawBos := false
+    if mainC.sawCh
+        nCh += 1
+        mainC.sawCh := false
+
+var table stats = table.new(position.bottom_right, 2, 4,
+     bgcolor = color.new(color.black, 85), border_width = 1,
+     border_color = color.new(#787b86, 70))
+if showStats and barstate.islast
+    int tot = nBos + nCh
+    table.cell(stats, 0, 0, "After IDM taken", text_size = size.tiny,
+         text_color = color.new(#d1d4dc, 0))
+    table.cell(stats, 1, 0, str.tostring(tot) + " races", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(stats, 0, 1, "BOS first", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(stats, 1, 1, tot > 0 ? str.tostring(100.0 * nBos / tot, "#.#") +
+         "%" : "—", text_size = size.tiny, text_color = cBull)
+    table.cell(stats, 0, 2, "CHoCH first", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(stats, 1, 2, tot > 0 ? str.tostring(100.0 * nCh / tot, "#.#") +
+         "%" : "—", text_size = size.tiny, text_color = cBear)
+    table.cell(stats, 0, 3, "ambiguous bars", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(stats, 1, 3, "excluded", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+
+var table dbg = table.new(position.bottom_left, 2, 7,
+     bgcolor = color.new(color.black, 85), border_width = 1,
+     border_color = color.new(#787b86, 70))
+if showDbg and barstate.islast
+    table.cell(dbg, 0, 0, "mother", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(dbg, 1, 0, str.tostring(momLo, format.mintick) + " / " +
+         str.tostring(momHi, format.mintick), text_size = size.tiny,
+         text_color = color.new(#d1d4dc, 0))
+    table.cell(dbg, 0, 1, "inside now", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(dbg, 1, 1, inside ? "yes" : "no", text_size = size.tiny,
+         text_color = color.new(#d1d4dc, 0))
+    table.cell(dbg, 0, 2, "outside-both seen", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(dbg, 1, 2, str.tostring(nOutBoth), text_size = size.tiny,
+         text_color = color.new(#d1d4dc, 0))
+    table.cell(dbg, 0, 3, "demand PB", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(dbg, 1, 3, dem.state == PB_ACTIVE ? "active, conf " +
+         str.tostring(dem.conf, format.mintick) : "riding impulse",
+         text_size = size.tiny, text_color = color.new(#d1d4dc, 0))
+    table.cell(dbg, 0, 4, "supply PB", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(dbg, 1, 4, sup.state == PB_ACTIVE ? "active, conf " +
+         str.tostring(sup.conf, format.mintick) : "riding impulse",
+         text_size = size.tiny, text_color = color.new(#d1d4dc, 0))
+    table.cell(dbg, 0, 5, "main leg from", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(dbg, 1, 5, na(mainC.legPx) ? "—" :
+         str.tostring(mainC.legPx, format.mintick), text_size = size.tiny,
+         text_color = color.new(#d1d4dc, 0))
+    table.cell(dbg, 0, 6, "sweep level BOS", text_size = size.tiny,
+         text_color = color.new(#787b86, 0))
+    table.cell(dbg, 1, 6, na(mainC.bBos.act) ? "—" :
+         str.tostring(mainC.bBos.act, format.mintick), text_size = size.tiny,
+         text_color = color.new(#d1d4dc, 0))
+
+// ═══════════════════════════ 10. ALERTS ═════════════════════════════════════
+// Event types kept separate on purpose. None of them is a trade - this phase
+// measures structure, it does not claim any of it is tradeable.
+bool aIdm = mainC.idmOn
+bool aBos = mainC.bosOn
+int aDir = mainC.dir
+alertcondition(aIdm and not aIdm[1], "LIT IDM published",
+     "Riptide LIT: new inducement level")
+alertcondition(not aIdm and aIdm[1], "LIT IDM taken",
+     "Riptide LIT: inducement taken")
+alertcondition(aBos and not aBos[1], "LIT BOS locked",
+     "Riptide LIT: BOS locked")
+alertcondition(not aBos and aBos[1], "LIT BOS broken",
+     "Riptide LIT: BOS broken - continuation")
+alertcondition(aDir != aDir[1] and aDir != 0, "LIT trend flip",
+     "Riptide LIT: CHoCH broken - trend flipped")
