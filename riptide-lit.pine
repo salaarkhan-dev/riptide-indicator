@@ -232,17 +232,22 @@ type PBDet
     int rngHiBar = na
     float rngLo = na
     int rngLoBar = na
+    int rngHiT = na
+    int rngLoT = na
     Brk b
     bool hit = false         // a correction confirmed on this bar
     float hitPx = na
     int hitBar = na
+    int hitT = na
     int hitFrom = na
+    int hitFromT = na
     float hitEdge = na
 
 // [§11] createdBar is what stops a level being broken by the bar that made it.
 type Lvl
     float px = na
     int bar = na
+    int barT = na          // the anchor as a TIMESTAMP - see RE10026 note
     int createdBar = na
     bool on = false
     Brk b
@@ -257,17 +262,22 @@ type Ctx
     float legPx = na
     float legHi = na
     int legHiBar = na
+    int legHiT = na
     float legLo = na
     int legLoBar = na
+    int legLoT = na
     float phHi = na
     int phHiBar = na
+    int phHiT = na
     float phLo = na
     int phLoBar = na
+    int phLoT = na
     Lvl idm
     Lvl bos
     Lvl ch
     float latPx = na
     int latBar = na
+    int latT = na
     bool racing = false
     line lnIdm = na
     label lbIdm = na
@@ -287,6 +297,7 @@ type Ctx
     int nLatent = 0
     bool markOn = false
     float markPx = na
+    int markT = na
     int nBad = 0
     string lastBad = ""
     string lastEvent = "-"
@@ -381,6 +392,8 @@ var float momO = na
 var float momC = na
 var int momHiBar = na
 var int momLoBar = na
+var int momHiT = na
+var int momLoT = na
 var int nBoth = 0
 var int nInside = 0
 
@@ -391,6 +404,8 @@ float gL = na
 float gC = na
 int gHiBar = na
 int gLoBar = na
+int gHiT = na
+int gLoT = na
 
 if na(momHi)
     momHi := high
@@ -399,6 +414,8 @@ if na(momHi)
     momC := close
     momHiBar := bar_index
     momLoBar := bar_index
+    momHiT := time
+    momLoT := time
 else
     bool over = high > momHi
     bool under = low < momLo
@@ -417,12 +434,16 @@ else
         gC := momC
         gHiBar := momHiBar
         gLoBar := momLoBar
+        gHiT := momHiT
+        gLoT := momLoT
         momHi := high
         momLo := low
         momO := open
         momC := close
         momHiBar := bar_index
         momLoBar := bar_index
+        momHiT := time
+        momLoT := time
 
 // ═══════════════════════════ 5. PULLBACK DETECTOR ═══════════════════════════
 // [SRC] Phase A rides the impulse: while each candle makes a new extreme
@@ -441,7 +462,7 @@ reorient(PBDet d, int dir, float h, float l) =>
     disarm(d.b)
 
 detStep(PBDet d, int i, float o, float h, float l, float c, int hiBar,
-     int loBar, int mode, bool useHS) =>
+     int loBar, int hiT, int loT, int mode, bool useHS) =>
     d.hit := false
     if na(d.trkHi)
         d.trkHi := h
@@ -459,8 +480,11 @@ detStep(PBDet d, int i, float o, float h, float l, float c, int hiBar,
                 d.initLvl := d.conf
                 d.rngHi := h
                 d.rngHiBar := hiBar
+                d.rngHiT := hiT
                 d.rngLo := l
                 d.rngLoBar := loBar
+                d.rngLoT := loT
+                d.hitFromT := time
                 arm(d.b, d.conf, bull ? 1 : -1, mode, useHS)
             else
                 bool cont = bull ? (h > d.trkHi and l >= d.trkLo) :
@@ -474,13 +498,16 @@ detStep(PBDet d, int i, float o, float h, float l, float c, int hiBar,
             if h > d.rngHi
                 d.rngHi := h
                 d.rngHiBar := hiBar
+                d.rngHiT := hiT
             if l < d.rngLo
                 d.rngLo := l
                 d.rngLoBar := loBar
+                d.rngLoT := loT
             if brkStep(d.b, o, h, l, c)
                 d.hit := true
                 d.hitPx := bull ? d.rngLo : d.rngHi
                 d.hitBar := bull ? d.rngLoBar : d.rngHiBar
+                d.hitT := bull ? d.rngLoT : d.rngHiT
                 d.hitFrom := d.startBar
                 d.hitEdge := pbEdge == "Initial level" or na(d.b.act) ?
                      d.initLvl : d.b.act
@@ -498,9 +525,10 @@ newCtx(int d) =>
          ch = Lvl.new(b = Brk.new()), junkL = array.new<line>(),
          junkB = array.new<label>(), zones = array.new<box>())
 
-setLvl(Lvl v, float px, int bar, int i, int d, int mode, bool hs) =>
+setLvl(Lvl v, float px, int bar, int barT, int i, int d, int mode, bool hs) =>
     v.px := px
     v.bar := bar
+    v.barT := barT
     v.createdBar := i
     v.on := true
     arm(v.b, px, d, mode, hs)
@@ -524,13 +552,16 @@ retire(Ctx x, line ln, label lb, int cap) =>
     0
 
 // [SRC/§9] A new directional leg. IDM migration never calls this.
-legStart(Ctx x, float px, int bar, float h, float l, int hiBar, int loBar) =>
+legStart(Ctx x, float px, int bar, float h, float l, int hiBar, int loBar,
+     int hiT, int loT) =>
     x.legPx := px
     x.legBar := bar
     x.legHi := h
     x.legHiBar := hiBar
+    x.legHiT := hiT
     x.legLo := l
     x.legLoBar := loBar
+    x.legLoT := loT
 
 flag(Ctx x, bool ok, string name) =>
     if not ok
@@ -542,7 +573,7 @@ flag(Ctx x, bool ok, string name) =>
 // transition. Returns true when THIS context resolved a boundary - which is
 // the only thing that ever resets its child.
 ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
-     int hiBar, int loBar, int cap) =>
+     int hiBar, int loBar, int hiT, int loT, int cap) =>
     if resetMe
         // [INF] Scope reset: the parent's valid range changed, so the child
         // restarts inside the new one with no inherited direction.
@@ -572,41 +603,47 @@ ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
         // [INFERRED INITIALIZATION] Both orientations run until one confirms a
         // correction. That sets the direction; the other is discarded. No
         // average, no candle colour, and no bootstrap state survives.
-        bool up = detStep(x.det, i, o, h, l, c, hiBar, loBar, pbMode, hsPB)
-        bool dn = detStep(x.boot, i, o, h, l, c, hiBar, loBar, pbMode, hsPB)
+        bool up = detStep(x.det, i, o, h, l, c, hiBar, loBar, hiT, loT, pbMode, hsPB)
+        bool dn = detStep(x.boot, i, o, h, l, c, hiBar, loBar, hiT, loT, pbMode, hsPB)
         if up
             x.dir := DIR_BULL
             hit := true
-            legStart(x, x.det.hitPx, x.det.hitBar, h, l, hiBar, loBar)
+            legStart(x, x.det.hitPx, x.det.hitBar, h, l, hiBar, loBar, hiT, loT)
         else if dn
             x.dir := DIR_BEAR
             hit := true
             x.det.hitPx := x.boot.hitPx
             x.det.hitBar := x.boot.hitBar
+            x.det.hitT := x.boot.hitT
+            x.det.hitFromT := x.boot.hitFromT
             x.det.hitFrom := x.boot.hitFrom
             x.det.hitEdge := x.boot.hitEdge
-            legStart(x, x.boot.hitPx, x.boot.hitBar, h, l, hiBar, loBar)
+            legStart(x, x.boot.hitPx, x.boot.hitBar, h, l, hiBar, loBar, hiT, loT)
         if x.dir != DIR_NONE
             reorient(x.det, x.dir, h, l)
             reorient(x.boot, -x.dir, h, l)
             x.lastEvent := "bootstrap"
     else
-        hit := detStep(x.det, i, o, h, l, c, hiBar, loBar, pbMode, hsPB)
+        hit := detStep(x.det, i, o, h, l, c, hiBar, loBar, hiT, loT, pbMode, hsPB)
 
     // running extremes: the leg feeds the BOS lock, the phase feeds the CHoCH
     if na(x.legHi) or h > x.legHi
         x.legHi := h
         x.legHiBar := hiBar
+        x.legHiT := hiT
     if na(x.legLo) or l < x.legLo
         x.legLo := l
         x.legLoBar := loBar
+        x.legLoT := loT
     if x.phase == PH_SEEK or x.phase == PH_LOCK
         if na(x.phHi) or h > x.phHi
             x.phHi := h
             x.phHiBar := hiBar
+            x.phHiT := hiT
         if na(x.phLo) or l < x.phLo
             x.phLo := l
             x.phLoBar := loBar
+            x.phLoT := loT
 
     // [SRC/§8] A confirmed correction is PUBLISHED as an IDM only in the two
     // phases that may hold one. During the BOS race it is cached as LATENT.
@@ -614,13 +651,14 @@ ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
         x.nPivot += 1
         x.latPx := x.det.hitPx
         x.latBar := x.det.hitBar
+        x.latT := x.det.hitT
         if x.phase == PH_DISCOVER or x.phase == PH_TRACK
             int legWas = x.legBar
             if x.idm.on
                 retire(x, x.lnIdm, x.lbIdm, cap)
                 x.lnIdm := na
                 x.lbIdm := na
-            setLvl(x.idm, x.det.hitPx, x.det.hitBar, i,
+            setLvl(x.idm, x.det.hitPx, x.det.hitBar, x.det.hitT, i,
                  x.dir == DIR_BULL ? -1 : 1, modeOf(mIDM), hsIDM)
             x.phase := PH_TRACK
             x.nIdm += 1
@@ -637,6 +675,7 @@ ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
         int was = x.dir
         x.markOn := true
         x.markPx := x.idm.px
+        x.markT := time
         clearLvl(x.idm)
         retire(x, x.lnIdm, x.lbIdm, cap)
         x.lnIdm := na
@@ -646,12 +685,15 @@ ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
             x.lnBos := na
             x.lbBos := na
         setLvl(x.bos, x.dir == DIR_BULL ? x.legHi : x.legLo,
-             x.dir == DIR_BULL ? x.legHiBar : x.legLoBar, i,
+             x.dir == DIR_BULL ? x.legHiBar : x.legLoBar,
+             x.dir == DIR_BULL ? x.legHiT : x.legLoT, i,
              x.dir == DIR_BULL ? 1 : -1, modeOf(mBOS), hsBOS)
         x.phHi := h
         x.phHiBar := hiBar
+        x.phHiT := hiT
         x.phLo := l
         x.phLoBar := loBar
+        x.phLoT := loT
         x.phase := x.ch.on ? PH_LOCK : PH_SEEK
         x.racing := x.ch.on
         x.nIdmBreak += 1
@@ -672,10 +714,11 @@ ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
             x.lbCh := na
         float newCh = x.dir == DIR_BULL ? x.phLo : x.phHi
         int newChBar = x.dir == DIR_BULL ? x.phLoBar : x.phHiBar
-        setLvl(x.ch, newCh, newChBar, i, x.dir == DIR_BULL ? -1 : 1,
+        int newChT = x.dir == DIR_BULL ? x.phLoT : x.phHiT
+        setLvl(x.ch, newCh, newChBar, newChT, i, x.dir == DIR_BULL ? -1 : 1,
              modeOf(mCH), hsCH)
         // [INF] That CHoCH point is where the next leg is measured from.
-        legStart(x, newCh, newChBar, h, l, hiBar, loBar)
+        legStart(x, newCh, newChBar, h, l, hiBar, loBar, hiT, loT)
         x.phase := PH_DISCOVER
         x.nBos += 1
         x.nCh += 1
@@ -684,8 +727,8 @@ ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
         flag(x, x.dir == was, "I3 BOS break flipped direction")
         // [SRC] Reuse a correction that already formed during the race.
         if not na(x.latPx) and x.latBar > newChBar
-            setLvl(x.idm, x.latPx, x.latBar, i, x.dir == DIR_BULL ? -1 : 1,
-                 modeOf(mIDM), hsIDM)
+            setLvl(x.idm, x.latPx, x.latBar, x.latT, i,
+                 x.dir == DIR_BULL ? -1 : 1, modeOf(mIDM), hsIDM)
             x.phase := PH_TRACK
             x.nLatent += 1
             x.nIdm += 1
@@ -697,6 +740,8 @@ ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
              (was == DIR_BULL ? x.legHi : x.legLo)
         int oldBar = x.bos.on ? x.bos.bar :
              (was == DIR_BULL ? x.legHiBar : x.legLoBar)
+        int oldT = x.bos.on ? x.bos.barT :
+             (was == DIR_BULL ? x.legHiT : x.legLoT)
         clearLvl(x.ch)
         retire(x, x.lnCh, x.lbCh, cap)
         x.lnCh := na
@@ -714,9 +759,9 @@ ctxStep(Ctx x, bool resetMe, int i, float o, float h, float l, float c,
         x.dir := -was
         // [SRC] The old BOS is not discarded - it is retyped as the CHoCH
         // that would flip the new trend back.
-        setLvl(x.ch, oldBos, oldBar, i, was == DIR_BULL ? 1 : -1, modeOf(mCH),
-             hsCH)
-        legStart(x, oldBos, oldBar, h, l, hiBar, loBar)
+        setLvl(x.ch, oldBos, oldBar, oldT, i, was == DIR_BULL ? 1 : -1,
+         modeOf(mCH), hsCH)
+        legStart(x, oldBos, oldBar, h, l, hiBar, loBar, hiT, loT)
         reorient(x.det, x.dir, h, l)
         x.latPx := na
         x.phase := PH_DISCOVER
@@ -742,23 +787,29 @@ float atr = ta.atr(50)
 // [§24] One object per active level, updated rather than recreated.
 // [§23] The label sits at 70% along the live segment, not at bar_index, so
 // active labels do not pile up vertically on the current candle.
-drawLvl(line cur, int x1, float y, color col, int w, string st) =>
+// RE10026: a bar-index coordinate has to sit within max_bars_back of the
+// current bar, and a structural anchor routinely does not. Timestamps carry no
+// such limit, so every drawing here is anchored in bar_time. This is the whole
+// fix for the 30m error - the anchors there simply sat further back in bars.
+drawLvl(line cur, int x1t, float y, color col, int w, string st) =>
     line out = cur
     if na(out)
-        out := line.new(x1, y, bar_index, y, xloc = xloc.bar_index,
-             color = col, style = st, width = w)
+        out := line.new(x1t, y, time, y, xloc = xloc.bar_time, color = col,
+             style = st, width = w)
     else
-        line.set_xy1(out, x1, y)
-        line.set_xy2(out, bar_index, y)
+        line.set_xy1(out, x1t, y)
+        line.set_xy2(out, time, y)
     out
 
-tagLvl(label cur, int x1, float y, string txt, color col, string sz,
+tagLvl(label cur, int x1t, float y, string txt, color col, string sz,
      bool above) =>
     label out = cur
-    int xx = x1 + int((bar_index - x1) * 0.70)
+    // [§23] 70% along the live segment, so active labels do not pile up in a
+    // vertical stack on the current candle.
+    int xx = x1t + int((time - x1t) * 0.70)
     float yy = y + (above ? atr * 0.22 : -atr * 0.22)
     if na(out)
-        out := label.new(xx, yy, txt, xloc = xloc.bar_index,
+        out := label.new(xx, yy, txt, xloc = xloc.bar_time,
              yloc = yloc.price, style = label.style_none, color = na,
              textcolor = col, size = sz)
     else
@@ -775,21 +826,21 @@ paint(Ctx x, bool on, string pre, int w, int fade, string sz) =>
         color id = color.new(cIDM, fade)
         bool bull = x.dir == DIR_BULL
         if x.idm.on and showIDM
-            x.lnIdm := drawLvl(x.lnIdm, x.idm.bar, x.idm.px, id, w,
+            x.lnIdm := drawLvl(x.lnIdm, x.idm.barT, x.idm.px, id, w,
                  line.style_dotted)
-            x.lbIdm := tagLvl(x.lbIdm, x.idm.bar, x.idm.px, pre + "IDM", id,
+            x.lbIdm := tagLvl(x.lbIdm, x.idm.barT, x.idm.px, pre + "IDM", id,
                  sz, not bull)
         if x.bos.on and showBOS
             color col = bull ? bu : be
-            x.lnBos := drawLvl(x.lnBos, x.bos.bar, x.bos.px, col, w,
+            x.lnBos := drawLvl(x.lnBos, x.bos.barT, x.bos.px, col, w,
                  line.style_dashed)
-            x.lbBos := tagLvl(x.lbBos, x.bos.bar, x.bos.px, pre + "BOS", col,
+            x.lbBos := tagLvl(x.lbBos, x.bos.barT, x.bos.px, pre + "BOS", col,
                  sz, bull)
         if x.ch.on and showCH
             color col = bull ? be : bu
-            x.lnCh := drawLvl(x.lnCh, x.ch.bar, x.ch.px, col, w,
+            x.lnCh := drawLvl(x.lnCh, x.ch.barT, x.ch.px, col, w,
                  line.style_solid)
-            x.lbCh := tagLvl(x.lbCh, x.ch.bar, x.ch.px, pre + "CHoCH", col,
+            x.lbCh := tagLvl(x.lbCh, x.ch.barT, x.ch.px, pre + "CHoCH", col,
                  sz, not bull)
     0
 
@@ -798,7 +849,7 @@ paint(Ctx x, bool on, string pre, int w, int fade, string sz) =>
 // information, so they get a mark and not a labelled line.
 markTaken(Ctx x, bool on, int fade, int cap) =>
     if on and x.markOn and showRetired
-        label m = label.new(bar_index, x.markPx, "x", xloc = xloc.bar_index,
+        label m = label.new(x.markT, x.markPx, "x", xloc = xloc.bar_time,
              yloc = yloc.price, style = label.style_none, color = na,
              textcolor = color.new(cIDM, fade), size = size.tiny)
         array.push(x.junkB, m)
@@ -813,8 +864,11 @@ zone(Ctx x, bool on, int fade, int border) =>
         color col = bull ? cBull : cBear
         float top = bull ? x.det.hitEdge : x.det.hitPx
         float bot = bull ? x.det.hitPx : x.det.hitEdge
-        box b = box.new(x.det.hitFrom, top, bar_index, bot,
-             xloc = xloc.bar_index, border_color = color.new(col, border),
+        // [§16] left = the bar the correction STARTED, right = the bar it
+        // CONFIRMED, both frozen here and never touched again. A correction is
+        // an event, not a trend regime.
+        box b = box.new(x.det.hitFromT, top, time, bot, xloc = xloc.bar_time,
+             border_color = color.new(col, border),
              bgcolor = color.new(col, fade))
         array.push(x.zones, b)
         if array.size(x.zones) > histPB
@@ -836,14 +890,14 @@ var bool resetDeep = false
 
 if engineOk and gOn
     bool rMain = ctxStep(mainC, false, bar_index, gO, gH, gL, gC, gHiBar,
-         gLoBar, histMain)
+         gLoBar, gHiT, gLoT, histMain)
     bool rInt = false
     if runInt
         rInt := ctxStep(intC, resetInt, bar_index, gO, gH, gL, gC, gHiBar,
-             gLoBar, histInt)
+             gLoBar, gHiT, gLoT, histInt)
         if runDeep
             ctxStep(deepC, resetDeep, bar_index, gO, gH, gL, gC, gHiBar,
-                 gLoBar, histDeep)
+                 gLoBar, gHiT, gLoT, histDeep)
     resetInt := rMain
     resetDeep := rInt
     zone(mainC, pbMainOn and showMain, 88, 62)
@@ -865,13 +919,13 @@ if showSW and showMain and barstate.islast and mainC.dir != DIR_NONE
     label.delete(swB)
     bool bull = mainC.dir == DIR_BULL
     if mainC.bos.on
-        swA := label.new(bar_index + 4, mainC.bos.px,
-             bull ? "Weak High" : "Weak Low", xloc = xloc.bar_index,
+        swA := label.new(time + 4 * (time - time[1]), mainC.bos.px,
+             bull ? "Weak High" : "Weak Low", xloc = xloc.bar_time,
              yloc = yloc.price, style = label.style_none, color = na,
              textcolor = color.new(bull ? cBull : cBear, 20), size = size.tiny)
     if mainC.ch.on
-        swB := label.new(bar_index + 4, mainC.ch.px,
-             bull ? "Strong Low" : "Strong High", xloc = xloc.bar_index,
+        swB := label.new(time + 4 * (time - time[1]), mainC.ch.px,
+             bull ? "Strong Low" : "Strong High", xloc = xloc.bar_time,
              yloc = yloc.price, style = label.style_none, color = na,
              textcolor = color.new(bull ? cBear : cBull, 20), size = size.tiny)
 
