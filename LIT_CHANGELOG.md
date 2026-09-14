@@ -2370,3 +2370,30 @@ The LIT **structure engine** is sound and externally validated (ZEC 30m
 IDM→BOS 65.6% vs the reference's 65.0%). The LIT **trading family** does not
 show an economic edge that survives out-of-sample testing at a pre-specified
 bar. Closed.
+
+
+---
+
+## riptide-lit.pine (v1) REMOVED
+
+Deleted at the user's request. It was the original LIT structure indicator,
+v0.7.18, frozen since `riptide-lit-v2.pine` was built and untouched by every
+change after that.
+
+Nothing depended on it. `deploy/check-parity.py` targets
+`riptide-indicator.pine`, not this file; no production module imported or read
+it; the only mention inside `riptide/` is a note about **v2**. Removing it
+breaks nothing.
+
+Documents earlier in this changelog, and in `LIT_V2_DESIGN.md`,
+`LIT_SOURCE.md` and `research/lit_v01.py`, still refer to it. Those references
+are left as they are: they are a record of what was done at the time, and
+rewriting history to hide a deleted file would be worse than a dangling name.
+
+**Recovery**, if it is ever wanted:
+
+    git show bebcbbe:riptide-lit.pine > riptide-lit.pine
+
+`riptide-lit-v2.pine` is now the only LIT indicator. It carries the same
+structure engine with every undefined case turned into a named policy, and its
+defaults match the Python forward record.
