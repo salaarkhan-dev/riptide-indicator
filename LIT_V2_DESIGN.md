@@ -350,19 +350,28 @@ them, with the label changing across the mark. V2 keeps the line object alive
 across a BOS→CHoCH retype, changes its label and colour, and drops a ✗ at the
 retype bar — instead of v1's delete-and-recreate.
 
-### 7.3 Retired IDMs are DELETED, not faded
+### 7.3 An IDM ends in one of two ways, and they render differently
 
-**User decision, and it overrides the earlier recommendation here.** The
-reference keeps a faded grey trail with migration arrows (Ch.8). V2 does not:
-when an IDM migrates, the previous IDM's line and label are deleted outright.
+**User decision, refined after seeing the first build.** The reference keeps a
+faded grey trail with migration arrows (Ch.8). V2 splits the two cases instead:
 
-> "only we move the idm up and after moving we will delete the previous IDM
-> that we created in a float so that our chart will be cleaned"
+> "we will only delete the migrated one. once that complete we will keep it
+> there, that one will be attached both end with candles we will keep that"
 
-§56 permits either ("optionally keep short historical segment"). One live IDM
-per depth, nothing behind it. Retired BOS/CHoCH segments still fade into the
-capped history — only IDMs are deleted, because they are the level that
-migrates repeatedly and so the only one that accumulates.
+**MIGRATED** — a newer pullback superseded it before price ever came back.
+That IDM never became anything; it is a level the market ignored. DELETED.
+This is the clutter the reference's trail accumulates.
+
+**TAKEN** — price came back and broke it. That is the inducement actually being
+taken, which is the entire point of the model. KEPT, as a frozen segment
+running pivot bar → break bar, both endpoints on real candles, capped by the
+depth's history limit.
+
+The first build deleted both, which is why the chart came back with no IDM
+anywhere in its history. Worth noting the engine was not wrong in that
+screenshot: Main was in BOUNDARY LOCK with BOS and CHoCH both live, and §39
+forbids publishing an IDM there, so having no LIVE IDM was correct. What was
+missing was the record of every IDM that had already been taken.
 
 ### 7.4 Pullback zones
 

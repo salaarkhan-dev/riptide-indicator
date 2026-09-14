@@ -696,10 +696,14 @@ retire(Ctx x, line ln, label lb, int cap) =>
             label.delete(array.shift(x.junkB))
     0
 
-// USER DECISION, overriding the reference's own faded-trail rendering:
-// an IDM that migrates is DELETED, not retired. "we move the idm up and after
-// moving we will delete the previous IDM ... so that our chart will be cleaned."
-// One live IDM per depth, nothing behind it.
+// AN IDM ENDS IN ONE OF TWO WAYS, AND THEY RENDER DIFFERENTLY.
+//
+// MIGRATED - a newer pullback superseded it before price ever came back for it.
+// That IDM never became anything; it was a level the market ignored. DELETE it.
+// This is the clutter the reference's faded trail accumulates, and the user's
+// decision is to drop it: "we move the idm up and after moving we will delete
+// the previous IDM that we created in a float so that our chart will be
+// cleaned."
 dropIdm(Ctx x) =>
     if not na(x.idm.ln)
         line.delete(x.idm.ln)
@@ -707,6 +711,18 @@ dropIdm(Ctx x) =>
     if not na(x.idm.lb)
         label.delete(x.idm.lb)
         x.idm.lb := na
+    0
+
+// TAKEN - price came back and broke it. That is the inducement actually being
+// taken, which is the whole point of the model, so it is KEPT as a frozen
+// segment running pivot bar -> break bar. Both endpoints sit on real candles,
+// nothing floats, and the chart carries a readable record of where liquidity
+// was grabbed. Capped by the depth's history limit like any other retired
+// level.
+keepIdm(Ctx x, int cap) =>
+    retire(x, x.idm.ln, x.idm.lb, cap)
+    x.idm.ln := na
+    x.idm.lb := na
     0
 
 // [SRC Ch.8] A ✗ where a level's ROLE ended - a swept threshold, or a BOS
@@ -854,7 +870,7 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
                 // [SRC Ch.3] IDM migration. The previous IDM is retired and
                 // replaced - and per the user's decision, DELETED outright.
                 if x.idm.on
-                    dropIdm(x)
+                    dropIdm(x)       // MIGRATED - the market never came for it
                 int legWas = x.legBar
                 setLvl(x.idm, dActive.last.pivot, dActive.last.pivotBar,
                      dActive.last.pivotT, i, up ? -1 : 1, cIdm, hsIDM)
@@ -876,7 +892,7 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
         if not moved and ready(x.idm, i) and brkStep(x.idm.b, o, h, l, c)
             int was = x.dir
             clearLvl(x.idm)
-            dropIdm(x)
+            keepIdm(x, cap)          // TAKEN - freeze it, do not delete it
             setLvl(x.bos, up ? x.legHi : x.legLo, up ? x.legHiBar : x.legLoBar,
                  up ? x.legHiT : x.legLoT, i, up ? 1 : -1, cBos, hsBOS)
             x.nBos += 1
@@ -1011,6 +1027,8 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
                 x.bos.lb := na
                 clearLvl(x.bos)
             if x.idm.on
+                // Invalidated by the flip, not taken. Same class as a
+                // migration: the market never came back for it.
                 clearLvl(x.idm)
                 dropIdm(x)
             x.dir := -was
