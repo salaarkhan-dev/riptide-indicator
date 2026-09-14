@@ -1779,3 +1779,63 @@ not enough on its own to justify an entry ... it also evaluates how the market
 behaves after reaching that zone." SCOB is testable on this same trade list by
 changing WHEN the entry fires (wait inside the zone for the confirmation break)
 rather than building anything new.
+
+
+────────────────────────────────────────────────────────────────────────────
+SCOB + the cost/timeframe test — the edge is real but too small to survive
+────────────────────────────────────────────────────────────────────────────
+
+research/lit_entry3.py. SCOB confirmation replacing the bare touch, on FVG
+zones only, 30 symbols. NET is after a 0.05%/side round trip; GROSS is before.
+
+    entry (arm 'bos')          n    win%     NET   GROSS
+    touch  (Variant 2)       258   20.5%  -0.124  -0.016
+    SCOB shadow, zone SL     221   29.0%  -0.085  +0.100
+    SCOB body,   zone SL     210   29.5%  -0.180  +0.008
+    SCOB shadow, SCOB SL     246   10.6%  -0.421  -0.058
+    SCOB body,   SCOB SL     227   12.8%  -0.201  -0.043
+
+1. SCOB ADDS REAL EDGE. Gross -0.016 -> +0.100. Ch.16 is right that reaching a
+   zone is not an entry.
+2. AND IT PAYS FOR IT. SCOB enters DEEPER in the zone, so R shrinks and the
+   same fee takes a larger share. Net barely moves, -0.124 -> -0.085.
+3. SCOB BARELY FILTERS. Only 2 of 265 touched zones timed out in shadow mode.
+   Ch.16 presents SCOB as a gate that refuses entries; as implemented it
+   refuses ~1% and mostly just re-prices. Either the implementation is too
+   permissive or the gating language oversells it - not resolved.
+
+THE COST/TIMEFRAME TEST, predicted from the gross/net gap before running
+
+    tf       n     NET   GROSS  fee/R  stop%   win%
+    Min15  133  -0.189  +0.069  0.257   1.87   26.3
+    Min30   88  +0.071  +0.147  0.076   3.19   33.0
+    Min60   51  -0.015  +0.049  0.064   4.13   25.5
+
+The fee mechanism is confirmed and is pure arithmetic: fee-in-R falls
+0.257 -> 0.076 -> 0.064 as the stop widens 1.87% -> 3.19% -> 4.13%.
+
+BUT GROSS EDGE DOES NOT HOLD UP: 0.069 / 0.147 / 0.049. Small everywhere and
+not monotone. The single NET-positive cell is Min30 at +0.071R on n=88, with
+unremarkable neighbours on both sides.
+
+THAT IS THE RANK-SPLIT SHAPE AND IT IS NOT CLAIMED AS A FINDING. One positive
+cell at n=88 bracketed by two negative ones is what noise looks like. The rank
+split had a trend, two agreeing arms and a source story, and still died at
+scale; this has less.
+
+HONEST STATUS
+The setup is roughly breakeven before costs and negative after. At 60m, where
+fees are nearly irrelevant (0.064R), gross is still only +0.049R. So the
+binding constraint is no longer transaction cost - it is that the edge is too
+small to survive anything.
+
+CUMULATIVE PROGRESSION, all measured, none positive:
+    Stage A   chase the IDM break              no stop distance works at all
+    Variant 2 retrace to zone                  -0.46R
+    + FVG     [SRC Ch.14]                      -0.11R   (armed% 33% -> 55%)
+    + SCOB    [SRC Ch.16]                      -0.085R  (gross -0.016 -> +0.10)
+
+Each source filter helped and each helped less. Remaining untested from the
+source: zone CLASSIFICATION (Decisional/Extreme/Breaker/Flip) and the OBSTACLE
+CHECK, which is the one flagged in the design as most likely to change a
+distribution rather than shave it.
