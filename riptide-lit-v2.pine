@@ -1530,6 +1530,7 @@ var int sigLoss = 0
 var float sigR = 0.0
 var float sigBest = 0.0
 var float sigWorst = 0.0
+var float sigR2 = 0.0        // sum of squares, for the standard error
 
 if showSig and engineOk
     // Manage what is open BEFORE opening anything new, so a setup can never
@@ -1543,6 +1544,7 @@ if showSig and engineOk
             sigWin += 1
         else
             sigLoss += 1
+        sigR2 += done * done
         sigBest := math.max(sigBest, done)
         sigWorst := math.min(sigWorst, done)
     // One at a time. A second setup while one is live is not taken, which is
@@ -1878,7 +1880,7 @@ if showDbg and barstate.islast
 // counts what these signals have done on the bars currently loaded. Read it as
 // a log, not as a verdict: a few dozen closed setups says nothing at all, and
 // the pre-registered work needed ~3000 bets to put a standard error on this.
-var table sigT = table.new(position.middle_right, 2, 7,
+var table sigT = table.new(position.middle_right, 2, 9,
      bgcolor = color.new(#111418, 12), border_width = 1,
      border_color = color.new(#2a2e39, 40), frame_width = 1,
      frame_color = color.new(#2a2e39, 40))
@@ -1900,16 +1902,34 @@ if showSig and sigLog and barstate.islast
     table.cell(sigT, 0, 3, "total R", text_color = mu, text_size = size.small)
     table.cell(sigT, 1, 3, fmtR(sigR),
          text_color = sigR >= 0 ? cLong : cShort, text_size = size.small)
+    // R/setup WITHOUT its error bar is the number that misleads. A 20-trade
+    // sample carrying one +13R outlier reads as +1.02R and is not
+    // distinguishable from zero; the panel now says both.
+    float mean = sigN > 0 ? sigR / sigN : 0.0
+    float vari = sigN > 1 ? (sigR2 - sigN * mean * mean) / (sigN - 1) : 0.0
+    float se = sigN > 1 and vari > 0 ? math.sqrt(vari / sigN) : 0.0
+    float tv = se > 0 ? mean / se : 0.0
     table.cell(sigT, 0, 4, "R / setup", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 4, sigN > 0 ? fmtR(sigR / sigN) : "-",
-         text_color = sigN > 0 and sigR >= 0 ? cLong : cShort,
+    table.cell(sigT, 1, 4, sigN > 0 ? fmtR(mean) +
+         (se > 0 ? " ± " + str.tostring(se, "0.00") : "") : "-",
+         text_color = sigN > 0 and mean >= 0 ? cLong : cShort,
          text_size = size.small)
-    table.cell(sigT, 0, 5, "best / worst", text_color = mu,
-         text_size = size.small)
-    table.cell(sigT, 1, 5, fmtR(sigBest) + " / " + fmtR(sigWorst),
+    // |t| under 2 is consistent with zero, whatever the headline says.
+    table.cell(sigT, 0, 5, "t", text_color = mu, text_size = size.small)
+    table.cell(sigT, 1, 5, se > 0 ? str.tostring(tv, "0.0") +
+         (math.abs(tv) < 2 ? "  (~0)" : "") : "-",
+         text_color = math.abs(tv) >= 2 ? cLong : mu, text_size = size.small)
+    // Concentration. One trade carrying most of the P&L is not an edge.
+    table.cell(sigT, 0, 6, "top trade", text_color = mu, text_size = size.small)
+    table.cell(sigT, 1, 6, sigR > 0 and sigBest > 0 ?
+         str.tostring(100 * sigBest / sigR, "0") + "% of total" : "-",
          text_color = mu, text_size = size.small)
-    table.cell(sigT, 0, 6, "open", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 6, sig.on ? (sig.armed ? "yes, armed" : "yes") : "no",
+    table.cell(sigT, 0, 7, "best / worst", text_color = mu,
+         text_size = size.small)
+    table.cell(sigT, 1, 7, fmtR(sigBest) + " / " + fmtR(sigWorst),
+         text_color = mu, text_size = size.small)
+    table.cell(sigT, 0, 8, "open", text_color = mu, text_size = size.small)
+    table.cell(sigT, 1, 8, sig.on ? (sig.armed ? "yes, armed" : "yes") : "no",
          text_color = mu, text_size = size.small)
 
 // ═══════════════════════════ 13. ALERTS ═════════════════════════════════════
