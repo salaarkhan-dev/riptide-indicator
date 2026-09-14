@@ -181,15 +181,41 @@ evidence rather than reopening it.
 Ships OFF. To enable on the box:
 
 ```bash
+# idempotent: delete any existing LIT lines first, so re-running cannot
+# duplicate them. systemd takes the LAST occurrence, so duplicates are
+# harmless, but two sources of truth in one file is how a later edit gets
+# silently ignored.
+sudo sed -i '/^RIPTIDE_LIT_FORWARD/d' /home/ubuntu/riptide/.env
 sudo tee -a /home/ubuntu/riptide/.env >/dev/null <<'ENV'
 RIPTIDE_LIT_FORWARD=1
 RIPTIDE_LIT_FORWARD_ALERTS=1
 ENV
 sudo chmod 600 /home/ubuntu/riptide/.env
 sudo chown ubuntu:ubuntu /home/ubuntu/riptide/.env
+
+# REQUIRED after any git pull that touched deploy/riptide.service, and systemd
+# warns when it is needed. Without it `restart` relaunches the process using
+# the unit definition systemd still has in memory.
+sudo systemctl daemon-reload
 sudo systemctl restart riptide
-journalctl -u riptide -n 50 --no-pager | grep 'LIT FWD'
+
+sleep 20 && journalctl -u riptide --since '2 min ago' --no-pager | grep 'LIT FWD'
 ```
+
+**Never `cat` the .env.** It holds the Telegram token, and a token that reaches
+a terminal log, a screenshot or a chat has to be rotated via @BotFather
+(`/revoke`, then `/token`). To check a setting without printing secrets:
+
+```bash
+grep '^RIPTIDE_LIT' /home/ubuntu/riptide/.env
+```
+
+**Where the flags belong.** `riptide.service` loads TWO environment files:
+`.env` first, then `riptide.conf` — so **`riptide.conf` overrides `.env`** for
+any key it defines, and `deploy/update.sh` reinstalls `riptide.conf` from the
+repo on every update. `riptide.conf` deliberately defines NO `RIPTIDE_LIT_*`
+keys, which is what makes `.env` authoritative for them. If LIT keys are ever
+added there, they will win over `.env` silently.
 
 Expect one line on the first cycle:
 
