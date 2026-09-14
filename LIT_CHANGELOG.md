@@ -1839,3 +1839,85 @@ Each source filter helped and each helped less. Remaining untested from the
 source: zone CLASSIFICATION (Decisional/Extreme/Breaker/Flip) and the OBSTACLE
 CHECK, which is the one flagged in the design as most likely to change a
 distribution rather than shave it.
+
+---
+
+## VARIANT 4 — the obstacle check and zone classification (research/lit_entry4.py)
+
+The last two untested source filters. Baseline is Variant 3's best arm: FVG
+zones, SCOB shadow confirmation, stop at the zone's far edge, exit at BOS.
+30 symbols across Min15/Min30/Min60.
+
+    arm                       n    win%    NET R  GROSS R   avgW   avgL
+    baseline (V3 best)      271   37.3%    0.008    0.170   2.05  -1.20
+    + obstacle check        246   32.5%   -0.027    0.157   2.44  -1.21
+    + Extreme zones         349   37.8%   -0.047    0.112   1.85  -1.20
+    + both                  309   32.4%   -0.084    0.096   2.29  -1.22
+
+### THE OBSTACLE CHECK IS CONFOUNDED, NOT REFUTED
+
+A first pass rejected only 3 of 273 setups, which would have read as "the
+filter does nothing". That was a harness fault, not a result: the obstacle set
+held only the CHoCH level and other zones' near edges. Ch.22's slide names the
+types explicitly — BOS Level, Valid opposite pullback, Breakout Zone (a level
+that CHANGED NATURE after being broken) — so broken BOS/CHoCH levels and
+opposite-direction pending pullbacks were added. Rejections went 3 -> 27.
+
+The filter then makes things worse, and the direct test says why. Taking the
+rejects anyway and tagging them, so kept and rejected come from ONE run and
+cannot differ through trade-slot competition:
+
+    kept (path clear)       244   32.8%   -0.011    0.166   2.44  -1.21
+    REJECTED (blocked)       27   77.8%    0.183    0.208   0.53  -1.04
+
+    kept      target distance: median 2.51R   mean 6.22R
+    rejected  target distance: median 0.35R   mean 0.51R
+
+The rejected set is the BEST set in the sample. The mechanism is arithmetic,
+not luck: Active Price is entry + 0.5R, BOS is an obstacle, and BOS is also our
+EXIT. So "blocked" is very nearly a restatement of "the target is nearer than
+0.5R" — median 0.35R against 2.51R kept. The filter removes short-path trades,
+which under a BOS exit are the quick reliable winners (77.8% at avgW 0.53).
+
+Dropping BOS from the obstacle set isolates the non-circular part:
+
+    kept                    268   36.6%   -0.016    0.148   2.04  -1.20
+    REJECTED                  3   too few to read
+
+Three rejections in 271. The other named obstacles essentially never sit in the
+entry -> Active corridor, because that corridor is 0.5R wide and sits at the
+zone, where there is little structure by construction.
+
+CONCLUSION: the obstacle check cannot be evaluated under a BOS exit. It is
+entirely BOS-driven, and BOS is the exit, so the filter and the exit are the
+same variable. It becomes testable only once T6 — what the trailing stop
+actually trails — is defined. T6 was already the design's largest hole; this is
+the second thing now blocked behind it. NOT a verdict on the source.
+
+### ZONE CLASSIFICATION IS A REAL NEGATIVE
+
+Extreme zones per Ch.15: created BY the CHoCH flip, from the prior structure's
+final pullback, facing the NEW direction. 384 born, 79 traded.
+
+    decisional              270   37.4%    0.012    0.175   2.05  -1.20
+    extreme                  79   39.2%   -0.250   -0.103   1.21  -1.19
+
+Classification does separate the population, but with the opposite sign to the
+hope. Extreme is the only arm measured in this whole programme that is negative
+GROSS. Win rate is comparable (39.2% vs 37.4%); the damage is in avgW, 1.21
+against 2.05. Extreme zones get hit about as often and pay far less.
+
+n=79 is small and this is one negative reading, so it is not proof the source
+is wrong. It is enough to stop Breaker and Flip, which chain off an Extreme
+being broken: building them now would stack on a base that does not hold.
+
+CUMULATIVE PROGRESSION, all measured, none positive:
+    Stage A   chase the IDM break        no stop distance works at all
+    Variant 2 retrace to zone            -0.46R
+    + FVG     [SRC Ch.14]                -0.11R   (armed% 33% -> 55%)
+    + SCOB    [SRC Ch.16]                -0.085R  (gross -0.016 -> +0.10)
+    + obstacle[SRC Ch.18]                confounded by the BOS exit, blocked on T6
+    + Extreme [SRC Ch.15]                gross -0.103, worse than decisional
+
+Every source filter is now measured except the two that need T6 first. T6 is no
+longer one hole among several — it is the only road left open.
