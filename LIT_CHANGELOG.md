@@ -1054,3 +1054,82 @@ Main is quiet. Before any orientation rule is chased further, the cheaper
 question is whether a Main correction that opens and then spans a boundary lock
 should be drawn at all — or whether the reference simply does not carry such an
 object.
+
+---
+
+# v0.3.8 — rendering-lifetime arms. Box identified; no arm adopted.
+
+Diagnostics only. **No Pine changed.**
+
+## Coupling check — clean
+
+`zone()` only READS `x.det.*`. Every write to detector state is inside
+`ctxStep`. `box.delete` touches box handles and the `x.zones` array and nothing
+else. **Drawing IDs are already presentation-only; no accidental coupling
+exists.**
+
+## The arms as briefed do not describe the mechanism
+
+A box is created **only on `x.det.hit` — the confirmation bar** — with
+`left = correction start`, `right = confirmation`, and is never touched again.
+There is no continuously-extending box and no box at all while a correction is
+unresolved. So "hide the unresolved Main PB" and "freeze its right edge" are
+both no-ops against the current renderer.
+
+## Why the first run showed nothing, and the fix
+
+My data ends **13 Sep 20:00**; the chart runs to **14 Sep ~10:00**. The giant
+box *confirms* in those missing hours, so it never appeared in my window. Main
+still holds the same correction open at my right edge, so its confirmation was
+simulated at the last bar to make the arms comparable.
+
+## Results — 11–14 Sep
+
+```
+WIDEST BOX EACH DEPTH WOULD DRAW
+  MAIN        3 boxes   widest  255 bars   11 Sep 04:15 -> 13 Sep 20:00
+  INTERNAL   19 boxes   widest   52 bars
+  DEEP       22 boxes   widest   33 bars
+
+arm                                  boxes   widest
+1 control - draw every confirmed         3      255
+2 suppress if span crossed a lock        2       10     <- removes it
+3 truncate right edge at lock entry      3      255     <- no-op
+```
+
+**The giant box is identified: a Main correction running 11 Sep 04:15 →
+13 Sep 20:00, 255 bars — starting exactly at lock entry.** That is why arm 3
+does nothing: there is no pre-lock portion to truncate back to.
+
+Internal and Deep are **bit-identical** across all three arms (19 and 22 boxes,
+widest 52 and 33) — no Main rendering arm touches them. Engine state is
+identical by construction, since the arms are downstream and read-only:
+invariants 0/0/0, final Main bearish/lock, latent cache 1073.93, Main 106
+pivots / 54 IDM / 19 taken / 13 BOS / 13 CHoCH / 6 flips over all data.
+
+## Why I am not recommending arm 2
+
+It works on this box, but it is blunt:
+
+```
+across all data: 54 of 112 Main boxes (48%) cross a lock
+  suppressed widths: median 8 bars, max 7403
+  kept widths:       median 2 bars, max 221
+```
+
+**It removes nearly half of all Main pullback boxes, most of them small and
+perfectly legitimate**, to delete one. The reference draws no Main box during
+*this* lock, but I have no evidence about what it draws during the many short
+locks arm 2 would also blank.
+
+I tried a narrower class — suppress only a correction that opened inside a lock
+and outlived it — and **mis-specified it**: my condition suppressed 95% of Main
+boxes. Not usable as written, and recorded as a failure rather than presented
+as an option.
+
+## Where this leaves it
+
+The object is now identified precisely and the coupling question is closed.
+What is not settled is the rule: "crosses a lock" is too broad, and the exact
+narrower class needs stating properly before it is worth coding. Nothing
+adopted; Arm A canonical and untouched.
