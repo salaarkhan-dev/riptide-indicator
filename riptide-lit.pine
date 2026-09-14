@@ -266,9 +266,9 @@ bool showStats = input.bool(false, "Structure statistics", group = gDbg,
 string statsDepth = input.string("Main", "Statistics / debug depth", group = gDbg,
      options = ["Main", "Internal", "Deep"],
      tooltip = "Which structure context the statistics table and the §63 debug table report on.")
-string statsWindow = input.string("Visible chart", "Statistics window", group = gDbg,
-     options = ["Visible chart", "All loaded bars"],
-     tooltip = "Visible chart cohorts calibration events whose opportunity begins inside the current viewport. Use the same viewport as the reference indicator when calibrating its table.")
+string statsWindow = input.string("All loaded bars", "Statistics window", group = gDbg,
+     options = ["All loaded bars", "Visible chart"],
+     tooltip = "[SRC] All loaded bars is the default because the REFERENCE TABLE IS NOT VIEWPORT-COHORTED. Its settings panel exposes one checkbox, Show LIT Statistics Table, and no window control at all - there is no way for it to express viewport cohorting, and its numbers hold still across changes of viewport.\n\nVisible chart cohorts events whose opportunity BEGINS inside the current viewport. Useful for reading one stretch of chart in isolation, but its totals are not comparable to the reference's.")
 bool showNearScan = input.bool(false, "Near-rule calibration scan", group = gDbg,
      tooltip = "Research only, off by default - §81 asks for no giant table on a first load. Counts first entries into several geometric 'near' candidates while BOS and CHoCH are both active. It does not alter structure. Target reference totals on the ZEC 30m fixture are BOS=29 and CHoCH=14.")
 

@@ -1320,6 +1320,82 @@ the tooltip. Ours (`pbIntOn`) defaults on. No action.
 
 ---
 
+## Chapter 13 — Reference Screenshots: Nested Pullbacks, and the Window Question
+
+### [SRC] External pullbacks CONTAIN internal pullbacks — seen on a live chart
+
+Four ZEC 15m captures. The pullback zones are drawn as large translucent boxes,
+and smaller, more saturated boxes sit INSIDE them: a wide teal external box with
+several darker boxes nested within it, a pink external box with a deeper pink
+box inside, and so on.
+
+This is Chapter 12's tooltip made visible:
+
+> "In LIT, shows Internal Pullbacks nested inside visible External Pullbacks."
+
+Confirms the v0.7 scoped hierarchy on a real chart rather than in prose. A child
+context is owned by a parent PULLBACK — `intScope` opened by a confirmed Main
+pullback, `deepScope` by an Internal one — and the picture is exactly that
+containment. The suspicion raised in Chapters 1, 2, 3 and 6 that the child
+degree might be fed by the parent's discarded inside bars is now refuted twice,
+once in prose and once on a chart.
+
+Also visible and consistent with ours: i / ii label prefixes by depth, blue
+bullish IDM against amber bearish IDM, BOS in the continuation colour with
+CHoCH in the reversal colour, and ✗ marks on retired levels.
+
+### [SRC] !! THE REFERENCE TABLE IS NOT VIEWPORT-COHORTED !!
+
+The statistics table reads identically across all four captures:
+
+    IDM → BOS touch            24  14  58.3%
+    IDM → Choch touch          24  10  41.7%
+    BOS near → Opp PB reach    38  26  68.4%
+    BOS near → BOS break       38  12  31.6%
+    Choch near → Opp PB reach  39  31  79.5%
+    Choch near → Choch break   39   8  20.5%
+
+Four very different viewports, one unchanging set of numbers. A viewport-
+cohorted table cannot do that.
+
+And Chapter 11 settles it independently of which indicator drew this particular
+table: the reference's settings panel exposes **one checkbox** for the
+statistics table and no window control of any kind. There is no way for it to
+express viewport cohorting, so it does not do it.
+
+CONSEQUENCE, AND IT IS NOT SMALL. Our `statsWindow` has defaulted to "Visible
+chart" for the whole calibration effort. Every totals comparison in this log —
+31 against 20, 34 against 29, 18 against 14 — put a viewport-cohorted count
+next to a whole-history count. Those comparisons were not like-for-like, and the
+"31 vs 20" density problem that has driven several rounds of investigation may
+be partly or wholly an artefact of the cohorting, not a property of the engine.
+
+CHANGED THIS PASS: `statsWindow` now defaults to "All loaded bars", and the
+option order is flipped so the comparable setting is first. The tooltip records
+why. "Visible chart" stays available for reading one stretch in isolation, with
+a note that its totals are not comparable to the reference's.
+
+This does not by itself make the numbers match. It makes them MEASURABLE
+against each other for the first time, which every previous round assumed it
+already had.
+
+### Reading note on attribution
+
+Riptide LIT appears hidden in the layer list of these captures while Index Algo
+is visible, which points to the table being the reference's. The label formats
+are not a discriminator — ours were calibrated to match its "HH | Weak High"
+style deliberately.
+
+The row set is six, where the annotated reference table in Chapter 10 carried
+twelve including the Hidden Shadow rows, so the two do not obviously come from
+the same build.
+
+It does not matter for the conclusion above, which rests on the settings panel
+rather than on this table's provenance. It does matter for treating 24 / 38 / 39
+as reference targets, so those numbers are NOT recorded as targets here.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
