@@ -291,6 +291,9 @@ type Ctx
     array<line> junkL
     array<label> junkB
     array<box> zones
+    array<label> swMarks
+    line dbgBase = na
+    line dbgAct = na
     int nPivot = 0
     int nIdm = 0
     int nIdmBreak = 0
@@ -533,7 +536,8 @@ newCtx(int d) =>
          boot = PBDet.new(dir = DIR_BEAR, b = Brk.new()),
          idm = Lvl.new(b = Brk.new()), bos = Lvl.new(b = Brk.new()),
          ch = Lvl.new(b = Brk.new()), junkL = array.new<line>(),
-         junkB = array.new<label>(), zones = array.new<box>())
+         junkB = array.new<label>(), zones = array.new<box>(),
+         swMarks = array.new<label>())
 
 setLvl(Lvl v, float px, int bar, int barT, int i, int d, int mode, bool hs) =>
     v.px := px
@@ -891,35 +895,37 @@ zone(Ctx x, bool on, int fade, int border) =>
 // than argued about. On measured data the drift is small - the pathological
 // ZEC CHoCH moved 0.6% across two sweeps - so expect the two lines to sit
 // almost on top of each other. A visible gap is the interesting case.
-var array<label> swMarks = array.new<label>()
-sweepDebug(Ctx x, bool on) =>
-    if on and showDbg
-        for v in array.from(x.bos, x.ch)
-            if v.on and v.b.swept
-                label mk = label.new(time, v.b.lastSweepPx,
-                     "S" + str.tostring(v.b.sweeps), xloc = xloc.bar_time,
-                     yloc = yloc.price, style = label.style_none, color = na,
-                     textcolor = color.new(cHS, 20), size = size.tiny)
-                array.push(swMarks, mk)
-                if array.size(swMarks) > 40
-                    label.delete(array.shift(swMarks))
+markSweep(Ctx x, Lvl v) =>
+    if v.on and v.b.swept
+        label mk = label.new(time, v.b.lastSweepPx,
+             "S" + str.tostring(v.b.sweeps), xloc = xloc.bar_time,
+             yloc = yloc.price, style = label.style_none, color = na,
+             textcolor = color.new(cHS, 20), size = size.tiny)
+        array.push(x.swMarks, mk)
+        if array.size(x.swMarks) > 40
+            label.delete(array.shift(x.swMarks))
     0
 
-var line dbgBase = na
-var line dbgAct = na
+sweepDebug(Ctx x, bool on) =>
+    if on and showDbg
+        markSweep(x, x.bos)
+        markSweep(x, x.ch)
+    0
+
 drawThreshold(Ctx x) =>
     if showDbg and x.ch.on
-        color g = color.new(#787b86, 40)
-        dbgBase := na(dbgBase) ? line.new(x.ch.barT, x.ch.px, time, x.ch.px,
-             xloc = xloc.bar_time, color = g, style = line.style_dashed) :
-             dbgBase
-        line.set_xy1(dbgBase, x.ch.barT, x.ch.px)
-        line.set_xy2(dbgBase, time, x.ch.px)
-        dbgAct := na(dbgAct) ? line.new(x.ch.barT, x.ch.b.act, time,
-             x.ch.b.act, xloc = xloc.bar_time, color = color.new(cHS, 25),
-             style = line.style_dotted, width = 2) : dbgAct
-        line.set_xy1(dbgAct, x.ch.barT, x.ch.b.act)
-        line.set_xy2(dbgAct, time, x.ch.b.act)
+        if na(x.dbgBase)
+            x.dbgBase := line.new(x.ch.barT, x.ch.px, time, x.ch.px,
+                 xloc = xloc.bar_time, color = color.new(#787b86, 40),
+                 style = line.style_dashed)
+        if na(x.dbgAct)
+            x.dbgAct := line.new(x.ch.barT, x.ch.b.act, time, x.ch.b.act,
+                 xloc = xloc.bar_time, color = color.new(cHS, 25),
+                 style = line.style_dotted, width = 2)
+        line.set_xy1(x.dbgBase, x.ch.barT, x.ch.px)
+        line.set_xy2(x.dbgBase, time, x.ch.px)
+        line.set_xy1(x.dbgAct, x.ch.barT, x.ch.b.act)
+        line.set_xy2(x.dbgAct, time, x.ch.b.act)
     0
 
 // ═══════════════════════════ 8. RUN ═════════════════════════════════════════
