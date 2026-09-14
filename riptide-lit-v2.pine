@@ -123,8 +123,9 @@ string pbShow = input.string("Show Latest Bullish & Bearish",
      tooltip = "[SRC] The reference's own control, options and default. 'Show Latest Bullish & Bearish' needs both directions tracked, which is policy P8.")
 bool pbIntOn = input.bool(true, "Internal zones", group = gPB, inline = "p")
 bool pbDeepOn = input.bool(false, "Deep zones", group = gPB, inline = "p")
-int histPB = input.int(10, "Zones kept per depth", minval = 1, maxval = 30,
-     group = gPB, tooltip = "Ignored while External pullback is set to Show Latest Bullish & Bearish.")
+int histPB = input.int(20, "Zones kept per depth", minval = 1, maxval = 40,
+     group = gPB,
+     tooltip = "Confirmed pullback zones kept per depth. The reference shows a dozen or more on one screen, so this needs headroom.")
 string pbEdge = input.string("Initial level", "Zone boundary", group = gPB,
      options = ["Initial level", "Final swept level"],
      tooltip = "[SRC] 'Should the upper level of the pullback be on the initial level or on the final level that got swept? Both ways are valid, which is why you can choose.' Visual only - the pivot and the structure are identical either way.")
@@ -774,14 +775,17 @@ zone(Ctx x, PBDet d, bool on, int fade, int border, int cap) =>
             box.delete(array.shift(x.zones))
     0
 
-// "Show Latest Bullish & Bearish" keeps exactly one box per direction alive.
+// WRONG READING, CORRECTED. This was implemented as "keep exactly two boxes,
+// one per direction", which left the chart almost empty. The reference draws
+// MANY zones under this same setting - its own screenshots show a dozen or more
+// across one screen - so "latest bullish & bearish" cannot mean a cap of two.
+// Its exact semantics are unconfirmed, so both visible modes now simply cap at
+// the history limit and the difference between them is left unclaimed rather
+// than guessed at a second time.
 trimZones(Ctx x) =>
-    if pbShow == "Show Latest Bullish & Bearish"
-        while array.size(x.zones) > 2
-            box.delete(array.shift(x.zones))
     0
 
-int zCap = pbShow == "Show All" ? histPB : 2
+int zCap = histPB
 bool zOn = pbShow != "Hide"
 
 // ═══════════════════════════ 9. CONTEXT STEP ════════════════════════════════
@@ -1442,7 +1446,15 @@ if showStats and barstate.islast
 pbTxt(PBDet d) =>
     d.state == PB_CORRECT ? "correcting" : "impulse"
 
-var table dbg = table.new(position.bottom_left, 2, 14,
+// Per-depth event tally. One screenshot answers "does this depth publish an IDM
+// at all", which the single-depth panel could not.
+tally(Ctx x) =>
+    str.tostring(x.nPivot) + "/" + str.tostring(x.nIdm) + "/" +
+     str.tostring(x.nIdmBreak) + "/" + str.tostring(x.nBos) + "/" +
+     str.tostring(x.nCh) + "/" + str.tostring(x.nFlip) + "/" +
+     str.tostring(x.nLatent) + "/" + str.tostring(x.nInvariant)
+
+var table dbg = table.new(position.bottom_left, 2, 18,
      bgcolor = color.new(chart.bg_color, 10), border_width = 1,
      border_color = color.new(#787b86, 60))
 if showDbg and barstate.islast
@@ -1509,11 +1521,25 @@ if showDbg and barstate.islast
          text_color = d.dir == DIR_BULL ? cBull : d.dir == DIR_BEAR ? cBear :
          color.gray, text_size = size.tiny)
     // Invariants are CHECKED, not assumed. A non-zero count is a real defect.
-    table.cell(dbg, 0, 13, "pivots / IDM / invariants", text_color = dk,
+    table.cell(dbg, 0, 13, "ALL DEPTHS  ↓", text_color = cHS,
          text_size = size.tiny)
-    table.cell(dbg, 1, 13, str.tostring(d.nPivot) + " / " +
-         str.tostring(d.nIdm) + " / " + str.tostring(d.nInvariant),
-         text_color = d.nInvariant > 0 ? cBear : dv, text_size = size.tiny)
+    table.cell(dbg, 1, 13, "pv/idm/take/bos/ch/flip/latent/inv",
+         text_color = cHS, text_size = size.tiny)
+    table.cell(dbg, 0, 14, "Main", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 14, tally(mainC),
+         text_color = mainC.nInvariant > 0 ? cBear : dv, text_size = size.tiny)
+    table.cell(dbg, 0, 15, "Internal", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 15, runInt ? tally(intC) : "off",
+         text_color = intC.nInvariant > 0 ? cBear : dv, text_size = size.tiny)
+    table.cell(dbg, 0, 16, "Deep", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 16, runDeep ? tally(deepC) : "off",
+         text_color = deepC.nInvariant > 0 ? cBear : dv, text_size = size.tiny)
+    // Whether the child feed policy is actually the one you think it is.
+    table.cell(dbg, 0, 17, "child feed [P7b]", text_color = dk,
+         text_size = size.tiny)
+    table.cell(dbg, 1, 17, childCont ? "continuous raw" :
+         "scoped · " + (intScope.active ? "open" : "closed"),
+         text_color = dv, text_size = size.tiny)
 
 // ═══════════════════════════ 13. ALERTS ═════════════════════════════════════
 // Structure events only. None of these is a trade signal, and this phase makes
