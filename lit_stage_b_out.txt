@@ -1,0 +1,199 @@
+========================================================================================================
+LIT STAGE B — THE STOP DEFINITION
+========================================================================================================
+HYPOTHESIS  H0: with a structurally-defined stop the naked LIT
+            continuation event still has no edge net of costs.
+            H1: it does, and Stage A's failure was the stop.
+PRIMARY     PRIOR_PB — 2nd-most-recent confirmed pullback pivot of
+            the trade direction in the current cycle. Selected on
+            GEOMETRY before any return existed (PREREG §2).
+CONTROL     RAID — Stage A's stop, for direct comparison.
+SECONDARY   IDM_PIVOT (requested; PREREG §2 shows it is NARROWER
+            than RAID), LEG, CHOCH. Descriptive only.
+INHERITED   population, entry, exits, scorer, fees, BET unit — all
+            unchanged from PREREG_lit_stage_a.md.
+CRITERION   PASS needs a control exit with R/bet>0 AND t>=2.5,
+            AND P(realized loss > 1.5R) <= 10%.
+DATE        2026-09-14 15:09 UTC
+COMMIT      becc0bf
+PREREG      PREREG_lit_stage_b.md (committed at becc0bf, before)
+========================================================================================================
+
+========================================================================================================
+  STOP GEOMETRY ON THE FULL POPULATION  [PREREG §6]
+========================================================================================================
+  stop          setups  skipped  med width      p25    fee/R  med BOS dist
+  PRIOR_PB        4440      929     2.917%   1.257%   0.011R         1.25R
+  RAID            5112      257     0.422%   0.179%   0.076R         8.67R
+  IDM_PIVOT       2530     2839     0.347%   0.143%   0.092R         8.71R
+  LEG             4994      375     8.407%   3.584%   0.004R         0.42R
+  CHOCH           5330       39    12.213%   6.490%   0.003R         0.28R
+
+========================================================================================================
+  PRIMARY ENDPOINT — stop = PRIOR_PB, in BETS
+========================================================================================================
+  cell           trades   bets    R/bet     SE      t     win     PF     totR   maxDD   recov
+  FIXED_1R         4440   3195   -0.028  0.017   -1.6   48.9%   0.92    -89.9   145.3   -0.62
+  FIXED_2R         4440   3195    0.021  0.024    0.9   39.2%   1.03     66.5    82.0    0.81
+  BOS_TARGET       4440   3195    0.024  0.039    0.6   46.1%   1.03     77.7   135.1    0.57
+  T6_PIVOT         4440   3195    0.145  0.059    2.5   40.0%   1.33    462.5    69.0    6.70
+  T6_STRUCTURE     4440   3195    0.138  0.062    2.2   25.5%   1.28    441.3   101.1    4.36
+
+========================================================================================================
+  CONTROL — stop = RAID (Stage A's), same run
+========================================================================================================
+  cell           trades   bets    R/bet     SE      t     win     PF     totR   maxDD   recov
+  FIXED_1R         5112   3632   -0.478  0.021  -22.3   36.0%   0.39  -1735.2  1736.1   -1.00
+  FIXED_2R         5112   3632   -0.296  0.027  -11.1   33.4%   0.63  -1076.2  1086.2   -0.99
+  BOS_TARGET       5112   3632    0.806  0.256    3.1   20.0%   1.82   2928.1   193.6   15.12
+  T6_PIVOT         5112   3632    0.564  0.149    3.8   21.0%   1.59   2048.5   158.5   12.92
+  T6_STRUCTURE     5112   3632    0.772  0.311    2.5   11.5%   1.61   2803.5   289.7    9.68
+
+========================================================================================================
+  REALIZED LOSS — the criterion Stage A failed
+========================================================================================================
+  PRIOR_PB (planned loss 1.00R, n=2209)  <-- PRIMARY
+    P(>1.0R)=94.0%  P(>1.25R)=4.3%  P(>1.5R)=1.9%  P(>2.0R)=0.7%
+    median 1.02R  p90 1.10R  p95 1.23R  worst 9.45R
+  RAID (planned loss 1.00R, n=3243)
+    P(>1.0R)=98.6%  P(>1.25R)=28.5%  P(>1.5R)=14.3%  P(>2.0R)=5.4%
+    median 1.13R  p90 1.67R  p95 2.04R  worst 22.45R
+  IDM_PIVOT (planned loss 1.00R, n=1472)
+    P(>1.0R)=98.7%  P(>1.25R)=35.3%  P(>1.5R)=19.9%  P(>2.0R)=9.0%
+    median 1.16R  p90 1.95R  p95 2.51R  worst 19.98R
+  LEG (planned loss 1.00R, n=2382)
+    P(>1.0R)=73.4%  P(>1.25R)=3.3%  P(>1.5R)=1.8%  P(>2.0R)=1.0%
+    median 1.01R  p90 1.05R  p95 1.15R  worst 14.01R
+  CHOCH (planned loss 1.00R, n=2526)
+    P(>1.0R)=59.4%  P(>1.25R)=0.3%  P(>1.5R)=0.2%  P(>2.0R)=0.1%
+    median 1.00R  p90 1.01R  p95 1.02R  worst 9.45R
+
+========================================================================================================
+  PAIRED vs BOS_TARGET on the primary stop
+========================================================================================================
+  exit             bets   mean d     SE      z  improved
+  FIXED_1R         3195   -0.052  0.035   -1.5     32.2%
+  FIXED_2R         3195   -0.003  0.035   -0.1     28.4%
+  T6_PIVOT         3195    0.120  0.048    2.5     34.1%
+  T6_STRUCTURE     3195    0.114  0.047    2.4     32.6%
+
+========================================================================================================
+  MFE BEYOND ACTIVE PRICE — primary stop
+========================================================================================================
+  Active Price reached: 2824/4440 = 63.6%
+  median 1.09R  mean 1.49R  p75 1.29R  p90 1.79R
+  >1.0R: 78.1%  >1.5R: 15.8%  >2.0R: 8.1%  >3.0R: 4.2%
+  hold time bars: median 14  MAE median -0.89R
+
+========================================================================================================
+  SECONDARY STOP POLICIES — DESCRIPTIVE ONLY
+  PREREG §5: these cannot convert a FAIL or INCONCLUSIVE into a PASS.
+========================================================================================================
+
+  stop = IDM_PIVOT
+  cell           trades   bets    R/bet     SE      t     win     PF     totR   maxDD   recov
+  FIXED_1R         2530   2007   -0.456  0.031  -14.5   40.9%   0.44   -916.0   932.0   -0.98
+  FIXED_2R         2530   2007   -0.243  0.039   -6.2   36.5%   0.72   -486.8   524.9   -0.93
+  BOS_TARGET       2530   2007    0.737  0.196    3.8   21.3%   1.89   1479.2   102.1   14.48
+
+  stop = LEG
+  cell           trades   bets    R/bet     SE      t     win     PF     totR   maxDD   recov
+  FIXED_1R         4994   3547   -0.008  0.016   -0.5   50.4%   1.02    -27.7    89.7   -0.31
+  FIXED_2R         4994   3547   -0.004  0.020   -0.2   42.3%   1.01    -15.1    75.6   -0.20
+  BOS_TARGET       4994   3547   -0.014  0.024   -0.6   60.2%   0.98    -48.5   123.5   -0.39
+
+  stop = CHOCH
+  cell           trades   bets    R/bet     SE      t     win     PF     totR   maxDD   recov
+  FIXED_1R         5330   3749    0.031  0.013    2.4   51.2%   1.10    114.4    37.2    3.07
+  FIXED_2R         5330   3749    0.026  0.016    1.6   44.9%   1.06     99.2    51.9    1.91
+  BOS_TARGET       5330   3749    0.005  0.012    0.4   68.2%   1.02     20.2    57.9    0.35
+
+========================================================================================================
+  RESULT AGAINST THE FROZEN CRITERION  [PREREG §5]
+========================================================================================================
+  primary stop policy: PRIOR_PB
+  criterion 1 (R/bet>0 and t>=2.5): NO control exit qualifies
+  criterion 2 (P(loss>1.5R) <= 10%): 1.9%  PASSES
+
+  VERDICT: INCONCLUSIVE
+  Per PREREG §5 the LIT trading family is CLOSED. No
+  progression to pullback-gap, POI, Breaker/Flip, mitigation,
+  SCOB, obstacle checking or sizing, and NO third stop
+  pre-registration: fitting by iteration is what this process
+  exists to prevent.
+
+====================================================================================================
+  INTERPRETATION  (written after the run; the criterion above was frozen at becc0bf)
+====================================================================================================
+
+VERDICT: INCONCLUSIVE. Criterion 2 passes overwhelmingly. Criterion 1 fails.
+Per PREREG §5 the LIT trading family is closed.
+
+1. THE STOP FIX WORKED COMPLETELY.
+
+    realized loss      median   P(>1.25R)  P(>1.5R)   worst
+    RAID (Stage A)      1.13R      28.5%     14.3%   22.45R
+    PRIOR_PB (primary)  1.02R       4.3%      1.9%    9.45R
+
+   Against a 10% ceiling, 1.9%. The risk unit is now real: a loss is a loss of
+   about 1R, which is what 1R is supposed to mean. Stage A's diagnosis was
+   correct and the remedy did exactly what it was predicted to do.
+
+2. AND WITH A REAL RISK UNIT THE EDGE DISAPPEARS.
+
+    control exit     RAID stop    PRIOR_PB stop
+    FIXED_1R            -0.478           -0.028
+    FIXED_2R            -0.296           +0.021
+    BOS_TARGET          +0.806           +0.024
+
+   BOS_TARGET falls from +0.806 R/bet to +0.024. The collapse is not a
+   degradation, it is the artefact being removed: median distance to BOS falls
+   from 8.67R to 1.25R over the same setups, because the denominator stopped
+   being a single candle's wick. Stage A's +0.806 was 20% of trades paying
+   ~8R of a fictional R. There was never 0.8R/bet there to lose.
+
+3. THE MFE OPTIMISM IN STAGE A WAS THE SAME ARTEFACT, AND IS WITHDRAWN.
+
+   Stage A reported that among setups reaching Active Price the median MFE was
+   1.91R with 48.3% exceeding 2R, and called that "real favourable excursion".
+   With an honest denominator:
+
+    among Active-Price reached   median MFE   >2R
+    RAID (Stage A)                    1.91R  48.3%
+    PRIOR_PB (primary)                1.09R   8.1%
+
+   The excursion was measured in the same fake units as everything else. The
+   event does not produce large favourable moves relative to a real risk unit.
+   That sentence in lit_stage_a_out.txt is hereby retracted.
+
+4. THE SECONDARIES AGREE, INCLUDING THE ONE THAT WAS REQUESTED.
+
+   IDM_PIVOT behaves exactly as PREREG §2 predicted from geometry alone: at
+   0.347% median width it is NARROWER than RAID, its realized-loss tail is the
+   worst of all five (P(>1.5R) = 19.9%), and its BOS_TARGET arm shows the same
+   +0.737 lottery. It reproduces Stage A's failure rather than fixing it.
+
+   LEG and CHOCH, both wider, land where PRIOR_PB lands: every control within
+   0.03R of zero. Three independent stop widths spanning 2.9% to 12.2% of
+   price all say the same thing, which is the strongest part of this result.
+
+5. WHAT IS NOT CLAIMED, AND THE ONE THING STILL ALIVE.
+
+   The trailing arms are the best cells on the primary stop — T6_PIVOT +0.145
+   (t=2.5) and T6_STRUCTURE +0.138 (t=2.2), both beating BOS_TARGET on paired
+   deltas (z = 2.5 and 2.4). PREREG §5 restricted criterion 1 to fully
+   specified controls precisely because T6 is an open [GAP] in the source, so
+   these cannot and do not deliver a PASS.
+
+   They are recorded, not claimed. Across 5 stops x 5 exits = 25 cells, a
+   |t| of 2.5 is close to what chance produces, and the two trail arms are not
+   independent of each other. Pursuing them would require a new
+   pre-registration with a trail as the primary endpoint — which is the
+   fitting-by-iteration PREREG §5 forbids. That call belongs to a human, not
+   to this process continuing on its own momentum.
+
+CONCLUSION. The LIT structure engine is sound and externally validated
+(ZEC 30m IDM->BOS 65.6% against the reference's 65.0%). The LIT trading
+family, as specified across two pre-registered experiments and five stop
+definitions, does not show an economic edge net of costs. Stage A failed on a
+broken risk unit; Stage B fixed the risk unit and found roughly zero.

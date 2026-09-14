@@ -2227,3 +2227,78 @@ compiler in this environment and `riptide-lit-v2.pine` has never been compiled.
 Agreement between it and `lit_v3` is unverified and no parity claim is made
 anywhere. The external validation that does exist is against the reference
 indicator's own published statistics (ZEC 30m IDM→BOS 65.6% vs 65.0%).
+
+---
+
+## STAGE B — THE STOP DEFINITION. FAMILY CLOSED.
+
+Pre-registered in `PREREG_lit_stage_b.md`, committed at `becc0bf` before the
+run. Stage A failed on its risk unit rather than visibly on its entry, so
+Stage B holds entry, exits, scorer, fees and unit of evidence fixed and varies
+only where the stop goes.
+
+### THE STOP THAT WAS REQUESTED DOES NOT WORK, AND GEOMETRY SAID SO FIRST
+
+Stop widths were measured before any P&L existed — width and fee-in-R are
+properties of the setup and carry no return information:
+
+    stop        setups  skipped  med width     fee/R   med BOS dist
+    PRIOR_PB      4440      929     2.917%    0.011R          1.25R
+    RAID          5112      257     0.422%    0.076R          8.67R
+    IDM_PIVOT     2530     2839     0.347%    0.092R          8.71R
+    LEG           4994      375     8.407%    0.004R          0.42R
+    CHOCH         5330       39    12.213%    0.003R          0.28R
+
+The IDM pivot stop is NARROWER than the raid stop it was meant to replace: for
+a long the IDM pivot sits ABOVE the raid low, because the raid is the sweep
+through that pivot. It was registered and run anyway, and it reproduces Stage
+A's failure exactly — worst realized-loss tail of all five at P(>1.5R)=19.9%.
+
+### THE FIX WORKED, AND THEN THE EDGE VANISHED
+
+    realized loss      median  P(>1.25R)  P(>1.5R)   worst
+    RAID (Stage A)      1.13R     28.5%     14.3%   22.45R
+    PRIOR_PB (primary)  1.02R      4.3%      1.9%    9.45R
+
+Criterion 2 passes at 1.9% against a 10% ceiling. The risk unit is real.
+
+    control exit     RAID stop   PRIOR_PB stop
+    FIXED_1R            -0.478          -0.028
+    FIXED_2R            -0.296          +0.021
+    BOS_TARGET          +0.806          +0.024
+
+**VERDICT: INCONCLUSIVE.** No control exit reaches t >= 2.5. Family closed.
+
+BOS_TARGET's collapse from +0.806 to +0.024 is the artefact being removed, not
+a degradation: median distance to BOS falls from 8.67R to 1.25R over the same
+setups once the denominator stops being one candle's wick.
+
+### A RETRACTION OF STAGE A'S ONE OPTIMISTIC LINE
+
+Stage A reported median MFE 1.91R with 48.3% exceeding 2R among Active-Price
+reached, and called it real favourable excursion. On the primary stop it is
+1.09R and 8.1%. It was measured in the same fake units. **Withdrawn.**
+
+### THE STRONGEST PART OF THE RESULT
+
+Three stop widths spanning 2.9% to 12.2% of price — PRIOR_PB, LEG, CHOCH —
+all put every fully-specified control within 0.03R of zero. The finding is not
+sensitive to the stop choice once the stop is sane.
+
+### RECORDED, NOT CLAIMED
+
+The trailing arms are the best cells on the primary stop: T6_PIVOT +0.145
+(t=2.5) and T6_STRUCTURE +0.138 (t=2.2), beating BOS_TARGET on paired deltas
+(z=2.5, 2.4). PREREG §5 restricted criterion 1 to fully-specified controls
+because T6 is an open [GAP]; across 25 cells a |t| of 2.5 is near what chance
+produces, and the two arms are not independent. Pursuing them needs a new
+pre-registration with a trail as primary, which is the fitting-by-iteration
+§5 forbids. That is a human's call, not this process's momentum.
+
+### CONCLUSION
+
+The LIT structure engine is sound and externally validated (ZEC 30m IDM→BOS
+65.6% vs the reference's 65.0%). The LIT trading family, across two
+pre-registered experiments and five stop definitions, shows no economic edge
+net of costs. Stage A failed on a broken risk unit; Stage B fixed it and found
+roughly zero.
