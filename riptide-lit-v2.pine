@@ -985,7 +985,13 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
             // later migration cannot move the goalposts. Under P8 this is
             // literal; with P8 off it degrades to the active detector's last.
             PBDet dOpp = pDual ? (up ? x.detBear : x.detBull) : dActive
-            bool haveTgt = dOpp.last.live
+            // ...and it has to be a pullback from THIS leg. A zone left behind
+            // several legs ago is not "the last opposite pullback" in any sense
+            // the reference would recognise - price has since walked away from
+            // it, so the race can only ever resolve as a break. Leg-relative,
+            // not a distance threshold: §2's determinism rules out a number.
+            bool haveTgt = dOpp.last.live and not na(x.legBar) and
+                 dOpp.last.confirmBar >= x.legBar
             if not x.stBosArmed and haveTgt and inStatsWindow(time) and
                  (x.bos.b.dir > 0 ? above(h, x.bos.px) : below(l, x.bos.px))
                 x.stBosArmed := true
@@ -1108,6 +1114,22 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
                 x.stChNearTot += 1
                 x.stChNearReach += 1
                 x.stChArmed := false
+
+        // ── [P8] THE IDLE OBSERVER RESTARTS AT EVERY STRUCTURAL EVENT ──────
+        // Without this it can open a correction whose confirmation level price
+        // never returns to, and sit in it indefinitely. Measured on ZEC 30m:
+        // the bear detector held trackers at 316/292 with a frozen conf of
+        // 298.47 while price traded at 1130 - stale by thousands of bars and a
+        // factor of four. Its stale `last` then became the near statistic's
+        // target, which is why BOS near -> Opp PB reach read 0 of 20.
+        //
+        // The rule is structural, not a number: the opposite-direction
+        // detector is an OBSERVER of the current leg, and a structural event
+        // is what ends a leg. Losing an in-flight opposite correction there
+        // costs nothing, because the event redefines the leg anyway.
+        if major and pDual
+            PBDet dIdle = x.dir == DIR_BULL ? x.detBear : x.detBull
+            detReorient(dIdle, dIdle.dir, h, l)
 
         // ── invariants, checked rather than assumed ────────────────────────
         if x.phase == PH_LOCK

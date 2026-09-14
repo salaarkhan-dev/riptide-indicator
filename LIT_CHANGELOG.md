@@ -1500,3 +1500,79 @@ NOT YET MEASURED. The acceptance test in LIT_V2_DESIGN.md §8 step 1 is a parity
 run against v1 with P8 set to Single - identical pullback count, pivots and
 IDM/BOS/CHoCH sequence. Any difference there is a porting bug, not an
 improvement. Nothing about V2 should be believed until that passes.
+
+
+────────────────────────────────────────────────────────────────────────────
+V2 — FIRST REAL MEASUREMENT, ZEC 30m, all loaded bars, Main depth
+────────────────────────────────────────────────────────────────────────────
+
+                          reference (30m)      V2
+  IDM → BOS touch          20  13  65.0%    32  21  65.6%
+  IDM → Choch touch        20   7  35.0%    32  11  34.4%
+  HS BOS break             19  16  84.2%    23  21  91.3%
+  HS BOS cancel            19   3  15.8%    23   2   8.7%
+  HS Choch break            5   5 100.0%    16  14  87.5%
+  HS Choch cancel           5   0   0.0%    16   2  12.5%
+  BOS near → Opp PB        29  20  69.0%    20   0   0.0%
+  BOS near → BOS break     29   9  31.0%    20  20 100.0%
+  Choch near → Opp PB      14   7  50.0%    12   1   8.3%
+  Choch near → Choch brk   14   7  50.0%    12  11  91.7%
+
+(HS reference figures are from the author's annotated table, a different
+chart and date, so they are shape comparisons and not same-window.)
+
+WHAT IS GOOD
+------------
+The IDM race now matches the reference's RATE almost exactly - 65.6/34.4
+against 65.0/35.0. That is the one row with no "near" definition in it, so it
+is the cleanest read we have of whether the structural engine agrees with the
+reference, and it does. The Hidden Shadow rows are in the right region too.
+
+Totals still run high (32 against 20), but the viewport-cohorting artefact is
+only now removed, so this is the first genuinely comparable reading of it.
+
+WHAT WAS BROKEN, AND IT WAS MINE
+--------------------------------
+BOS near → Opp PB reach read 0 of 20. Not low - ZERO. A statistic that never
+fires is not a calibration problem, it is a bug, and the debug panel found it
+in one screenshot:
+
+    bull trk hi/lo   1295.43 / 1271.43   correcting
+    bear trk hi/lo    316.73 /  292.87   correcting
+    conf bull / bear 1295.43 /  298.47
+
+Price was trading at 1130. The bear detector was holding trackers at 316/292
+with a frozen confirmation level of 298.47 - stale by thousands of bars and by
+a factor of four in price.
+
+CAUSE. P8 runs a detector in each direction. The idle one opens a correction
+like any other, and a bear correction confirms only on a break BELOW its
+frozen low. In a market that has quadrupled since, that never happens, so it
+sat in one correction indefinitely. Its ancient `last` record was then handed
+to the near statistic as "the last opposite pullback", at a price the market
+left long ago - so the race could only ever resolve as a break. Hence 100%.
+
+This is the same failure mode as the v0.1 "unoriented parallel trackers"
+defect, reintroduced by P8 and not caught because P8 was reasoned about rather
+than measured.
+
+FIX, and it is structural rather than a threshold:
+  - The idle opposite detector RESTARTS at every major structural event. It is
+    an observer of the current leg, and a structural event is what ends a leg,
+    so an in-flight opposite correction costs nothing there.
+  - The near target must be a pullback confirmed within the CURRENT leg.
+    Leg-relative, not a distance band - §2's determinism requirement rules out
+    a number, and the rescored scan already showed every proximity band far
+    worse than raw touch.
+
+STILL OPEN
+----------
+Main 139/96/33/32/31/14/67/0 against Internal 139/94/32/32/18/14/65/0
+(pv/idm/take/bos/ch/flip/latent/inv). Under P7b Continuous, Internal reads raw
+candles and Main reads normalized groups - roughly 5000 steps against 850 - yet
+they produce nearly the same structure. Either the finer feed is not actually
+producing finer structure, or Internal is stuck the same way the bear detector
+was. Not diagnosed. Next measurement, not the next theory.
+
+Zero invariant violations at both depths, which is the one unambiguously good
+line in the whole panel.
