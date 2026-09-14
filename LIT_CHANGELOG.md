@@ -304,3 +304,93 @@ the pullback detector. Neither rule is stated by the reference, so both are
 
 **Regression fixture:** the correction-lifetime distribution above. `MAX` should
 fall to the p99 range (~170 bars) without any size, ATR or bar-count filter.
+
+---
+
+# v0.3.1 diagnostics — the decision gate is open
+
+Both briefs name a root cause and ask for verification first. All three are
+falsified. Measured on ZEC 15m, 120 days, Main depth.
+
+## Q2/Q3 — the pullback tracker DOES reset after confirmation
+
+```
+cycles 111   median 3   p90 71   p95 154   p99 604   MAX 7403 bars
+cycles longer than 300 bars: 4
+```
+
+111 distinct cycles with a median of **3 bars**. The v0.3.1 §5 hypothesis —
+tracker not restarted, subsequent corrections swallowed by the old pullback —
+does not hold: `detStep` already sets `state := PB_IMPULSE` and reseeds
+`trkHi/trkLo` from the confirmation bar, and the cycle count proves it works.
+**4 of 111 cycles are pathological, not most of them.**
+
+## Q1 — the PullbackObserver is NOT frozen by the lock
+
+It runs on every analytical bar regardless of phase, and a confirmed
+correction is cached as latent whenever the phase forbids publishing it. The
+third long lock proves the path works end to end:
+
+```
+lock  569..986   (417 bars)   latent PB confirmed inside: 0
+lock 1934..9273  (7339 bars)  latent PB confirmed inside: 0
+lock 9411..10541 (1130 bars)  latent PB confirmed inside: 5
+```
+
+Locks 1 and 2 cached nothing not because the observer was gated, but because
+the detector was sitting inside one unconfirmed correction for the whole span.
+
+## Q4 — the leg anchor was NOT stale
+
+```
+lock 1934..9273   legStart 644.48 at bar 1649   BOS 250.00   CHoCH 644.48
+                  leg anchor age at lock start: 285 bars
+```
+
+285 bars old, and `legStart == CHoCH` exactly — which is correct by
+construction, since a BOS continuation sets the new leg anchor to the newly
+validated opposite extreme. The anchor history confirms it moves on every BOS
+break (breaks 7→13, a new anchor each time). **The 250 BOS did not come from a
+stale anchor.** It is the genuine lowest low from bar 1649 through the IDM
+break, which is the documented rule applied correctly.
+
+## What is actually happening
+
+All four pathological cycles occur inside a boundary lock:
+
+```
+PB#64   bars  1870..9273   len 7403   phase lock
+PB#79   bars  9497..10163  len  666   phase lock
+PB#25   bars   382..986    len  604   phase lock
+PB#81   bars 10187..10538  len  351   phase lock
+```
+
+A bearish context in a long range: BOS sits at the leg's true low (250, reached
+early and then left far below), CHoCH sits at the leg's high (644.48) where it
+is repeatedly swept but never body-broken. Price oscillates between them. A
+supply correction opens inside that range and its frozen level — the start
+candle's low — is never revisited, so it waits for the flip rather than
+confirming. PB#64 ended by reorientation on the flip, not by confirmation.
+
+**The documented rules produce this lock.** It is not a lifecycle defect.
+
+## The decision gate (lock brief §10) is open
+
+The gate says: only if pathological locks remain after (a) continuous latent PB
+detection, (b) correct BOS-cycle legStart reset, (c) correct BreakTracker
+ownership. All three are verified present:
+
+- (a) verified above — the observer is unfrozen and latent caching works.
+- (b) verified above — the anchor is re-established from the new valid opposite
+  extreme at every BOS break.
+- (c) verified by inspection — `setLvl` calls `arm`, which sets
+  `base = act = px` and clears the pending and sweep state, so a replaced level
+  never inherits a migrated threshold.
+
+The pathological locks remain. Per §10 the next step is an EXPERIMENTAL
+comparison of the two undocumented alternatives — Body & Sweep reset semantics,
+and BOS range semantics — measured against the fixture and not silently
+adopted.
+
+Distributions to report before and after, per §9, with no target value:
+pullback duration and lock duration, median / p90 / p95 / p99 / max.
