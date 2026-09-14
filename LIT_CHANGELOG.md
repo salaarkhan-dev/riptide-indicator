@@ -1422,3 +1422,81 @@ the numbers themselves.
 
 The density finding from v0.7.17 still stands as the live explanation and is
 untested until the rescored scan is read back.
+
+
+────────────────────────────────────────────────────────────────────────────
+VARIANT 2 — riptide-lit-v2.pine, first build
+────────────────────────────────────────────────────────────────────────────
+
+New file. riptide-lit.pine (v1) is untouched and stays the working build.
+Built against LIT_V2_DESIGN.md; every rule traces to LIT_SOURCE.md.
+
+WHAT IS STRUCTURALLY DIFFERENT FROM v1
+--------------------------------------
+
+1. THE UNDEFINED CASES ARE NAMED. v1's rules were all source-correct; what was
+   wrong was that wherever the source is silent, v1 answered by statement order
+   - an `if` arm that happened to be written first. Those answers moved the
+   output and were invisible. V2 exposes them as policies P1, P3, P4, P8 with
+   explicit defaults, and the debug panel counts how often each actually fires.
+
+2. DUAL-ORIENTATION DETECTORS [P8]. A pullback detector runs in EACH direction
+   at every depth. Only the one matching the structural direction may publish
+   an IDM or open a child scope; the other is observed. This is the single
+   confirmed divergence from the reference and it has two witnesses - Ch.3's
+   post-flip lookback and Ch.12's "Show Latest Bullish & Bearish" display
+   option. It makes the Ch.3 lookback implementable for the first time:
+   on a CHoCH flip, if an opposite-direction pullback already exists it becomes
+   the IDM immediately instead of waiting for a fresh one.
+
+3. NO FLOATING IDM, AND NO INPUT FOR IT. The line begins on the candle that
+   MADE the level - the pivot - and runs to the current bar. v1 carried an
+   idmAnchor input offering the wrong answer as an option; the reference does
+   it one way and that is the only correct way, so the input is gone.
+
+4. MIGRATED IDMs ARE DELETED. User decision, overriding the reference's own
+   faded-trail rendering: "we move the idm up and after moving we will delete
+   the previous IDM ... so that our chart will be cleaned". One live IDM per
+   depth, nothing behind it. BOS/CHoCH still fade into capped history.
+
+5. RETYPE IN PLACE. On a CHoCH flip the old BOS line OBJECT is transferred to
+   the CHoCH and relabelled, with a small ✗ at the retype bar - one continuous
+   level, which is what Ch.8's diagram shows. v1 deleted and recreated.
+
+6. TWELVE-ROW STATISTICS, all-loaded-bars cohort by default, including the six
+   Hidden Shadow break/cancel rows. Near arms on a TOUCH and targets the LAST
+   opposite pullback, which under P8 is literal rather than approximated.
+
+7. NEAR HAS NO DISTANCE BAND ANYWHERE. Ch.2's determinism requirement forbids
+   one and the rescored scan already showed every proximity band an order of
+   magnitude worse than raw touch.
+
+NO COMPLEX-PULLBACK RULE, DELIBERATELY. A complex pullback is the emergent
+shape of the frozen-confirmation-level machine: oscillations that fail to break
+`conf` leave the correction running, the range ratchets, one pivot comes out at
+the true extreme. Writing a rule for it would be inventing exactly what Ch.2
+spends its length warning against.
+
+THREE BUGS FOUND IN SELF-REVIEW AND FIXED BEFORE COMMIT
+--------------------------------------------------------
+  - The I5 invariant read `not x.idm.on == false`, which does not parse as
+    intended and would have silently never fired.
+  - A bar that bootstraps the direction fell through and advanced its detectors
+    a SECOND time, stepping one group twice. Guarded with `justSeeded`. This is
+    precisely the class of bug that surfaces as an unexplained density
+    discrepancy several rounds later.
+  - Pullback zones were drawn in the render section, which runs on every bar,
+    while `det.hit` persists between analytical groups - so one confirmation
+    would redraw its box on every intervening inside bar. Zones are now drawn
+    where they are decided.
+
+NOT COMPILED. There is no Pine compiler in this environment. Checked by reading
+and by script: no function assigns a global scalar (CE10088), every drawing is
+anchored in xloc.bar_time (RE10026), no return-type annotations, no `[]`
+history on object fields, no continuation line on a multiple-of-4 indent, zero
+ta.pivot* uses. Compile errors on first paste are still possible.
+
+NOT YET MEASURED. The acceptance test in LIT_V2_DESIGN.md §8 step 1 is a parity
+run against v1 with P8 set to Single - identical pullback count, pivots and
+IDM/BOS/CHoCH sequence. Any difference there is a porting bug, not an
+improvement. Nothing about V2 should be believed until that passes.

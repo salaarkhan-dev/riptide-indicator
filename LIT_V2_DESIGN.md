@@ -350,12 +350,19 @@ them, with the label changing across the mark. V2 keeps the line object alive
 across a BOS→CHoCH retype, changes its label and colour, and drops a ✗ at the
 retype bar — instead of v1's delete-and-recreate.
 
-### 7.3 Retired levels
+### 7.3 Retired IDMs are DELETED, not faded
 
-Reference keeps a faded trail with migration arrows (Ch.8); v1 leaves a small
-"x", default off. V2 default: faded short segment retained, arrow optional,
-capped by the existing per-depth history limits. §56 permits either; match the
-reference.
+**User decision, and it overrides the earlier recommendation here.** The
+reference keeps a faded grey trail with migration arrows (Ch.8). V2 does not:
+when an IDM migrates, the previous IDM's line and label are deleted outright.
+
+> "only we move the idm up and after moving we will delete the previous IDM
+> that we created in a float so that our chart will be cleaned"
+
+§56 permits either ("optionally keep short historical segment"). One live IDM
+per depth, nothing behind it. Retired BOS/CHoCH segments still fade into the
+capped history — only IDMs are deleted, because they are the level that
+migrates repeatedly and so the only one that accumulates.
 
 ### 7.4 Pullback zones
 
