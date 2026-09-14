@@ -218,6 +218,9 @@ type Brk
     float hsMomLo = na
     bool swept = false
     bool shadow = false      // a Hidden Shadow rejection fired this bar
+    int sweeps = 0           // length of the current sweep chain
+    int lastSweepBar = na
+    float lastSweepPx = na
 
 // [SRC] The documented two-phase correction tracker, ORIENTED to a trend.
 type PBDet
@@ -315,6 +318,7 @@ arm(Brk b, float lvl, int d, int mode, bool useHS) =>
     b.pend := false
     b.swept := false
     b.shadow := false
+    b.sweeps := 0
     b.hsLvl := na
 
 disarm(Brk b) =>
@@ -358,9 +362,15 @@ brkStep(Brk b, float o, float h, float l, float c) =>
                 if up and h > b.act and c <= b.act
                     b.act := h
                     b.swept := true
+                    b.sweeps += 1
+                    b.lastSweepBar := bar_index
+                    b.lastSweepPx := h
                 else if not up and l < b.act and c >= b.act
                     b.act := l
                     b.swept := true
+                    b.sweeps += 1
+                    b.lastSweepBar := bar_index
+                    b.lastSweepPx := l
                 raw := up ? c > b.act : c < b.act
             if raw
                 if b.useHS and b.mode != BRK_SHADOW
@@ -875,6 +885,43 @@ zone(Ctx x, bool on, int fade, int border) =>
             box.delete(array.shift(x.zones))
     0
 
+// [DEBUG ONLY] The Body & Sweep threshold made visible: a faint dashed BASE,
+// a stronger dotted ACTIVE, and an S-mark at each wick that moved it. This
+// exists so the migration can be compared against the reference by eye rather
+// than argued about. On measured data the drift is small - the pathological
+// ZEC CHoCH moved 0.6% across two sweeps - so expect the two lines to sit
+// almost on top of each other. A visible gap is the interesting case.
+var array<label> swMarks = array.new<label>()
+sweepDebug(Ctx x, bool on) =>
+    if on and showDbg
+        for v in array.from(x.bos, x.ch)
+            if v.on and v.b.swept
+                label mk = label.new(time, v.b.lastSweepPx,
+                     "S" + str.tostring(v.b.sweeps), xloc = xloc.bar_time,
+                     yloc = yloc.price, style = label.style_none, color = na,
+                     textcolor = color.new(cHS, 20), size = size.tiny)
+                array.push(swMarks, mk)
+                if array.size(swMarks) > 40
+                    label.delete(array.shift(swMarks))
+    0
+
+var line dbgBase = na
+var line dbgAct = na
+drawThreshold(Ctx x) =>
+    if showDbg and x.ch.on
+        color g = color.new(#787b86, 40)
+        dbgBase := na(dbgBase) ? line.new(x.ch.barT, x.ch.px, time, x.ch.px,
+             xloc = xloc.bar_time, color = g, style = line.style_dashed) :
+             dbgBase
+        line.set_xy1(dbgBase, x.ch.barT, x.ch.px)
+        line.set_xy2(dbgBase, time, x.ch.px)
+        dbgAct := na(dbgAct) ? line.new(x.ch.barT, x.ch.b.act, time,
+             x.ch.b.act, xloc = xloc.bar_time, color = color.new(cHS, 25),
+             style = line.style_dotted, width = 2) : dbgAct
+        line.set_xy1(dbgAct, x.ch.barT, x.ch.b.act)
+        line.set_xy2(dbgAct, time, x.ch.b.act)
+    0
+
 // ═══════════════════════════ 8. RUN ═════════════════════════════════════════
 var Ctx mainC = newCtx(0)
 var Ctx intC = newCtx(1)
@@ -903,10 +950,12 @@ if engineOk and gOn
     zone(mainC, pbMainOn and showMain, 88, 62)
     zone(intC, pbIntOn and runInt, 92, 72)
     zone(deepC, pbDeepOn and runDeep, 95, 82)
+    sweepDebug(mainC, showMain)
     markTaken(mainC, showMain, fadeMain + 20, histMain)
     markTaken(intC, runInt, fadeInt + 25, histInt)
     markTaken(deepC, runDeep, fadeDeep + 25, histDeep)
 
+drawThreshold(mainC)
 paint(mainC, showMain, "", 2, fadeMain, size.small)
 paint(intC, runInt, "i", 1, fadeInt, size.tiny)
 paint(deepC, runDeep, "ii", 1, fadeDeep, size.tiny)
@@ -1027,9 +1076,21 @@ if showDbg and barstate.islast
     table.cell(dbg, 1, 9, na(d.latPx) ? "—" :
          str.tostring(d.latPx, format.mintick), text_color = cVal,
          text_size = size.tiny)
-    table.cell(dbg, 0, 10, "Hidden Shadow", text_color = cTxt,
+    table.cell(dbg, 0, 10, "BOS / CHoCH sweep", text_color = cTxt,
          text_size = size.tiny)
-    table.cell(dbg, 1, 10, d.bos.b.pend or d.ch.b.pend ? "pending" : "idle",
+    string sweepTxt = (d.bos.on ? "BOS base " +
+         str.tostring(d.bos.px, format.mintick) + " act " +
+         str.tostring(d.bos.b.act, format.mintick) + " drift " +
+         str.tostring(100 * math.abs(d.bos.b.act - d.bos.px) / d.bos.px, "#.##")
+         + "% n" + str.tostring(d.bos.b.sweeps) + " age " +
+         str.tostring(bar_index - d.bos.createdBar) : "BOS -") + "   " +
+         (d.ch.on ? "CHoCH base " + str.tostring(d.ch.px, format.mintick) +
+         " act " + str.tostring(d.ch.b.act, format.mintick) + " drift " +
+         str.tostring(100 * math.abs(d.ch.b.act - d.ch.px) / d.ch.px, "#.##") +
+         "% n" + str.tostring(d.ch.b.sweeps) + " age " +
+         str.tostring(bar_index - d.ch.createdBar) : "CHoCH -")
+    table.cell(dbg, 1, 10, sweepTxt + "   HS " +
+         (d.bos.b.pend or d.ch.b.pend ? "pending" : "idle"),
          text_color = cVal, text_size = size.tiny)
     table.cell(dbg, 0, 11, "counters", text_color = cTxt,
          text_size = size.tiny)

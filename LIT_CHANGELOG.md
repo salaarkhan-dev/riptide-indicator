@@ -502,3 +502,99 @@ reference examples before it is worth building.
 PB#64, ZEC 15m bars 1870..9273, ends by REORIENTATION on a trend flip rather
 than by confirmation. Still true in all four arms. Any future rule must explain
 why it resolves differently, not merely shorten the box.
+
+---
+
+# v0.3.3 — Body & Sweep forensics. No implementation bug, and a correction.
+
+Diagnostics only. Arm A is bit-identical; the only file change is debug-mode
+drawing and one debug table row.
+
+## First: I have to correct my own last report
+
+Last turn I reported the pathological CHoCH as "a single unbounded ratchet
+jump" that walked the threshold from 644 to roughly 1296. **That was an
+artifact of my own diagnostic, not the engine.** The shadow tracker in that
+script was re-armed at bar 1934 and then scanned to the end of the data — which
+is mostly *after* the level had already broken at 9273. The window was wrong,
+so the figures drawn from it ("max HIGH 1296.37", "1,390 closes above the
+base") described a period the real tracker never saw.
+
+The engine never did that. The real migration sequence is small.
+
+## 1. The actual sweep sequence
+
+```
+   bar  raw candle class  group H  group L   close   act before  act after  event      n
+  1796  outside-up         527.36   510.58  517.62       527.00     644.48  (level created)
+  9268  outside-up         647.29   621.58  639.09       644.48     647.29  SWEEP      1
+  9269  outside-up         659.15   636.99  648.32       647.29     647.29  HS-PENDING 1
+  9270  outside-down       659.24   645.15  646.70       647.29     647.29  HS-REJECT  1
+  9271  outside-up         648.13   634.73  645.48       647.29     648.13  SWEEP      2
+  9272  outside-down       650.52   644.11  648.99       648.13     648.13  HS-PENDING 2
+  9273  break confirmed
+```
+
+Two sweeps. **644.48 → 647.29 (+0.4%) → 648.13 (+0.1%)**, total drift 0.6%.
+The bar-1796 row is the level being created by `arm()`, not a sweep — the
+sweep counter is 0 there.
+
+## 2. Sweep-candle eligibility — clean
+
+Every candle that moved the threshold is classified `outside-up` against the
+owning normalizer's mother range at the moment it was consumed: an analytical
+bar at that depth. **No candle suppressed as internal ratcheted the level.**
+
+## 3. Temporal eligibility — clean
+
+The CHoCH was created on bar 1796 and `ready()` gates evaluation on
+`i > createdBar`. On the creation bar the CHoCH block is additionally unreachable
+because `moved` is already true from the BOS break that created it — doubly
+protected. My first pass reported VIOLATED twice; both were the diagnostic
+recording the creation event itself as an interaction, not the engine
+evaluating early.
+
+## 4. Why the level held for 7,472 bars
+
+```
+between bar 1796 and 9268:
+  highest group HIGH reached: 625.25   vs base 644.48
+  group closes above the base: 0
+```
+
+**The level was never touched.** No sweep could occur because price did not
+reach it. Price sat between BOS 250 below and CHoCH 644.48 above and came
+within 19 points of the upper boundary without tagging it, for 7,472 bars.
+
+## 5. Is there an implementation bug?
+
+**No.** Sweep eligibility is clean, temporal eligibility is clean, migration is
+0.6% across two sweeps, and Hidden Shadow cost four bars. The long lock is a
+genuine 7,000-bar range between two correctly-placed structural boundaries.
+
+Which also falsifies the hypothesis I proposed last turn — a bounded ratchet
+would change nothing here, because the ratchet never moved.
+
+## 6. Debug visualisation added (§4, §5)
+
+Debug mode now draws the Body & Sweep threshold: a faint dashed BASE, a
+stronger dotted ACTIVE, and an `S1/S2/...` mark at each wick that moved it, plus
+a table row carrying base, active, drift %, sweep count and age for both BOS
+and CHoCH.
+
+Setting expectation honestly: on measured data the two lines will sit almost on
+top of each other, because the drift is 0.6%. The visual was requested to make a
+large migration obvious — there is no large migration to see. A visible gap on
+some other chart is the interesting case, and now it is visible when it happens.
+
+## 7. The calibration question has changed
+
+It is no longer "does Index Algo ratchet its threshold far after a big failed
+wick?" — ours does not ratchet far. The open question is now:
+
+> When price ranges for thousands of bars between a BOS and a CHoCH, touching
+> neither, does Index Algo hold both boundaries for the whole range as we do,
+> or does it re-scope the structure at some point?
+
+That is a question a screenshot of the 1796–9273 region answers immediately,
+and no amount of further instrumentation on our side can.
