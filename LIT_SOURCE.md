@@ -696,6 +696,106 @@ of the relationships is.
 
 ---
 
+## Chapter 7 — The Course Diagrams
+
+Three slides from the video. Read as GEOMETRY, with the caveat that these are
+stylized teaching diagrams and not price charts, so proportions are
+illustrative. Where a diagram only restates text already extracted it is not
+repeated here.
+
+### [SRC] Inside bars — the mother range is HIGH to LOW, wicks included
+
+Left slide: one tall green mother, a dashed horizontal line at its HIGH and
+another at its LOW, both extending right. One small candle entirely between
+them is labelled "Inside bar Candle". The next candle's high clears the upper
+dashed line and is labelled "Not Inside bar".
+
+Right slide: same mother, then FIVE candles inside the dashed band, bracketed
+together as one "Inside bar Candle" group, then a candle clearing the upper
+line labelled "Not Inside bar".
+
+Two things this pins down that the text left implicit:
+
+  - The dashed boundaries sit at the mother's wick extremes, not its body. Our
+    normalizer seeds from `h`/`l`. Correct.
+  - Within the group of five, individual candles rise above and fall below each
+    other freely — the 2nd dips below the 1st, the 4th is much taller than the
+    3rd — and all five remain inside bars. Containment is judged against the
+    MOTHER alone, never against the neighbour. Correct.
+
+Neither slide shows a candle whose high exactly meets the dashed line, so the
+equality [GAP] from Chapter 1 remains open.
+
+### [SRC] The two stated failure modes of fixed-N pivots
+
+Slide reads: "Identifying pivot points this way is the biggest mistake analysts
+make !!!" and gives exactly two reasons:
+
+    1 Candle or 2 Candle or 3 Candle or 4 Candle or 5 candle or 10 Candle or ...
+    Considering Inside Bar Candles
+
+An accompanying slide shows the ±1 / ±2 counting method applied to a "Pivot
+Low" and a "Pivot High", each struck through with a red X, and a zigzag chart
+where roughly half the marked turns carry a "?" — the point being that the
+method produces candidates it cannot adjudicate.
+
+Both reasons were already extracted from the text. Recorded because the second
+one — inside bars being counted — is now stated as co-equal with the arbitrary
+number, not as an aside.
+
+### [SRC] !! COMPLEX PULLBACK GEOMETRY — one box, one pivot !!
+
+Uptrend panel: three shaded boxes on the corrections only, never on the
+impulses. Two are labelled "Pullback" and contain a single clean dip. The
+middle one is labelled "Complex Pullback", is visibly WIDER, and contains
+several oscillations — down, up, down, up, down. Each of the three boxes
+carries exactly ONE orange "Pivot Low" dot, and in the complex box that dot is
+at the lowest point of the WHOLE box, not at the first dip.
+
+Downtrend panel mirrors it exactly: "Pullback", "Complex Pullback",
+"Pullback", each with one "Pivot High" at the highest point of its box.
+
+This confirms the Chapter 2 text visually and adds the box geometry:
+
+  - The box spans from where the correction STARTS to where it is confirmed,
+    horizontally. Our `hitFrom` → `hit` range. Correct.
+  - The box's top edge (uptrend) is flat and sits at the correction-start
+    level, and its bottom is the pivot. That is our `zone()` drawn from
+    `hitEdge` to `hitPx`, with `pbEdge = "Initial level"`. Correct.
+  - One box, one pivot. A complex pullback does NOT decompose into several
+    pullbacks with several pivots.
+
+### [INF] The diagram supports the break-mode explanation, and here is why
+
+The decisive detail is where the internal oscillations of the complex pullback
+sit relative to the box's top edge. In the slide they stay at or below it; the
+stroke that leaves the box goes decisively above it.
+
+That is the whole mechanism. Our detector freezes its confirmation level at the
+correction-start candle and confirms when that level is validly broken. An
+internal rally that merely WICKS through the top edge confirms the correction
+immediately under Shadow mode — splitting one complex pullback into two simple
+ones, each with its own pivot and therefore its own IDM. Under Body, and more
+so under Body & Sweep, that same wick does not confirm, the correction survives
+its internal oscillation, and it runs on to the true extreme exactly as drawn.
+
+So "complex pullback" is not a rule that needs implementing. It is the
+EMERGENT SHAPE of a correction under a strict-enough pullback break mode, and
+under Shadow it cannot form at all. That is the same conclusion Chapter 4
+reached from the text, now independently supported by the geometry.
+
+This remains [INF] until the break-mode reading is actually taken on the
+fixture. It is a prediction, not a result: switching Pullback confirmation from
+Shadow to Body or Body & Sweep should cut the pullback count, cut the IDM race
+Total from 31 toward 20, and produce visibly wider pullback boxes containing
+internal oscillations — the shape in this slide.
+
+If the boxes do NOT get wider and multi-peaked when the mode is tightened, this
+explanation is wrong and the complex-pullback rule is something separate after
+all.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
