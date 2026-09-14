@@ -252,10 +252,24 @@ def simulate_market(cs, signal_bar: int, entry: float, stop: float,
                     horizon_bars: int = TRACK_HORIZON_BARS,
                     be_arm_r: float = 0.0, be_lock_r: float = 0.0,
                     part_at_r: float = 0.0, part_to_r: float = 0.0,
+                    trail: list | None = None,
+                    trail_arm_r: float = 0.0,
                     fee_pct: float | None = None,
                     fee_maker: float = FEE_MAKER,
                     fee_taker: float = FEE_TAKER) -> Outcome | None:
     """A MARKET entry taken at `entry` on the CLOSE of `signal_bar`.
+
+    `trail` mirrors simulate() exactly — a per-bar list of candidate stop
+    levels indexed like `cs`, read from `trail[k - 1]` so a level is only used
+    once the bar that produced it has closed, and applied only in the trade's
+    favour. It is here rather than in a study because simulate() already
+    carries it and two copies of a scorer drift; LIT's Active-Price trail
+    needs a market entry, which simulate() cannot express.
+
+    `trail_arm_r` gates it: the LIT reference arms its trailing stop only once
+    price reaches Active Price, so below that R the initial stop is the only
+    exit. At the default of 0.0 the trail is live from the first bar, which is
+    the behaviour simulate() already has.
 
     simulate() cannot express this. It fills a limit by waiting for price to
     come back to the level, which for a long means waiting for a move DOWN; a
@@ -309,12 +323,24 @@ def simulate_market(cs, signal_bar: int, entry: float, stop: float,
     tgt_r = part_at_r or target_r
     fixed_px = target_px if (target_px is not None and not part_at_r) else None
     mfe = mae = 0.0
+    trail_on = trail_arm_r <= 0.0
 
     for k in range(signal_bar + 1, min(signal_bar + 1 + horizon_bars, len(cs))):
         c = cs[k]
         fav = (c.h - entry) / risk if is_long else (entry - c.l) / risk
         adv = (c.l - entry) / risk if is_long else (entry - c.h) / risk
         mfe, mae = max(mfe, fav), min(mae, adv)
+
+        # Raise the stop to the structural line BEFORE testing it, using the
+        # previous bar's level, never in the losing direction — identical to
+        # simulate(). Gated on trail_arm_r having been REACHED, which is the
+        # LIT Active-Price rule: below it the initial stop is the only exit.
+        if trail is not None and trail_on and 0 <= k - 1 < len(trail):
+            lv_ = trail[k - 1]
+            if lv_ is not None:
+                cur_stop = max(cur_stop, lv_) if is_long \
+                    else min(cur_stop, lv_)
+
         if (c.l <= cur_stop) if is_long else (c.h >= cur_stop):
             r = banked + size * sgn * (cur_stop - entry) / risk
             return Outcome(r - fee_lose, True, signal_bar, mfe, mae, k, "stop")
@@ -332,6 +358,8 @@ def simulate_market(cs, signal_bar: int, entry: float, stop: float,
         if be_arm_r and not armed:
             if (c.c >= lvl(be_arm_r)) if is_long else (c.c <= lvl(be_arm_r)):
                 cur_stop, armed = lvl(be_lock_r), True
+        if not trail_on and fav >= trail_arm_r:
+            trail_on = True
     last = min(signal_bar + 1 + horizon_bars, len(cs)) - 1
     r = banked + size * sgn * (cs[last].c - entry) / risk
     return Outcome(r - fee_lose, True, signal_bar, mfe, mae, last, "timeout")

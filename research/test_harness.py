@@ -244,5 +244,54 @@ b = simulate(cs, 0, 100.0, 90.0, True, target_r=3.0, fill_bars=3,
              trail=[None, None, 80.0], fee_pct=0.0, fee_maker=0.0, fee_taker=0.0)
 check("an irrelevant line changes nothing", round(a.r, 6), round(b.r, 6))
 
+
+# ---------------------------------------------------------------------------
+# TRAIL ON A MARKET ENTRY, and the Active-Price gate.
+#
+# simulate() fills a limit by waiting for price to come BACK to the level. LIT
+# enters at the close of the IDM-break bar, which only simulate_market can
+# express, so the trail had to exist on both. These mirror the simulate()
+# trail tests above so the two scorers cannot drift apart silently.
+cs = bars([(100, 101,  99, 100),      # 0 signal bar, entry at its close 100
+           (100, 106,  99, 105),      # 1
+           (105, 106,  94,  95)])     # 2 falls to 94
+NOFEE = dict(fee_pct=0.0, fee_maker=0.0, fee_taker=0.0)
+
+plain = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0, **NOFEE)
+tr = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0,
+                     trail=[None, 95.0, 95.0], **NOFEE)
+check("market: plain stop is not touched", plain.exit, "timeout")
+check("market: the trailed stop is", tr.exit, "stop")
+check("market: it exits at the line, -0.5R", round(tr.r, 6), -0.5)
+
+# The level for bar k is read from trail[k-1], never trail[k] — a line that
+# only exists once bar 2 closed cannot stop bar 2.
+tr = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0,
+                     trail=[None, None, 95.0], **NOFEE)
+check("market: bar 2's own level cannot stop bar 2", tr.exit, "timeout")
+
+# A line that falls back must never widen the risk after entry.
+cs2 = bars([(100, 101,  99, 100),
+            (100, 106,  99, 105),
+            (105, 106,  91,  92),
+            (92,  93,   89,  90)])
+tr = simulate_market(cs2, 0, 100.0, 90.0, True, target_r=3.0,
+                     trail=[None, 95.0, 80.0, 80.0], **NOFEE)
+check("market: a line dropping to 80 does not reopen the risk",
+      round(tr.r, 6), -0.5)
+
+# THE ACTIVE-PRICE GATE. trail_arm_r holds the trail inert until the trade's
+# favourable excursion reaches it. Bar 1 tops at 106 = +0.6R on a 10-wide
+# risk, so a gate at 0.5R arms and a gate at 1.0R never does.
+armed = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0,
+                        trail=[None, 95.0, 95.0], trail_arm_r=0.5, **NOFEE)
+never = simulate_market(cs, 0, 100.0, 90.0, True, target_r=3.0,
+                        trail=[None, 95.0, 95.0], trail_arm_r=1.0, **NOFEE)
+check("market: trail arms once Active Price is reached", armed.exit, "stop")
+check("market: an unreached gate leaves the trail inert", never.exit,
+      "timeout")
+check("market: the ungated trade keeps its original stop",
+      round(never.r, 6), round(plain.r, 6))
+
 print("\n" + ("FAILED: " + ", ".join(FAILED) if FAILED else "ALL PASS"))
 sys.exit(1 if FAILED else 0)

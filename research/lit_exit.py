@@ -45,7 +45,18 @@ import aiohttp                                          # noqa: E402
 from research.deep import load_universe                 # noqa: E402
 import research.lit_v3 as L                             # noqa: E402
 
-COMMISSION = 0.0005
+# THE REPOSITORY'S FEE MODEL, not the reference document's.
+# research/harness.py: FEE_MAKER 0.010%, FEE_TAKER 0.022%, and fees are
+# charged in R as fee_pct / risk_pct. The conservative round trip is the
+# loss side, maker+taker = 0.032%, i.e. 0.00016 per side.
+#
+# Everything in this file before the recheck used 0.0005 per side - 0.10%
+# round trip, taken from the reference's own Ch.24 default. That is 3x the
+# repo's assumption and it penalised every LIT measurement. Kept as a named
+# constant so the two can be compared rather than swapped silently.
+COMMISSION_REPO = 0.00016        # research/harness.py, loss-side round trip
+COMMISSION_SRC = 0.0005          # the reference's Ch.24 default
+COMMISSION = COMMISSION_SRC      # unchanged default: earlier runs reproduce
 MIN_RR = 0.5
 MAX_WAIT = 400
 SCOB_WAIT = 12
@@ -84,14 +95,16 @@ class Zone:
 class Setup:
     """A confirmed entry. Exit-rule agnostic — this is what every arm shares."""
     __slots__ = ("bar", "entry", "stop0", "dir", "bos", "risk", "active",
-                 "blocked")
+                 "blocked", "fee")
 
-    def __init__(self, bar, entry, stop0, dirn, bos):
+    def __init__(self, bar, entry, stop0, dirn, bos, fee=None):
+        fee = COMMISSION if fee is None else fee
         self.blocked = False
         self.bar, self.entry, self.stop0, self.dir, self.bos = \
             bar, entry, stop0, dirn, bos
         self.risk = abs(entry - stop0)
-        cost = entry * COMMISSION * 2
+        self.fee = fee
+        cost = entry * fee * 2
         self.active = (entry + MIN_RR * self.risk + cost) if dirn > 0 \
             else (entry - MIN_RR * self.risk - cost)
 
@@ -112,7 +125,7 @@ def build(pending, dirn, bar):
     return out
 
 
-def collect(cs, events):
+def collect(cs, events, fee=None):
     """One pass. Every confirmed setup, with NO exit simulated and therefore no
     slot competition — a setup is recorded even if an earlier one is still open
     under some exit rule. That is the point: the arms must share a trade set."""
@@ -154,7 +167,7 @@ def collect(cs, events):
             px = z.feed(k.o, k.h, k.l, k.c)
             if px is not None:
                 z.dead = True
-                s = Setup(i, px, z.far(), z.dir, bos)
+                s = Setup(i, px, z.far(), z.dir, bos, fee)
                 if s.risk > 0 and (
                         (s.stop0 < px and bos is not None and bos > px)
                         if z.dir > 0 else
@@ -224,7 +237,7 @@ def simulate(cs, byBar, s, rule, k=0.0, bodyStop=False):
             if (c.h >= s.active) if up else (c.l <= s.active):
                 armed = True
                 if rule in ("be", "pivot", "struct", "mfe"):
-                    be = s.entry + (s.entry * COMMISSION * 2) * (1 if up else -1)
+                    be = s.entry + (s.entry * s.fee * 2) * (1 if up else -1)
                     stop = max(stop, be) if up else min(stop, be)
 
         # --- the trail itself, only once armed
@@ -252,7 +265,7 @@ def simulate(cs, byBar, s, rule, k=0.0, bodyStop=False):
 
 def rOf(s, px, up):
     d = (px - s.entry) if up else (s.entry - px)
-    return d / s.risk - (s.entry * COMMISSION * 2) / s.risk
+    return d / s.risk - (s.entry * s.fee * 2) / s.risk
 
 
 def report(name, rs, extra=""):
