@@ -904,6 +904,114 @@ this pass, and neither affects a single statistic.
 
 ---
 
+## Chapter 9 — The Breakout and Hidden Shadow Diagrams
+
+### [SRC] The three break types, drawn
+
+Shadow: the level dashed across, the second candle's upper WICK crosses it,
+lightning bolt at the crossing, "Breakout ok". A wick is enough.
+
+Body: the same level, one candle's wick crosses with no break, then a later
+candle's BODY crosses — "Breakout ok". The wick-only bar did not count.
+
+Body & Sweep Level: a staircase. The original "Level", then a curved arrow
+labelled "Sweep Level" lifting it to a higher line, then a second "Sweep Level"
+arrow lifting it again, then a final candle whose body clears the last line —
+"Breakout ok".
+
+All three match `brkStep` exactly, including that under sweep it is the latest
+migrated level and never the original that has to be cleared.
+
+### [SRC] A swept level is marked with ✗ where it was abandoned
+
+Each superseded level in the sweep staircase carries a small "x" sitting on it.
+Same glyph the master diagram uses for a retyped BOS→CHoCH level, so ✗ is this
+author's general "this level's role ended here" marker.
+
+We have the equivalent as `markSweep`, which drops "S1", "S2" labels at each
+swept wick — but it is gated behind `showDbg` and so is debug-only. Cosmetic
+divergence, recorded, not changed.
+
+### [SRC] All four levels take an independent break mode — numbered on the chart
+
+The uptrend/downtrend slide numbers four break points ①②③④ — pullback
+confirmation, IDM break, BOS break, CHoCH break — and puts the same three
+checkboxes (Shadow / Body / Body & Sweep) beside every one of them, in both
+trend directions.
+
+Confirms §59 and our four separate inputs. Nothing about which is DEFAULT is
+shown here, which leaves the Chapter 4 break-mode hypothesis untouched.
+
+### [SRC] !! HIDDEN SHADOW — THE SYNTHETIC CANDLE, DRAWN TWICE, DECIDED ON CLOSE !!
+
+Two panels, identical setup, opposite outcomes. Both draw the combined candle
+separately with its High / Open / Close / Low each on its own guide line.
+
+  LEFT — the candidate's body clears the level, the next candle pulls back.
+  The combined candle renders RED. Its Open and its Close both sit BELOW the
+  level; only the High is above it. Verdict: "Hidden Shadow".
+
+  RIGHT — same candidate, but the second candle closes high. The combined
+  candle renders GREEN and its Close sits ABOVE the level. Verdict: "Breakout
+  With Body".
+
+The only thing that differs between the two panels is where the combined CLOSE
+lands relative to the level. This is §28/§29 and our `up ? c > b.hsLvl : c <
+b.hsLvl` drawn as a controlled experiment, and it independently confirms that
+the synthetic candle's colour/direction is not what decides — the left panel's
+combined candle is red and the right's is green, but so is the answer in the
+inside-bar panel below, where a GREEN combined candle still rejects.
+
+### [SRC] Inside-bar skipping, drawn with four skipped bars
+
+A tall candidate candle clears the level with its body. Four following candles
+are each labelled "inside" and are skipped. A yellow arrow runs from the
+candidate's high across all four to the fifth, which is tagged "NOT Insidebar
+Candle" with a dot on its high — the first candle whose high escapes the
+CANDIDATE's range.
+
+The combined candle is then built across the whole span: High and Low at the
+span extremes, Open from the candidate, Close from the resolver. It renders
+GREEN, and its Close still sits below the level. Verdict: "Hidden Shadow".
+
+Three things confirmed:
+
+  - Containment is tested against the CANDIDATE candle's own range, not a
+    running span and not the neighbour. Our `hsMomHi` / `hsMomLo` are set once
+    from the candidate bar and never updated. Correct.
+  - Any number of inside bars are skipped; the first escapee resolves.
+  - A bullish combined candle whose close fails is still a rejection. Direction
+    is irrelevant. Correct.
+
+### [INF] Possible divergence — WHICH bars get the purple tint
+
+Chapter 6 says "Candles related to the activation of Hidden Shadow are
+displayed in purple". In these slides the purple tint covers more than one bar:
+in the inside-bar panel the four skipped bars and the resolver are all purple,
+and both panels box the whole candidate-through-resolver window.
+
+We tint exactly ONE bar. `b.shadow` is cleared at the top of every `brkStep` and
+set only on the resolver bar where the rejection fires, so `barcolor(anyHS ?
+cHS : ...)` paints the rejection bar alone.
+
+LOW CONFIDENCE — the two slides are not even consistent with each other on this
+(the inside-bar panel's candidate is green, the other panel's is purple), so
+the colouring may be purely illustrative. Not changed. If it is real, the fix is
+to tint the whole pending window rather than the resolution bar, which is a
+renderer change with no effect on any structural decision or statistic.
+
+### Net from Chapter 9
+
+Hidden Shadow is now confirmed by text (Chapter 5), by the author's own
+description (Chapter 6), and by two controlled diagrams (here). Every stated
+rule matches our implementation. The concept was the thing suspected missing
+when this audit started; it is the single best-corroborated part of the engine.
+
+Nothing in this chapter changes the code. Two cosmetic items recorded: the ✗
+sweep marker being debug-only in ours, and the possible multi-bar purple tint.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
