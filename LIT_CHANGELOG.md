@@ -1261,15 +1261,28 @@ DEFECT 2 — §63 Debug Mode. showDbg is an input again. It was not enough to
   It follows the existing depth selector, now relabelled "Statistics / debug
   depth". markHiddenPb is reachable for the first time.
 
-DEFECT 3 — §51/§52 width. paint()'s `w` parameter is wired through. Main
-  BOS/CHoCH draw at width 2, Main IDM at 1 (§51 wants Main IDM thinner than
-  Main BOS/CHoCH), all Internal and Deep levels at 1.
+DEFECT 3 — §51/§52 width. paint()'s `w` parameter is wired through instead of
+  every draw passing a hardcoded 1. Main BOS/CHoCH read a new "Main line width"
+  input; Main IDM sits one step below it, floored at 1 (§51 wants Main IDM
+  thinner than Main BOS/CHoCH); Internal and Deep are always 1.
+  FIRST ATTEMPT WAS WRONG AND WAS CORRECTED ON SIGHT. Main went out at width 2
+  and on a real chart that reads as heavy, not as hierarchy - Main is already
+  separated from the children by solid style and zero fade. Pine has no width
+  below 1, so "thinner" has exactly one value and the default is now 1. The
+  input exists so calibration can raise it rather than re-edit the file.
 
-DEFECT 4 — §55 label placement. tagLvl anchors at the live segment's right
-  endpoint, inset two bars so a centred style_none text does not overhang the
-  price scale, clamped to the segment start for a level created on the current
-  bar. retire() freezes the tag at the same place instead of at 50%. The bar
-  width is computed once at global scope (barMs) rather than opening a
+DEFECT 4 — §55 label placement, SPLIT BY LIFETIME.
+  LIVE level   → tags near the segment's right endpoint, which is the current
+                 bar, so the text sits next to price. Inset two bars so a
+                 centred style_none label does not overhang the price scale,
+                 clamped to the segment start for a level created on this bar.
+  RETIRED level → tag recentres on its own frozen span. A closed historical
+                 segment has no live edge; tagging its right end puts the text
+                 on top of whatever structure replaced it. This is why the
+                 first pass, which moved retire() to the right edge too, was
+                 wrong: "right edge" is only meaningful while the edge tracks
+                 the current bar.
+  The bar width is computed once at global scope (barMs) rather than opening a
   `time[1]` history buffer at each call site.
 
 Housekeeping: indicator() title bumped to v0.7.16 (it still read v0.7.9 CAL).

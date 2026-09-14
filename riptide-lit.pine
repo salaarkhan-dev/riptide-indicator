@@ -107,9 +107,13 @@
 //    near-scan off, inside-bar tint ON.
 //  - §63 Debug Mode is an INPUT again, not a hardcoded false, and it now
 //    prints the state §63 lists - including the §12 OUTSIDE_BOTH count.
-//  - §51/§52 depth is graded by line WIDTH: Main levels 2, Main IDM and every
-//    child level 1. paint() took a width parameter and ignored it until now.
-//  - §55 BOS/CHoCH/IDM tags sit near the line's RIGHT endpoint, not at 50%.
+//  - §51/§52 depth can be graded by line WIDTH. paint() took a width parameter
+//    and passed a hardcoded 1 to every draw; it is wired now, behind a "Main
+//    line width" input that still defaults to 1. Main IDM sits one step below
+//    the Main width (floored at 1), children are always 1.
+//  - §55 tag placement now splits by lifetime: a LIVE level tags near its
+//    right endpoint, next to price. A RETIRED level has no live edge, so its
+//    frozen tag recentres on its own closed span.
 //
 indicator("Riptide LIT Structure — v0.7.16", "Riptide LIT",
      overlay          = true,
@@ -240,6 +244,8 @@ string labelSizeMain = input.string("Normal", "Main label size", group = gCol,
      options = ["Tiny", "Small", "Normal"], inline = "ls")
 string labelSizeChild = input.string("Small", "Child labels", group = gCol,
      options = ["Tiny", "Small", "Normal"], inline = "ls")
+int mainW = input.int(1, "Main line width", minval = 1, maxval = 3, group = gCol,
+     tooltip = "[§51] Width of the Main BOS and CHoCH lines. Main IDM sits one step below this, floored at 1, and Internal/Deep are always 1.\n\n1 is the reference weight - Main already reads as Main through solid style and zero fade, and a thicker line covers price. Raise it only if Main is genuinely hard to pick out.")
 float labelClearAtr = input.float(0.24, "Label clearance × ATR", minval = 0.00,
      maxval = 0.50, step = 0.01, group = gCol,
      tooltip = "Vertical clearance keeps the BOS/CHoCH/IDM tags off the candle bodies at the line's right edge. Visual only.")
@@ -748,11 +754,14 @@ retire(Ctx x, line ln, label lb, int cap) =>
     if not na(ln)
         line.set_x2(ln, time)
         if not na(lb)
-            // [§55] Freeze the tag at the retired segment's RIGHT endpoint,
-            // matching tagLvl. Same two-bar inset, same clamp to the start.
+            // [§55] A LIVE level tags at its right endpoint, because that edge
+            // is the current bar and the label belongs next to price. A RETIRED
+            // level has no live edge - it is a closed segment sitting in
+            // history, and tagging its right end crowds whatever replaced it.
+            // So retired tags recentre on their own frozen span. tagLvl handles
+            // the live case; this handles the retired one.
             int lx1 = line.get_x1(ln)
-            int rx = time - barMs * 2
-            label.set_x(lb, rx < lx1 ? lx1 : rx)
+            label.set_x(lb, lx1 + int((time - lx1) * 0.50))
         array.push(x.junkL, ln)
         if array.size(x.junkL) > cap
             line.delete(array.shift(x.junkL))
@@ -1305,11 +1314,15 @@ drawLvl(line cur, int x1t, float y, color col, int w, string st) =>
 tagLvl(label cur, int x1t, float y, string txt, color col, string sz,
      bool above, float clearance) =>
     label out = cur
-    // [§51/§55] The label sits NEAR THE LINE'S RIGHT ENDPOINT, not in the
-    // middle of it. §51 is explicit - "label aligned near right endpoint, not
-    // floating in middle of candles" - and the reference charts agree. v0.7.15
-    // placed every label at 50% along the segment, which on a long-lived Main
-    // level parks the text in open space far from price.
+    // [§51/§55] A LIVE level tags NEAR ITS RIGHT ENDPOINT, not in the middle.
+    // §51 is explicit - "label aligned near right endpoint, not floating in
+    // middle of candles" - and the right endpoint of a live level is the
+    // current bar, so the tag ends up next to price where it is read.
+    // v0.7.15 placed every label at 50%, which on a long-lived Main level
+    // parks the text in open space far from anything.
+    // This is the LIVE case only. retire() recentres a tag when its level is
+    // frozen, because a closed historical segment has no live edge and tagging
+    // its right end crowds whatever structure replaced it.
     //
     // "Near", not "at": the anchor is pulled two bars back from the right
     // endpoint so a centred style_none text does not overhang into the price
@@ -1351,11 +1364,13 @@ paint(Ctx x, bool on, string pre, int w, int fade, string sz) =>
         string chStyle = x.depth == 0 ? line.style_solid : line.style_dashed
         // [§51/§52] Depth is graded by WIDTH as well as style and fade.
         // Through v0.7.15 this function took `w` and then every draw passed a
-        // hardcoded 1, so Main, Internal and Deep all rendered identically
-        // thick. §51 wants Main BOS/CHoCH "slightly thicker" and Main IDM
-        // "thinner"; §52 wants Internal thinner than Main throughout. So the
-        // level lines carry `w` and the IDM sits one step below it, floored
-        // at 1 so a child IDM never disappears.
+        // hardcoded 1, so the parameter was dead. It is wired now, but the
+        // DEFAULT is still 1 everywhere: §51 asks for Main "slightly thicker"
+        // and on a real chart width 2 reads as heavy, not as hierarchy - Main
+        // is already separated by solid style and zero fade. The Main width is
+        // an input (mainW) so it can be raised if calibration wants it.
+        // Main IDM sits one step below the Main level width, floored at 1, per
+        // §51's "thinner line" for IDM; children are always 1 per §52.
         int idmW = w > 1 ? w - 1 : 1
         if x.idm.on and showIDM
             // The IDM PRICE is the pivot emitted by the completed pullback.
@@ -1545,7 +1560,7 @@ if engineOk
     sweepDebug(mainC, showMain)
 
 drawThreshold(mainC)
-paint(mainC, showMain, "", 2, fadeMain, sizeOf(labelSizeMain))
+paint(mainC, showMain, "", mainW, fadeMain, sizeOf(labelSizeMain))
 paint(intC, runInt and intScope.active, "i", 1, fadeInt, sizeOf(labelSizeChild))
 paint(deepC, runDeep and deepScope.active, "ii", 1, fadeDeep, sizeOf(labelSizeChild))
 
