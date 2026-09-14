@@ -15,6 +15,24 @@
 //  V2 turns every one of them into a NAMED POLICY with an explicit default and
 //  a switch, so they can be measured instead of argued. See §1 below.
 //
+//  v2.1 ADDS AN ENTRY-SIGNAL LAYER, AND IT SHIPS OFF.
+//
+//  Settings group 9 draws the Stage B/C setup: enter at the close of the
+//  IDM-break bar, with-trend only, stop at the PRIOR confirmed pullback pivot,
+//  Active Price arming a pivot trail. It is implemented exactly as
+//  pre-registered and it is NOT a validated edge.
+//
+//  Three pre-registered experiments (PREREG_lit_stage_a/b/c.md) all returned
+//  INCONCLUSIVE. On symbols none of the earlier work touched, the trailing arm
+//  came in at +0.114 R/bet against a control at +0.047 - a paired difference
+//  of +0.068 that did not clear its pre-set bar. The honest pooled estimate is
+//  around +0.09 R with a standard error that contains zero.
+//
+//  So the layer exists to be FORWARD-RECORDED on bars no backtest here has
+//  seen, and the forward-record panel is the only number in this indicator
+//  that is not borrowed from a backtest. Nothing places an order; this project
+//  places no orders anywhere.
+//
 //  SOURCE TAGS, per master prompt §79:
 //    [SRC] stated outright by the reference author. LIT_SOURCE.md quotes it.
 //    [INF] our inference. The source does not settle it.
@@ -28,7 +46,7 @@
 //    - continuation lines must not land on a multiple-of-4 indent
 // ═══════════════════════════════════════════════════════════════════════════
 //@version=6
-indicator("Riptide LIT Structure — v2.0", "Riptide LIT v2",
+indicator("Riptide LIT Structure — v2.1", "Riptide LIT v2",
      overlay          = true,
      max_lines_count  = 500,
      max_labels_count = 500,
@@ -43,6 +61,7 @@ string gShow = "5. Structure"
 string gPB  = "6. Pullback zones"
 string gCol = "7. Appearance"
 string gDbg = "8. Panels and debug"
+string gSig = "9. Entry signals (research)"
 
 bool cfgConfirm = input.bool(true, "Only update structure on closed bars",
      group = gEng,
@@ -166,6 +185,33 @@ string statsWindow = input.string("All loaded bars", "Statistics window",
      group = gDbg, options = ["All loaded bars", "Visible chart"],
      tooltip = "[SRC] All loaded bars is the default because THE REFERENCE TABLE IS NOT VIEWPORT-COHORTED. Its panel exposes one checkbox and no window control at all, and its numbers hold still across changes of viewport.\n\nVisible chart is useful for reading one stretch in isolation, but its totals are not comparable to the reference's.")
 
+// ── 9. ENTRY SIGNALS ────────────────────────────────────────────────────────
+// SHIPS OFF, and the tooltip says why rather than the changelog alone.
+//
+// This is the Stage B/C entry, implemented exactly as pre-registered: enter at
+// the close of the IDM-break bar, with-trend only, stop at the PRIOR confirmed
+// pullback pivot, Active Price arms a pivot trail. It is NOT a validated edge.
+// Three pre-registered experiments returned INCONCLUSIVE; the measured
+// expectancy is about +0.09 R per bet with a standard error that contains
+// zero. It is here to be FORWARD-RECORDED on data none of those tests saw.
+bool showSig = input.bool(false, "Show entry signals", group = gSig,
+     tooltip = "OFF by default and that is deliberate.\n\nThese signals were measured across three pre-registered experiments (PREREG_lit_stage_a/b/c.md). All three returned INCONCLUSIVE. On symbols that took no part in the earlier work the trailing arm came in at +0.114 R/bet against a control at +0.047, a paired difference of +0.068 that did NOT clear its pre-set bar.\n\nSo: no claim of an edge is made here. The purpose of this layer is to record what happens FORWARD, on bars no backtest in this project has seen. Treat every signal as data collection, not as advice.")
+float sigRR = input.float(0.5, "Active Price, in R", minval = 0.1, maxval = 3.0,
+     step = 0.1, group = gSig,
+     tooltip = "[SRC Ch.18/24] Active Price is NOT a take-profit. It is the level at which the trailing stop ARMS. Below it the initial stop is the only exit. 0.5R is the reference's own minimum reward/risk threshold.")
+float sigFee = input.float(0.032, "Round-trip fee, %", minval = 0.0, maxval = 1.0,
+     step = 0.001, group = gSig,
+     tooltip = "The repository's own assumption (research/harness.py): maker 0.010% + taker 0.022%. It is folded into Active Price exactly as the research did.\n\nThis is a DISTRIBUTION, not a constant - it moves with VIP tier, the MX deduction and zero-fee promotions - so read any conclusion that turns on it as a range.")
+bool sigTrail = input.bool(true, "Arm pivot trail at Active Price", group = gSig,
+     tooltip = "T6_PIVOT: once Active Price is reached, the stop follows each newly confirmed pullback pivot in the trade direction, and never moves against the position.\n\nWhat the reference's trailing stop actually trails is never stated in the source - this is a research policy, not a documented rule.")
+bool sigBox = input.bool(true, "Shade the risk band", group = gSig)
+bool sigLog = input.bool(true, "Forward record panel", group = gSig,
+     tooltip = "Counts what these signals have actually done on the bars currently loaded. This is the only number here that is not borrowed from a backtest.")
+color cLong = input.color(#26a69a, "Long", inline = "sc", group = gSig)
+color cShort = input.color(#ef5350, "Short", inline = "sc", group = gSig)
+color cStop = input.color(#e05252, "Stop", inline = "sc2", group = gSig)
+color cActive = input.color(#9598a1, "Active", inline = "sc2", group = gSig)
+
 // One bar in milliseconds, computed once so the label placers and the retire
 // path all read the same value instead of each opening a `time[1]` buffer.
 int barMs = nz(time - time[1], 0)
@@ -275,6 +321,25 @@ type Lvl
     line ln = na
     label lb = na
 
+// One live research setup. It owns its own drawings so the render path never
+// has to reconstruct where a trade was.
+type Sig
+    bool on = false
+    bool armed = false       // Active Price reached, the trail is live
+    int dir = 0
+    float entry = na
+    float stop0 = na         // the stop as placed, kept for the R calculation
+    float stop = na          // the stop as it stands now
+    float active = na
+    float risk = na
+    int barT = na
+    line enLn = na
+    line slLn = na
+    line acLn = na
+    label enLb = na
+    label slLb = na
+    box band = na
+
 // [SRC] Child structure is owned by a confirmed parent PULLBACK.
 type Scope
     bool active = false
@@ -329,6 +394,17 @@ type Ctx
     int nOutsideImp = 0      // [P1] how often the undefined case actually fires
     int nInvariant = 0
     string lastEvent = ""
+    // ── entry layer handoff ─────────────────────────────────────────────────
+    // The stop is the PRIOR confirmed pullback pivot: the most recent one IS
+    // the IDM being broken, so the one behind it is the structural level that
+    // gives a risk unit wide enough to survive contact with the market.
+    // Stage B: median 2.9% of price against the raid extreme's 0.42%.
+    float pbLast = na
+    float pbPrior = na
+    bool sigNew = false      // set for ONE bar, read by the RUN section
+    int sigDir = 0
+    float sigEntry = na
+    float sigStop = na
     // ── statistics ──────────────────────────────────────────────────────────
     int stRaceTot = 0
     int stRaceBos = 0
@@ -845,6 +921,8 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
     int cPb = modeOf(mPB)
     bool major = false
     bool justSeeded = false
+    // One bar's life. The RUN section reads it on the same bar it is set.
+    x.sigNew := false
 
     if reset
         // ENGINE BUG IN THE FIRST BUILD: the child normalizer survived the
@@ -859,6 +937,8 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
         x.norm.cl := na
         x.dir := DIR_NONE
         x.phase := PH_DISCOVER
+        x.pbLast := na
+        x.pbPrior := na
         clearLvl(x.idm)
         clearLvl(x.bos)
         clearLvl(x.ch)
@@ -947,6 +1027,11 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
         // ── a confirmed correction publishes, or is cached ─────────────────
         if dActive.hit
             x.nPivot += 1
+            // The prior pivot is the entry layer's stop. Recorded for every
+            // confirmed correction, published or cached, so a setup born in
+            // any phase has the same level behind it.
+            x.pbPrior := x.pbLast
+            x.pbLast := dActive.last.pivot
             if x.phase == PH_DISCOVER or x.phase == PH_TRACK
                 // [SRC Ch.3] IDM migration. The previous IDM is retired and
                 // replaced - and per the user's decision, DELETED outright.
@@ -989,6 +1074,23 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
             x.lastEvent := x.phase == PH_LOCK ? "IDM taken - lock" : "IDM taken"
             moved := true
             major := true
+            // ── entry layer ────────────────────────────────────────────────
+            // With-trend only, and the BOS the thesis targets must lie beyond
+            // the entry or there is nothing to be right about. The stop is the
+            // PRIOR pivot; where none exists the setup is SKIPPED rather than
+            // given a substitute, exactly as the pre-registration specifies.
+            float sEnt = c
+            float sStp = x.pbPrior
+            bool okSide = not na(sStp) and (up ? sStp < sEnt : sStp > sEnt)
+            bool okBos = up ? x.bos.px > sEnt : x.bos.px < sEnt
+            if okSide and okBos
+                x.sigNew := true
+                x.sigDir := up ? DIR_BULL : DIR_BEAR
+                x.sigEntry := sEnt
+                x.sigStop := sStp
+            // A new cycle starts here, so the pivot pair is re-earned in it.
+            x.pbLast := na
+            x.pbPrior := na
             // [SRC §35] A broken IDM is liquidity taken. It never flips trend.
             flag(x, x.dir != was, "I2 IDM break flipped direction")
 
@@ -1176,6 +1278,115 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
                  "I11 BOS/CHoCH sides crossed")
     major
 
+// ═══════════════════════ 8b. ENTRY SIGNAL ENGINE ════════════════════════════
+// Declared before section 10 because RUN drives it. Every function here
+// MUTATES the Sig it is handed and assigns no global - CE10088.
+
+fmtR(float r) =>
+    (r >= 0 ? "+" : "") + str.tostring(r, "0.00") + "R"
+
+// Close a setup and stamp the result on the chart where it happened.
+sigClose(Sig g, float px, bool stopped) =>
+    float r = g.dir > 0 ? (px - g.entry) / g.risk : (g.entry - px) / g.risk
+    if not na(g.enLn)
+        line.set_x2(g.enLn, time)
+    if not na(g.slLn)
+        line.set_x2(g.slLn, time)
+    if not na(g.acLn)
+        line.set_x2(g.acLn, time)
+    if not na(g.band)
+        box.set_right(g.band, time)
+    color rc = r >= 0 ? cLong : cShort
+    label.new(time, px, fmtR(r), xloc = xloc.bar_time, yloc = yloc.price,
+         style = g.dir > 0 ? label.style_label_up : label.style_label_down,
+         color = color.new(rc, 15), textcolor = color.white, size = size.tiny)
+    if not na(g.slLb)
+        label.delete(g.slLb)
+        g.slLb := na
+    if not na(g.enLb)
+        label.delete(g.enLb)
+        g.enLb := na
+    g.on := false
+    g.armed := false
+    r
+
+// Open a setup. The drawings are created once and only extended afterwards.
+sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct) =>
+    float risk = math.abs(entry - stop)
+    g.on := true
+    g.armed := false
+    g.dir := dir
+    g.entry := entry
+    g.stop0 := stop
+    g.stop := stop
+    g.risk := risk
+    g.barT := time
+    // [SRC Ch.18] Active Price carries the round trip, because a setup has to
+    // clear its own costs before it is worth arming anything for.
+    float fee = entry * feePct / 100.0
+    g.active := dir > 0 ? entry + rr * risk + fee : entry - rr * risk - fee
+    color cd = dir > 0 ? cLong : cShort
+    g.enLn := line.new(time, entry, time, entry, xloc = xloc.bar_time,
+         color = cd, width = 2)
+    g.slLn := line.new(time, stop, time, stop, xloc = xloc.bar_time,
+         color = cStop, width = 1, style = line.style_dashed)
+    g.acLn := line.new(time, g.active, time, g.active, xloc = xloc.bar_time,
+         color = color.new(cActive, 35), width = 1, style = line.style_dotted)
+    g.enLb := label.new(time, entry, (dir > 0 ? "▲ LONG  " : "▼ SHORT  ") +
+         str.tostring(entry, format.mintick), xloc = xloc.bar_time,
+         yloc = yloc.price, style = label.style_label_right,
+         color = color.new(cd, 12), textcolor = color.white, size = size.tiny)
+    g.slLb := label.new(time, stop, "SL " + str.tostring(stop, format.mintick),
+         xloc = xloc.bar_time, yloc = yloc.price, style = label.style_none,
+         color = na, textcolor = cStop, size = size.tiny)
+
+// One bar of management. Returns the realised R, or na while still open.
+// ORDER MATTERS: the stop is tested against the level it ALREADY held, then
+// the trail moves. A pivot confirmed on this bar cannot stop this bar - the
+// same rule research/harness.py applies by reading trail[k-1].
+sigStep(Sig g, float h, float l, float pivNow, bool useTrail,
+     bool shade) =>
+    float out = na
+    if g.on
+        bool hit = g.dir > 0 ? l <= g.stop : h >= g.stop
+        if hit
+            out := sigClose(g, g.stop, true)
+        else
+            if not g.armed
+                bool reach = g.dir > 0 ? h >= g.active : l <= g.active
+                if reach
+                    g.armed := true
+                    if not na(g.acLn)
+                        line.set_color(g.acLn, color.new(cActive, 70))
+            // A level already violated by this bar is not a stop, it is an
+            // exit that has happened. Only accept one still beyond price.
+            bool okPiv = not na(pivNow) and
+                 (g.dir > 0 ? pivNow < l : pivNow > h)
+            if g.armed and useTrail and okPiv
+                g.stop := g.dir > 0 ? math.max(g.stop, pivNow) :
+                     math.min(g.stop, pivNow)
+            line.set_x2(g.enLn, time)
+            line.set_xy2(g.slLn, time, g.stop)
+            line.set_y1(g.slLn, g.stop)
+            line.set_x2(g.acLn, time)
+            if not na(g.slLb)
+                label.set_xy(g.slLb, time, g.stop)
+                label.set_text(g.slLb, (g.armed ? "⚑ SL " : "SL ") +
+                     str.tostring(g.stop, format.mintick))
+            if not na(g.enLb)
+                label.set_x(g.enLb, time)
+            if shade
+                if na(g.band)
+                    g.band := box.new(g.barT, math.max(g.entry, g.stop), time,
+                         math.min(g.entry, g.stop), xloc = xloc.bar_time,
+                         border_color = color.new(cStop, 80),
+                         bgcolor = color.new(cStop, 90))
+                else
+                    box.set_right(g.band, time)
+                    box.set_top(g.band, math.max(g.entry, g.stop))
+                    box.set_bottom(g.band, math.min(g.entry, g.stop))
+    out
+
 // ═══════════════════════════ 10. RUN ════════════════════════════════════════
 var Ctx mainC = newCtx(0)
 var Ctx intC = newCtx(1)
@@ -1280,6 +1491,43 @@ if runDeep and deepScope.active and engineOk and not childCont
         zone(deepC, deepC.dir == DIR_BULL ? deepC.detBull : deepC.detBear,
              zOn and pbDeepOn, 88, 86, zCap)
         trimZones(deepC)
+
+// ── the entry layer runs on MAIN only ───────────────────────────────────────
+// Internal and Deep publish structure; they do not publish setups. The
+// pre-registrations measured MAIN depth and nothing else, so nothing else is
+// shown here.
+var Sig sig = Sig.new()
+var int sigN = 0
+var int sigWin = 0
+var int sigLoss = 0
+var float sigR = 0.0
+var float sigBest = 0.0
+var float sigWorst = 0.0
+
+if showSig and engineOk
+    // Manage what is open BEFORE opening anything new, so a setup can never
+    // be replaced by its own successor mid-bar.
+    float pivNow = mainC.dir == sig.dir ? mainC.pbLast : na
+    float done = sigStep(sig, high, low, pivNow, sigTrail, sigBox)
+    if not na(done)
+        sigN += 1
+        sigR += done
+        if done > 0
+            sigWin += 1
+        else
+            sigLoss += 1
+        sigBest := math.max(sigBest, done)
+        sigWorst := math.min(sigWorst, done)
+    // One at a time. A second setup while one is live is not taken, which is
+    // what the research measured and is also the only honest thing to draw.
+    if mainC.sigNew and not sig.on
+        sigOpen(sig, mainC.sigDir, mainC.sigEntry, mainC.sigStop, sigRR,
+             sigFee)
+// An object field carries no [] history, so the arming EDGE is tracked in a
+// plain series instead of being read as sig.armed[1].
+var bool sigArmedPrev = false
+bool sigJustArmed = showSig and sig.armed and not sigArmedPrev
+sigArmedPrev := showSig and sig.armed
 
 // ═══════════════════════════ 11. RENDER ═════════════════════════════════════
 // Presentation only. Nothing here infers a pivot, a level or a direction.
@@ -1598,6 +1846,45 @@ if showDbg and barstate.islast
          "scoped · " + (intScope.active ? "open" : "closed"),
          text_color = dv, text_size = size.tiny)
 
+// ── forward record ──────────────────────────────────────────────────────────
+// The ONLY number in this indicator that is not borrowed from a backtest. It
+// counts what these signals have done on the bars currently loaded. Read it as
+// a log, not as a verdict: a few dozen closed setups says nothing at all, and
+// the pre-registered work needed ~3000 bets to put a standard error on this.
+var table sigT = table.new(position.middle_right, 2, 7,
+     bgcolor = color.new(#111418, 12), border_width = 1,
+     border_color = color.new(#2a2e39, 40), frame_width = 1,
+     frame_color = color.new(#2a2e39, 40))
+
+if showSig and sigLog and barstate.islast
+    color hd = color.new(#d7e5f2, 0)
+    color mu = color.new(#9598a1, 0)
+    float wr = sigN > 0 ? 100.0 * sigWin / sigN : 0.0
+    table.cell(sigT, 0, 0, "Forward record", bgcolor = hd,
+         text_color = #263238, text_size = size.small)
+    table.cell(sigT, 1, 0, "loaded bars", bgcolor = hd, text_color = #263238,
+         text_size = size.small)
+    table.cell(sigT, 0, 1, "closed", text_color = mu, text_size = size.small)
+    table.cell(sigT, 1, 1, str.tostring(sigN), text_color = mu,
+         text_size = size.small)
+    table.cell(sigT, 0, 2, "win rate", text_color = mu, text_size = size.small)
+    table.cell(sigT, 1, 2, str.tostring(wr, "0.0") + "%", text_color = mu,
+         text_size = size.small)
+    table.cell(sigT, 0, 3, "total R", text_color = mu, text_size = size.small)
+    table.cell(sigT, 1, 3, fmtR(sigR),
+         text_color = sigR >= 0 ? cLong : cShort, text_size = size.small)
+    table.cell(sigT, 0, 4, "R / setup", text_color = mu, text_size = size.small)
+    table.cell(sigT, 1, 4, sigN > 0 ? fmtR(sigR / sigN) : "-",
+         text_color = sigN > 0 and sigR >= 0 ? cLong : cShort,
+         text_size = size.small)
+    table.cell(sigT, 0, 5, "best / worst", text_color = mu,
+         text_size = size.small)
+    table.cell(sigT, 1, 5, fmtR(sigBest) + " / " + fmtR(sigWorst),
+         text_color = mu, text_size = size.small)
+    table.cell(sigT, 0, 6, "open", text_color = mu, text_size = size.small)
+    table.cell(sigT, 1, 6, sig.on ? (sig.armed ? "yes, armed" : "yes") : "no",
+         text_color = mu, text_size = size.small)
+
 // ═══════════════════════════ 13. ALERTS ═════════════════════════════════════
 // Structure events only. None of these is a trade signal, and this phase makes
 // no claim that any of it is tradeable.
@@ -1614,3 +1901,16 @@ alertcondition(not aBos and aBos[1], "LIT v2 BOS broken",
      "Riptide LIT v2: BOS broken - continuation")
 alertcondition(aDir != aDir[1] and aDir != 0, "LIT v2 trend flip",
      "Riptide LIT v2: CHoCH broken - trend flipped")
+
+// ── entry layer ─────────────────────────────────────────────────────────────
+// RESEARCH ALERTS. Three pre-registered experiments returned INCONCLUSIVE, so
+// these fire to be RECORDED, not acted on. Nothing here places an order and
+// this project places no orders anywhere.
+bool aLong = showSig and mainC.sigNew and mainC.sigDir == DIR_BULL
+bool aShort = showSig and mainC.sigNew and mainC.sigDir == DIR_BEAR
+alertcondition(aLong, "LIT v2 LONG setup",
+     "Riptide LIT v2 research LONG - entry at close, SL at prior pullback pivot. Not validated; record it.")
+alertcondition(aShort, "LIT v2 SHORT setup",
+     "Riptide LIT v2 research SHORT - entry at close, SL at prior pullback pivot. Not validated; record it.")
+alertcondition(sigJustArmed, "LIT v2 Active Price reached",
+     "Riptide LIT v2: Active Price reached - trailing stop armed")
