@@ -1238,3 +1238,45 @@ ONE HOUSEKEEPING ITEM
 NOTHING CHANGED IN THIS PASS. Defects 1 and 2 are one-line each and carry no
 engine risk. Defects 3 and 4 are rendering and should be settled against the
 reference screenshots, not against the MD text alone.
+
+
+v0.7.16 — the four defects fixed
+--------------------------------
+
+DEFECT 1 — §58/§81 defaults. showDeep, pbDeepOn, showStats and showNearScan
+  now default false; showInside now defaults true. Tooltips rewritten so they
+  no longer argue the opposite of the value they carry.
+  CONSEQUENCE WORTH KNOWING: runDeep = runInt and showDeep, so showDeep off
+  stops the Deep ENGINE, not just Deep drawing. Deep statistics read empty
+  until it is switched on. This is what §46 and §58 ask for, but it is a
+  behaviour change at default settings, not only a cosmetic one.
+
+DEFECT 2 — §63 Debug Mode. showDbg is an input again. It was not enough to
+  un-hardcode it: §63 lists what debug must expose and almost none of it was
+  exposed, so a compact bottom-left table was added printing the mother range,
+  inside-bar state and count, the §12 OUTSIDE_BOTH count with a this-bar flag,
+  the pullback tracker and its frozen confirmation level, the Body & Sweep
+  base→act migration and sweep chain length, Hidden Shadow pending state and
+  which level owns it, the §34 leg anchor, IDM/BOS/CHoCH, and phase/direction.
+  It follows the existing depth selector, now relabelled "Statistics / debug
+  depth". markHiddenPb is reachable for the first time.
+
+DEFECT 3 — §51/§52 width. paint()'s `w` parameter is wired through. Main
+  BOS/CHoCH draw at width 2, Main IDM at 1 (§51 wants Main IDM thinner than
+  Main BOS/CHoCH), all Internal and Deep levels at 1.
+
+DEFECT 4 — §55 label placement. tagLvl anchors at the live segment's right
+  endpoint, inset two bars so a centred style_none text does not overhang the
+  price scale, clamped to the segment start for a level created on the current
+  bar. retire() freezes the tag at the same place instead of at 50%. The bar
+  width is computed once at global scope (barMs) rather than opening a
+  `time[1]` history buffer at each call site.
+
+Housekeeping: indicator() title bumped to v0.7.16 (it still read v0.7.9 CAL).
+
+NOT COMPILED. There is no Pine compiler in this environment and there has not
+been one for any version in this log. Everything here was checked by reading:
+no function assigns a global scalar (CE10088), every drawing stays anchored in
+xloc.bar_time (RE10026), continuation indents follow the file's 9-space
+convention, and no `[]` history is taken on an object field. Compile errors on
+first paste are still possible and are the expected next round.

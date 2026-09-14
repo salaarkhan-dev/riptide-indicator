@@ -96,9 +96,22 @@
 //    structural rule is introduced. This is a hierarchy/ownership change only.
 //  - Child drawings are gated by their owning scope, so i/ii levels stop at
 //    scope boundaries instead of leaking across unrelated structure.
-//  - Labels use a controlled centre position + depth-aware vertical clearance.
+//  - Labels use a controlled position + depth-aware vertical clearance.
 //
-indicator("Riptide LIT Structure — v0.7.9 CAL", "Riptide LIT",
+// v0.7.16 - MD conformance pass (§58, §63, §51/§52, §55). No engine code is
+// changed: no rule, level, pivot or transition differs from v0.7.15. One
+// DEFAULT does change what the engine runs, and it is called out below -
+// showDeep off means runDeep is false, so the Deep context does not step
+// until it is switched on. That is what §46 and §58 ask for.
+//  - Default inputs match §58/§81: Deep off, Deep zones off, statistics off,
+//    near-scan off, inside-bar tint ON.
+//  - §63 Debug Mode is an INPUT again, not a hardcoded false, and it now
+//    prints the state §63 lists - including the §12 OUTSIDE_BOTH count.
+//  - §51/§52 depth is graded by line WIDTH: Main levels 2, Main IDM and every
+//    child level 1. paint() took a width parameter and ignored it until now.
+//  - §55 BOS/CHoCH/IDM tags sit near the line's RIGHT endpoint, not at 50%.
+//
+indicator("Riptide LIT Structure — v0.7.16", "Riptide LIT",
      overlay          = true,
      max_lines_count  = 500,
      max_labels_count = 500,
@@ -169,8 +182,8 @@ bool hsCH = input.bool(true, "Hidden Shadow on CHoCH", group = gHS)
 // ── 4. Structure ────────────────────────────────────────────────────────────
 bool showMain = input.bool(true, "Main", group = gShow, inline = "d")
 bool showInt = input.bool(true, "Internal", group = gShow, inline = "d")
-bool showDeep = input.bool(true, "Deep", group = gShow, inline = "d",
-     tooltip = "Deep is owned by the active Internal pullback scope in v0.7. Turn off only to simplify visual calibration.")
+bool showDeep = input.bool(false, "Deep", group = gShow, inline = "d",
+     tooltip = "[§58/§81] Off by default: the default chart shows Main and a light Internal, and deeper structure has to be asked for.\n\nNote this is not a draw switch. Deep is owned by the active Internal pullback scope, and turning it off stops the Deep ENGINE as well - Deep statistics are empty while this is off.")
 bool showIDM = input.bool(true, "IDM", group = gShow, inline = "l")
 bool showBOS = input.bool(true, "BOS", group = gShow, inline = "l")
 bool showCH = input.bool(true, "CHoCH", group = gShow, inline = "l")
@@ -179,8 +192,8 @@ bool showSW = input.bool(true, "Strong / Weak labels", group = gShow,
 bool showRetired = input.bool(false, "Mark taken inducements with x",
      group = gShow,
      tooltip = "A retired IDM leaves a small cross where it was taken instead of a full labelled line. Old inducements are the main source of clutter and they are not live information.")
-bool showInside = input.bool(false, "Tint inside bars", group = gShow,
-     tooltip = "Off by default - on a busy chart the tint reads as another signal. The debug panel reports the rate either way.")
+bool showInside = input.bool(true, "Tint inside bars", group = gShow,
+     tooltip = "[§58/§61] On by default. The tint is a subtle neutral grey at 70% transparency, not a signal colour - it marks the candles the engine treats as noise inside the active mother range. Turn it off on a busy chart.")
 int histMain = input.int(8, "History", minval = 1, maxval = 40, group = gShow,
      inline = "h", tooltip = "Retired levels kept per depth. TradingView caps a script at 500 lines and 500 labels; these are what hold this one inside that.")
 int histInt = input.int(6, "", minval = 1, maxval = 40, group = gShow,
@@ -191,7 +204,7 @@ int histDeep = input.int(3, "", minval = 1, maxval = 40, group = gShow,
 // ── 5. Pullback zones ───────────────────────────────────────────────────────
 bool pbMainOn = input.bool(true, "Main zones", group = gPB, inline = "p")
 bool pbIntOn = input.bool(true, "Internal zones", group = gPB, inline = "p")
-bool pbDeepOn = input.bool(true, "Deep zones", group = gPB, inline = "p")
+bool pbDeepOn = input.bool(false, "Deep zones", group = gPB, inline = "p")
 int histPB = input.int(10, "Zones kept per depth", minval = 1, maxval = 30,
      group = gPB)
 string pbEdge = input.string("Initial level", "Zone boundary", group = gPB,
@@ -229,23 +242,31 @@ string labelSizeChild = input.string("Small", "Child labels", group = gCol,
      options = ["Tiny", "Small", "Normal"], inline = "ls")
 float labelClearAtr = input.float(0.24, "Label clearance × ATR", minval = 0.00,
      maxval = 0.50, step = 0.01, group = gCol,
-     tooltip = "Vertical clearance keeps centered BOS/CHoCH/IDM labels from sitting behind candle bodies. Visual only.")
+     tooltip = "Vertical clearance keeps the BOS/CHoCH/IDM tags off the candle bodies at the line's right edge. Visual only.")
 
 // ── 7. Panels ───────────────────────────────────────────────────────────────
 bool showPanel = input.bool(false, "Guidance panel", group = gDbg)
-// Developer diagnostics are intentionally not exposed in the normal UI.
-// Keep the engine invariant counters internally, but do not cover the chart
-// with the old bottom-left debug table.
-bool showDbg = false
-bool showStats = input.bool(true, "Structure statistics", group = gDbg,
-     tooltip = "Compact first-passage statistics for the selected structure depth. These are structure diagnostics, not trade performance.")
-string statsDepth = input.string("Main", "Statistics depth", group = gDbg,
-     options = ["Main", "Internal", "Deep"])
+// [§63] Debug Mode. Off by default, per §58 and §81 - but it is an INPUT, not
+// a constant. It was hardcoded false through v0.7.15, which made the whole
+// §63 surface dead code and silently disabled the outside-bar reporting that
+// §12 calls mandatory ("this edge case must not silently corrupt structure").
+bool showDbg = input.bool(false, "Debug mode", group = gDbg,
+     tooltip = "[§63] Developer diagnostics. Exposes the mother range and inside-bar state, the pullback tracker and its frozen confirmation level, the live Body & Sweep threshold, Hidden Shadow pending state, the leg anchor, IDM/BOS/CHoCH, phase and depth, and the OUTSIDE_BOTH count - the bars that broke the mother range on both sides in one candle, where OHLC cannot say which side went first.\n\nOff by default. It draws extra lines and a table.")
+bool showStats = input.bool(false, "Structure statistics", group = gDbg,
+     tooltip = "[§58] Off by default. Compact first-passage statistics for the selected structure depth. These are structure diagnostics, not trade performance.")
+string statsDepth = input.string("Main", "Statistics / debug depth", group = gDbg,
+     options = ["Main", "Internal", "Deep"],
+     tooltip = "Which structure context the statistics table and the §63 debug table report on.")
 string statsWindow = input.string("Visible chart", "Statistics window", group = gDbg,
      options = ["Visible chart", "All loaded bars"],
      tooltip = "Visible chart cohorts calibration events whose opportunity begins inside the current viewport. Use the same viewport as the reference indicator when calibrating its table.")
-bool showNearScan = input.bool(true, "Near-rule calibration scan", group = gDbg,
-     tooltip = "Research only. Counts first entries into several geometric 'near' candidates while BOS and CHoCH are both active. It does not alter structure. Target reference totals on the ZEC 30m fixture are BOS=29 and CHoCH=14.")
+bool showNearScan = input.bool(false, "Near-rule calibration scan", group = gDbg,
+     tooltip = "Research only, off by default - §81 asks for no giant table on a first load. Counts first entries into several geometric 'near' candidates while BOS and CHoCH are both active. It does not alter structure. Target reference totals on the ZEC 30m fixture are BOS=29 and CHoCH=14.")
+
+// [§55] One bar's width in milliseconds, computed once at global scope so the
+// label placers and retire() all read the same value instead of each opening
+// its own `time[1]` history buffer.
+int barMs = nz(time - time[1], 0)
 
 // ═══════════════════════════ 2. TYPES ═══════════════════════════════════════
 // [SRC] One break engine, four users: pullback, IDM, BOS, CHoCH.
@@ -727,9 +748,11 @@ retire(Ctx x, line ln, label lb, int cap) =>
     if not na(ln)
         line.set_x2(ln, time)
         if not na(lb)
+            // [§55] Freeze the tag at the retired segment's RIGHT endpoint,
+            // matching tagLvl. Same two-bar inset, same clamp to the start.
             int lx1 = line.get_x1(ln)
-            int mid = lx1 + int((time - lx1) * 0.50)
-            label.set_x(lb, mid)
+            int rx = time - barMs * 2
+            label.set_x(lb, rx < lx1 ? lx1 : rx)
         array.push(x.junkL, ln)
         if array.size(x.junkL) > cap
             line.delete(array.shift(x.junkL))
@@ -1264,8 +1287,7 @@ ctxStep(Ctx x, bool resetMe, int seedDir, int i, float o, float h, float l, floa
 float atr = ta.atr(50)
 
 // [§24] One object per active level, updated rather than recreated.
-// [§23] The label sits at 70% along the live segment, not at bar_index, so
-// active labels do not pile up vertically on the current candle.
+// [§55] The label sits near the live segment's RIGHT endpoint - see tagLvl.
 // RE10026: a bar-index coordinate has to sit within max_bars_back of the
 // current bar, and a structural anchor routinely does not. Timestamps carry no
 // such limit, so every drawing here is anchored in bar_time. This is the whole
@@ -1283,9 +1305,19 @@ drawLvl(line cur, int x1t, float y, color col, int w, string st) =>
 tagLvl(label cur, int x1t, float y, string txt, color col, string sz,
      bool above, float clearance) =>
     label out = cur
-    // Keep labels centered on their own live segment, but clear candle bodies.
-    // Child levels use slightly less clearance so nesting stays compact.
-    int xx = x1t + int((time - x1t) * 0.50)
+    // [§51/§55] The label sits NEAR THE LINE'S RIGHT ENDPOINT, not in the
+    // middle of it. §51 is explicit - "label aligned near right endpoint, not
+    // floating in middle of candles" - and the reference charts agree. v0.7.15
+    // placed every label at 50% along the segment, which on a long-lived Main
+    // level parks the text in open space far from price.
+    //
+    // "Near", not "at": the anchor is pulled two bars back from the right
+    // endpoint so a centred style_none text does not overhang into the price
+    // scale. It is clamped to the segment start so a level created on the
+    // current bar still carries its tag.
+    // Child levels use slightly less vertical clearance so nesting stays compact.
+    int right = time - barMs * 2
+    int xx = right < x1t ? x1t : right
     float yy = y + (above ? atr * clearance : -atr * clearance)
     if na(out)
         out := label.new(xx, yy, txt, xloc = xloc.bar_time,
@@ -1317,21 +1349,29 @@ paint(Ctx x, bool on, string pre, int w, int fade, string sz) =>
         string idmStyle = x.depth == 0 ? line.style_solid : line.style_dotted
         string bosStyle = x.depth == 0 ? line.style_solid : line.style_dashed
         string chStyle = x.depth == 0 ? line.style_solid : line.style_dashed
+        // [§51/§52] Depth is graded by WIDTH as well as style and fade.
+        // Through v0.7.15 this function took `w` and then every draw passed a
+        // hardcoded 1, so Main, Internal and Deep all rendered identically
+        // thick. §51 wants Main BOS/CHoCH "slightly thicker" and Main IDM
+        // "thinner"; §52 wants Internal thinner than Main throughout. So the
+        // level lines carry `w` and the IDM sits one step below it, floored
+        // at 1 so a child IDM never disappears.
+        int idmW = w > 1 ? w - 1 : 1
         if x.idm.on and showIDM
             // The IDM PRICE is the pivot emitted by the completed pullback.
             // Where the line STARTS is the idmAnchor input above; see the
             // floating-IDM note. The level itself is the pivot either way.
-            x.lnIdm := drawLvl(x.lnIdm, idmX, x.idm.px, id, 1, idmStyle)
+            x.lnIdm := drawLvl(x.lnIdm, idmX, x.idm.px, id, idmW, idmStyle)
             x.lbIdm := tagLvl(x.lbIdm, idmX, x.idm.px, pre + "IDM", id,
                  sz, not bull, x.depth == 0 ? labelClearAtr : labelClearAtr * 0.78)
         if x.bos.on and showBOS
             color col = bull ? bu : be
-            x.lnBos := drawLvl(x.lnBos, x.bos.barT, x.bos.px, col, 1, bosStyle)
+            x.lnBos := drawLvl(x.lnBos, x.bos.barT, x.bos.px, col, w, bosStyle)
             x.lbBos := tagLvl(x.lbBos, x.bos.barT, x.bos.px, pre + "BOS", col,
                  sz, bull, x.depth == 0 ? labelClearAtr : labelClearAtr * 0.78)
         if x.ch.on and showCH
             color col = bull ? be : bu
-            x.lnCh := drawLvl(x.lnCh, x.ch.barT, x.ch.px, col, 1, chStyle)
+            x.lnCh := drawLvl(x.lnCh, x.ch.barT, x.ch.px, col, w, chStyle)
             x.lbCh := tagLvl(x.lbCh, x.ch.barT, x.ch.px, pre + "CHoCH", col,
                  sz, not bull, x.depth == 0 ? labelClearAtr : labelClearAtr * 0.78)
     0
@@ -1505,7 +1545,7 @@ if engineOk
     sweepDebug(mainC, showMain)
 
 drawThreshold(mainC)
-paint(mainC, showMain, "", 1, fadeMain, sizeOf(labelSizeMain))
+paint(mainC, showMain, "", 2, fadeMain, sizeOf(labelSizeMain))
 paint(intC, runInt and intScope.active, "i", 1, fadeInt, sizeOf(labelSizeChild))
 paint(deepC, runDeep and deepScope.active, "ii", 1, fadeDeep, sizeOf(labelSizeChild))
 
@@ -1583,9 +1623,84 @@ if showPanel and barstate.islast
          (mainC.ch.on ? str.tostring(mainC.ch.px, format.mintick) : "—"),
          text_color = cVal, text_size = size.small)
 
-// Developer invariant counters remain in each Ctx, but the old bottom-left
-// debug table is deliberately removed from the reference profile. It obscured
-// price and was not useful during normal calibration.
+// [§63] DEBUG MODE. Off by default and it covers price when on, which is
+// exactly why §58/§81 want it off - but it has to EXIST, and through v0.7.15
+// it did not: showDbg was a hardcoded false, so §63 was dead code and the
+// outside-bar reporting §12 calls mandatory was never reachable.
+//
+// Everything here reads state and prints it. Nothing is computed for display.
+fmtPx(float v) =>
+    na(v) ? "—" : str.tostring(v, format.mintick)
+
+pbTxt(PBDet d) =>
+    d.state == PB_ACTIVE ? "correcting" : "impulse"
+
+modeTxt(int m) =>
+    m == BRK_SHADOW ? "shadow" : m == BRK_BODY ? "body" : "body&sweep"
+
+var table dbg = table.new(position.bottom_left, 2, 12,
+     bgcolor = color.new(chart.bg_color, 10), border_width = 1,
+     border_color = color.new(#787b86, 60))
+if showDbg and barstate.islast
+    Ctx d = statsDepth == "Main" ? mainC : statsDepth == "Internal" ? intC : deepC
+    Norm dn = statsDepth == "Main" ? normMain :
+         statsDepth == "Internal" ? normInt : normDeep
+    color dk = color.new(#787b86, 0)
+    color dv = chart.fg_color
+    table.cell(dbg, 0, 0, "LIT DEBUG §63", text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 1, 0, statsDepth + " · depth " + str.tostring(d.depth),
+         text_color = cHS, text_size = size.tiny)
+    table.cell(dbg, 0, 1, "mother range", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 1, fmtPx(dn.hi) + " / " + fmtPx(dn.lo),
+         text_color = dv, text_size = size.tiny)
+    // The per-bar INSIDE/OUTSIDE_BOTH flags are published by the Main
+    // normalizer only; the child normalizers run inside a parent scope and
+    // have no meaningful "this bar" state off that scope. Counts are per-depth.
+    bool dIns = statsDepth == "Main" and mInside
+    bool dBoth = statsDepth == "Main" and mBoth
+    table.cell(dbg, 0, 2, "inside bars", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 2, (dIns ? "INSIDE now · " : "") +
+         str.tostring(dn.insideCount) + " total",
+         text_color = dIns ? cHS : dv, text_size = size.tiny)
+    // [§12] OUTSIDE_BOTH. One candle broke the mother range on BOTH sides, so
+    // OHLC cannot say which side went first and no intrabar order is invented.
+    table.cell(dbg, 0, 3, "outside both §12", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 3, str.tostring(dn.bothCount) + (dBoth ? "  ← this bar" : ""),
+         text_color = dBoth ? cBear : dv, text_size = size.tiny)
+    table.cell(dbg, 0, 4, "PB tracker hi/lo", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 4, fmtPx(d.det.trkHi) + " / " + fmtPx(d.det.trkLo),
+         text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 0, 5, "PB state / conf", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 5, pbTxt(d.det) + " · " + fmtPx(d.det.conf),
+         text_color = d.det.state == PB_ACTIVE ? cHS : dv, text_size = size.tiny)
+    // [§21] BASE is the level as set; ACT is where Body & Sweep migrated it to.
+    table.cell(dbg, 0, 6, "sweep BOS base→act", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 6, fmtPx(d.bos.b.base) + " → " + fmtPx(d.bos.b.act) +
+         "  (" + str.tostring(d.bos.b.sweeps) + ")", text_color = dv,
+         text_size = size.tiny)
+    // [§25] A body candidate is waiting on its Hidden Shadow resolver.
+    bool hsOn = d.bos.b.pend or d.ch.b.pend or d.idm.b.pend
+    float hsAt = d.bos.b.pend ? d.bos.b.hsLvl :
+         d.ch.b.pend ? d.ch.b.hsLvl : d.idm.b.hsLvl
+    string hsWho = d.bos.b.pend ? "BOS" : d.ch.b.pend ? "CHoCH" : "IDM"
+    table.cell(dbg, 0, 7, "hidden shadow", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 7, hsOn ? "PENDING " + hsWho + " " + fmtPx(hsAt) : "—",
+         text_color = hsOn ? cHS : dv, text_size = size.tiny)
+    // [§34] The leg anchor is NOT reset by IDM migration. BOS reads these.
+    table.cell(dbg, 0, 8, "leg §34 hi/lo", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 8, fmtPx(d.legHi) + " / " + fmtPx(d.legLo) +
+         "  @" + (na(d.legBar) ? "—" : str.tostring(d.legBar)),
+         text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 0, 9, "IDM", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 9, d.idm.on ? fmtPx(d.idm.px) + "  " + modeTxt(d.idm.b.mode) : "—",
+         text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 0, 10, "BOS / CHoCH", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 10, (d.bos.on ? fmtPx(d.bos.px) : "—") + " / " +
+         (d.ch.on ? fmtPx(d.ch.px) : "—"), text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 0, 11, "phase / dir", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 11, phTxt(d.phase) + " · " + dirTxt(d.dir),
+         text_color = d.dir == DIR_BULL ? cBull : d.dir == DIR_BEAR ? cBear :
+         color.gray, text_size = size.tiny)
 
 // Compact reference-shaped statistics table. The first two rows are now
 // measured on the same first-passage population implied by the reference:
