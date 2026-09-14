@@ -15,6 +15,17 @@
 //  V2 turns every one of them into a NAMED POLICY with an explicit default and
 //  a switch, so they can be measured instead of argued. See §1 below.
 //
+//  v2.3 MAKES A SETUP FINDABLE, AND SAYS WHICH DEPTH IT CAME FROM.
+//
+//  A setup is a one-bar EVENT, and unfilled text in the right margin - which
+//  reads well for a structural level that persists - reads badly for one. So a
+//  setup now gets a filled pin on its own bar, carrying "MAIN ▲ LONG" or
+//  "INT ▼ SHORT", and every one of its labels carries a HOVER TOOLTIP with the
+//  entry, the stop and its risk as a percent, Active Price, and which depth it
+//  came from - including whether that depth has ever been measured.
+//
+//  Structure levels keep the house style unchanged. Only setups get a pin.
+//
 //  v2.2 DEFAULTS NOW MATCH THE PYTHON FORWARD RECORD.
 //
 //  Two defaults changed so the chart shows the setups LIT_FORWARD_V1 actually
@@ -62,7 +73,7 @@
 //    - continuation lines must not land on a multiple-of-4 indent
 // ═══════════════════════════════════════════════════════════════════════════
 //@version=6
-indicator("Riptide LIT Structure — v2.2", "Riptide LIT v2",
+indicator("Riptide LIT Structure — v2.3", "Riptide LIT v2",
      overlay          = true,
      max_lines_count  = 500,
      max_labels_count = 500,
@@ -363,6 +374,8 @@ type Sig
     line acLn = na
     label enLb = na
     label slLb = na
+    label mark = na          // the filled arrow at the entry bar
+    string depth = ""        // "MAIN" or "INT" - shown, not inferred
     box band = na
 
 // [SRC] Child structure is owned by a confirmed parent PULLBACK.
@@ -1336,9 +1349,13 @@ sigClose(Sig g, float px, bool stopped) =>
     if not na(g.band)
         box.set_right(g.band, time)
     color rc = r >= 0 ? cLong : cShort
-    label.new(time + barMs * labelGapBars, px, fmtR(r), xloc = xloc.bar_time,
-         yloc = yloc.price, style = label.style_none, color = na,
-         textcolor = rc, size = size.tiny)
+    label.new(time + barMs * labelGapBars, px, g.depth + " " + fmtR(r),
+         xloc = xloc.bar_time, yloc = yloc.price, style = label.style_none,
+         color = na, textcolor = rc, size = size.small)
+    // The pin keeps the result, so a closed setup reads without hovering.
+    if not na(g.mark)
+        label.set_text(g.mark, g.depth + " " + fmtR(r))
+        label.set_color(g.mark, color.new(rc, 25))
     // A finished tag is CENTRED over the span it describes, which is what
     // retire() does to a closed BOS or CHoCH. Live reads on the right, done
     // reads in the middle, and the two are never confused at a glance.
@@ -1359,7 +1376,7 @@ sigClose(Sig g, float px, bool stopped) =>
 
 // Open a setup. The drawings are created once and only extended afterwards.
 sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct,
-     int fade) =>
+     int fade, string depth) =>
     float risk = math.abs(entry - stop)
     g.on := true
     g.armed := false
@@ -1369,6 +1386,7 @@ sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct,
     g.stop := stop
     g.risk := risk
     g.barT := time
+    g.depth := depth
     // [SRC Ch.18] Active Price carries the round trip, because a setup has to
     // clear its own costs before it is worth arming anything for.
     float fee = entry * feePct / 100.0
@@ -1381,16 +1399,40 @@ sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct,
          style = line.style_dashed)
     g.acLn := line.new(time, g.active, time, g.active, xloc = xloc.bar_time,
          color = color.new(cActive, 35), width = 1, style = line.style_dotted)
+    // THE MARKER. A filled pin ON the entry bar, because "hard to find" was the
+    // actual complaint: unfilled text in the right margin reads well for a
+    // structural level that persists and badly for a one-bar event. Structure
+    // levels keep the house style; a setup gets a pin.
+    float riskPct = 100.0 * math.abs(entry - stop) / entry
+    string tip = depth + " · " + (dir > 0 ? "LONG" : "SHORT") + "\n" +
+         "Entry   " + str.tostring(entry, format.mintick) + "\n" +
+         "Stop    " + str.tostring(stop, format.mintick) + "   (" +
+         str.tostring(riskPct, "0.00") + "% = 1R)\n" +
+         "Active  " + str.tostring(g.active, format.mintick) +
+         "   arms the trail, NOT a target" +
+         (depth == "MAIN"
+              ? "\n\nMAIN depth - what Stages A/B/C measured, and the only depth LIT_FORWARD_V1 records."
+              : "\n\nINTERNAL depth - never scored by any stage. Its expectancy is UNMEASURED, not small or large.") +
+         "\n\nLIT_FORWARD_V1 · research only, not a trade signal."
+    g.mark := label.new(time, stop, depth + (dir > 0 ? " ▲ LONG" : " ▼ SHORT"),
+         xloc = xloc.bar_time, yloc = yloc.price,
+         style = dir > 0 ? label.style_label_up : label.style_label_down,
+         color = cd, textcolor = color.new(color.white, fade),
+         size = size.small, tooltip = tip)
+
+    // The level tags keep the house style - unfilled, right margin, padded off
+    // their own line - but now carry the DEPTH, so Main and Internal differ by
+    // a word rather than by one lowercase letter.
     int lx = time + barMs * labelGapBars
-    g.enLb := label.new(lx, entry + (dir > 0 ? atr * 0.28 : -atr * 0.28),
-         (fade > 0 ? "i" : "") +
-         (dir > 0 ? "LONG " : "SHORT ") + str.tostring(entry, format.mintick),
+    g.enLb := label.new(lx, entry + (dir > 0 ? atr * 0.30 : -atr * 0.30),
+         depth + (dir > 0 ? " ▲ " : " ▼ ") + str.tostring(entry, format.mintick),
          xloc = xloc.bar_time, yloc = yloc.price, style = label.style_none,
-         color = na, textcolor = cd, size = size.tiny)
-    g.slLb := label.new(lx, stop + (dir > 0 ? -atr * 0.28 : atr * 0.28),
-         "SL " + str.tostring(stop, format.mintick), xloc = xloc.bar_time,
+         color = na, textcolor = cd, size = size.small, tooltip = tip)
+    g.slLb := label.new(lx, stop + (dir > 0 ? -atr * 0.30 : atr * 0.30),
+         "SL " + str.tostring(stop, format.mintick) + "  (" +
+         str.tostring(riskPct, "0.00") + "%)", xloc = xloc.bar_time,
          yloc = yloc.price, style = label.style_none, color = na,
-         textcolor = cStop, size = size.tiny)
+         textcolor = color.new(cStop, fade), size = size.small, tooltip = tip)
 
 // One bar of management. Returns the realised R, or na while still open.
 // ORDER MATTERS: the stop is tested against the level it ALREADY held, then
@@ -1424,12 +1466,14 @@ sigStep(Sig g, float h, float l, float pivNow, bool useTrail,
             int lx = time + barMs * labelGapBars
             if not na(g.slLb)
                 label.set_xy(g.slLb, lx, g.stop +
-                     (g.dir > 0 ? -atr * 0.28 : atr * 0.28))
+                     (g.dir > 0 ? -atr * 0.30 : atr * 0.30))
                 label.set_text(g.slLb, (g.armed ? "⚑ SL " : "SL ") +
-                     str.tostring(g.stop, format.mintick))
+                     str.tostring(g.stop, format.mintick) + "  (" +
+                     str.tostring(100.0 * math.abs(g.entry - g.stop) /
+                          g.entry, "0.00") + "%)")
             if not na(g.enLb)
                 label.set_xy(g.enLb, lx, g.entry +
-                     (g.dir > 0 ? atr * 0.28 : -atr * 0.28))
+                     (g.dir > 0 ? atr * 0.30 : -atr * 0.30))
             if shade
                 if na(g.band)
                     g.band := box.new(g.barT, math.max(g.entry, g.stop), time,
@@ -1586,7 +1630,7 @@ if showSig and sigMain and engineOk
     // what the research measured and is also the only honest thing to draw.
     if mainC.sigNew and not sig.on
         sigOpen(sig, mainC.sigDir, mainC.sigEntry, mainC.sigStop, sigRR,
-             sigFee, 0)
+             sigFee, 0, "MAIN")
 
 if showSig and sigInt and engineOk and runInt
     float pivI = sigI.dir > 0 ? intC.pbTrailBull : intC.pbTrailBear
@@ -1600,7 +1644,7 @@ if showSig and sigInt and engineOk and runInt
         sigWorstI := math.min(sigWorstI, doneI)
     if intC.sigNew and not sigI.on
         sigOpen(sigI, intC.sigDir, intC.sigEntry, intC.sigStop, sigRR,
-             sigFee, 45)
+             sigFee, 45, "INT")
 // An object field carries no [] history, so the arming EDGE is tracked in a
 // plain series instead of being read as sig.armed[1].
 var bool sigArmedPrev = false
