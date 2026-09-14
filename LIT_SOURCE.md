@@ -1705,6 +1705,37 @@ in the structural case.
 
 ---
 
+## Chapter 23 — Hidden Shadow on the STOP LOSS, drawn
+
+The same three-panel construction as Ch.9, with `SL` in place of the structural
+level. Short position, so the stop sits above and a break is upward.
+
+    LEFT   combined candle: High above SL, Open and Close both BELOW it.
+           Only the wick got through.                    → "Hidden Shadow"
+    RIGHT  same setup, the resolver closes higher, combined Close ABOVE SL.
+                                                         → "Breakout With Body"
+    THIRD  four candles labelled "inside" are skipped; the first one whose high
+           escapes the candidate's range resolves it; the combined Close still
+           sits below SL.                                → "Hidden Shadow"
+
+### The finding is that there is NO new mechanism
+
+Every element is identical to the structural case: synthetic candle built from
+the candidate's open, the span's high and low, and the resolver's close; inside
+bars skipped against the CANDIDATE's range; only the close decides; one
+resolution attempt.
+
+So guarding a stop needs **no new code at all** — arm a `Brk` on the SL price in
+`BRK_BODY` with `useHS` on, and feed it the same stream. The existing engine
+already does the whole thing, including the sweep variant if that is ever
+wanted.
+
+That is worth knowing before Stage F is scoped: SL management reads as a large
+subsystem in the reference's description and is in fact a two-line application
+of machinery we have had working since v0.7.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
