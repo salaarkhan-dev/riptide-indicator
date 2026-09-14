@@ -119,8 +119,17 @@ inclusion.
 ## 8. POWER — computed before activation, and it is the uncomfortable part
 
 Stage C's paired delta: +0.068 R/bet, SE 0.047 on 3027 bets, so the per-bet
-standard deviation is **2.586 R**. Observed rate: **9.1 bets/day** across the
-universe.
+standard deviation is **2.586 R**.
+
+**Rate, corrected after measurement.** An earlier draft used Stage C's own
+9.1 bets/day, which came from its 55-symbol research universe. Production
+scans `TOP_N=120` across three timeframes. Measured directly — 880 setups over
+39 symbol-timeframes x 333 days — the rate is **0.068 setups per
+symbol-timeframe-day**, independently matching the 0.074 implied by Stage C's
+4090 setups. Live that is **~24 setups/day, ~18 bets/day**.
+
+Only the calendar estimates below change. **The checkpoints are defined in
+BETS and they do not move.**
 
     bets      SE    MDE@z=2   z at +0.068   z at +0.120
      250   0.164     0.327        0.42          0.73
@@ -128,12 +137,12 @@ universe.
     1000   0.082     0.164        0.83          1.47
     2000   0.058     0.116        1.18          2.08
 
-    to reach z=2 at +0.068 (the Stage C estimate):  5,784 bets ≈ 1.7 years
-    to reach z=2 at +0.120 (the Stage B estimate):  1,857 bets ≈ 0.6 years
-    to reach z=2 at +0.200:                           669 bets ≈ 0.2 years
+    to reach z=2 at +0.068 (the Stage C estimate):  5,784 bets ≈ 320 days
+    to reach z=2 at +0.120 (the Stage B estimate):  1,857 bets ≈ 103 days
+    to reach z=2 at +0.200:                           669 bets ≈  37 days
 
 **STATE THIS PLAINLY: if the true effect is the size Stage C measured, this
-experiment cannot resolve it in under about 1.7 years.** Setting a bar that
+experiment cannot resolve it in under about 320 days.** Setting a bar that
 requires it would repeat the Stage C mistake of a threshold the sample cannot
 reach. The checkpoints below are therefore chosen to be powered for the
 **Stage B** effect size, and the final read is explicitly a statement about
@@ -143,9 +152,9 @@ effects of that size or larger — not about zero.
 
 | # | resolved bets | ≈ elapsed | what happens |
 |---|---|---|---|
-| 1 | 250 | ~1 month | **Health check only.** Guards, data integrity, bet rate. NO efficacy read, and the paired delta is not even looked at for a decision. |
-| 2 | 1000 | ~4 months | **Futility check only.** If the paired delta is ≤ −0.10, stop early: that is a wrong-direction result large enough to matter. Otherwise continue. No success claim is available here. |
-| 3 | 1857 | ~7 months | **THE READ.** The only checkpoint at which V1 can be closed as supported or not. |
+| 1 | 250 | ~2 weeks | **Health check only.** Guards, data integrity, bet rate. NO efficacy read, and the paired delta is not even looked at for a decision. |
+| 2 | 1000 | ~8 weeks | **Futility check only.** If the paired delta is ≤ −0.10, stop early: that is a wrong-direction result large enough to matter. Otherwise continue. No success claim is available here. |
+| 3 | 1857 | ~15 weeks | **THE READ.** The only checkpoint at which V1 can be closed as supported or not. |
 
 **No other evaluation is permitted.** Recomputing a decision daily and stopping
 when significance appears is optional-stopping bias; `/stats` therefore reports

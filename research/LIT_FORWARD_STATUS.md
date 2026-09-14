@@ -44,12 +44,17 @@ running the check properly rather than assuming.
 
 ### Checkpoints — no other evaluation is permitted
 
-    1.  250 bets  (~1 month)   health only, no efficacy read
-    2. 1000 bets  (~4 months)  futility only: stop if paired delta ≤ −0.10
-    3. 1857 bets  (~7 months)  THE READ, the only place V1 can be closed
+    1.  250 bets  (~2 weeks)   health only, no efficacy read
+    2. 1000 bets  (~8 weeks)   futility only: stop if paired delta ≤ −0.10
+    3. 1857 bets  (~15 weeks)  THE READ, the only place V1 can be closed
+
+Rate measured, not guessed: 0.068 setups per symbol-timeframe-day over 39
+symbol-timeframes x 333 days, matching the 0.074 implied by Stage C. At
+TOP_N=120 x 3 timeframes that is ~24 setups/day and ~18 bets/day. The
+checkpoints are in BETS and do not move; only these calendar estimates did.
 
 Powered for the Stage B effect (+0.120). **If the true effect is Stage C's
-size (+0.068) this experiment needs ~5,800 bets ≈ 1.7 years** and a null at
+size (+0.068) this experiment needs ~5,800 bets ≈ 320 days** and a null at
 checkpoint 3 means "no effect ≳0.12 detected", not "no effect".
 
 ### Enabling
