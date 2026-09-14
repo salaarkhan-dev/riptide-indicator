@@ -582,6 +582,120 @@ MD-conformant.
 
 ---
 
+## Chapter 6 — The Published Indicator Description
+
+Mostly restates the video chapters. Four things in it are new.
+
+### [SRC] !! ORDER FLOW IS NOT A SEPARATELY ORIENTABLE STATE !!
+
+> "Order Flow is the result of this sequence of corrections and continuation
+> moves in price."
+
+> "Index Algo tracks both: External Pullbacks, which shape the broader market
+> flow; Internal Pullbacks, which can help identify more refined zones and more
+> precise Block Orders"
+
+This closes the question that has been open since v0.3.6. Order flow is the
+EMERGENT RESULT of the pullback/continuation sequence — there is no separate
+flow state with its own direction to orient.
+
+The v0.3.6 experiment built MainOrderFlowState as an independent object and
+tested the only two orientations the master prompt permitted:
+
+    OF-A  flow carries the structural direction
+    OF-B  an opposite-direction confirmation re-orients the flow
+
+Both were measured and both were rejected. The finding now is that the PREMISE
+was wrong, not the two arms. Nothing needs orienting because order flow is not
+a thing that has an orientation of its own. The rejection stands and the
+question is closed rather than still open — which is the right outcome, and it
+means no further experiment is owed here.
+
+### [SRC] Hidden Shadow candles are purple, and it is their own invention
+
+> "Candles related to the activation of Hidden Shadow are displayed in purple on
+> the indicator"
+
+Confirms our `cHS = #9c27b0` and the `barcolor(anyHS ? cHS : ...)` tint.
+
+> "This concept is introduced for the first time by Index Algo"
+
+Worth knowing: Hidden Shadow is not standard LIT. No external material will
+ever corroborate §24–§30 beyond this author's own description, so Chapter 5
+plus this paragraph is the complete source and there is nothing further to
+find.
+
+### [SRC] Structure detection is SETTINGS-DEPENDENT, by the author's own account
+
+> "Modify the available structure-detection settings according to the market,
+> timeframe, and level of detail you want to observe. The goal is to make the
+> plotted structure clear, consistent, and suitable for your preferred way of
+> reading price behavior."
+
+This is a caveat on the entire calibration exercise. The reference table we are
+matching against — IDM races 20, BOS near 29, CHoCH near 14 — was produced by
+whatever settings THAT chart had, and we do not know them. Chasing an exact
+match to numbers generated under unknown settings is not a well-posed target.
+
+It also reinforces the Chapter 4 conclusion. "Level of detail you want to
+observe" is, mechanically, the break mode: Shadow is described here as "faster
+and more aggressive", Body as "more conservative and requires stronger
+confirmation". Detail level and pullback break mode are the same knob.
+
+### [GAP] Internal pullbacks are described as serving ZONE refinement
+
+> "Internal Pullbacks, which can help identify more refined zones and more
+> precise Block Orders"
+
+Our Internal context runs a full second structure engine with its own IDM, BOS
+and CHoCH. The description frames internal pullbacks as feeding refined zones
+and order blocks instead.
+
+Do not act on this. The reference screenshots plainly draw iIDM, iChoch and
+iiDM levels, so internal structure does have its own levels; and the release
+notes say this build is structure-only, so the Block Order language is almost
+certainly forward-looking to a later version. Recorded because it is the fourth
+consecutive document to say something about how the child degree is fed, and at
+some point that accumulation is worth a measurement.
+
+### Restated, already confirmed
+
+Inside bars (persistent mother range, previous-bar comparison named as the
+common error), pivots from pullbacks only with no numerical input, pullback
+definition, the IDM → BOS → CHoCH chain, the three breakout modes, Hidden
+Shadow on all four levels. All consistent with Chapters 1–5 and with our
+implementation.
+
+---
+
+## WHERE THIS LEAVES US AFTER SIX DOCUMENTS
+
+CONFIRMED CORRECT, no change needed — the normalizer, pivot-from-pullback,
+the two-level tracker with its frozen confirmation level, the pullback range
+and its pivot, IDM migration, the §34 leg anchor, the boundary lock, CHoCH
+retyping the old BOS, latent pullback reuse after a continuation, Body & Sweep
+migrating and judging the swept level, the whole of Hidden Shadow, the
+pullback-zone boundary input, the purple HS tint, and the absence of any pivot
+numerical input.
+
+CLOSED, no longer an open question — order-flow orientation. There is nothing
+to orient.
+
+ONE CONFIRMED DIVERGENCE — after a CHoCH flip the source looks back for an
+opposite-direction pullback formed during the lock. We track only the trend
+direction and discard on flip. Real engine change, needs measuring, not done.
+
+ONE TEST THAT NEEDS NO CODE — pullback break mode. Ours defaults to Shadow,
+the loosest of the three. The source names the break mode as the noise filter
+and the author names it as the detail-level control. This is the leading
+explanation for 31 lock episodes against the reference's 20.
+
+ONE CAVEAT ON THE WHOLE CALIBRATION — the reference numbers came from unknown
+settings, so an exact match is not a well-posed target. Matching the STRUCTURE
+of the relationships is.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
