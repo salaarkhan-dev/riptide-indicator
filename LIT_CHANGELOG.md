@@ -598,3 +598,116 @@ wick?" — ours does not ratchet far. The open question is now:
 
 That is a question a screenshot of the 1796–9273 region answers immediately,
 and no amount of further instrumentation on our side can.
+
+---
+
+# v0.3.4 — structural re-scope forensics. Diagnostics only.
+
+Arm A bit-identical. No behavioural change.
+
+## 1. Are structural range and external-pullback scope the same lifetime?
+
+Three concepts, and the code has **two of the three**:
+
+| | concept | object in the code | own lifetime? |
+|---|---|---|---|
+| A | structural range, BOS ↔ CHoCH | `x.bos`, `x.ch` — each a `Lvl` with its own `createdBar` and `Brk` | yes |
+| B | order-flow / external-pullback scope | **does not exist** | — |
+| C | pullback event range, PB_START → PB_CONFIRM | `x.det` — `startBar`, frozen `conf`, reset every cycle | yes |
+
+**A and C are correctly separate. B is absent, and is implicitly identified
+with A.** The conflation is one line of consequence: `x.det` is re-oriented
+only when `x.dir` changes — that is, only on a CHoCH break — so order-flow
+direction is *slaved to structural trend*. There is exactly one correction in
+flight per depth and its orientation is the structure's orientation.
+
+That is precisely what §4 warns against, and it is the whole finding.
+
+## 2. Main corrections inside lock 1934..9273
+
+```
+start 1870  end 9273  len 7403  conf level 291.89  dir -1  status REORIENTED
+-> 1 Main correction across 7339 bars
+```
+
+One. It never confirmed — it ended when the trend flip re-oriented the
+detector out from under it.
+
+## 3. Diagnostic order-flow segmentation of the same window
+
+A parameter-free swing walker, run diagnostically and never fed to the engine
+(a swing extreme is confirmed when price takes the opposite extreme of the
+candle that made it):
+
+```
+2051 segments inside the lock.  median length 2 bars, max 85.
+seg 1  1935..1937  up    hi 399.62  lo 384.17
+seg 2  1937..1941  down  hi 398.28  lo 377.84
+seg 3  1941..1942  up    hi 397.05  lo 384.00
+...
+```
+
+**1 versus 2,051.** Stated honestly: 2,051 at a median of 2 bars is raw swing
+flow, far finer than the handful of External Pullbacks the reference draws. It
+is not a candidate segmentation — it is the opposite extreme, and it brackets
+the answer. Main sits at one end, raw swings at the other, and the reference
+sits between them.
+
+## 4. Reference geometry comparison
+
+**Not possible this round — the ZEC screenshot was not attached.** Items 7.1–7.n
+cannot be filled in. This is now the fourth brief in a row whose visual
+comparison step is blocked on the same missing image; the numeric fixture
+(23 taken inducements per 2000 bars, 56.5/43.5) is all that has been available.
+
+## 5. Internal activity during the Main lock
+
+```
+int PB       179
+iIDM          24
+iBOS          24
+iCHoCH         1     (counting artifact: only the FIRST is a "create",
+                      the rest register as "move")
+int flip      17
+```
+
+**Yes — Internal completes full LIT cycles repeatedly while Main never moves.**
+24 inducements taken and 24 BOS breaks, and the internal trend changed
+direction 17 times, all inside one frozen Main boundary lock.
+
+## 6. Is there any parent/child promotion mechanism?
+
+**No.** The coupling is strictly one-directional:
+
+```python
+resetInt, resetDeep = rMain, rInt     # parent resolution resets the child
+rMain = ctx_step(main, False, ...)    # Main is ALWAYS called resetMe=False
+```
+
+Nothing a child does can reach its parent. There is no promotion, no
+re-scope, and no order-flow scope object to promote into.
+
+## 7. Do the geometries support H1 or H2?
+
+**H1 — parent BOS/CHoCH stays valid while the external pullback / order-flow
+scope is replaced: SUPPORTED.** The structural boundaries were correct
+throughout (never touched, verified last round), yet the flow inside them
+reversed 17 times at Internal degree and produced 179 confirmed corrections,
+while Main held one correction open for 7,403 bars. Structural-range lifetime
+and order-flow lifetime are demonstrably different quantities on this data.
+
+**H2 — a completed child cycle may define the next parent external-PB scope
+without a parent CHoCH reversal: CONSISTENT, NOT DISTINGUISHED.** 24 complete
+Internal cycles with Main unchanged is exactly what H2 predicts. But it is also
+exactly what H1 predicts, because the same 24 cycles are the order flow. **This
+data cannot separate the two hypotheses**, and choosing between them decides
+whether the re-scope trigger is order flow itself (H1) or a completed child
+structural cycle (H2).
+
+What would separate them: a reference window where order flow changes direction
+*without* Internal completing a full cycle. If the reference draws a new
+External Pullback there, H1; if not, H2.
+
+## 8. No behaviour changed
+
+Neither hypothesis is implemented. Arm A is untouched and remains canonical.
