@@ -1228,6 +1228,98 @@ was wrong; the next one gets measured first.
 
 ---
 
+## Chapter 12 — The Display Settings Panel
+
+Short panel, three items, and two of them matter a lot.
+
+### [SRC] "Show External Pullback (ORDER FLOW)"
+
+The control is literally labelled with both names. Third independent
+confirmation of Chapter 6: order flow IS the external pullback sequence, not a
+separate orientable state. The v0.3.6 question is closed for good.
+
+Options: Hide / Show All / **Show Latest Bullish & Bearish** (the one selected).
+
+> "LIT draws its confirmed External Pullbacks. SMC draws confirmed
+> Main-structure pullbacks using the same display mode. All pullback zones use
+> the full tracked range."
+
+### [SRC] !! "LATEST BULLISH & BEARISH" — SECOND INDEPENDENT WITNESS FOR DUAL TRACKING !!
+
+You cannot offer to draw "the latest bullish AND the latest bearish external
+pullback" unless you are maintaining both at once. A single trend-oriented
+detector only ever has one.
+
+This corroborates Chapter 3 from a completely different document:
+
+> "First, we check whether there was already a bearish pullback before the
+> change of character got broken."
+
+Two independent sources now say the engine holds a latest pullback in EACH
+direction simultaneously. Our `PBDet` is oriented to the current trend and
+holds one; on a CHoCH flip we do `x.latPx := na` and reorient, so we start from
+nothing and must wait for a fresh correction.
+
+This is now the only confirmed engine divergence in the whole audit, and it has
+gone from one mention to two. It is still not implemented — it is a real change
+and it needs measuring — but it is no longer a single-sentence inference.
+
+It also refines the near statistic. "The last opposite pullback" (Chapter 10)
+most naturally means the latest pullback of the OPPOSITE DIRECTION, which is
+precisely what "Latest Bullish & Bearish" maintains. Our `pickOppPb` now takes
+the most recent GEOMETRICALLY eligible zone — the most recent one lying on the
+far side of the boundary. In our engine those coincide, because we only ever
+publish same-trend pullbacks. Under dual tracking they would not. So the
+pickOppPb fix is correct as far as our engine can express it, and would need
+revisiting if dual tracking is ever implemented.
+
+### [SRC] !! INTERNAL PULLBACKS NEST INSIDE EXTERNAL PULLBACKS !!
+
+> "In LIT, shows Internal Pullbacks nested inside visible External Pullbacks.
+> In SMC, shows confirmed pullbacks from the visible Internal and Deep Internal
+> structure depths."
+
+This closes the [GAP] that has been accumulating since Chapter 1 and was raised
+again in Chapters 2, 3 and 6 — how the child degree is fed.
+
+It is NOT fed by the parent's discarded inside bars, which was the worry each
+time "inside bar candles ... only form fractal and internal structures" came
+up. Internal pullbacks are nested INSIDE external pullbacks.
+
+That is exactly the v0.7 scoped hierarchy: a child context is owned by a parent
+PULLBACK, `intScope` opened by a confirmed Main pullback and `deepScope` by an
+Internal one. Our architecture is right, and the accumulated suspicion against
+it was wrong. Recorded so it stops being re-raised.
+
+Note also the LIT/SMC split in the tooltip: the "Internal and Deep Internal
+structure depths" phrasing belongs to the SMC model. In LIT, internal pullbacks
+are defined by nesting, not by a separate depth engine.
+
+### [SRC] "Color Inside Bars" is CHECKED
+
+Confirms the v0.7.16 default flip to ON was right, and that §58/§61 match the
+reference's actual profile on this one.
+
+### [INF] "All pullback zones use the full tracked range"
+
+Our `zone()` draws from `det.hitEdge` to `det.hitPx` — confirmation level to
+pivot. The full tracked range is `rngHi`..`rngLo`, which we maintain separately.
+
+For a bullish correction these are nearly the same object: the range high
+cannot exceed the confirmation level without confirming the correction, so the
+range high sits at or just under it. The difference is at most one wick, and
+under "Final swept level" it is zero.
+
+Not changed. Recorded as a sub-pixel question, and one that `pbEdge` already
+exposes both sides of.
+
+### [GAP] Default of "Show Internal Pullback" is ambiguous
+
+Unchecked in one capture, checked in the next — most likely toggled to surface
+the tooltip. Ours (`pbIntOn`) defaults on. No action.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
