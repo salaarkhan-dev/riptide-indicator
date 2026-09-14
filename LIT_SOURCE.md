@@ -1110,6 +1110,124 @@ is systematic, not sampling.
 
 ---
 
+## Chapter 11 — The Reference Indicator's Actual Settings Panel
+
+### [SRC] The settings, verbatim
+
+    [Market Structure Model]
+      Show Structure ....................... on     Model: LIT
+      Show Internal Structure .............. ON
+      Show Deep Internal Structure ......... ON
+      Show Premium / Equilibrium / Discount  off
+      Label Swing .......................... ON
+      Show Guidance ........................ off
+      Show LIT Statistics Table ............ ON
+
+    [Breakout Rules]
+      Breakout type for Pullbacks Detection  Shadow
+      Breakout type for IDM Level .......... Shadow
+      Breakout type for BOS Level .......... Body & Sweep Level
+      Breakout type for Choch Level ........ Body & Sweep Level
+      Active Hidden Shadow for Pullbacks ... DISABLED (greyed out)
+      Active Hidden Shadow for IDM ......... DISABLED (greyed out)
+      Active Hidden Shadow for BOS ......... ON
+      Active Hidden Shadow for Choch ....... ON
+
+Tooltips captured:
+
+> "LIT Pullback detection rule. Shadow confirms by wick; Body confirms by
+> close; Body & Sweep Level keeps the sweep route."
+
+> "Hidden Shadow for LIT Pullback detection ... Shadow mode is already
+> wick-based, so Hidden Shadow is inactive there."
+
+> "Enables the deepest tracked structure. It is available only when Internal
+> Structure is enabled."
+
+### !! THE BREAK-MODE HYPOTHESIS IS DEAD. I WAS WRONG. !!
+
+Chapters 4 and 7 built a case that our Main structure runs 1.55x hotter than
+the reference because our Pullback break mode defaults to Shadow, the loosest of
+the three, and that switching it to Body or Body & Sweep would cut the IDM race
+Total from 31 toward 20. It was stated as the leading explanation and as the
+next test to run.
+
+Their Pullback break mode IS Shadow. Identically ours. The hypothesis is
+refuted outright and the test is not worth running.
+
+What was wrong with the reasoning: Chapter 2 deferred a noise filter, Chapter 4
+described break modes, and I treated the second as the answer to the first
+because they fit. They may simply be different things, and the deferred filter
+may be something not yet in any material we have.
+
+### [SRC] Our defaults match theirs exactly — all eight of them
+
+Every break mode and every Hidden Shadow switch:
+
+    ours   mPB Shadow, mIDM Shadow, mBOS Body & Sweep, mCH Body & Sweep
+           hsPB false, hsIDM false, hsBOS true, hsCH true
+    theirs identical, all eight
+
+Master prompt §59 and §60 were right, and this is now source-verified rather
+than specified. Also confirms `Label Swing` (our `showSW`, default on) and the
+Guidance panel defaulting off.
+
+The greyed-out Hidden Shadow boxes for Pullback and IDM are a UI nicety we
+cannot reproduce — Pine cannot disable an input — but the BEHAVIOUR matches:
+`brkStep` gates on `b.useHS and b.mode != BRK_SHADOW`, so HS is inert under
+Shadow mode either way, and our `hsPB` tooltip already says so.
+
+### [SRC] Deep Internal only runs with Internal — confirmed
+
+> "It is available only when Internal Structure is enabled."
+
+Exactly our `runDeep = runInt and showDeep`. Confirmed.
+
+### ONE REAL SETTING DIVERGENCE WE INTRODUCED
+
+Their **Show Deep Internal Structure is ON**. We defaulted it OFF in v0.7.16,
+following master prompt §58 ("Show Deep Internal = false") and §81 ("no Deep by
+default").
+
+So the spec and the actual reference profile disagree, and we followed the
+spec. That is defensible for a clean first load, but it means our default chart
+is NOT the reference's chart. Anyone comparing the two by eye should turn Deep
+on first. The MD default stays unless asked otherwise — flagging it, not
+changing it.
+
+It should not affect a Main-depth statistic, since Main does not read Deep.
+
+### [GAP] Their statistics table has no depth selector
+
+"Show LIT Statistics Table" is a single checkbox. Ours has a
+Statistics / debug depth dropdown defaulting to Main. Theirs must be fixed to
+one depth, or pooled across depths, and the panel does not say which.
+
+If theirs pools Main + Internal + Deep and ours reports Main alone, the 31-vs-20
+comparison is not like-for-like at all — though the direction is wrong for that
+to be the explanation, since pooling would make THEIR number larger, not
+smaller.
+
+### WHAT IS ACTUALLY LEFT ON THE 31-vs-20
+
+With inside bars confirmed (Ch. 1), pivot-from-pullback confirmed (Ch. 2), the
+two-level tracker and its frozen confirmation level confirmed (Ch. 4), and now
+every break mode confirmed identical, the remaining suspects are narrow:
+
+  1. The outside-group case. In `detStep`, a group that makes a new impulse
+     extreme AND gives back the other side evaluates `started` first, so it
+     opens a correction. The source never covers a group breaking both sides,
+     so this is [INF] and it is one of the few remaining places our behaviour
+     is a choice rather than a transcription.
+  2. The deferred noise filter from Chapter 2, if it is genuinely a separate
+     mechanism rather than the break modes.
+  3. Whatever their statistics table actually cohorts over.
+
+No hypothesis is promoted to leading. The last one was promoted on a fit and it
+was wrong; the next one gets measured first.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
