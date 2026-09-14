@@ -648,6 +648,49 @@ legStart(Ctx x, float px, int bar, float h, float l, int hiBar, int loBar,
     x.legLoBar := loBar
     x.legLoT := loT
 
+// [SRC Ch.10] "price moves toward and reaches THE LAST OPPOSITE PULLBACK".
+//
+// WRONG READING, CORRECTED BY MEASUREMENT. V2 first read "opposite" as the
+// opposite-DIRECTION detector. That is a different quantity, and the numbers
+// caught it: CHoCH-near landed on the reference almost exactly (50.0/50.0
+// against 50.0/50.0 on 30m, 75.0% against 79.5% on 15m) while BOS-near sat far
+// too low (25.8-54.8% against 68-69%). The asymmetry is the tell.
+//
+// In a bearish structure the CHoCH is the UPPER boundary, so the
+// opposite-direction detector's pivots happen to lie below it - correct by
+// accident. The BOS is the LOWER boundary, and those same pivots lie below it
+// too, which is the WRONG side: price that fails at the BOS retraces UP.
+//
+// "Opposite" is geometric - the side AWAY from the boundary that was
+// approached - exactly as v1 had it. Among the pullbacks on that side, take
+// the most RECENTLY confirmed, and only from the CURRENT leg: a zone left
+// behind several legs ago is not "the last" pullback in any sense the
+// reference would recognise, and the race could only ever resolve as a break.
+// Leg-relative, never a distance threshold - §2's determinism rules out a
+// number, and every proximity band scored an order of magnitude worse than
+// raw touch when the calibration scan was rescored.
+considerPb(Lvl v, PB p, int legBar, float bestTop, float bestBot, int bestBar) =>
+    float outTop = bestTop
+    float outBot = bestBot
+    int outBar = bestBar
+    if p.live and not na(legBar) and p.confirmBar >= legBar
+        float top = math.max(p.pivot, p.edge)
+        float bot = math.min(p.pivot, p.edge)
+        bool eligible = v.b.dir > 0 ? top < v.px : bot > v.px
+        if eligible and (na(outBar) or p.confirmBar > outBar)
+            outTop := top
+            outBot := bot
+            outBar := p.confirmBar
+    [outTop, outBot, outBar]
+
+pickTarget(Ctx x, Lvl v) =>
+    float top = na
+    float bot = na
+    int bar = na
+    [t1, b1, r1] = considerPb(v, x.detBull.last, x.legBar, top, bot, bar)
+    [t2, b2, r2] = considerPb(v, x.detBear.last, x.legBar, t1, b1, r1)
+    [t2, b2]
+
 flag(Ctx x, bool bad, string why) =>
     if bad
         x.nInvariant += 1
@@ -984,25 +1027,19 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
             // The LAST opposite-direction pullback, snapshotted at arm time so
             // later migration cannot move the goalposts. Under P8 this is
             // literal; with P8 off it degrades to the active detector's last.
-            PBDet dOpp = pDual ? (up ? x.detBear : x.detBull) : dActive
-            // ...and it has to be a pullback from THIS leg. A zone left behind
-            // several legs ago is not "the last opposite pullback" in any sense
-            // the reference would recognise - price has since walked away from
-            // it, so the race can only ever resolve as a break. Leg-relative,
-            // not a distance threshold: §2's determinism rules out a number.
-            bool haveTgt = dOpp.last.live and not na(x.legBar) and
-                 dOpp.last.confirmBar >= x.legBar
-            if not x.stBosArmed and haveTgt and inStatsWindow(time) and
+            [bTop, bBot] = pickTarget(x, x.bos)
+            [cTop, cBot] = pickTarget(x, x.ch)
+            if not x.stBosArmed and not na(bTop) and inStatsWindow(time) and
                  (x.bos.b.dir > 0 ? above(h, x.bos.px) : below(l, x.bos.px))
                 x.stBosArmed := true
-                x.stBosTgtHi := math.max(dOpp.last.pivot, dOpp.last.edge)
-                x.stBosTgtLo := math.min(dOpp.last.pivot, dOpp.last.edge)
+                x.stBosTgtHi := bTop
+                x.stBosTgtLo := bBot
                 bosArmedNow := true
-            if not x.stChArmed and haveTgt and inStatsWindow(time) and
+            if not x.stChArmed and not na(cTop) and inStatsWindow(time) and
                  (x.ch.b.dir > 0 ? above(h, x.ch.px) : below(l, x.ch.px))
                 x.stChArmed := true
-                x.stChTgtHi := math.max(dOpp.last.pivot, dOpp.last.edge)
-                x.stChTgtLo := math.min(dOpp.last.pivot, dOpp.last.edge)
+                x.stChTgtHi := cTop
+                x.stChTgtLo := cBot
                 chArmedNow := true
 
         // ── BOS break: continuation. Never flips. ──────────────────────────
@@ -1390,22 +1427,19 @@ var table stat = table.new(position.bottom_right, 4, 13,
 // become inactive, as well as the percentage of cases in which the level was
 // genuinely broken." A level on Shadow mode cannot produce a candidate at all
 // and reads "HS not active" - exactly as the reference's own IDM rows do.
+// A level whose break mode is Shadow can never produce a Hidden Shadow
+// candidate, so its two rows carry no information. They are omitted rather
+// than printed as "HS not active" - the function returns the next free row so
+// the table closes up around them.
 hsRows(int r, string nm, Brk b, bool on, color mu, color cv, color gd,
      color bd) =>
-    table.cell(stat, 0, r, "HS " + nm + " break", text_color = mu,
-         text_size = size.normal)
-    table.cell(stat, 0, r + 1, "HS " + nm + " cancel", text_color = mu,
-         text_size = size.normal)
-    if not on
-        table.cell(stat, 1, r, "HS not active", text_color = bd,
+    int nextR = r
+    if on
+        nextR := r + 2
+        table.cell(stat, 0, r, "HS " + nm + " break", text_color = mu,
              text_size = size.normal)
-        table.cell(stat, 2, r, "", text_color = cv, text_size = size.normal)
-        table.cell(stat, 3, r, "", text_color = cv, text_size = size.normal)
-        table.cell(stat, 1, r + 1, "HS not active", text_color = bd,
+        table.cell(stat, 0, r + 1, "HS " + nm + " cancel", text_color = mu,
              text_size = size.normal)
-        table.cell(stat, 2, r + 1, "", text_color = cv, text_size = size.normal)
-        table.cell(stat, 3, r + 1, "", text_color = cv, text_size = size.normal)
-    else
         int tot = b.nHsArm
         int brk = b.nHsBrk
         table.cell(stat, 1, r, str.tostring(tot), text_color = cv,
@@ -1420,7 +1454,7 @@ hsRows(int r, string nm, Brk b, bool on, color mu, color cv, color gd,
              text_size = size.normal)
         table.cell(stat, 3, r + 1, pct(tot - brk, tot), text_color = bd,
              text_size = size.normal)
-    0
+    nextR
 
 nearRow(int r, string nm, int tot, int cnt, color mu, color cv, color tone) =>
     table.cell(stat, 0, r, nm, text_color = mu, text_size = size.normal)
@@ -1449,19 +1483,20 @@ if showStats and barstate.islast
          text_size = size.normal)
     nearRow(1, "IDM → BOS touch", st.stRaceTot, st.stRaceBos, muted, cVal, good)
     nearRow(2, "IDM → Choch touch", st.stRaceTot, st.stRaceCh, muted, cVal, bad)
-    hsRows(3, "IDM", st.idm.b, hsIDM and modeOf(mIDM) != BRK_SHADOW,
+    int rw = 3
+    rw := hsRows(rw, "IDM", st.idm.b, hsIDM and modeOf(mIDM) != BRK_SHADOW,
          muted, cVal, good, bad)
-    hsRows(5, "BOS", st.bos.b, hsBOS and modeOf(mBOS) != BRK_SHADOW,
+    rw := hsRows(rw, "BOS", st.bos.b, hsBOS and modeOf(mBOS) != BRK_SHADOW,
          muted, cVal, good, bad)
-    hsRows(7, "Choch", st.ch.b, hsCH and modeOf(mCH) != BRK_SHADOW,
+    rw := hsRows(rw, "Choch", st.ch.b, hsCH and modeOf(mCH) != BRK_SHADOW,
          muted, cVal, good, bad)
-    nearRow(9, "BOS near → Opp PB reach", st.stBosNearTot, st.stBosNearReach,
+    nearRow(rw, "BOS near → Opp PB reach", st.stBosNearTot, st.stBosNearReach,
          muted, cVal, good)
-    nearRow(10, "BOS near → BOS break", st.stBosNearTot, st.stBosNearBrk,
+    nearRow(rw + 1, "BOS near → BOS break", st.stBosNearTot, st.stBosNearBrk,
          muted, cVal, bad)
-    nearRow(11, "Choch near → Opp PB reach", st.stChNearTot, st.stChNearReach,
-         muted, cVal, good)
-    nearRow(12, "Choch near → Choch break", st.stChNearTot, st.stChNearBrk,
+    nearRow(rw + 2, "Choch near → Opp PB reach", st.stChNearTot,
+         st.stChNearReach, muted, cVal, good)
+    nearRow(rw + 3, "Choch near → Choch break", st.stChNearTot, st.stChNearBrk,
          muted, cVal, bad)
 
 // ── [SRC §63] Debug ─────────────────────────────────────────────────────────

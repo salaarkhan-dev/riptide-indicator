@@ -1576,3 +1576,40 @@ was. Not diagnosed. Next measurement, not the next theory.
 
 Zero invariant violations at both depths, which is the one unambiguously good
 line in the whole panel.
+
+
+V2 — NEAR TARGET CORRECTED BY MEASUREMENT (the asymmetry was the tell)
+---------------------------------------------------------------------
+
+After the stale-detector fix, ZEC all loaded bars, Main:
+
+                      reference 30m      V2 30m        V2 15m   (ref 15m)
+  BOS near → Opp PB    29 20 69.0%    42 23 54.8%   31  8 25.8%  (68.4%)
+  Choch near → Opp PB  14  7 50.0%    28 14 50.0%   48 36 75.0%  (79.5%)
+
+CHoCH-near landed on the reference almost exactly on BOTH timeframes - 50.0%
+against 50.0%, and 75.0% against 79.5%. BOS-near sat far too low on both. One
+row right and its mirror wrong is not sampling noise, it is a sign error.
+
+CAUSE. V2 read "the last OPPOSITE pullback" as the opposite-DIRECTION
+detector's last record. That is a different quantity from what the reference
+means, and the geometry exposes it:
+
+  bearish structure, CHoCH is the UPPER boundary
+    the opposite-direction detector's pivots lie BELOW it → correct, by accident
+  bearish structure, BOS is the LOWER boundary
+    those same pivots lie below it too → WRONG SIDE. Price that fails at the
+    BOS retraces UP, so the target has to be above it.
+
+"Opposite" is geometric - the side AWAY from the boundary approached - which is
+what v1 had and what v2 replaced with a worse reading. Restored, with two
+things v1 lacked: among eligible zones take the most RECENTLY confirmed (Ch.10
+says "the last"), and only from the CURRENT leg.
+
+Also: the two Hidden Shadow rows for a level on Shadow mode are now omitted
+rather than printed as "HS not active". They carry no information.
+
+STILL OPEN. BOS-near totals run about 1.45x the reference (42 against 29) while
+CHoCH-near runs 2x (28 against 14). The 15m and 30m readings disagree sharply
+on BOS-near (25.8% against 54.8%), which nothing in the model predicts. Not
+theorised about - next measurement.
