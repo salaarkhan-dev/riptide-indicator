@@ -1012,6 +1012,104 @@ sweep marker being debug-only in ours, and the possible multi-bar purple tint.
 
 ---
 
+## Chapter 10 — The Author's Own Annotated Statistics Table
+
+The single most useful document so far: the reference table with the author's
+definitions written beside it. Different chart and date from the ZEC 30m
+comparison, so it is a SECOND independent reading, not the same one.
+
+    Statistic                    Total  Count   Rate
+    IDM → BOS touch                 15     12   80.0%
+    IDM → Choch touch               15      3   20.0%
+    HS IDM break                        HS not active
+    HS IDM cancel                       HS not active
+    HS BOS break                    19     16   84.2%
+    HS BOS cancel                   19      3   15.8%
+    HS Choch break                   5      5  100.0%
+    HS Choch cancel                  5      0    0.0%
+    BOS near → Opp PB reach         23     16   69.6%
+    BOS near → BOS break            23      7   30.4%
+    Choch near → Opp PB reach       16     13   81.3%
+    Choch near → Choch break        16      3   18.8%
+
+### [SRC] Rows 1–2
+
+> "how often, after the IDM level was broken, the prediction was correct and
+> price moved toward the BOS level, eventually reaching it"
+
+> "the percentage of cases in which, after the IDM level was broken, price moved
+> toward and reached the Choch level"
+
+Matches our implementation: armed on the IDM break, resolved by first TOUCH of
+either boundary. The accompanying slide states the thesis behind it — after the
+liquidity grab at IDM, 70% continue to the Valid BOS and 30% reverse. Both
+observed tables sit near that (80/20 here, 65/35 on the ZEC chart).
+
+### [SRC] !! ROWS 3–6 ARE A STATISTIC WE DID NOT HAVE AT ALL !!
+
+> "Rows three to six of this table show, when Hidden Shadow is enabled, the
+> percentage of cases in which price returned back into the range after touching
+> the level, causing HS to become inactive, as well as the percentage of cases
+> in which the level was genuinely broken."
+
+Six rows, three level pairs: for IDM, BOS and CHoCH, how many Hidden Shadow
+candidates were GENUINE breaks versus CANCELLED. Our table simply omitted them.
+
+Note the reference's own IDM rows read "HS not active" — its IDM break mode is
+Shadow on those settings, and Shadow cannot produce an HS candidate. Same as our
+defaults (mIDM = Shadow, hsIDM = false), so ours will read the same.
+
+IMPLEMENTED THIS PASS. `Brk` gains `nHsArm` / `nHsBrk`, incremented inside
+`brkStep` at the arm site and at the resolution site, deliberately NOT reset by
+`arm()` so the tally spans every level that Brk has held. The table renders all
+six rows and prints "HS not active" where the mode is Shadow or the HS switch
+is off.
+
+This is a NEW COMPARISON SURFACE, which is what makes it valuable: a second
+independent measurement to check the engine against, on a part of it (Hidden
+Shadow) that is otherwise only verifiable by eye.
+
+### [SRC] !! ROWS 7–10 — "THE LAST OPPOSITE PULLBACK" !!
+
+> "when price approaches or touches the BOS or CHOCH levels but does not break
+> them, the percentage of cases in which price moves toward and reaches THE LAST
+> OPPOSITE PULLBACK"
+
+LAST. Most recent. We picked the NEAREST by price, which is a different
+pullback whenever an older zone happens to sit closer to the boundary than the
+newest one does.
+
+IMPLEMENTED THIS PASS. `pickOppPb` keeps the same geometric eligibility — the
+pullback must lie on the side away from the boundary approached — and now takes
+the most recently published eligible entry instead of the closest.
+
+Also note the arming language: "approaches or touches ... but does not break
+them". Touch, not a distance band, and explicitly a FAILED approach. That is
+what our arm does, and combined with Chapter 4's "A liquidity grab means that
+price touches a level, but does not actually break it" the proximity-band
+candidates in the calibration scan can be retired for good.
+
+### HONEST NOTE ON WHAT THIS WILL AND WILL NOT FIX
+
+The "last" change is correct because the source says so, not because it is
+predicted to close the gap — and it may well move the wrong way. The NEAREST
+pullback is by definition the easiest to reach, so switching to the LAST can
+only make the reach target the same or harder, which pushes the reach rate DOWN.
+Ours is already too low (50.0% and 33.3% against the reference's 69% and 50% on
+ZEC, and 69.6% / 81.3% here).
+
+So this is a correctness fix to a definition, and the split problem may survive
+it. If the reach rate drops further after this change, that is informative
+rather than a regression: it would mean the gap is not in which pullback is
+chosen, and the remaining suspects are the arm rule's one-race-in-flight guard
+and the pullback break mode from Chapter 4.
+
+Both readings of the reference agree the reach side should dominate — 69.6% and
+81.3% here, 69.0% and 50.0% on ZEC. Ours never exceeds 50%. Whatever is wrong
+is systematic, not sampling.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,

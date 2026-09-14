@@ -277,6 +277,13 @@ bool showNearScan = input.bool(false, "Near-rule calibration scan", group = gDbg
 // its own `time[1]` history buffer.
 int barMs = nz(time - time[1], 0)
 
+// Statistics cohorting. Declared here because the break engine counts Hidden
+// Shadow outcomes and needs it. Visible-chart cohorting keeps the sample to
+// events whose opportunity BEGINS inside the viewport.
+inStatsWindow(int t) =>
+    statsWindow == "All loaded bars" or
+     (t >= chart.left_visible_bar_time and t <= chart.right_visible_bar_time)
+
 // ═══════════════════════════ 2. TYPES ═══════════════════════════════════════
 // [SRC] One break engine, four users: pullback, IDM, BOS, CHoCH.
 type Brk
@@ -296,6 +303,11 @@ type Brk
     int sweeps = 0           // length of the current sweep chain
     int lastSweepBar = na
     float lastSweepPx = na
+    // [SRC] Hidden Shadow outcome counters for the reference statistics table.
+    // arm() deliberately does NOT reset these - one Brk lives for the whole
+    // context, so the tally spans every level that Brk has ever held.
+    int nHsArm = 0
+    int nHsBrk = 0
 
 // [SRC] Persistent mother-range normalizer. IMPORTANT: each structure depth
 // owns one. Main suppression must not globally delete candles that can form
@@ -536,6 +548,8 @@ brkStep(Brk b, float o, float h, float l, float c) =>
                 b.pend := false
                 if up ? c > b.hsLvl : c < b.hsLvl
                     done := true
+                    if inStatsWindow(time)
+                        b.nHsBrk += 1
                 else
                     // [INF] After a rejection Body & Sweep keeps the level it
                     // had already migrated to rather than resetting to base.
@@ -564,6 +578,8 @@ brkStep(Brk b, float o, float h, float l, float c) =>
                 raw := up ? c > b.act : c < b.act
             if raw
                 if b.useHS and b.mode != BRK_SHADOW
+                    if inStatsWindow(time)
+                        b.nHsArm += 1
                     b.pend := true
                     b.hsLvl := b.mode == BRK_SWEEP ? b.act : b.base
                     b.hsHi := h
@@ -795,25 +811,28 @@ flag(Ctx x, bool ok, string name) =>
 // A race armed left of the viewport is not allowed to resolve inside the viewport
 // and inflate the visible sample. Once armed inside the viewport, it may resolve
 // later; this matches first-passage cohort semantics.
-inStatsWindow(int t) =>
-    statsWindow == "All loaded bars" or
-     (t >= chart.left_visible_bar_time and t <= chart.right_visible_bar_time)
-
 nearDist(Lvl v, float h, float l) =>
     v.b.dir == 1 ? math.max(v.px - h, 0.0) : math.max(l - v.px, 0.0)
 
 nearTouch(Lvl v, float h, float l) =>
     v.b.dir == 1 ? h >= v.px : l <= v.px
 
-// v0.7.15: choose the nearest previously-published pullback in the direction
-// AWAY from the structural boundary that was approached.
-// Upper boundary (break dir +1) -> choose nearest PB below it.
-// Lower boundary (break dir -1) -> choose nearest PB above it.
+// [SRC] "the percentage of cases in which price moves toward and reaches THE
+// LAST OPPOSITE PULLBACK" - the reference author's own annotation on this
+// table. LAST, meaning most recent. v0.7.15 through v0.7.18 picked the NEAREST
+// by price instead, which is a different pullback whenever an older zone
+// happens to sit closer to the boundary than the newest one does.
+//
+// Eligibility is unchanged and still geometric: the pullback must lie on the
+// side AWAY from the boundary that was approached, so an upper boundary
+// (break dir +1) takes a pullback below it and a lower boundary one above.
+// Among those, take the most recently published rather than the closest.
+// statPbTops/statPbBots are appended in publication order, so the last
+// eligible entry scanning forward is the most recent.
 // Calibration only; never mutates structure.
 pickOppPb(Ctx x, Lvl v) =>
     float outTop = na
     float outBot = na
-    float best = na
     int n = array.size(x.statPbTops)
     if n > 0
         for j = 0 to n - 1
@@ -821,11 +840,8 @@ pickOppPb(Ctx x, Lvl v) =>
             float pb = array.get(x.statPbBots, j)
             bool eligible = v.b.dir == 1 ? pt < v.px : pb > v.px
             if eligible
-                float d = v.b.dir == 1 ? v.px - pt : pb - v.px
-                if na(best) or d < best
-                    best := d
-                    outTop := pt
-                    outBot := pb
+                outTop := pt
+                outBot := pb
     [outTop, outBot]
 
 // Research-only scan of possible meanings of the reference word "near".
@@ -1728,9 +1744,38 @@ if showDbg and barstate.islast
 pct(int n, int d) =>
     d > 0 ? str.tostring(100.0 * n / d, "#.0") + "%" : "—"
 
-var table stat = table.new(position.bottom_right, 4, 7,
+var table stat = table.new(position.bottom_right, 4, 13,
      bgcolor = color.new(chart.bg_color, 8), border_width = 1,
      border_color = color.new(#b0b3b8, 45))
+
+// [SRC] HIDDEN SHADOW OUTCOME ROWS. The reference table carries six rows we
+// did not: for each of IDM, BOS and CHoCH, how often an HS candidate was a
+// GENUINE break versus how often price "returned back into the range after
+// touching the level, causing HS to become inactive" - the author's words.
+// A level whose break mode is Shadow, or whose HS switch is off, cannot
+// produce a candidate at all and reads "HS not active", exactly as the
+// reference's IDM rows do on its own default settings.
+hsRows(int r, string nm, Brk b, bool on, color muted, color cVal,
+     color good, color bad) =>
+    table.cell(stat, 0, r, "HS " + nm + " break", text_color = muted, text_size = size.normal)
+    table.cell(stat, 0, r + 1, "HS " + nm + " cancel", text_color = muted, text_size = size.normal)
+    if not on
+        table.cell(stat, 1, r, "HS not active", text_color = bad, text_size = size.normal)
+        table.cell(stat, 2, r, "", text_color = cVal, text_size = size.normal)
+        table.cell(stat, 3, r, "", text_color = cVal, text_size = size.normal)
+        table.cell(stat, 1, r + 1, "HS not active", text_color = bad, text_size = size.normal)
+        table.cell(stat, 2, r + 1, "", text_color = cVal, text_size = size.normal)
+        table.cell(stat, 3, r + 1, "", text_color = cVal, text_size = size.normal)
+    else
+        int tot = b.nHsArm
+        int brk = b.nHsBrk
+        table.cell(stat, 1, r, str.tostring(tot), text_color = cVal, text_size = size.normal)
+        table.cell(stat, 2, r, str.tostring(brk), text_color = cVal, text_size = size.normal)
+        table.cell(stat, 3, r, pct(brk, tot), text_color = good, text_size = size.normal)
+        table.cell(stat, 1, r + 1, str.tostring(tot), text_color = cVal, text_size = size.normal)
+        table.cell(stat, 2, r + 1, str.tostring(tot - brk), text_color = cVal, text_size = size.normal)
+        table.cell(stat, 3, r + 1, pct(tot - brk, tot), text_color = bad, text_size = size.normal)
+    0
 if showStats and barstate.islast
     Ctx st = statsDepth == "Main" ? mainC : statsDepth == "Internal" ? intC : deepC
     color hdr = color.new(#d7e5f2, 0)
@@ -1752,25 +1797,32 @@ if showStats and barstate.islast
     table.cell(stat, 2, 2, str.tostring(st.statIdmToChoch), text_color = cVal, text_size = size.normal)
     table.cell(stat, 3, 2, pct(st.statIdmToChoch, st.statIdmRaceTotal), text_color = bad, text_size = size.normal)
 
-    table.cell(stat, 0, 3, "BOS near → Opp PB reach", text_color = muted, text_size = size.normal)
-    table.cell(stat, 1, 3, st.statBosNearTotal > 0 ? str.tostring(st.statBosNearTotal) : "—", text_color = cVal, text_size = size.normal)
-    table.cell(stat, 2, 3, st.statBosNearTotal > 0 ? str.tostring(st.statBosNearOppPb) : "—", text_color = cVal, text_size = size.normal)
-    table.cell(stat, 3, 3, st.statBosNearTotal > 0 ? pct(st.statBosNearOppPb, st.statBosNearTotal) : "—", text_color = good, text_size = size.normal)
+    hsRows(3, "IDM", st.idm.b, hsIDM and modeOf(mIDM) != BRK_SHADOW,
+         muted, cVal, good, bad)
+    hsRows(5, "BOS", st.bos.b, hsBOS and modeOf(mBOS) != BRK_SHADOW,
+         muted, cVal, good, bad)
+    hsRows(7, "Choch", st.ch.b, hsCH and modeOf(mCH) != BRK_SHADOW,
+         muted, cVal, good, bad)
 
-    table.cell(stat, 0, 4, "BOS near → BOS break", text_color = muted, text_size = size.normal)
-    table.cell(stat, 1, 4, st.statBosNearTotal > 0 ? str.tostring(st.statBosNearTotal) : "—", text_color = cVal, text_size = size.normal)
-    table.cell(stat, 2, 4, st.statBosNearTotal > 0 ? str.tostring(st.statBosNearBreak) : "—", text_color = cVal, text_size = size.normal)
-    table.cell(stat, 3, 4, st.statBosNearTotal > 0 ? pct(st.statBosNearBreak, st.statBosNearTotal) : "—", text_color = bad, text_size = size.normal)
+    table.cell(stat, 0, 9, "BOS near → Opp PB reach", text_color = muted, text_size = size.normal)
+    table.cell(stat, 1, 9, st.statBosNearTotal > 0 ? str.tostring(st.statBosNearTotal) : "—", text_color = cVal, text_size = size.normal)
+    table.cell(stat, 2, 9, st.statBosNearTotal > 0 ? str.tostring(st.statBosNearOppPb) : "—", text_color = cVal, text_size = size.normal)
+    table.cell(stat, 3, 9, st.statBosNearTotal > 0 ? pct(st.statBosNearOppPb, st.statBosNearTotal) : "—", text_color = good, text_size = size.normal)
 
-    table.cell(stat, 0, 5, "Choch near → Opp PB reach", text_color = muted, text_size = size.normal)
-    table.cell(stat, 1, 5, st.statChNearTotal > 0 ? str.tostring(st.statChNearTotal) : "—", text_color = cVal, text_size = size.normal)
-    table.cell(stat, 2, 5, st.statChNearTotal > 0 ? str.tostring(st.statChNearOppPb) : "—", text_color = cVal, text_size = size.normal)
-    table.cell(stat, 3, 5, st.statChNearTotal > 0 ? pct(st.statChNearOppPb, st.statChNearTotal) : "—", text_color = good, text_size = size.normal)
+    table.cell(stat, 0, 10, "BOS near → BOS break", text_color = muted, text_size = size.normal)
+    table.cell(stat, 1, 10, st.statBosNearTotal > 0 ? str.tostring(st.statBosNearTotal) : "—", text_color = cVal, text_size = size.normal)
+    table.cell(stat, 2, 10, st.statBosNearTotal > 0 ? str.tostring(st.statBosNearBreak) : "—", text_color = cVal, text_size = size.normal)
+    table.cell(stat, 3, 10, st.statBosNearTotal > 0 ? pct(st.statBosNearBreak, st.statBosNearTotal) : "—", text_color = bad, text_size = size.normal)
 
-    table.cell(stat, 0, 6, "Choch near → Choch break", text_color = muted, text_size = size.normal)
-    table.cell(stat, 1, 6, st.statChNearTotal > 0 ? str.tostring(st.statChNearTotal) : "—", text_color = cVal, text_size = size.normal)
-    table.cell(stat, 2, 6, st.statChNearTotal > 0 ? str.tostring(st.statChNearBreak) : "—", text_color = cVal, text_size = size.normal)
-    table.cell(stat, 3, 6, st.statChNearTotal > 0 ? pct(st.statChNearBreak, st.statChNearTotal) : "—", text_color = bad, text_size = size.normal)
+    table.cell(stat, 0, 11, "Choch near → Opp PB reach", text_color = muted, text_size = size.normal)
+    table.cell(stat, 1, 11, st.statChNearTotal > 0 ? str.tostring(st.statChNearTotal) : "—", text_color = cVal, text_size = size.normal)
+    table.cell(stat, 2, 11, st.statChNearTotal > 0 ? str.tostring(st.statChNearOppPb) : "—", text_color = cVal, text_size = size.normal)
+    table.cell(stat, 3, 11, st.statChNearTotal > 0 ? pct(st.statChNearOppPb, st.statChNearTotal) : "—", text_color = good, text_size = size.normal)
+
+    table.cell(stat, 0, 12, "Choch near → Choch break", text_color = muted, text_size = size.normal)
+    table.cell(stat, 1, 12, st.statChNearTotal > 0 ? str.tostring(st.statChNearTotal) : "—", text_color = cVal, text_size = size.normal)
+    table.cell(stat, 2, 12, st.statChNearTotal > 0 ? str.tostring(st.statChNearBreak) : "—", text_color = cVal, text_size = size.normal)
+    table.cell(stat, 3, 12, st.statChNearTotal > 0 ? pct(st.statChNearBreak, st.statChNearTotal) : "—", text_color = bad, text_size = size.normal)
 
 // Temporary near-rule calibration table. This is deliberately separate from
 // the reference-shaped result table so candidate research cannot be mistaken
