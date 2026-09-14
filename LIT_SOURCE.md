@@ -1396,6 +1396,315 @@ as reference targets, so those numbers are NOT recorded as targets here.
 
 ---
 
+# PART TWO — THE TRADING SIDE
+
+Chapters 14-20 come from the full Index Algo description and the POI/FVG
+slides. Part One was structure; this is what the system does with it.
+
+## Chapter 14 — FVG is the distance between two PULLBACKS
+
+### [SRC] A pullback is a transactional node that can be consumed
+
+> "Each Pullback can represent a transactional node where meaningful orders may
+> still remain active, or where they may already have been consumed by later
+> price action. If a new Pullback penetrates into the previous Pullback, the
+> orders associated with the earlier area are considered to have been consumed,
+> and that area loses its validity."
+
+### [SRC] !! FVG IS NOT THE THREE-CANDLE WICK GAP !!
+
+> "However, if there is a price gap between two Pullbacks and the market moves
+> from one transactional node to the next through a sharp displacement, the
+> orders from the previous Pullback may not have been fully consumed... This
+> price gap and displacement are referred to as an FVG."
+
+> "Contrary to the common simplified interpretation, an FVG is not merely the
+> distance between the wicks of three consecutive candles."
+
+The slide states it twice, once with a red ✗ over the three-candle version:
+**"FVG is the Distance between two consecutive pullbacks"** and **"So FVG is not
+necessarily the distance between the shadows in three consecutive candles."**
+
+The same slide shows an inside bar invalidating a would-be three-candle FVG and
+labels the move "Not Pullback". So FVG inherits the whole Part One machinery -
+inside bars, valid pullbacks, pivots - rather than being a candle pattern.
+
+This matters enormously for implementation: every generic SMC library computes
+the three-candle version. That is the wrong object here.
+
+## Chapter 15 — POI, and the four zone types
+
+### [SRC] Decisional
+
+> "When IDM is broken, Pullbacks that remain structurally valid and contain an
+> FVG on the appropriate side may be drawn as Decisional POIs. In a bullish
+> structure, these zones have a Demand nature. In a bearish structure, they have
+> a Supply nature."
+
+### [SRC] Extreme
+
+> "An Extreme zone is derived from the last defensive point of the current
+> market structure. After BOS is broken and Choch is formed, the final valid
+> high or low of the prior structure can be treated as one of the most sensitive
+> structural reference points. If the candle range associated with that level
+> remains valid and price has not yet penetrated into it, that range can define
+> the Extreme zone."
+
+### [SRC] Breaker Block and Flip both require a JUMP
+
+> "If the break of the Extreme zone occurs with a Jump, or sharp price
+> displacement, the Breaker Block becomes valid."
+
+> "If, after a Choch break, the market fails to react properly to the Breaker
+> Block, price may extend toward the Flip zone... Flip formation is also linked
+> to a Jump-based break of the Extreme zone."
+
+### [SRC] Trade only WITH the trend, and zones expire structurally
+
+> "We only enter trades in the direction of the prevailing trend... when price
+> reaches Demand zones, the market must be in an uptrend, and only Long entry
+> opportunities are evaluated."
+
+> "if the BOS level is broken before price reaches these zones, a Change of
+> Character level will then form above them... the market has already shifted
+> into a downtrend before reaching the Decisional zones. As a result, these
+> Demand zones lose their validity. For this reason, once the BOS level is
+> broken, these zones are no longer extended."
+
+### [SRC] POI RANGE — Internal pullbacks refine it, automatically
+
+> "If the range is based on Order Flow, the focus is on the broader
+> transactional node... If the range is based on an Order Block, the zone becomes
+> more precise and compact, focusing on a more internal component of the
+> structure, such as the pivot candle or internal Pullbacks."
+
+> "Index Algo handles this automatically. If an External Pullback contains a
+> valid Internal Pullback, the POI range is defined using the Internal Pullbacks.
+> If the External Pullback is not extensive and does not contain a valid internal
+> structure, the POI range is derived from the External Pullback itself."
+
+**This is what the Internal degree is FOR.** Ch.12 said internal pullbacks nest
+inside external ones; this says why it matters — they tighten the entry zone.
+Our P7b work feeds directly into this and is no longer a display question.
+
+### [SRC] Mitigation — the arbitrary 50% is rejected by name
+
+> "The tool does not rely on a generic 50% threshold as a rough approximation.
+> Instead, it uses the selected structural logic to determine how penetration
+> into Order Flow or Order Block areas should be interpreted."
+
+The slide is blunter: **"It is incorrect to assume or set an arbitrary and
+subjective level such as 50%."** Same objection as the fixed-N pivot rejection
+in Ch.2 and the multi-timeframe rejection in Ch.3. Consistent philosophy, and
+it forbids the obvious shortcut.
+
+### [SRC] Liquidity Grab Levels — the level-based entry family
+
+> "These are not box-shaped zones. Instead, they are key structural levels...
+> IDM Level, BOS Level, Choch Level."
+
+## Chapter 16 — SCOB entry confirmation
+
+> "Reaching a valid zone or level is not enough on its own to justify an entry...
+> Index Algo does not merely check whether 'price has reached the zone.' It also
+> evaluates 'how the market behaves after reaching that zone.'"
+
+SCOB = Single Candle Order Block. Three modes, mirroring the structural break
+modes: Shadow With SCOB / Body With SCOB / Level Sweep and Body With SCOB.
+
+> "if SCOB confirmation is not issued, no trade entry is opened, even if the
+> zone itself remains valid."
+
+SCOB Level Behavior: **Move With Deeper Candle** (the reference shifts to each
+new deeper candle) or **Keep First Penetration Candle** (the first valid
+penetration stays the reference).
+
+[GAP] The exact geometry of the SCOB level is never stated - only how it
+BEHAVES and how it is broken. This is the single biggest hole on the trading
+side and it cannot be closed by inference.
+
+## Chapter 17 — Stop loss
+
+> "the SL may be placed closer to or farther from the entry price - for example,
+> below the relevant Block Order itself or below its associated Order Flow."
+
+LowRisk = farther (beyond the Order Flow). HighRisk = closer (the Block Order).
+
+> "Because the SL break and Stop Loss activation are evaluated on a body-break
+> basis, and because the Hidden Shadow logic is also incorporated during position
+> management, there is no need to apply an additional tolerance buffer."
+
+Hidden Shadow is reused for SL management - the same synthetic-candle test that
+guards structural breaks guards the stop.
+
+Secondary Loss Cap: an optional second maximum loss as a % of balance, for when
+a body-break or Hidden Shadow exit would exceed the risk calculated at entry.
+
+## Chapter 18 — Active Price, and the obstacle check
+
+> "Active Price is determined based on the Entry Price, Stop Loss, minimum
+> required Reward/Risk ratio, and trading commission. It represents the level
+> price must reach for the setup to satisfy the required trade-quality threshold.
+> Once price reaches this level, the Trailing Stop logic becomes active."
+
+### [SRC] !! THE OBSTACLE CHECK — a setup can be REJECTED after confirmation !!
+
+> "Before entry, Index Algo also checks whether the path from Entry Price to
+> Active Price is clear of meaningful structural obstacles. These may include:
+> BOS levels, Opposing Pullbacks, Zones that have changed nature after a break,
+> Other relevant broken structural levels. If Active Price is invalid or a
+> structural obstacle blocks the path toward it, the setup is rejected even if
+> SCOB has been confirmed."
+
+A confirmed entry can still be thrown away because the road to its own target is
+blocked. Nothing in master prompt §72-§75 contains this idea, and it is the kind
+of filter that changes a distribution rather than shaving it.
+
+## Chapter 19 — Position sizing
+
+Balance (evolving, not the initial capital), entry, stop distance, max
+acceptable loss as % of balance, and commission. Leverage derived where
+applicable. Nothing exotic; the notable part is that commission is in the
+sizing AND in the Active Price calculation.
+
+## Chapter 20 — Exit is a TRAILING STOP, not a fixed target
+
+> "For trade management, Index Algo relies on a Trailing Stop logic rather than
+> fixed take-profit targets. This approach allows a trade to retain room for
+> further expansion as long as price continues to move in line with the confirmed
+> scenario."
+
+The trailing stop arms when price reaches Active Price. Before that, the initial
+stop is the only exit.
+
+**This contradicts master prompt §74**, which names BOS as "the natural
+structural target". The reference does not target BOS - it uses BOS-directional
+logic to justify the trade and then trails. §74 is our own inference and the
+source overrides it.
+
+[GAP] What the trailing stop actually trails is never stated - structure,
+a fraction of the move, or something else. Second-biggest hole after SCOB.
+
+---
+
+## Chapter 21 — SCOB geometry, Liquidity Grabs and SL placement, from the slides
+
+These three slide sets close the two [GAP]s flagged in Ch.16 and Ch.17.
+
+### [SRC] !! SCOB GEOMETRY — GAP CLOSED !!
+
+Three panels, same setup, differing only in what confirms:
+
+    Mode 1  SCOB With Shadow        a red candle, the SCOB level drawn at its
+                                    top, then a green candle whose HIGH breaks
+                                    it. Annotated "High/Low Candle".
+    Mode 2  SCOB With Body          same level, confirmation only when a later
+                                    candle CLOSES beyond it. "Close Candle".
+    Mode 3  SCOB With Body & Sweep  the level RATCHETS upward, each abandoned
+                                    level marked with the same ✗ glyph used for
+                                    swept structural levels, until a candle
+                                    closes beyond the latest one.
+
+So SCOB is the Single Candle Order Block: **the last opposite-direction candle
+before the reaction**, its level taken at the boundary facing the intended
+move, and then broken under the same three-mode engine the structure already
+uses. Mode 3 is `brkStep` in BRK_SWEEP exactly - same ratchet, same ✗.
+
+That is a large simplification for implementation: SCOB needs no new break
+engine, only a new level source.
+
+### [SRC] !! STOP LOSS PLACEMENT — GAP CLOSED !!
+
+The long-position slide draws a wide **OrderFlow** box containing a narrow
+**Order Block** box, with two stop levels and two labelled outcomes:
+
+    SL on Order Block  →  HIGH RISK   (closer to entry, below the OB's low)
+    SL on Pullback     →  LOW RISK    (farther, below the whole pullback/
+                                       OrderFlow low)
+
+Exactly the Ch.17 text, now with the geometry attached. Mirrors for shorts.
+
+### [SRC] Liquidity Grab entries — three levels, all gated by SCOB
+
+    IDM Level    price dips THROUGH the IDM (the grab), "Check SCOB", then up.
+    BOS Level    price pokes ABOVE the BOS (the grab), "Check SCOB", then DOWN.
+    CHoCH Level  price dips through the CHoCH, "Check SCOB", then up.
+
+Every one of the three routes through SCOB. The grab alone never enters.
+
+### [GAP] The BOS-grab slide points AGAINST the prevailing trend
+
+Ch.15 says plainly: *"We only enter trades in the direction of the prevailing
+trend."* But the BOS slide shows a bullish structure, price sweeping above the
+BOS, and a red arrow DOWN.
+
+Two readings, and the source does not choose between them:
+
+  1. Liquidity Grab Levels are a SEPARATE entry family from POI zones, and the
+     with-trend rule was stated inside the POI section only.
+  2. A failed BOS sweep is itself the signal that the leg is done.
+
+Reading 2 is the one our own instrumentation already measures: "BOS near → Opp
+PB reach" runs 69% in the reference and 55% in ours - price that touches the
+BOS and fails mostly retraces rather than continuing. That is the same event.
+
+Recorded as a genuine conflict, not resolved. It decides whether the strategy
+has one direction rule or two, which is not a detail.
+
+### [GAP] What the trailing stop trails is still unstated
+
+Nothing in these slides addresses it. Ch.20's gap stands and is now the only
+large hole left on the trading side.
+
+---
+
+## Chapter 22 — Active Price rejection, and the SL decision, drawn
+
+### [SRC] The obstacle check, with the obstacle types NAMED on the chart
+
+The "Active Price Set — Long Position" slide draws a long from a Decisional
+zone and then **rejects it with a red 🚫**. Reading the level stack downward:
+
+    BOS Level
+    Valid opposite pullback        (a purple box just under the BOS)
+    Breakout Zone
+    Active Price          ┐
+    Breakout Zone         │  the shaded Entry → Active Price corridor
+    Entry Point           ┘
+    Stop Loss
+
+The rejection is the point of the slide: a **Breakout Zone sits inside the
+Entry → Active Price corridor**, so the setup is thrown away even though the
+zone and the entry are otherwise valid.
+
+It also names the obstacle types visually, matching the text list: **BOS Level**,
+**Valid opposite pullback**, **Breakout Zone** (a level that changed nature after
+being broken). "Breakout Zone" is a term the text never used - it appears twice
+on the slide at two different prices, so broken levels leave behind a ZONE, not
+just a line.
+
+This is the filter with no counterpart anywhere in master prompt §72-§75, and
+it is the one most likely to change a distribution rather than shave it: it
+removes setups that are structurally fine but have no room to pay.
+
+### [SRC] The stop-loss decision, drawn as a question
+
+The "Stop Loss Management" slide shows a Decisional zone, a SCOB, an Entry
+Point, and the SL at the zone's lower boundary. Price rallies, collapses back,
+and two candidates are both labelled **"Exit Point"** one bar apart - with
+**"Close or Hold the Position"** and a visibly unsure trader beside them.
+
+That is the Hidden Shadow decision transplanted onto the stop: the first candle
+breaks the SL with its body, the next one is the resolver, and the synthetic
+candle decides whether the break was real. Same machinery as Ch.5, applied to
+risk instead of structure - which is exactly what Ch.17 said in words.
+
+Nothing new mechanically. It does confirm that the two exit candidates are
+ADJACENT candles, so the SL resolver is the immediate next non-inside bar, as
+in the structural case.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
