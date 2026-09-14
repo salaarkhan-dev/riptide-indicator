@@ -711,3 +711,146 @@ External Pullback there, H1; if not, H2.
 ## 8. No behaviour changed
 
 Neither hypothesis is implemented. Arm A is untouched and remains canonical.
+
+---
+
+# v0.3.5 — H1 vs H2 discrimination against the ZEC 15m reference
+
+Visual forensics. **No behaviour changed.** Arm A bit-identical.
+
+## 0. A correction to my own framing first
+
+The pathological lock I have been dissecting for three rounds — bars 1934–9273
+— maps to **06 Jun → 21 Aug**. The screenshot is **08 Sep → 14 Sep**, which is
+bars 10958–11518. Same phenomenon, different instance. Everything measured
+about bar 1934 stands, but it was never the box on your chart.
+
+Here is what our engine does in the window you are actually looking at:
+
+```
+09 Sep 05:30  MAIN PB 221 bars · IDM published
+09 Sep 07:45  MAIN PB   8 bars · IDM published
+09 Sep 08:30  MAIN PB   1 bar  · IDM published
+09 Sep 11:15  MAIN PB   7 bars · IDM published
+09 Sep 15:15  MAIN PB   1 bar  · IDM published
+09 Sep 15:30  IDM taken
+09 Sep 15:45  MAIN PB   1 bar
+10 Sep 23:15  MAIN PB 118 bars · TREND FLIP
+11 Sep 02:30  MAIN PB  10 bars · IDM published
+11 Sep 04:00  MAIN PB   4 bars · IDM published
+11 Sep 04:15  IDM taken
+      ... then nothing for ~250 bars, to the end of data
+final Main state: bear, phase LOCK
+```
+
+Main cycles perfectly well on 9 Sep — six corrections, five inducements. It
+then **goes silent from 11 Sep 04:15 onward** and holds one open correction to
+the right edge. That silence is the giant box.
+
+## A. Structural-boundary lifetime vs external-PB lifetime
+
+**CONFIRMED, high confidence.** The reference's Main `Choch` at ≈1295 is drawn
+as one unbroken line from the HH on 9 Sep all the way to the right edge on
+14 Sep — five days — while beneath it I count **eight to ten separate
+pullback boxes**. The boundary outlives the corrections by an order of
+magnitude.
+
+## B. Visible reference external PB cycles under live old boundaries
+
+Ordered ledger, approximate, from the image:
+
+| # | when | dir | approx band | ownership | conf |
+|---|---|---|---|---|---|
+| REF-1 | 8 Sep 06:00 → 9 Sep 11:00 | bull | 1110–1260 | MAIN_EXTERNAL | HIGH |
+| REF-2 | 8 Sep 18:00 → 9 Sep 06:00 | bull | 1140–1185 | INTERNAL (nested in REF-1) | MEDIUM |
+| REF-3 | 9 Sep 18:00 → 20:00 | bear | 1255–1295 | MAIN_EXTERNAL | HIGH |
+| REF-4 | 10 Sep 00:00 → 04:00 | bear | 1230–1265 | MAIN_EXTERNAL | MEDIUM |
+| REF-5 | 10 Sep 06:00 → 12:00 | bear | 1225–1260 | MAIN_EXTERNAL | MEDIUM |
+| REF-6 | 10 Sep 12:00 → 18:00 | bear | 1225–1250 | INTERNAL (nested, darker) | MEDIUM |
+| REF-7 | 11 Sep 00:00 → 06:00 | bear | 1115–1160 | MAIN_EXTERNAL | MEDIUM |
+| REF-8 | 12 Sep 12:00 → 18:00 | bear | 1150–1175 | MAIN_EXTERNAL | MEDIUM |
+| REF-9 | 13 Sep 06:00 → 12:00 | bear | 1140–1165 | MAIN_EXTERNAL | MEDIUM |
+| REF-10 | 13 Sep 12:00 → 14 Sep | bear | 1100–1130 | MAIN_EXTERNAL | MEDIUM |
+
+**Roughly 8 external cycles under one unchanged Main CHoCH.** Our engine
+produces **one** open box over REF-7 through REF-10.
+
+## C / E. H2 — FALSIFIED
+
+The discriminator is REF-3 → REF-6, the run from 9 Sep 18:00 to 10 Sep 18:00.
+Four successive external bearish corrections form there, and **no internal
+structural label appears anywhere in that region**. Every `iIDM`, `iBOS`,
+`iChoch`, `iiDM`, `iiChoch` in the image sits from ≈11 Sep 18:00 rightward.
+
+If a completed Internal cycle were required to promote each new external
+pullback, those four boxes could not exist. They do.
+
+Confidence MEDIUM-HIGH rather than certain: absence of a drawn label is weaker
+evidence than presence of one, and Internal drawing could in principle be
+suppressed in that region. But combined with D below it is decisive enough.
+
+## D. H1 — SUPPORTED
+
+The reference shows **three separate unprefixed `IDM` levels** — ≈1205 on
+9 Sep, ≈1070 on 11 Sep, ≈1105 on 14 Sep — while exactly one Main `Choch` at
+1295 persists across all of them. Main's inducement cycles at least three
+times under one unchanged Main structural boundary, with Main external
+pullbacks cycling alongside.
+
+That is H1 stated exactly: order flow has its own lifecycle underneath a
+persistent structure.
+
+## F. Promotion trigger
+
+**None is needed, and none is supported.** Order flow cycles on its own
+pullback confirmations. Of the §13 candidates, **OF-1** (a confirmed
+opposite-direction pullback re-orients the flow) is the only one required to
+explain the geometry; OF-3/4/5/6 all presuppose the child dependency that
+REF-3→REF-6 falsifies. I cannot cleanly separate OF-1 from **OF-2** (the flow
+tracker's opposite side being taken) from one screenshot — they coincide on
+every transition visible here.
+
+## G. Depth shift — SUPPORTED
+
+```
+reference        Main structure  →  Main ORDER FLOW  →  Internal  →  Deep
+riptide today    Main structure  →  (missing)        →  Internal  →  Deep
+```
+
+With the order-flow layer absent, Internal is doing the job the reference's
+Main order flow does, and Deep is doing Internal's. That is exactly the
+`iBOS` ↔ `iiBOS` mismatch, and it is one level in size. Our Internal has taken
+84 inducements over this data while our Main took 2 in the screenshot window —
+the work is being done, just one degree too deep.
+
+## H. Where IDM belongs
+
+**OrderFlowState, not StructureState.** Evidence in D: three Main IDM levels
+under one Main CHoCH. BOS and CHoCH belong to structure; IDM and the external
+pullback belong to flow.
+
+## I. Minimal architecture — DESIGN ONLY, not implemented
+
+```
+MainStructureState      trend, valid high/low, BOS, CHoCH     (unchanged)
+MainOrderFlowState      flow direction, external PB, pivot, IDM
+InternalStructureState  iBOS, iCHoCH
+InternalOrderFlowState  internal PB, iIDM
+DeepStructureState      iiBOS, iiCHoCH
+```
+
+Minimum state for OrderFlowState, per §11 — it is NOT another BOS/CHoCH
+machine: a direction, an impulse tracker pair, one correction in flight, the
+last confirmed pivot. It re-orients on OF-1/OF-2 and never consults the
+structural phase. `PH_BOUNDARY_LOCK` continues to gate IDM *publication* only.
+
+## J. Open questions before any of this is built
+
+1. **OF-1 vs OF-2** need a window where they disagree.
+2. **The calibration fixture may be wrong by ~4x.** The reference stat table
+   reads `IDM → BOS touch  Total 24`. If that total is window-scoped it means
+   ≈24 taken inducements in ≈600 bars — about 80 per 2000 — where I have been
+   calibrating Main against 23 per 2000 from `research/lit.py`. Worth
+   confirming whether that table counts the visible window or all loaded bars
+   before any target is set against it.
+3. Box ownership above is MEDIUM confidence; several boxes could be Internal.
