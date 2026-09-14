@@ -102,10 +102,14 @@ bool swAllDepths = input.bool(false, "  ...at every depth", group = gShow,
      tooltip = "Off: Main only, which is the readable default. On: Internal and Deep mark their extremes too.")
 bool showInside = input.bool(true, "Tint inside bars", group = gShow,
      tooltip = "[SRC] The reference ships this ON. A subtle neutral grey marking the candles the engine treats as noise inside the active mother range.")
-int histMain = input.int(8, "History", minval = 1, maxval = 40, group = gShow,
-     inline = "h", tooltip = "Retired BOS/CHoCH segments kept per depth. TradingView caps a script at 500 lines and 500 labels. IDMs are not kept - they are deleted on migration.")
-int histInt = input.int(6, "", minval = 1, maxval = 40, group = gShow, inline = "h")
-int histDeep = input.int(3, "", minval = 1, maxval = 40, group = gShow, inline = "h")
+int histMain = input.int(20, "History: BOS/CHoCH", minval = 1, maxval = 60,
+     group = gShow, inline = "h",
+     tooltip = "Retired BOS and CHoCH segments kept per depth (Main / Internal / Deep). TradingView caps a script at 500 lines and 500 labels.\n\nTaken IDMs have their OWN budget below - sharing one with BOS/CHoCH churn evicted every IDM within a few structural events, which is why the chart came back with almost no IDM history.")
+int histInt = input.int(12, "", minval = 1, maxval = 60, group = gShow, inline = "h")
+int histDeep = input.int(6, "", minval = 1, maxval = 60, group = gShow, inline = "h")
+int histIdm = input.int(25, "History: taken IDMs", minval = 1, maxval = 80,
+     group = gShow,
+     tooltip = "Taken inducements kept per depth. A taken IDM is the inducement actually being grabbed, which is the whole point of the model, so it gets its own budget rather than competing with retired BOS/CHoCH segments.")
 
 // ── PULLBACK ZONES ──────────────────────────────────────────────────────────
 // [SRC] Chapter 12 - the reference's own three display options, by name.
@@ -299,8 +303,10 @@ type Ctx
     Lvl idm
     Lvl bos
     Lvl ch
-    array<line> junkL
+    array<line> junkL        // retired BOS / CHoCH segments
     array<label> junkB
+    array<line> idmL         // TAKEN IDM segments - their own history, because
+    array<label> idmB        // sharing one with BOS/CHoCH evicted them instantly
     array<box> zones
     array<label> marks
     label weakDot = na
@@ -605,7 +611,8 @@ newCtx(int d) =>
          boot = PBDet.new(dir = DIR_BEAR, b = Brk.new(), last = PB.new()),
          idm = Lvl.new(b = Brk.new()), bos = Lvl.new(b = Brk.new()),
          ch = Lvl.new(b = Brk.new()), junkL = array.new<line>(),
-         junkB = array.new<label>(), zones = array.new<box>(),
+         junkB = array.new<label>(), idmL = array.new<line>(),
+         idmB = array.new<label>(), zones = array.new<box>(),
          marks = array.new<label>())
 
 setLvl(Lvl v, float px, int bar, int barT, int i, int d, int mode, bool useHS) =>
@@ -720,7 +727,20 @@ dropIdm(Ctx x) =>
 // was grabbed. Capped by the depth's history limit like any other retired
 // level.
 keepIdm(Ctx x, int cap) =>
-    retire(x, x.idm.ln, x.idm.lb, cap)
+    if not na(x.idm.ln)
+        // Both ends land on real candles: x1 is the pivot bar that made the
+        // level, x2 is the bar that took it.
+        line.set_x2(x.idm.ln, time)
+        if not na(x.idm.lb)
+            int lx1 = line.get_x1(x.idm.ln)
+            label.set_x(x.idm.lb, lx1 + int((time - lx1) * 0.50))
+        array.push(x.idmL, x.idm.ln)
+        if array.size(x.idmL) > cap
+            line.delete(array.shift(x.idmL))
+    if not na(x.idm.lb)
+        array.push(x.idmB, x.idm.lb)
+        if array.size(x.idmB) > cap
+            label.delete(array.shift(x.idmB))
     x.idm.ln := na
     x.idm.lb := na
     0
@@ -776,6 +796,16 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
     bool justSeeded = false
 
     if reset
+        // ENGINE BUG IN THE FIRST BUILD: the child normalizer survived the
+        // scope reset, so a new Internal scope inherited the mother range of
+        // the previous one and spent its first bars classifying real candles as
+        // inside bars of a range that belonged to different price action. The
+        // symptom was Internal accumulating thousands of inside bars and never
+        // building structure. A scope starts clean.
+        x.norm.hi := na
+        x.norm.lo := na
+        x.norm.op := na
+        x.norm.cl := na
         x.dir := DIR_NONE
         x.phase := PH_DISCOVER
         clearLvl(x.idm)
@@ -892,7 +922,7 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
         if not moved and ready(x.idm, i) and brkStep(x.idm.b, o, h, l, c)
             int was = x.dir
             clearLvl(x.idm)
-            keepIdm(x, cap)          // TAKEN - freeze it, do not delete it
+            keepIdm(x, histIdm)      // TAKEN - freeze it, do not delete it
             setLvl(x.bos, up ? x.legHi : x.legLo, up ? x.legHiBar : x.legLoBar,
                  up ? x.legHiT : x.legLoT, i, up ? 1 : -1, cBos, hsBOS)
             x.nBos += 1
