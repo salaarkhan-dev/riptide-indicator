@@ -854,3 +854,93 @@ structural phase. `PH_BOUNDARY_LOCK` continues to gate IDM *publication* only.
    confirming whether that table counts the visible window or all loaded bars
    before any target is set against it.
 3. Box ownership above is MEDIUM confidence; several boxes could be Internal.
+
+---
+
+# v0.3.6 — MainOrderFlowState experiment. Both minimum models REJECT.
+
+`research/lit_of.py`, `research/lit_of.out`. **No Pine written, no canonical
+change.** The reason for that is below and it is deliberate.
+
+## What was built
+
+`OrderFlow` — owns flow direction, the impulse tracker, the live external
+pullback, its pivot and the IDM. It holds no reference to a `Ctx`, so
+**OF-INV-1 and OF-INV-2 hold by construction**: it cannot mutate structural
+direction, BOS or CHoCH even by accident. OF-INV-3 (every IDM originates from a
+confirmed external PB pivot), OF-INV-4 (confirmed PBs are appended and never
+touched) and OF-INV-5 (boundary lock gates publication, never the flow) are
+enforced in the code path. The canonical engine is read, never written.
+
+The brief settles the architecture but not **what orients the flow**, and §8
+permits exactly two readings. Both were built and measured:
+
+- **OF-A** — the flow carries the structural direction; only the *cycle* is
+  decoupled.
+- **OF-B** — OF-1 taken literally: a completed opposite-direction pullback
+  re-orients the flow.
+
+## Result — ZEC 15m, fixture window 08 Sep → 13 Sep
+
+```
+CONTROL          9 external PB in window   open PB at right edge   255 bars
+
+OF-A             8 external PB in window   18.2 per 2000 bars
+                 IDM create 19  migrate 34  taken 19   flow changes 6
+                 PB duration median 3  p90 21  p99 221  max 666
+                 longest silent interval 7422 bars   SILENT TAIL 256 bars
+                 §20: REJECT - leaves the problem region silent
+
+OF-B             6 external PB in window   64.9 per 2000 bars
+                 IDM create 24  migrate 41  taken 24   flow changes 99
+                 PB duration median 2  p90 25  p99 962  max 2224
+                 longest silent interval 1104 bars   SILENT TAIL 401 bars
+                 §20: REJECT - raw swing noise, not a structural scale
+```
+
+**Neither fixes the defect.** Every external pullback either model produces in
+the window lands on 9 Sep or early 11 Sep — the same events the control already
+had. Across **11 Sep 04:00 → 13 Sep 20:00**, the exact stretch where the giant
+box sits and where the reference draws roughly three boxes, both models produce
+**nothing**.
+
+## The result that matters most
+
+**OF-B's silent tail is 401 bars — longer than the control's 255.** Taking
+OF-1 literally makes the problem region *worse* while simultaneously producing
+raw-swing noise elsewhere at 64.9 events per 2000 bars.
+
+The mechanism is visible in the numbers: 99 flow direction changes. In a chop
+the flow flips constantly, and every flip abandons the correction in flight
+and reseeds, so nothing ever reaches confirmation. **OF-1 as the flow
+orientation rule is falsified**, not merely unsupported.
+
+## Why no Pine was written
+
+§1 asks for the feature flag with a bit-identity proof, and §21 asks for the
+Pine build. I have not written it. The variant failed the acceptance gate
+before it was worth 400 lines of Pine I cannot compile here, and §20 explicitly
+authorises rejection. Writing the flag would have produced a switch whose ON
+state is measurably worse than OFF in the region under investigation.
+
+The architecture itself is not what failed — the reference evidence for
+splitting structure from flow is unchanged and still strong. What failed is
+both permitted readings of the orientation rule.
+
+## Recommendation: NEED MORE REFERENCE
+
+Specifically, on one question: **what re-orients Main order flow?** It is
+neither "follow the structure" (OF-A, too sticky — it never turns in the chop)
+nor "turn on any opposite confirmation" (OF-B, far too eager — it turns 99
+times and completes nothing). The reference sits between them and this fixture
+cannot locate it.
+
+**The screenshot region that would settle it is 11 Sep 04:00 → 13 Sep 20:00.**
+The reference draws roughly three external boxes there (REF-8/9/10). For each,
+what immediately precedes it — a new low, a failed rally, an internal event, a
+particular candle relation? That is a zoom on one region of a chart you already
+have, and it is worth more than any further instrumentation on our side.
+
+Until then nothing is adopted, Arm A is canonical and untouched, and the two
+rejected models stay in `research/lit_of.py` so the next candidate can be
+measured against them rather than argued about.
