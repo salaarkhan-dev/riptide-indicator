@@ -1,0 +1,90 @@
+RIPTIDE LIT - 2x2 FACTORIAL ON THE TWO UNDOCUMENTED RULES
+8 symbols, Min15, 120 days. Arm A is the untouched documented engine.
+
+====================================================================================================
+STRUCTURAL POPULATION - Main depth, all symbols
+====================================================================================================
+  arm                PB    IDM  taken   BOS  CHoCH  flips  locks  latent used
+  A control        1574    567    278   198    198     95    270          122
+  B sweep only     1848    749    359   252    252    128    351          156
+  C bos only       1730    673    329   236    236    114    321          125
+  D both           2077    896    433   304    304    158    425          165
+
+====================================================================================================
+INVARIANTS AND AMBIGUITY - gate 1, any non-zero is disqualifying
+====================================================================================================
+  A control     all clean                                            ambiguous bars excluded 0
+  B sweep only  all clean                                            ambiguous bars excluded 0
+  C bos only    all clean                                            ambiguous bars excluded 0
+  D both        all clean                                            ambiguous bars excluded 0
+
+====================================================================================================
+REFERENCE FIXTURE - ZEC 15m, deepest degree
+====================================================================================================
+  the reference shows 23 taken inducements per ~2000 bars splitting
+  56.5/43.5. gate 5 rejects an arm that explodes the population.
+  arm             deep taken  per 2000   vs ref  BOS-first  main PB  main IDM
+  A control              170      29.5    1.28x      62.9%      106        54
+  B sweep only           205      35.6    1.55x      55.1%      114        60
+  C bos only             196      34.0    1.48x      64.3%      108        54
+  D both                 229      39.8    1.73x      58.8%      116        60
+
+====================================================================================================
+BOS LOCK OUTCOMES - Main
+====================================================================================================
+  A control     n  278   broke  71%   abandoned  27%   open at end   2%   bars-to-break median   56 p99  1476
+  B sweep only  n  359   broke  70%   abandoned  28%   open at end   2%   bars-to-break median   51 p99  1020
+  C bos only    n  329   broke  72%   abandoned  26%   open at end   2%   bars-to-break median   44 p99  1445
+  D both        n  433   broke  70%   abandoned  29%   open at end   1%   bars-to-break median   41 p99   962
+
+====================================================================================================
+COUNTERFACTUAL REPLAY ON THE CONTROL'S WORST LOCKS
+====================================================================================================
+  for each pathological lock found by Arm A, when would each rule
+  FIRST have resolved it? nothing is acted on - shadow trackers only.
+
+  ZEC_USDT  lock from bar 27   dir bear   BOS ctrl 497.30   BOS seg 497.30   CHoCH 515.48
+      A control      resolves bar     98 (+   71 bars) via CHoCH
+      B sweep only   resolves bar     46 (+   19 bars) via CHoCH
+      C bos only     resolves bar     98 (+   71 bars) via CHoCH
+      D both         resolves bar     46 (+   19 bars) via CHoCH
+
+  ZEC_USDT  lock from bar 569   dir bull   BOS ctrl 690.00   BOS seg 690.00   CHoCH 578.02
+      A control      resolves bar    986 (+  417 bars) via CHoCH
+      B sweep only   resolves bar    975 (+  406 bars) via CHoCH
+      C bos only     resolves bar    986 (+  417 bars) via CHoCH
+      D both         resolves bar    975 (+  406 bars) via CHoCH
+
+  ZEC_USDT  lock from bar 1660   dir bull   BOS ctrl 644.48   BOS seg 635.92   CHoCH 527.00
+      A control      resolves bar   1796 (+  136 bars) via CHoCH
+      B sweep only   resolves bar   1796 (+  136 bars) via CHoCH
+      C bos only     resolves bar   1796 (+  136 bars) via CHoCH
+      D both         resolves bar   1796 (+  136 bars) via CHoCH
+
+  ZEC_USDT  lock from bar 1934   dir bear   BOS ctrl 250.00   BOS seg 250.00   CHoCH 644.48
+      A control      survives the window
+      B sweep only   survives the window
+      C bos only     survives the window
+      D both         survives the window
+
+  ZEC_USDT  lock from bar 9411   dir bull   BOS ctrl 859.43   BOS seg 856.13   CHoCH 730.61
+      A control      resolves bar  10541 (+ 1130 bars) via BOS
+      B sweep only   resolves bar   9496 (+   85 bars) via BOS
+      C bos only     resolves bar  10541 (+ 1130 bars) via BOS
+      D both         resolves bar   9496 (+   85 bars) via BOS
+
+  ZEC_USDT  lock from bar 11116   dir bull   BOS ctrl 1296.37   BOS seg 1295.03   CHoCH 1125.14
+      A control      resolves bar  11243 (+  127 bars) via CHoCH
+      B sweep only   resolves bar  11242 (+  126 bars) via CHoCH
+      C bos only     resolves bar  11243 (+  127 bars) via CHoCH
+      D both         resolves bar  11242 (+  126 bars) via CHoCH
+
+====================================================================================================
+SWEEP BEHAVIOUR - how far the threshold walks
+====================================================================================================
+  drift is the active level's distance from its base when the level
+  was retired. a ratchet that never resets is what walks it away.
+  A control     final-state drift% median   0.0  max   2.23   sweep chain max 6
+  B sweep only  final-state drift% median   0.0  max    0.0   sweep chain max 0
+  C bos only    final-state drift% median   0.0  max   2.23   sweep chain max 6
+  D both        final-state drift% median   0.0  max    0.0   sweep chain max 0

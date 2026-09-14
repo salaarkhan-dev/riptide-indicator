@@ -62,6 +62,25 @@ M_PB, M_IDM, M_BOS, M_CH = BRK_SHADOW, BRK_SHADOW, BRK_SWEEP, BRK_SWEEP
 HS_PB, HS_IDM, HS_BOS, HS_CH = False, False, True, True
 
 
+class Cfg:
+    """EXPERIMENTAL switches. Both default OFF, so the untouched engine is
+    the canonical documented control and stays bit-identical to what has
+    already been measured. Neither rule is stated by the reference."""
+
+    sweep_reset = False   # EXPERIMENTAL: a close back on the original side of
+    #                       baseLevel returns activeLevel to baseLevel and
+    #                       clears the sweep chain. Tests whether repeated
+    #                       failed probes should make a level permanently
+    #                       harder to break once price has returned through it.
+    segment_bos = False   # EXPERIMENTAL: BOS is the extreme from the impulse
+    #                       segment that carries the active IDM - the tracker
+    #                       reset that followed the pullback which became that
+    #                       IDM - rather than from the whole structural leg.
+
+
+CFG = Cfg()
+
+
 # ═════════════════════════ BREAK ENGINE ═════════════════════════════════════
 @dataclass
 class Brk:
@@ -79,12 +98,17 @@ class Brk:
     hsMomLo: float = None
     swept: bool = False     # a sweep happened on this bar
     shadow: bool = False    # Hidden Shadow rejected a break on this bar
+    sweeps: int = 0         # length of the current sweep chain
+    reset: bool = False     # the experimental reset fired on this bar
 
 
 def arm(b, lvl, d, mode, useHS):
+    # A replaced level always gets a FRESH tracker - a migrated sweep
+    # threshold is never inherited.
     b.base = b.act = lvl
     b.dir, b.mode, b.useHS = d, mode, useHS
-    b.pend = b.swept = b.shadow = False
+    b.pend = b.swept = b.shadow = b.reset = False
+    b.sweeps = 0
     b.hsLvl = None
 
 
@@ -96,7 +120,7 @@ def disarm(b):
 def brk_step(b, o, h, l, c):
     """One bar. True only on the bar the break is CONFIRMED."""
     done = False
-    b.swept = b.shadow = False
+    b.swept = b.shadow = b.reset = False
     if b.base is None:
         return False
     up = b.dir > 0
@@ -119,12 +143,23 @@ def brk_step(b, o, h, l, c):
         elif b.mode == BRK_BODY:
             raw = (c > b.base) if up else (c < b.base)
         else:
+            # [EXPERIMENTAL - CFG.sweep_reset] Price closing back on the
+            # original, non-breakout side of baseLevel cancels the sweep chain
+            # and returns the threshold to baseLevel. The owning level is NOT
+            # retired; only its sweep-confirmation threshold resets.
+            if CFG.sweep_reset and b.act != b.base:
+                if (c < b.base) if up else (c > b.base):
+                    b.act = b.base
+                    b.sweeps = 0
+                    b.reset = True
             # [SRC] A wick through that closes back inside has SWEPT. The
             # threshold moves to that wick; the old level is no longer enough.
             if up and h > b.act and c <= b.act:
                 b.act, b.swept = h, True
+                b.sweeps += 1
             elif not up and l < b.act and c >= b.act:
                 b.act, b.swept = l, True
+                b.sweeps += 1
             raw = (c > b.act) if up else (c < b.act)
         if raw:
             if b.useHS and b.mode != BRK_SHADOW:
@@ -317,6 +352,11 @@ class Ctx:
     idm: Lvl = field(default_factory=Lvl)
     bos: Lvl = field(default_factory=Lvl)
     ch: Lvl = field(default_factory=Lvl)
+    segBar: int = None      # tracker reset after the PB that became the IDM
+    segHi: float = None
+    segHiBar: int = None
+    segLo: float = None
+    segLoBar: int = None
     latPx: float = None
     latBar: int = None
     racing: bool = False
@@ -392,6 +432,11 @@ def ctx_step(x, resetMe, real, i, o, h, l, c, hiBar, loBar):
         x.legHi, x.legHiBar = h, hiBar
     if x.legLo is None or l < x.legLo:
         x.legLo, x.legLoBar = l, loBar
+    if x.segBar is not None:
+        if x.segHi is None or h > x.segHi:
+            x.segHi, x.segHiBar = h, hiBar
+        if x.segLo is None or l < x.segLo:
+            x.segLo, x.segLoBar = l, loBar
     if x.phase in (PH_SEEK, PH_LOCK):
         if x.phHi is None or h > x.phHi:
             x.phHi, x.phHiBar = h, hiBar
@@ -409,6 +454,11 @@ def ctx_step(x, resetMe, real, i, o, h, l, c, hiBar, loBar):
             legWas = (x.legBar, x.legPx)
             x.idm.set(px, bar, i, -1 if x.dir == DIR_BULL else 1, M_IDM, HS_IDM)
             x.phase = PH_TRACK
+            # The impulse segment carrying this IDM starts where the tracker
+            # reset - the bar this correction confirmed on.
+            x.segBar = i
+            x.segHi, x.segHiBar = h, hiBar
+            x.segLo, x.segLoBar = l, loBar
             x.lvlLog.append(("IDM", round(px, 10), bar))
             check(x, (x.legBar, x.legPx) == legWas, "I7 leg moved with IDM")
         else:
@@ -421,16 +471,27 @@ def ctx_step(x, resetMe, real, i, o, h, l, c, hiBar, loBar):
     if x.idm.ready(i) and brk_step(x.idm.b, o, h, l, c):
         was = x.dir
         x.idm.clear()
-        x.bos.set(x.legHi if x.dir == DIR_BULL else x.legLo,
-                  x.legHiBar if x.dir == DIR_BULL else x.legLoBar, i,
-                  1 if x.dir == DIR_BULL else -1, M_BOS, HS_BOS)
+        # [SRC control] the extreme of the whole structural leg.
+        # [EXPERIMENTAL - CFG.segment_bos] the extreme of the impulse segment
+        # carrying this IDM instead. Nothing else differs between the arms.
+        useSeg = CFG.segment_bos and x.segBar is not None
+        bosPx = (x.segHi if x.dir == DIR_BULL else x.segLo) if useSeg else \
+                (x.legHi if x.dir == DIR_BULL else x.legLo)
+        bosBar = (x.segHiBar if x.dir == DIR_BULL else x.segLoBar) if useSeg \
+            else (x.legHiBar if x.dir == DIR_BULL else x.legLoBar)
+        x.bos.set(bosPx, bosBar, i, 1 if x.dir == DIR_BULL else -1,
+                  M_BOS, HS_BOS)
         x.phHi, x.phHiBar = h, i
         x.phLo, x.phLoBar = l, i
         x.phase = PH_LOCK if x.ch.on else PH_SEEK
         x.racing = x.ch.on
         x.ev["idm_break"] += 1
         x.ev["enter_lock" if x.phase == PH_LOCK else "seek_bos"] += 1
-        x.bosLog.append([abs(x.bos.px - c) / c, i, None])
+        altSeg = (x.segHi if x.dir == DIR_BULL else x.segLo) \
+            if x.segBar is not None else None
+        altLeg = x.legHi if x.dir == DIR_BULL else x.legLo
+        x.bosLog.append([abs(x.bos.px - c) / c, i, None, altLeg, altSeg,
+                         x.ch.px if x.ch.on else None, x.dir, x.phase])
         x.lvlLog.append(("BOS", round(x.bos.px, 10), x.bos.bar))
         moved = True
         check(x, x.dir == was, "I2 IDM break flipped direction")
@@ -530,6 +591,7 @@ def engine(cs):
         x.det.reorient(DIR_BULL, cs[0].h, cs[0].l)
         x.boot.reorient(DIR_BEAR, cs[0].h, cs[0].l)
     resetInt = resetDeep = False
+    groups = []
     for i, k in enumerate(cs):
         o, h, l, c = k.o, k.h, k.l, k.c
         # MEASURED, AND IT SETTLES THE ARCHITECTURE: the inside-bar
@@ -548,13 +610,14 @@ def engine(cs):
         # own direction. The mirroring test below is what checks it.
         g1 = deep.norm.feed(o, h, l, c, i, i)
         if g1:
+            groups.append((i, g1[0], g1[1], g1[2], g1[3]))
             gi, gh, gl, gc, ghb, glb = g1
             rDeep = ctx_step(deep, resetDeep, True, i, gi, gh, gl, gc, ghb, glb)
             rInt = ctx_step(inter, resetInt, True, i, gi, gh, gl, gc, ghb, glb)
             rMain = ctx_step(main, False, True, i, gi, gh, gl, gc, ghb, glb)
             resetInt, resetDeep = rMain, rInt
             del rDeep
-    return main, inter, deep
+    return main, inter, deep, groups
 
 
 # ═════════════════════════ CALIBRATION REPORT ═══════════════════════════════
@@ -579,7 +642,7 @@ async def main():
           f"{'taken':>7}{'BOS':>6}{'CHoCH':>7}{'flip':>6}"
           f"{'taken/2k':>10}{'invariant':>11}")
     for s, k in cs.items():
-        m, it, dp = engine(k)
+        m, it, dp, _g = engine(k)
         res[s] = (m, it, dp)
         n = len(k)
         realN = dp.norm.nEmit

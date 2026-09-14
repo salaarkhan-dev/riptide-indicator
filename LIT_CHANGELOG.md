@@ -394,3 +394,111 @@ adopted.
 
 Distributions to report before and after, per §9, with no target value:
 pullback duration and lock duration, median / p90 / p95 / p99 / max.
+
+---
+
+# v0.3.2 — the 2x2 factorial. Verdict: keep Arm A.
+
+`research/lit_exp.py`, `research/lit_exp.out`. 8 symbols, Min15, 120 days.
+Arm A is the untouched engine and is bit-identical to everything measured
+before. Nothing else differs between arms.
+
+## Gate 1 — invariants
+
+All four arms: **all clean**, zero ambiguous bars. Nothing disqualified here.
+
+## Gate 5 — event population, against the reference fixture
+
+```
+arm             deep taken  per 2000   vs ref  BOS-first  main PB  main IDM
+A control              170      29.5    1.28x      62.9%      106        54
+B sweep only           205      35.6    1.55x      55.1%      114        60
+C bos only             196      34.0    1.48x      64.3%      108        54
+D both                 229      39.8    1.73x      58.8%      116        60
+```
+
+**Every experimental arm moves further from the reference count.** A is closest
+at 1.28x; D is 1.73x with 58% more taken inducements than A.
+
+One point for B: its first-passage split, **55.1%**, is the closest any arm gets
+to the reference's 56.5% — A is 62.9%. That is a real mark in B's favour and it
+is the only one.
+
+## Gate 4 — the counterfactual replay, and it is decisive
+
+```
+ZEC lock from bar 1934   dir bear   BOS ctrl 250.00   BOS seg 250.00   CHoCH 644.48
+    A control      survives the window
+    B sweep only   survives the window
+    C bos only     survives the window
+    D both         survives the window
+```
+
+**No arm resolves the lock that motivated the whole experiment.** Both rules
+fail gate 4 on the case they were designed for.
+
+B does help elsewhere, materially:
+
+```
+ZEC lock from bar 9411   A resolves +1130 bars via BOS
+                         B resolves   +85 bars via BOS
+ZEC lock from bar   27   A resolves   +71 bars      B  +19 bars
+```
+
+and it eliminates threshold drift outright (max drift 2.23% -> 0.0%, sweep
+chain max 6 -> 0). C is close to inert: the segment extreme equals the leg
+extreme in almost every lock observed (250/250, 497.30/497.30, 690/690,
+859.43/856.13), so the rule rarely changes the level it was meant to change.
+
+## Why the sweep-reset rule cannot fire where it is needed
+
+Isolating the 644.48 CHoCH from bar 1934 onward:
+
+```
+after bar 1934: 6306 analytical bars, max HIGH 1296.37, max CLOSE 1285.56
+closes above the 644.48 base: 1390
+
+ratchet + HS   (Arm A)        breaks at 9273 (+7339)   sweeps 2   HS rejections 1
+reset   + HS   (Arm B)        breaks at 9273 (+7339)   sweeps 2   HS rejections 1
+ratchet, no HS  EXPERIMENTAL  breaks at 9269 (+7335)   sweeps 1   HS rejections 0
+reset,   no HS  EXPERIMENTAL  breaks at 9269 (+7335)   sweeps 1   HS rejections 0
+```
+
+Price closed above the base **1,390 times** and the level still did not break
+for 7,339 bars. The cause is a **single unbounded ratchet jump**: one sweep on a
+bar with a very large high walks the threshold from 644 to near the top of the
+subsequent rally, and nothing brings it back.
+
+The proposed reset is specified to fire when price closes back on the ORIGINAL
+side of baseLevel. In a sustained move past the level price never returns
+there, **so the reset cannot fire in exactly the situation that motivated it**.
+That is a property of the rule as specified, not of this implementation.
+
+Hidden Shadow is not the blocker either: disabling it moves the break four
+bars, from 9273 to 9269.
+
+## Verdict
+
+Keep **Arm A**, the documented control. Neither experimental rule passes the
+decision hierarchy: both fail gate 4 on the motivating lock and all four
+experimental configurations fail gate 5. Arm B is not adopted, but it is worth
+keeping on the shelf - it is the only arm that improves the first-passage match
+and it demonstrably fixes the milder locks.
+
+The switches stay in the engine, default OFF, so any arm is one flag away.
+
+## The sharper hypothesis this produced
+
+The ratchet's defect is not that it lacks a reset - it is that **one sweep can
+move the threshold an unbounded distance**. `activeLevel = high` accepts any
+excursion, however large, as "the level that must now be body-broken". A
+bounded formulation - the furthest failed wick within the retest that produced
+it, rather than any subsequent high - would be a different rule and is NOT
+implemented or tested here. It is recorded as the next candidate, and it needs
+reference examples before it is worth building.
+
+## Regression case, kept
+
+PB#64, ZEC 15m bars 1870..9273, ends by REORIENTATION on a trend flip rather
+than by confirmation. Still true in all four arms. Any future rule must explain
+why it resolves differently, not merely shorten the box.
