@@ -65,6 +65,10 @@ string pReseed = input.string("Resolver group", "Tracker re-seed after confirm",
 bool pEqBreak = input.bool(false, "Exact equality counts as a break",
      group = gPol,
      tooltip = "[P4] A high or low exactly equal to a level. Master prompt §11 says equality is NOT a break, which is the default. The source defines both 'inside' and 'broken' with strict inequality and so never resolves the tie. Round numbers make it less rare than it sounds.")
+string pChild = input.string("Continuous, raw candles", "Child structure feed",
+     group = gPol,
+     options = ["Continuous, raw candles", "Scoped to parent pullback (v1)"],
+     tooltip = "[P7b] What Internal and Deep actually read, and when they are allowed to exist.\n\nScoped to parent pullback (v1): a child runs its OWN normalizer over raw candles only while its owning parent pullback holds the scope, and restarts each time. It is drawn only while scoped. Faithful to 'nested inside', but a scope lasts a handful of bars, so the child rarely survives long enough to reach BOS or CHoCH.\n\nContinuous, raw candles: Internal reads RAW candles with NO normalizer - exactly the granularity Main throws away - and runs without interruption. This is the other reading of chapter 1's 'inside bar candles only form fractal and internal structures', and it is the only feed that makes Internal genuinely FINER than Main rather than identical to it. Deep stays owned by a confirmed Internal pullback, because there is no third granularity on one timeframe and ownership is what makes it deeper.")
 bool pDual = input.bool(true, "Track both pullback directions",
      group = gPol,
      tooltip = "[P8] [SRC] The one confirmed divergence from the reference, with two independent witnesses.\n\nChapter 3: 'First, we check whether there was already a bearish pullback before the change of character got broken.' Chapter 12: the display option is literally 'Show Latest Bullish & Bearish' - you cannot draw both unless you hold both.\n\nOn: a pullback detector runs in EACH direction at every depth. Only the one matching the structural direction may publish an IDM or open a child scope; the other is observed so it is ready the moment the trend flips.\n\nOff reproduces v1 for parity testing.")
@@ -1150,7 +1154,30 @@ if mOn
         intScope.active := false
         deepScope.active := false
 
-if runInt and intScope.active and engineOk
+bool childCont = pChild == "Continuous, raw candles"
+
+// [P7b] CONTINUOUS: Internal reads RAW candles with no normalizer at all -
+// precisely the granularity Main discards - and is never reset. This is the
+// only feed that makes Internal genuinely finer than Main: running a second
+// normalizer over the same stream is idempotent and would reproduce Main's own
+// groups exactly, which is the measurement that closed that route earlier in
+// this project.
+if runInt and childCont and engineOk
+    bool eInt = ctxStep(intC, false, DIR_NONE, bar_index, open, high, low,
+         close, bar_index, bar_index, time, time, histInt)
+    PBDet iDet = intC.dir == DIR_BULL ? intC.detBull : intC.detBear
+    zone(intC, iDet, zOn and pbIntOn, 80, 74, zCap)
+    trimZones(intC)
+    if iDet.hit and runDeep
+        deepScope.active := true
+        deepScope.id += 1
+        deepScope.fromT := iDet.last.startT
+        deepScope.confirmT := iDet.last.confirmT
+        resetDeep := true
+    if eInt and runDeep
+        deepScope.active := false
+
+if runInt and not childCont and intScope.active and engineOk
     [iOn, iO, iH, iL, iC, iHiBar, iLoBar, iHiT, iLoT, iInside, iBoth] =
          normStep(intC.norm, open, high, low, close, bar_index, time, true)
     if iOn
@@ -1169,7 +1196,18 @@ if runInt and intScope.active and engineOk
         if eInt and runDeep
             deepScope.active := false
 
-if runDeep and deepScope.active and engineOk
+// Deep stays owned by a confirmed INTERNAL pullback in both modes. There is no
+// third granularity available on one timeframe, so ownership is the only thing
+// that makes Deep deeper than Internal.
+if runDeep and deepScope.active and engineOk and childCont
+    ctxStep(deepC, resetDeep, DIR_NONE, bar_index, open, high, low, close,
+         bar_index, bar_index, time, time, histDeep)
+    resetDeep := false
+    zone(deepC, deepC.dir == DIR_BULL ? deepC.detBull : deepC.detBear,
+         zOn and pbDeepOn, 88, 86, zCap)
+    trimZones(deepC)
+
+if runDeep and deepScope.active and engineOk and not childCont
     [dOn, dO, dH, dL, dC, dHiBar, dLoBar, dHiT, dLoT, dInside, dBoth] =
          normStep(deepC.norm, open, high, low, close, bar_index, time, true)
     if dOn
@@ -1218,7 +1256,10 @@ paint(Ctx x, bool on, string pre, int w, int fade, string sz) =>
     0
 
 paint(mainC, showMain, "", mainW, fadeMain, sizeOf(labelSizeMain))
-paint(intC, runInt and intScope.active, "i", 1, fadeInt,
+// Under Continuous, Internal exists everywhere and is drawn everywhere - which
+// is what makes iIDM / iBOS / iCHoCH visible at all. Under Scoped it is drawn
+// only inside its owning parent pullback.
+paint(intC, runInt and (childCont or intScope.active), "i", 1, fadeInt,
      sizeOf(labelSizeChild))
 paint(deepC, runDeep and deepScope.active, "ii", 1, fadeDeep,
      sizeOf(labelSizeChild))
@@ -1258,7 +1299,8 @@ swPaint(Ctx x, bool on, int fade) =>
     0
 
 swPaint(mainC, showSW and showMain, fadeMain)
-swPaint(intC, showSW and swAllDepths and runInt, fadeInt)
+swPaint(intC, showSW and swAllDepths and runInt and
+     (childCont or intScope.active), fadeInt)
 swPaint(deepC, showSW and swAllDepths and runDeep, fadeDeep)
 
 // [SRC Ch.6] Hidden Shadow candles render PURPLE. Inside bars get a neutral
@@ -1412,12 +1454,16 @@ if showDbg and barstate.islast
     table.cell(dbg, 0, 0, "LIT v2 DEBUG", text_color = dv, text_size = size.tiny)
     table.cell(dbg, 1, 0, statsDepth + " · depth " + str.tostring(d.depth),
          text_color = cHS, text_size = size.tiny)
+    // Under P7b Continuous a child has NO normalizer - it reads raw candles -
+    // so an empty mother range there is correct, not a fault.
+    bool noNorm = childCont and d.depth > 0
     table.cell(dbg, 0, 1, "mother range", text_color = dk, text_size = size.tiny)
-    table.cell(dbg, 1, 1, fmtPx(dn.hi) + " / " + fmtPx(dn.lo), text_color = dv,
+    table.cell(dbg, 1, 1, noNorm ? "raw candles · no normalizer" :
+         fmtPx(dn.hi) + " / " + fmtPx(dn.lo), text_color = dv,
          text_size = size.tiny)
     table.cell(dbg, 0, 2, "inside bars", text_color = dk, text_size = size.tiny)
-    table.cell(dbg, 1, 2, str.tostring(dn.insideCount), text_color = dv,
-         text_size = size.tiny)
+    table.cell(dbg, 1, 2, noNorm ? "—" : str.tostring(dn.insideCount),
+         text_color = dv, text_size = size.tiny)
     // [§12] Groups that broke the mother range on BOTH sides in one move, where
     // OHLC cannot say which side went first. And [P1] the same situation one
     // level up, at the pullback trackers - how often the policy actually fires.
