@@ -1,0 +1,156 @@
+====================================================================================================
+LIT STAGE C — THE TRAILING EXIT, ON UNTOUCHED SYMBOLS
+====================================================================================================
+TYPE        REPLICATION of Stage B's T6_PIVOT (+0.145 R/bet vs a
+            BOS_TARGET control). Not a discovery test.
+POPULATION  the symbols in the ranked turnover universe that took
+            NO part in Stage A or B. The old 'held-out' tier was
+            inside those stages and is NOT used as out-of-sample.
+STOP        fixed at PRIOR_PB (Stage B primary). Not varied.
+PRIMARY     T6_PIVOT — the T6 DEFAULT in LIT_STRATEGY_DESIGN.md,
+            which also happened to score best in Stage B; the
+            prereg discloses the coincidence rather than hiding it.
+CRITERION   BOTH: R/bet>0 with t>=2.0, AND paired delta vs
+            BOS_TARGET > 0 with z>=2.0.
+GUARDS      >20% horizon exits => CONFOUNDED; P(loss>1.5R)>10% => CONFOUNDED;
+            <2000 bets => UNDERPOWERED, a null is uninformative.
+DATE        2026-09-14 15:16 UTC
+COMMIT      639d287
+PREREG      PREREG_lit_stage_c.md (committed at 639d287, before)
+====================================================================================================
+
+  untouched symbols: 55
+  Stage A/B symbols (reproduction check only): 60
+BTW_USDT Min60: 1 discontinuities in 3418 bars
+
+====================================================================================================
+  ENGINE HEALTH ON THE UNTOUCHED TIER  [PREREG §7]
+====================================================================================================
+  untouched : 7/54 symbol-runs with <5 IDM breaks, median 18.0
+  Stage A/B : 6/58 symbol-runs with <5 IDM breaks, median 17.5
+
+====================================================================================================
+  PRIMARY ENDPOINT — untouched symbols, in BETS
+====================================================================================================
+  arm               trades   bets    R/bet     SE      t     win     PF     totR   maxDD
+  T6_PIVOT  <-- PRIMARY    4090   3027    0.114  0.047    2.4   40.5%   1.24    345.9    44.3
+  BOS_TARGET          4090   3027    0.047  0.049    0.9   45.0%   1.10    141.2    60.3
+  T6_STRUCTURE        4090   3027    0.048  0.049    1.0   23.9%   1.09    145.5    83.7
+  FIXED_1R            4090   3027   -0.041  0.017   -2.3   47.9%   0.92   -123.4   130.1
+  FIXED_2R            4090   3027   -0.015  0.024   -0.6   37.7%   0.99    -46.2    85.3
+
+====================================================================================================
+  REPRODUCTION CHECK — Stage A/B symbols, same pipeline
+  Confirms the code still returns Stage B's numbers. NO part in the verdict.
+====================================================================================================
+  arm               trades   bets    R/bet     SE      t     win     PF     totR   maxDD
+  T6_PIVOT            4440   3195    0.145  0.059    2.5   40.0%   1.33    462.5    53.1
+  BOS_TARGET          4440   3195    0.024  0.039    0.6   46.1%   1.03     77.7   200.7
+  T6_STRUCTURE        4440   3195    0.138  0.062    2.2   25.5%   1.28    441.3    90.2
+  FIXED_1R            4440   3195   -0.028  0.017   -1.6   48.9%   0.92    -89.9   136.6
+  FIXED_2R            4440   3195    0.021  0.024    0.9   39.2%   1.03     66.5    95.1
+
+====================================================================================================
+  PAIRED: T6_PIVOT vs BOS_TARGET, untouched symbols
+====================================================================================================
+  bets 3027   mean delta +0.068   SE 0.047   z 1.5   improved 34.7%
+
+====================================================================================================
+  GUARDS  [PREREG §5]
+====================================================================================================
+    exit=stop       3969 ( 97.0%)  mean R   0.100  contributes   0.097R/trade
+    exit=timeout     121 (  3.0%)  mean R   0.353  contributes   0.010R/trade
+  mark-to-market : 3.0% horizon exits  (PASS)
+  risk unit      : P(loss>1.5R) = 1.3%  (PASS)
+                   median loss 1.01R  p95 1.14R  worst 4.03R
+
+====================================================================================================
+  POWER ACHIEVED  [PREREG §4]
+====================================================================================================
+  bets 3027  SE 0.0468  MDE at t=2.0: 0.094R
+  Stage B effect being replicated: +0.145R  -> detectable here at t=3.1
+  underpowered (<2000 bets): no
+
+====================================================================================================
+  RESULT AGAINST THE FROZEN CRITERION  [PREREG §6]
+====================================================================================================
+  criterion 1  R/bet>0 and t>=2.0     : MET   (+0.114 at t=2.4)
+  criterion 2  paired delta>0, z>=2.0 : not met   (+0.068 at z=1.5)
+  disqualifiers                         : clear
+
+  VERDICT: INCONCLUSIVE
+  Per PREREG §6 the LIT trading family is closed PERMANENTLY.
+  No Stage D, no further variants, no re-registration.
+
+====================================================================================================
+  INTERPRETATION  (written after the run; the criterion was frozen at 639d287)
+====================================================================================================
+
+VERDICT: INCONCLUSIVE. Criterion 1 met, criterion 2 missed, guards clear, and
+the run was adequately powered. Per PREREG §6 the LIT trading family is closed
+permanently.
+
+1. THE PIPELINE IS CONFIRMED.
+
+   The reproduction check on the Stage A/B symbols returns T6_PIVOT at +0.145
+   R/bet, t=2.5, on 3195 bets — Stage B's number to three decimals. Whatever
+   Stage C says, it is not saying it because the code changed.
+
+2. THE EFFECT DID NOT VANISH. IT SHRANK, AND MISSED THE BAR.
+
+                             Stage A/B      untouched tier
+    T6_PIVOT, standalone        +0.145           +0.114   (t 2.5 -> 2.4)
+    paired delta vs control     +0.120           +0.068   (z 2.5 -> 1.5)
+
+   Criterion 1 is met: the arm is positive at t=2.4. Criterion 2 is not: the
+   paired delta is +0.068 at z=1.5 against a required 2.0.
+
+   Criterion 2 is the one that matters and PREREG §6 required both for a
+   reason. The standalone number cannot isolate the trail, because the
+   BOS_TARGET control is also positive here (+0.047). Only the paired
+   difference says whether trailing is doing anything.
+
+3. THIS IS NOT AN UNDERPOWERED NULL, WHICH MAKES IT WORSE, NOT BETTER.
+
+    achieved: 3027 bets, SE 0.0468, MDE at t=2.0 = 0.094R
+
+   Stage B's paired delta of +0.120 would have registered at z=2.6 on this
+   sample. The experiment could see the effect it was looking for and found
+   roughly half of it. The §4 underpower declaration does not fire.
+
+4. THE GUARDS ARE CLEAN, AND THAT IS WORTH RECORDING.
+
+    mark-to-market   3.0% horizon exits, contributing +0.010R/trade
+    risk unit        P(loss > 1.5R) = 1.3%, median loss 1.01R, worst 4.03R
+
+   Neither of the two ways this measurement could have lied is what happened.
+   The trail result, such as it is, comes from real stop exits on a real risk
+   unit. Stage A's failure mode is fully absent here.
+
+5. THE MOST PARSIMONIOUS READING, STATED PLAINLY.
+
+   Shrinkage of roughly half on an out-of-sample tier is the signature of the
+   winner's curse. T6_PIVOT was the best of 25 cells in Stage B; the best of
+   25 cells regresses. A real-but-smaller effect produces the same picture and
+   one test cannot separate the two. What can be said is that the honest
+   estimate of the trail's advantage is no longer +0.120 — the pooled reading
+   across both tiers is closer to +0.09, and at that size it is not
+   distinguishable from zero on any sample this project can assemble.
+
+6. NO RESCUE, AND NO STAGE D.
+
+   PREREG §0 committed against a fourth pre-registration before any of these
+   numbers existed, and §6 closes the family on INCONCLUSIVE. Both hold. The
+   directionally-consistent result is recorded, not argued past: pooling the
+   two tiers to manufacture significance, or re-testing on a narrower slice,
+   is precisely the fitting-by-iteration this sequence was built to stop.
+
+CONCLUSION ACROSS THREE PRE-REGISTERED EXPERIMENTS.
+
+  Stage A   naked continuation, raid stop       INCONCLUSIVE - risk unit broken
+  Stage B   five stop definitions               INCONCLUSIVE - stop fixed, edge gone
+  Stage C   pivot trail, untouched symbols      INCONCLUSIVE - effect halved, bar missed
+
+The LIT structure engine is sound and externally validated (ZEC 30m IDM->BOS
+65.6% against the reference's 65.0%). The LIT trading family does not show an
+economic edge that survives out-of-sample testing at a pre-specified bar.

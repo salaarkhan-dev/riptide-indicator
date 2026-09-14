@@ -2302,3 +2302,71 @@ The LIT structure engine is sound and externally validated (ZEC 30m IDM→BOS
 pre-registered experiments and five stop definitions, shows no economic edge
 net of costs. Stage A failed on a broken risk unit; Stage B fixed it and found
 roughly zero.
+
+---
+
+## STAGE C — THE TRAILING EXIT ON UNTOUCHED SYMBOLS. FAMILY CLOSED PERMANENTLY.
+
+Pre-registered in `PREREG_lit_stage_c.md` at `639d287` before the run. A third
+prereg, which Stage B §5 had called fitting by iteration; it exists because a
+human authorised one clean test of the trail lead, and it committed against a
+fourth before any number existed.
+
+Two design corrections made before running:
+
+- **The previous "held-out" tier is not out of sample** and was not used as
+  one. Ranks 31-60 were inside Stages A and B. Stage C used the 55 symbols in
+  the ranked universe that took no part in either.
+- **The t ≥ 3.0 bar I proposed was refuted by a power calculation** and
+  dropped. It needs ~4770 bets, more than Stages A/B produced on the full
+  population, so it would have returned FAIL even if the effect were exactly
+  real. Replaced by two conditions required together, which is jointly
+  stricter while staying inside available power.
+
+### RESULT
+
+                             Stage A/B      untouched tier
+    T6_PIVOT, standalone        +0.145           +0.114   (t 2.5 -> 2.4)
+    paired delta vs control     +0.120           +0.068   (z 2.5 -> 1.5)
+
+    criterion 1  R/bet>0, t>=2.0      MET      (+0.114 at t=2.4)
+    criterion 2  paired delta, z>=2.0 NOT MET  (+0.068 at z=1.5)
+
+**VERDICT: INCONCLUSIVE.** Family closed permanently.
+
+The reproduction check on Stage A/B symbols returned +0.145 at t=2.5 on 3195
+bets — Stage B to three decimals — so the pipeline is confirmed.
+
+### THE THINGS THAT MAKE THIS A CLEAN NULL RATHER THAN A WEAK ONE
+
+**Adequately powered.** 3027 bets, SE 0.0468, MDE 0.094R. Stage B's paired
+delta would have registered at z=2.6 here. The test could see what it was
+looking for and found about half. The underpower declaration did not fire.
+
+**Both guards clean.** 3.0% horizon exits contributing +0.010R/trade, so this
+is not the mark-to-market artefact that produced the earlier "+0.360" false
+positive. P(loss>1.5R) = 1.3%, median loss 1.01R, worst 4.03R — Stage A's
+broken risk unit is fully absent.
+
+Neither of the two ways this measurement could have lied is what happened.
+
+### THE READING
+
+Shrinkage of about half on an untouched tier is the winner's-curse signature:
+T6_PIVOT was the best of 25 cells in Stage B, and the best of 25 regresses. A
+real-but-smaller effect looks identical and one test cannot separate them. The
+honest pooled estimate of the trail's advantage is around +0.09, which is not
+distinguishable from zero on any sample this project can assemble.
+
+Not pooled to manufacture significance, not re-sliced, not re-registered.
+
+### THE SEQUENCE
+
+    Stage A   naked continuation, raid stop     INCONCLUSIVE  risk unit broken
+    Stage B   five stop definitions             INCONCLUSIVE  stop fixed, edge gone
+    Stage C   pivot trail, untouched symbols    INCONCLUSIVE  effect halved, bar missed
+
+The LIT **structure engine** is sound and externally validated (ZEC 30m
+IDM→BOS 65.6% vs the reference's 65.0%). The LIT **trading family** does not
+show an economic edge that survives out-of-sample testing at a pre-specified
+bar. Closed.
