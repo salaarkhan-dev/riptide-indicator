@@ -1,0 +1,74 @@
+# LIT_FORWARD_V1 — durable status
+
+**Read this before proposing any LIT work.** It exists so a future session
+cannot reopen research that is already closed.
+
+## Historical status — FROZEN, DO NOT REOPEN
+
+    Stage A   naked continuation, raid stop     INCONCLUSIVE
+    Stage B   five stop definitions             INCONCLUSIVE
+    Stage C   T6_PIVOT, untouched symbols       INCONCLUSIVE
+    HISTORICAL LIT TRADING FAMILY: CLOSED
+
+Stage C detail: T6_PIVOT standalone +0.114 R/bet (t≈2.4) PASSED its criterion;
+paired delta vs control +0.068 (z≈1.5) FAILED. Effect roughly halved from
+Stage B. Mark-to-market and realized-loss guards both passed.
+
+**Do NOT**: re-slice history · pool samples · optimise T6_PIVOT · modify Active
+Price · try other trailing variants · change entry or stop · filter symbols or
+timeframes retrospectively · optimise Hidden Shadow or the break engine · add
+FVG/POI/SCOB to rescue it · call the historical family profitable.
+
+## Forward status
+
+    State:            PRE-REGISTERED — NOT ACTIVATED
+    Pre-registration: PREREG_lit_forward_v1.md
+    Version:          LIT_FORWARD_V1
+    Rules hash:       4b105c593bc48469
+    Started:          (not started — no forward_start_timestamp stamped)
+    Primary outcome:  paired_delta_R = t6_pivot_R − control_R
+    Unit:             market-event bet (riptide/decide.py::event_span)
+
+### OPEN PRECONDITION — activation is blocked on this
+
+Pine↔Python parity is NOT established and cannot be in this environment (no
+Pine compiler; `riptide-lit-v2.pine` has never been compiled). The
+specification makes parity a precondition for collection. A human must compile
+the Pine, compare its setup markers against the Python record on the same
+symbol/timeframe, and record the outcome in PREREG §0 before enabling.
+
+One divergence was already found and fixed during implementation: the Pine
+entry layer reset the trail pivot at each IDM break, while the Python
+`trails()` forward-fills it across cycles. That it existed is the argument for
+running the check properly rather than assuming.
+
+### Checkpoints — no other evaluation is permitted
+
+    1.  250 bets  (~1 month)   health only, no efficacy read
+    2. 1000 bets  (~4 months)  futility only: stop if paired delta ≤ −0.10
+    3. 1857 bets  (~7 months)  THE READ, the only place V1 can be closed
+
+Powered for the Stage B effect (+0.120). **If the true effect is Stage C's
+size (+0.068) this experiment needs ~5,800 bets ≈ 1.7 years** and a null at
+checkpoint 3 means "no effect ≳0.12 detected", not "no effect".
+
+### Enabling
+
+    RIPTIDE_LIT_FORWARD=1
+    RIPTIDE_LIT_FORWARD_ALERTS=1     # optional
+
+Both default 0. Not enabled by the implementing session.
+
+## Research ledger entry
+
+The repository has no central research ledger file, so the entry lives here.
+
+    ID:         LIT-FWD-001
+    Hypothesis: T6_PIVOT produces positive incremental paired R versus the
+                frozen control on future unseen LIT setups.
+    Evidence:   prospective forward (not a backtest)
+    Motivation: Stage C paired delta +0.068 R/bet at z=1.5 — NOT validated,
+                and roughly half the Stage B discovery estimate.
+    Primary:    paired_delta_R = t6_pivot_R − control_R, in bets
+    Status:     PRE-REGISTERED, NOT ACTIVATED (parity precondition open)
+    Revisit:    only at a pre-registered checkpoint (250 / 1000 / 1857 bets)

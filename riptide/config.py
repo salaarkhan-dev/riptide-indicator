@@ -890,3 +890,13 @@ def build_id() -> str:
 # later from rows already on disk without re-recording anything.
 TRENDLINE_CONFLUENCE_BARS = int(
     os.getenv("RIPTIDE_TRENDLINE_CONFLUENCE_BARS", "0")) or CFG.early_max_bars
+
+# ── LIT forward research (LIT_FORWARD_V1) ───────────────────────────────────
+# ALL DEFAULT OFF. The historical LIT trading family is CLOSED - Stages A, B
+# and C each returned INCONCLUSIVE under their own pre-registered criteria.
+# These flags enable a PROSPECTIVE data-collection experiment and nothing else:
+# no order placement, no execution, no production alert change. See
+# PREREG_lit_forward_v1.md before turning any of them on.
+LIT_STRUCTURE = os.getenv("RIPTIDE_LIT_STRUCTURE", "0") == "1"
+LIT_FORWARD = os.getenv("RIPTIDE_LIT_FORWARD", "0") == "1"
+LIT_FORWARD_ALERTS = os.getenv("RIPTIDE_LIT_FORWARD_ALERTS", "0") == "1"

@@ -399,8 +399,15 @@ type Ctx
     // the IDM being broken, so the one behind it is the structural level that
     // gives a risk unit wide enough to survive contact with the market.
     // Stage B: median 2.9% of price against the raid extreme's 0.42%.
-    float pbLast = na
-    float pbPrior = na
+    float pbLast = na        // cycle-scoped: the IDM being broken
+    float pbPrior = na       // cycle-scoped: the STOP, the level behind it
+    // PARITY. research/studies/lit_stage_a.py::trails forward-fills the TRAIL
+    // pivot ACROSS structural cycles - it is simply the most recent confirmed
+    // pullback pivot of that direction, and it is NOT reset at an IDM break.
+    // v2.1 reset it with the stop pair, which made the Pine trail freeze where
+    // the Python one kept trailing. Two accumulators, not one.
+    float pbTrailBull = na
+    float pbTrailBear = na
     bool sigNew = false      // set for ONE bar, read by the RUN section
     int sigDir = 0
     float sigEntry = na
@@ -939,6 +946,8 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
         x.phase := PH_DISCOVER
         x.pbLast := na
         x.pbPrior := na
+        x.pbTrailBull := na
+        x.pbTrailBear := na
         clearLvl(x.idm)
         clearLvl(x.bos)
         clearLvl(x.ch)
@@ -1032,6 +1041,10 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
             // any phase has the same level behind it.
             x.pbPrior := x.pbLast
             x.pbLast := dActive.last.pivot
+            if up
+                x.pbTrailBull := dActive.last.pivot
+            else
+                x.pbTrailBear := dActive.last.pivot
             if x.phase == PH_DISCOVER or x.phase == PH_TRACK
                 // [SRC Ch.3] IDM migration. The previous IDM is retired and
                 // replaced - and per the user's decision, DELETED outright.
@@ -1088,7 +1101,8 @@ ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
                 x.sigDir := up ? DIR_BULL : DIR_BEAR
                 x.sigEntry := sEnt
                 x.sigStop := sStp
-            // A new cycle starts here, so the pivot pair is re-earned in it.
+            // A new cycle starts here, so the STOP pair is re-earned in it.
+            // pbTrailBull/Bear deliberately survive - see the parity note.
             x.pbLast := na
             x.pbPrior := na
             // [SRC §35] A broken IDM is liquidity taken. It never flips trend.
@@ -1297,15 +1311,23 @@ sigClose(Sig g, float px, bool stopped) =>
     if not na(g.band)
         box.set_right(g.band, time)
     color rc = r >= 0 ? cLong : cShort
-    label.new(time, px, fmtR(r), xloc = xloc.bar_time, yloc = yloc.price,
-         style = g.dir > 0 ? label.style_label_up : label.style_label_down,
-         color = color.new(rc, 15), textcolor = color.white, size = size.tiny)
-    if not na(g.slLb)
-        label.delete(g.slLb)
-        g.slLb := na
-    if not na(g.enLb)
-        label.delete(g.enLb)
-        g.enLb := na
+    label.new(time + barMs * labelGapBars, px, fmtR(r), xloc = xloc.bar_time,
+         yloc = yloc.price, style = label.style_none, color = na,
+         textcolor = rc, size = size.tiny)
+    // A finished tag is CENTRED over the span it describes, which is what
+    // retire() does to a closed BOS or CHoCH. Live reads on the right, done
+    // reads in the middle, and the two are never confused at a glance.
+    if not na(g.enLn)
+        int ex1 = line.get_x1(g.enLn)
+        int mid = ex1 + int((time - ex1) * 0.50)
+        if not na(g.enLb)
+            label.set_xy(g.enLb, mid, g.entry +
+                 (g.dir > 0 ? atr * 0.28 : -atr * 0.28))
+        if not na(g.slLb)
+            label.set_xy(g.slLb, mid, g.stop +
+                 (g.dir > 0 ? -atr * 0.28 : atr * 0.28))
+            label.set_text(g.slLb, "SL " + str.tostring(g.stop0,
+                 format.mintick))
     g.on := false
     g.armed := false
     r
@@ -1332,13 +1354,15 @@ sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct) =>
          color = cStop, width = 1, style = line.style_dashed)
     g.acLn := line.new(time, g.active, time, g.active, xloc = xloc.bar_time,
          color = color.new(cActive, 35), width = 1, style = line.style_dotted)
-    g.enLb := label.new(time, entry, (dir > 0 ? "▲ LONG  " : "▼ SHORT  ") +
-         str.tostring(entry, format.mintick), xloc = xloc.bar_time,
-         yloc = yloc.price, style = label.style_label_right,
-         color = color.new(cd, 12), textcolor = color.white, size = size.tiny)
-    g.slLb := label.new(time, stop, "SL " + str.tostring(stop, format.mintick),
+    int lx = time + barMs * labelGapBars
+    g.enLb := label.new(lx, entry + (dir > 0 ? atr * 0.28 : -atr * 0.28),
+         (dir > 0 ? "LONG " : "SHORT ") + str.tostring(entry, format.mintick),
          xloc = xloc.bar_time, yloc = yloc.price, style = label.style_none,
-         color = na, textcolor = cStop, size = size.tiny)
+         color = na, textcolor = cd, size = size.tiny)
+    g.slLb := label.new(lx, stop + (dir > 0 ? -atr * 0.28 : atr * 0.28),
+         "SL " + str.tostring(stop, format.mintick), xloc = xloc.bar_time,
+         yloc = yloc.price, style = label.style_none, color = na,
+         textcolor = cStop, size = size.tiny)
 
 // One bar of management. Returns the realised R, or na while still open.
 // ORDER MATTERS: the stop is tested against the level it ALREADY held, then
@@ -1369,12 +1393,15 @@ sigStep(Sig g, float h, float l, float pivNow, bool useTrail,
             line.set_xy2(g.slLn, time, g.stop)
             line.set_y1(g.slLn, g.stop)
             line.set_x2(g.acLn, time)
+            int lx = time + barMs * labelGapBars
             if not na(g.slLb)
-                label.set_xy(g.slLb, time, g.stop)
+                label.set_xy(g.slLb, lx, g.stop +
+                     (g.dir > 0 ? -atr * 0.28 : atr * 0.28))
                 label.set_text(g.slLb, (g.armed ? "⚑ SL " : "SL ") +
                      str.tostring(g.stop, format.mintick))
             if not na(g.enLb)
-                label.set_x(g.enLb, time)
+                label.set_xy(g.enLb, lx, g.entry +
+                     (g.dir > 0 ? atr * 0.28 : -atr * 0.28))
             if shade
                 if na(g.band)
                     g.band := box.new(g.barT, math.max(g.entry, g.stop), time,
@@ -1507,7 +1534,7 @@ var float sigWorst = 0.0
 if showSig and engineOk
     // Manage what is open BEFORE opening anything new, so a setup can never
     // be replaced by its own successor mid-bar.
-    float pivNow = mainC.dir == sig.dir ? mainC.pbLast : na
+    float pivNow = sig.dir > 0 ? mainC.pbTrailBull : mainC.pbTrailBear
     float done = sigStep(sig, high, low, pivNow, sigTrail, sigBox)
     if not na(done)
         sigN += 1
