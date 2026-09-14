@@ -223,5 +223,37 @@ check("LIT writes only to its own table and meta",
       all(t in ("meta", forward.TABLE) or t.startswith("sqlite")
           for t in after), True)
 
+print("\n13. the production hook exists and is inert when the flag is off")
+import asyncio                                                    # noqa: E402
+import inspect                                                    # noqa: E402
+from riptide.strategies.lit import runner                          # noqa: E402
+from riptide import scanner                                        # noqa: E402
+src = inspect.getsource(scanner.cycle)
+check("scanner.cycle calls the hook", "run_if_enabled" in src, True)
+check("the hook is exception-guarded so research cannot break alerting",
+      "production unaffected" in src, True)
+check("hook returns inert with LIT_FORWARD off",
+      asyncio.get_event_loop().run_until_complete(
+          runner.run_if_enabled(None, None, [])), {"enabled": False})
+
+print("\n14. an UNOBSERVED setup leaves the sample, it is not invented")
+db4, _ = fresh_db()
+forward.activate(db4, 1)
+old = mk(sid="stale1", sig_t=1_600_000_000)
+forward.record(db4, old)
+n = forward.sweep_stale(db4, {"Min30": 1800}, now=1_600_000_000 + 10**7)
+check("the stale pending was swept", n, 1)
+check("nothing left pending", len(forward.pending(db4)), 0)
+check("and it is NOT counted as an outcome", len(forward.resolved(db4)), 0)
+row = db4.execute(
+    f"SELECT state, paired_delta_r FROM {forward.TABLE} "
+    f"WHERE setup_id='stale1'").fetchone()
+check("state is ambiguous", row[0], "ambiguous")
+check("it carries no R", row[1], None)
+fresh_pending = mk(sid="young1", sig_t=1_600_000_000)
+forward.record(db4, fresh_pending)
+check("a young pending setup is left alone",
+      forward.sweep_stale(db4, {"Min30": 1800}, now=1_600_000_000 + 100), 0)
+
 print("\n" + ("FAILED: " + ", ".join(FAILED) if FAILED else "ALL PASS"))
 sys.exit(1 if FAILED else 0)

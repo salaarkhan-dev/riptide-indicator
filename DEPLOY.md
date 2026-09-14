@@ -170,3 +170,52 @@ sudo systemctl restart riptide
 No API key, no order placement, no code path that could place one. No Docker,
 no reverse proxy, no inbound port. One Python process under systemd, one
 dependency (`aiohttp`). Engine logic and `Cfg` defaults are untouched.
+
+## LIT forward research (LIT_FORWARD_V1)
+
+A prospective data-collection experiment. It is **not** a trading strategy and
+it changes nothing about production alerting. Read `PREREG_lit_forward_v1.md`
+before enabling; the historical LIT family is CLOSED and this collects new
+evidence rather than reopening it.
+
+Ships OFF. To enable on the box:
+
+```bash
+sudo tee -a /home/ubuntu/riptide/.env >/dev/null <<'ENV'
+RIPTIDE_LIT_FORWARD=1
+RIPTIDE_LIT_FORWARD_ALERTS=1
+ENV
+sudo chmod 600 /home/ubuntu/riptide/.env
+sudo chown ubuntu:ubuntu /home/ubuntu/riptide/.env
+sudo systemctl restart riptide
+journalctl -u riptide -n 50 --no-pager | grep 'LIT FWD'
+```
+
+Expect one line on the first cycle:
+
+    LIT FWD V1 collection ARMED at <epoch> — only setups AFTER this timestamp
+    are recorded
+
+That timestamp is stamped ONCE into `meta` and never moves, including across
+restarts. Setups at or before it are rejected, so enabling cannot backfill.
+
+`RIPTIDE_LIT_FORWARD_ALERTS=1` adds a separate 🧪 LIT RESEARCH Telegram
+message per setup. It never uses production vocabulary (Grade A/B, CONFIRMED,
+EARLY) and an alert that drifts into claim language is suppressed rather than
+sent. Production alerts are untouched either way.
+
+`/stats` gains a second message with the forward numbers once collection is on.
+It reports COLLECTING and never a verdict — reviews happen only at the
+checkpoints fixed in the pre-registration (250 / 1000 / 1857 bets).
+
+To stop collecting, remove both lines and restart. Recorded setups are kept:
+
+```bash
+sudo sed -i '/^RIPTIDE_LIT_FORWARD/d' /home/ubuntu/riptide/.env
+sudo systemctl restart riptide
+```
+
+Cost, measured: the frozen engine is ~7.7 ms per 2000-bar pass, so 60 symbols
+across three timeframes is ~1.4 s of CPU per cycle at ~42 MB. Candles come from
+the same `fetch_candles` production already calls, so there is no extra request
+budget beyond the cycle it shares.

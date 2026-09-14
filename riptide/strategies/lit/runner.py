@@ -122,3 +122,52 @@ def _build(sid: str, sym: str, tf: str, raw, rh: str, nowts: int
         market_event_id=event_id(raw.signal_time, is_long),
         event_direction=raw.direction,
         created_at=nowts, updated_at=nowts)
+
+
+# ── the production hook ─────────────────────────────────────────────────────
+
+async def run_if_enabled(sess, db, symbols) -> dict:
+    """Called once per scan cycle. Returns immediately unless LIT_FORWARD=1.
+
+    This is the ONLY entry point production calls, and when the flag is off it
+    does nothing at all — no fetch, no query, no log line. With it on, the
+    experiment shares production's session, database and symbol universe and
+    shares none of its state.
+    """
+    from ...config import BAR_SECONDS, INTERVALS, LIT_FORWARD, LIT_FORWARD_ALERTS
+    if not LIT_FORWARD:
+        return {"enabled": False}
+
+    from ...exchange import fetch_candles
+    from . import forward as fwd
+
+    fwd.init(db)
+    # Stamped once, on the first enabled cycle, and never moved by a restart.
+    started = fwd.start_ts(db)
+    if started is None:
+        started = fwd.activate(db)
+        log.info("LIT FWD V1 collection ARMED at %d — only setups AFTER this "
+                 "timestamp are recorded", started)
+
+    alert = None
+    if LIT_FORWARD_ALERTS:
+        from . import render
+        from ... import telegram as tg
+
+        async def alert(s):                                   # noqa: F811
+            txt = render.alert_text(s)
+            bad = render.check_language(txt)
+            if bad:
+                # A research alert that has drifted into claim language does
+                # not go out. Better silent than misread as a Riptide signal.
+                log.error("LIT FWD alert suppressed, banned language: %s", bad)
+                return
+            await tg.tg_send(sess, txt)
+
+    async def load(sym, tf):
+        return await fetch_candles(sess, sym, tf)
+
+    st = await cycle(db, symbols, INTERVALS, load, alert)
+    st["ambiguous"] = fwd.sweep_stale(db, BAR_SECONDS)
+    st["enabled"] = True
+    return st

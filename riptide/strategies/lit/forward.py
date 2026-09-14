@@ -145,6 +145,8 @@ def pending(db: sqlite3.Connection) -> list[dict]:
 
 
 def resolved(db: sqlite3.Connection) -> list[dict]:
+    # AMBIGUOUS is deliberately absent: an unobserved setup carries no R and
+    # must not be counted as anything.
     cur = db.execute(f"SELECT {','.join(_COLS)} FROM {TABLE} "
                      f"WHERE state IN (?,?) AND strategy_version=?",
                      (RESOLVED, TIMED_OUT, FWD_VERSION))
@@ -254,6 +256,37 @@ def _bar_of(candles: Sequence[Any], t: int) -> int | None:
         if int(candles[i].t) == int(t):
             return i
     return None
+
+
+def sweep_stale(db: sqlite3.Connection, bar_seconds: dict,
+                now: int | None = None) -> int:
+    """Setups whose outcome can no longer be OBSERVED leave the sample.
+
+    If the bot was down long enough that a pending setup's signal bar has
+    fallen out of the fetched window, its path is unknown. It is marked
+    AMBIGUOUS, not timed_out and not resolved: a timeout is a real outcome with
+    a real R, and inventing one for a trade nobody watched would be exactly the
+    mark-to-market failure this experiment is built to avoid.
+
+    AMBIGUOUS rows carry no R and are excluded from every reported statistic.
+    """
+    t = int(now if now is not None else time.time())
+    horizon = int(RULES["horizon_bars"])
+    n = 0
+    for row in pending(db):
+        step = bar_seconds.get(row["timeframe"], 1800)
+        # 1.5x the horizon: comfortably past any legitimate resolution.
+        if t - int(row["signal_time"]) > int(1.5 * horizon * step):
+            db.execute(
+                f"UPDATE {TABLE} SET state=?, updated_at=?, notes=? "
+                f"WHERE setup_id=? AND state=?",
+                (AMBIGUOUS, t, "unobserved: signal bar left the window",
+                 row["setup_id"], PENDING))
+            n += 1
+    if n:
+        db.commit()
+        log.info("LIT FWD %d pending setups marked ambiguous (unobserved)", n)
+    return n
 
 
 # ── reporting ───────────────────────────────────────────────────────────────

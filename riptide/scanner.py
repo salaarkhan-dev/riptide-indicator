@@ -826,6 +826,17 @@ async def cycle(sess, db, symbols):
                  g["paired"], g["sent"])
     state_gate.clear()
     state_gate.update(gate)
+
+    # LIT forward research. OFF by default; returns immediately when
+    # RIPTIDE_LIT_FORWARD is unset, and never touches a production table,
+    # signal or alert. See PREREG_lit_forward_v1.md.
+    try:
+        from .strategies.lit.runner import run_if_enabled
+        await run_if_enabled(sess, db, symbols)
+    except Exception as e:                                    # noqa: BLE001
+        # A research experiment must never be able to break the alerting path.
+        log.warning("LIT forward cycle failed (production unaffected): %s", e)
+
     return sent + quick + swept
 
 

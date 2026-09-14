@@ -21,7 +21,7 @@ FVG/POI/SCOB to rescue it · call the historical family profitable.
 
 ## Forward status
 
-    State:            PRE-REGISTERED — NOT ACTIVATED
+    State:            WIRED AND ARMED — awaiting the .env flag
     Pre-registration: PREREG_lit_forward_v1.md
     Version:          LIT_FORWARD_V1
     Rules hash:       4b105c593bc48469
@@ -54,10 +54,20 @@ checkpoint 3 means "no effect ≳0.12 detected", not "no effect".
 
 ### Enabling
 
+The code path is live: `scanner.cycle` calls the hook every cycle and it
+returns inert while the flag is unset. Enabling is one `.env` change on the
+Oracle box (see DEPLOY.md), which no session working from a container can
+make — `/home/ubuntu/riptide/.env` is `600`, owned by `ubuntu`, and is the only
+copy of the deployment's configuration.
+
     RIPTIDE_LIT_FORWARD=1
     RIPTIDE_LIT_FORWARD_ALERTS=1     # optional
 
-Both default 0. Not enabled by the implementing session.
+Both default 0 in code and that default is NOT changed: flipping it would arm
+the experiment for every checkout, and PREREG §16 says it ships off.
+
+`forward_start_timestamp` is stamped on the first enabled cycle and never
+moves, so enabling cannot backfill history.
 
 ## Research ledger entry
 
