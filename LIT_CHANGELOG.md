@@ -1681,3 +1681,58 @@ TWO HARNESS BUGS FOUND AND FIXED MID-RUN, both mine:
 NEXT: not Stage B. The entry model is what needs replacing, so the next
 measurement is the reference's own - retrace to a zone, stop behind the zone -
 even in a crude form, before any filter is built on top of it.
+
+
+────────────────────────────────────────────────────────────────────────────
+ENTRY VARIANT 2 — the retrace entry also has no edge, and a subset that
+looked real turned out to be noise
+────────────────────────────────────────────────────────────────────────────
+
+research/lit_entry2.py. Zones born at IDM break from the leg's unmitigated
+pullbacks, entry on the retrace touch, stop beyond the zone's far edge (the
+reference's LowRisk "SL on Pullback"), zones killed by a BOS break per Ch.15.
+30 symbols, 30m AND 15m, 1214 trades.
+
+THE GEOMETRY IS FIXED - this is a real improvement over Stage A
+    stop distance        1.251% of price   (Stage A 0.330%)
+    commission in R          0.08R         (Stage A 0.30R - was eating half of R)
+    entry -> BOS             1.52R         (Stage A 11.85R)
+    zone fill rate           58.6%
+
+SO THE SETUP IS NOW COHERENT. AND IT STILL LOSES
+    arm        n     win%     expR
+    fixed   1212    37.2%   -0.517
+    bos     1214    19.9%   -0.459
+    mfe     1158    36.8%   -0.456
+
+THE PART WORTH RECORDING: A FALSE POSITIVE, CAUGHT
+On the first 102-trade run the zone-stack rank split looked monotone and
+rank 2+ came out POSITIVE:
+
+    rank 2   n=11   36.4%   +0.172R
+    rank 3+  n=10   20.0%   +0.205R
+
+It had everything a real finding is supposed to have - a monotone trend, the
+same direction on two independent exit arms, and a source-recognised story
+(Ch.15's Decisional-nearer / Extreme-deepest distinction). At 1214 trades:
+
+    rank 0   n=821   -0.502      rank 2   n=111   -0.446
+    rank 1   n=192   -0.404      rank 3+  n= 90   -0.190
+
+Every rank negative, ordering gone. Split by timeframe, 30m rank 3+ is -0.379
+and 15m rank 3+ is -0.024 - not consistent and neither positive.
+
+That subset was noise found by slicing, and it would have been the worst kind
+of false positive: it came with a ready-made source-flavoured justification.
+The only reason it did not get reported as a finding is that the sample was
+widened BEFORE writing it up, not after.
+
+VERDICT: Stage B/C/D stay locked.
+
+WHAT THIS DOES NOT PROVE. The source's real entry takes only zones carrying an
+FVG, classifies them into Decisional/Extreme/Breaker/Flip, and requires SCOB
+confirmation - every one of those is a filter on WHICH zone to take.
+"Unfiltered zones lose" does not establish "filtered zones lose". What it does
+establish is the rule for what happens next: no filter gets built on a hunch,
+and the next thing to move is whichever filter can be MEASURED on this existing
+trade list without being built first.

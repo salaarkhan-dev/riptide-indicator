@@ -478,6 +478,10 @@ def ctx_step(x, resetMe, real, i, o, h, l, c, hiBar, loBar):
     # two phases that may hold one; during the BOS race it is cached instead.
     if hit:
         px, bar = hit[0], hit[1]
+        # Every confirmed correction, published or cached. The zone is the
+        # OrderFlow range [edge, pivot] - the tightened OrderBlock range needs
+        # internal structure and is Stage C.
+        log(x, "pb", i, px=px, pivotBar=bar, start=hit[2], edge=hit[3])
         x.ev["pivot"] += 1
         x.latPx, x.latBar = px, bar
         if x.phase in (PH_DISCOVER, PH_TRACK):
