@@ -15,7 +15,23 @@
 //  V2 turns every one of them into a NAMED POLICY with an explicit default and
 //  a switch, so they can be measured instead of argued. See §1 below.
 //
-//  v2.1 ADDS AN ENTRY-SIGNAL LAYER, AND IT SHIPS OFF.
+//  v2.2 DEFAULTS NOW MATCH THE PYTHON FORWARD RECORD.
+//
+//  Two defaults changed so the chart shows the setups LIT_FORWARD_V1 actually
+//  collects, rather than a different structure that merely looks similar:
+//
+//    Pullback confirmation   Shadow -> Body   [SRC Ch.24] the reference
+//                                             STRATEGY build is Body; its
+//                                             STRUCTURE build is Shadow
+//    Track both directions   on -> off        research/lit_v3.py carries one
+//                                             detector per context, not a pair
+//
+//  Setting Shadow / dual-on gives the reference's structure view, which is a
+//  legitimate thing to look at and is NOT what the experiment records. The
+//  signal layer follows a "Signals follow" selector: Main, Internal or Both.
+//  Main is the default and the only depth any stage measured.
+//
+//  v2.1 ADDED AN ENTRY-SIGNAL LAYER, AND IT SHIPS OFF.
 //
 //  Settings group 9 draws the Stage B/C setup: enter at the close of the
 //  IDM-break bar, with-trend only, stop at the PRIOR confirmed pullback pivot,
@@ -46,7 +62,7 @@
 //    - continuation lines must not land on a multiple-of-4 indent
 // ═══════════════════════════════════════════════════════════════════════════
 //@version=6
-indicator("Riptide LIT Structure — v2.1", "Riptide LIT v2",
+indicator("Riptide LIT Structure — v2.2", "Riptide LIT v2",
      overlay          = true,
      max_lines_count  = 500,
      max_labels_count = 500,
@@ -88,15 +104,15 @@ string pChild = input.string("Continuous, raw candles", "Child structure feed",
      group = gPol,
      options = ["Continuous, raw candles", "Scoped to parent pullback (v1)"],
      tooltip = "[P7b] What Internal and Deep actually read, and when they are allowed to exist.\n\nScoped to parent pullback (v1): a child runs its OWN normalizer over raw candles only while its owning parent pullback holds the scope, and restarts each time. It is drawn only while scoped. Faithful to 'nested inside', but a scope lasts a handful of bars, so the child rarely survives long enough to reach BOS or CHoCH.\n\nContinuous, raw candles: Internal reads RAW candles with NO normalizer - exactly the granularity Main throws away - and runs without interruption. This is the other reading of chapter 1's 'inside bar candles only form fractal and internal structures', and it is the only feed that makes Internal genuinely FINER than Main rather than identical to it. Deep stays owned by a confirmed Internal pullback, because there is no third granularity on one timeframe and ownership is what makes it deeper.")
-bool pDual = input.bool(true, "Track both pullback directions",
+bool pDual = input.bool(false, "Track both pullback directions",
      group = gPol,
-     tooltip = "[P8] [SRC] The one confirmed divergence from the reference, with two independent witnesses.\n\nChapter 3: 'First, we check whether there was already a bearish pullback before the change of character got broken.' Chapter 12: the display option is literally 'Show Latest Bullish & Bearish' - you cannot draw both unless you hold both.\n\nOn: a pullback detector runs in EACH direction at every depth. Only the one matching the structural direction may publish an IDM or open a child scope; the other is observed so it is ready the moment the trend flips.\n\nOff reproduces v1 for parity testing.")
+     tooltip = "[P8] [SRC] The one confirmed divergence from the reference, with two independent witnesses.\n\nChapter 3: 'First, we check whether there was already a bearish pullback before the change of character got broken.' Chapter 12: the display option is literally 'Show Latest Bullish & Bearish' - you cannot draw both unless you hold both.\n\nOn: a pullback detector runs in EACH direction at every depth. Only the one matching the structural direction may publish an IDM or open a child scope; the other is observed so it is ready the moment the trend flips.\n\nOff reproduces v1 for parity testing.\n\nTHIS BUILD DEFAULTS TO OFF. research/lit_v3.py, which produces the Python forward record, carries a SINGLE detector per context plus a bootstrap - there is no bull/bear pair in it. On is the better reading of the source; off is what the recorded experiment actually runs. They are not the same chart.")
 
 // ── BREAKOUT RULES ──────────────────────────────────────────────────────────
 // [SRC] Chapter 11: these four defaults are the reference's own settings.
-string mPB = input.string("Shadow", "Pullback confirmation", group = gBrk,
+string mPB = input.string("Body", "Pullback confirmation", group = gBrk,
      options = ["Shadow", "Body", "Body & Sweep"],
-     tooltip = "[SRC] 'Shadow confirms by wick; Body confirms by close; Body & Sweep Level keeps the sweep route.' - the reference's own tooltip.\n\nThis is also the noise filter. A stricter mode lets a correction survive its internal oscillations and run on to the true extreme, which is what a COMPLEX PULLBACK is. The reference runs Shadow here.")
+     tooltip = "[SRC] 'Shadow confirms by wick; Body confirms by close; Body & Sweep Level keeps the sweep route.' - the reference's own tooltip.\n\nThis is also the noise filter. A stricter mode lets a correction survive its internal oscillations and run on to the true extreme, which is what a COMPLEX PULLBACK is. The reference runs Shadow here.\n\nTHIS BUILD DEFAULTS TO BODY, not Shadow, because research/lit_v3.py - the engine behind the Python forward record - ships M_PB = BRK_BODY per [SRC Ch.24]: the reference STRATEGY build uses Body while its STRUCTURE build uses Shadow. Setting Shadow here gives you the reference's structure view, and a chart that no longer matches what LIT_FORWARD_V1 is recording.")
 string mIDM = input.string("Shadow", "IDM break", group = gBrk,
      options = ["Shadow", "Body", "Body & Sweep"],
      tooltip = "Taking inducement IS a wick event - the stops under that low fill whether or not the candle closes there.")
@@ -205,12 +221,15 @@ float sigFee = input.float(0.032, "Round-trip fee, %", minval = 0.0, maxval = 1.
 bool sigTrail = input.bool(true, "Arm pivot trail at Active Price", group = gSig,
      tooltip = "T6_PIVOT: once Active Price is reached, the stop follows each newly confirmed pullback pivot in the trade direction, and never moves against the position.\n\nWhat the reference's trailing stop actually trails is never stated in the source - this is a research policy, not a documented rule.")
 bool sigBox = input.bool(true, "Shade the risk band", group = gSig)
-// INTERNAL ENTRIES ARE UNMEASURED. Stages A, B and C all ran MAIN depth and
-// nothing else; the Python forward record is MAIN-only and frozen there. This
-// draws Internal setups so they can be WATCHED, and the panel keeps the two
-// depths in separate columns so they can never blend into one number.
-bool sigInt = input.bool(false, "Also take entries from Internal", group = gSig,
-     tooltip = "Internal structure produces far more setups than Main, which is the honest answer to 'too few signals'.\n\nBut NOTHING IS KNOWN ABOUT THEM. Every measurement in this project - Stage A, B and C - used MAIN depth. Internal has never been scored, so its expectancy is not small or large, it is unmeasured.\n\nThe forward record keeps Main and Internal in separate columns and never pools them. The Python forward experiment records MAIN only and this switch cannot reach it.")
+// WHICH STRUCTURE THE SIGNALS FOLLOW. Main is what every pre-registered
+// measurement used and what LIT_FORWARD_V1 records. Internal has NEVER been
+// scored - its expectancy is unmeasured, not small or large - so the forward
+// panel keeps the two in separate columns and never pools them.
+string sigDepth = input.string("Main", "Signals follow", group = gSig,
+     options = ["Main", "Internal", "Both"],
+     tooltip = "Which structure publishes entry signals.\n\nMain - the depth Stages A, B and C measured, and the only depth the Python forward record collects. This is the default because it is the one with evidence attached.\n\nInternal - far more setups, and NOTHING is known about them: no stage ever scored Internal. Watch them, do not read them as validated.\n\nBoth - draws each in its own colour and books them SEPARATELY. The panel never averages the two, because pooling a measured population with an unmeasured one hides the difference that matters.\n\nThis setting is chart-only. The Python experiment records MAIN regardless.")
+bool sigMain = sigDepth != "Internal"
+bool sigInt = sigDepth != "Main"
 bool sigLog = input.bool(true, "Forward record panel", group = gSig,
      tooltip = "Counts what these signals have actually done on the bars currently loaded. This is the only number here that is not borrowed from a backtest.")
 color cLong = input.color(#26a69a, "Long", inline = "sc", group = gSig)
@@ -1551,7 +1570,7 @@ var float sigBestI = 0.0
 var float sigWorstI = 0.0
 var float sigR2I = 0.0
 
-if showSig and engineOk
+if showSig and sigMain and engineOk
     // Manage what is open BEFORE opening anything new, so a setup can never
     // be replaced by its own successor mid-bar.
     float pivNow = sig.dir > 0 ? mainC.pbTrailBull : mainC.pbTrailBear
@@ -1939,12 +1958,13 @@ if showSig and sigLog and barstate.islast
     [mI, seI, tI] = fmtSE(sigNI, sigRI, sigR2I)
     table.cell(sigT, 0, 0, "Forward record", bgcolor = hd,
          text_color = #263238, text_size = size.small)
-    table.cell(sigT, 1, 0, "Main", bgcolor = hd, text_color = #263238,
-         text_size = size.small)
+    table.cell(sigT, 1, 0, sigMain ? "Main" : "—", bgcolor = hd,
+         text_color = #263238, text_size = size.small)
     table.cell(sigT, 2, 0, sigInt ? "Internal" : "—", bgcolor = hd,
          text_color = #263238, text_size = size.small)
 
-    cell2(1, "closed", str.tostring(sigN), str.tostring(sigNI), mu, mu)
+    cell2(1, "closed", sigMain ? str.tostring(sigN) : "-",
+         str.tostring(sigNI), mu, mu)
     cell2(2, "win rate",
          sigN > 0 ? str.tostring(100.0 * sigWin / sigN, "0.0") + "%" : "-",
          sigNI > 0 ? str.tostring(100.0 * sigWinI / sigNI, "0.0") + "%" : "-",
