@@ -1378,3 +1378,47 @@ rescored table, and one A/B on statsWindow ("Visible chart" vs "All loaded
 bars") to settle whether the reference table is window-cohorted at all - if it
 is not, our windowed totals are not comparable to its totals in the first
 place and the ratios above are the only sound comparison.
+
+
+v0.7.18 — label gap, and the BOS/CHoCH swap theory tested and rejected
+----------------------------------------------------------------------
+
+LABEL GAP. A live level's tag now sits PAST its right endpoint by a
+"Label gap (bars)" input (default 3), in the empty margin, instead of on the
+last bars of its own line. Retired tags still centre on their frozen span.
+
+THE SWAP THEORY. Observation raised: our BOS near row (50.0/50.0) looks like
+the reference's CHoCH row (50.0/50.0), and our CHoCH row (33.3/66.7) looks
+like the reference's BOS row (69.0/31.0) with the two rows exchanged. Two
+places a swap could live were audited, and then the theory was tested against
+the numbers themselves.
+
+  CODE AUDIT — no swap found.
+    Render: each of the six cells reads the counter its label names.
+    Counters: statBosNearOppPb increments only in the Opp-PB reach branch,
+      statBosNearBreak only inside the confirmed BOS break branch, and the
+      CHoCH pair mirrors it exactly.
+    Orientation: which level is BOS and which is CHoCH is guarded every bar by
+      invariant I11 (bullish bos > ch, bearish bos < ch). It has not flagged.
+
+  THE DATA RULES IT OUT ON ITS OWN, which is stronger than the audit.
+    A BOS/CHoCH swap would cross the TOTALS too. Ours are BOS 34, CHoCH 18 -
+    BOS is 1.9x CHoCH. The reference is BOS 29, CHoCH 14 - BOS is 2.1x CHoCH.
+    Same ordering, same ratio. Under a swap our BOS total would be the SMALL
+    one. It is not.
+
+    A row swap within a pair cannot explain it either. The two rows of a pair
+    share a Total and sum to it, so swapping them just exchanges the two
+    percentages. For BOS ours is 50/50 and swapping leaves 50/50 - it changes
+    nothing against the reference's 69/31. For CHoCH ours is 33.3/66.7 and
+    swapping gives 66.7/33.3, which is not the reference's 50/50 either. A row
+    swap makes both rows no closer.
+
+  WHAT THE RESEMBLANCE ACTUALLY IS. 50/50 is the degenerate value any
+  near-even race lands on, so it turning up in both tables on different rows
+  carries no information. 33.3/66.7 against 69/31 is a mirrored pair at n=18
+  and n=29 - one event either way moves our CHoCH row by 5.6 points. The gap
+  is real; a crossed wire is not the cause of it.
+
+The density finding from v0.7.17 still stands as the live explanation and is
+untested until the rescored scan is read back.

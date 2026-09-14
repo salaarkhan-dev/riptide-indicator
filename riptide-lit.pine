@@ -244,6 +244,9 @@ string labelSizeMain = input.string("Normal", "Main label size", group = gCol,
      options = ["Tiny", "Small", "Normal"], inline = "ls")
 string labelSizeChild = input.string("Small", "Child labels", group = gCol,
      options = ["Tiny", "Small", "Normal"], inline = "ls")
+int labelGapBars = input.int(3, "Label gap (bars)", minval = 0, maxval = 12,
+     group = gCol,
+     tooltip = "[§55] Horizontal gap between a LIVE level's right endpoint and its tag, measured in bars. The tag sits in the empty margin past the line instead of on top of it. Retired tags are centred on their own frozen span and ignore this.")
 int mainW = input.int(1, "Main line width", minval = 1, maxval = 3, group = gCol,
      tooltip = "[§51] Width of the Main BOS and CHoCH lines. Main IDM sits one step below this, floored at 1, and Internal/Deep are always 1.\n\n1 is the reference weight - Main already reads as Main through solid style and zero fade, and a thicker line covers price. Raise it only if Main is genuinely hard to pick out.")
 float labelClearAtr = input.float(0.24, "Label clearance × ATR", minval = 0.00,
@@ -1322,13 +1325,14 @@ tagLvl(label cur, int x1t, float y, string txt, color col, string sz,
     // frozen, because a closed historical segment has no live edge and tagging
     // its right end crowds whatever structure replaced it.
     //
-    // "Near", not "at": the anchor is pulled two bars back from the right
-    // endpoint so a centred style_none text does not overhang into the price
-    // scale. It is clamped to the segment start so a level created on the
-    // current bar still carries its tag.
+    // The tag sits PAST the right endpoint by labelGapBars, in the empty
+    // margin, rather than on the last few bars of its own line. Anchoring it
+    // inside the segment put the text on top of the line it belongs to.
     // Child levels use slightly less vertical clearance so nesting stays compact.
-    int right = time - barMs * 2
-    int xx = right < x1t ? x1t : right
+    // x1t is now unused here - the anchor no longer depends on where the
+    // segment started. It is kept in the signature because retire() needs the
+    // same geometry and the call sites already carry it.
+    int xx = time + barMs * labelGapBars
     float yy = y + (above ? atr * clearance : -atr * clearance)
     if na(out)
         out := label.new(xx, yy, txt, xloc = xloc.bar_time,
