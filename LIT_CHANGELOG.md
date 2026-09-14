@@ -2397,3 +2397,25 @@ rewriting history to hide a deleted file would be worse than a dangling name.
 `riptide-lit-v2.pine` is now the only LIT indicator. It carries the same
 structure engine with every undefined case turned into a named policy, and its
 defaults match the Python forward record.
+
+
+---
+
+## riptide-structure.pine REMOVED
+
+Deleted at the user's request. A standalone 460-line v5 indicator, "Market
+Structure Inducements ICT CHoch BOS Sweeps", carrying a period-based pivot
+engine alongside a Pullback (LIT) mode.
+
+Nothing loaded it. `deploy/check-parity.py` targets `riptide-indicator.pine`;
+no production module read it. `research/studies/lit_trend.py` and
+`research/lit.py` name it in their docstrings, but they PORTED its ChoCh block
+into Python rather than importing the file, so those studies still run exactly
+as before.
+
+**Recovery**, if it is ever wanted:
+
+    git show fc04f65:riptide-structure.pine > riptide-structure.pine
+
+Pine files remaining: `riptide-indicator.pine` (production, untouched),
+`riptide-lit-v2.pine`, `riptide-reversal.pine`, `liquidity-trendline.pine`.
