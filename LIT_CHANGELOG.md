@@ -1613,3 +1613,71 @@ STILL OPEN. BOS-near totals run about 1.45x the reference (42 against 29) while
 CHoCH-near runs 2x (28 against 14). The 15m and 30m readings disagree sharply
 on BOS-near (25.8% against 54.8%), which nothing in the model predicts. Not
 theorised about - next measurement.
+
+
+────────────────────────────────────────────────────────────────────────────
+STAGE A — §72's naked continuation is REFUTED, and usefully
+────────────────────────────────────────────────────────────────────────────
+
+research/lit_entry.py on research/lit_v3.py (a separate copy; lit_v02.py stays
+the frozen control). 8 symbols, 30m, commission 0.05%/side, minRR 0.5,
+Pullback = Body per Ch.24. 51 setups.
+
+    long   bullish IDM taken, BOS locked above, with-trend only
+    entry  the IDM-break bar's close
+    stop   that bar's extreme - the IDM raid extreme (§73)
+
+THE PREMISE IS REAL
+    BOS reached before CHoCH   34/41 = 82.9%   (reference 65.0%)
+    distance entry → BOS       11.85R median   [1.65 .. 30.67]
+
+EVERY EXIT ARM LOSES
+    trail        n   win%     expR    avgW    avgL  armed%
+    fixed       51  39.2%   -0.709    0.50   -1.49   39.2%
+    bos         51   9.8%   -0.657    3.44   -1.10   33.3%
+    breakeven   51   0.0%   -1.002    0.00   -1.00   39.2%
+    pivot       51   3.9%   -0.983    0.48   -1.04   39.2%
+    mfe         51  39.2%   -0.421    1.23   -1.49   39.2%
+
+83% of paths reach BOS, yet the BOS arm wins 9.8%. The contradiction is the
+finding, and one measurement resolves it - on the 34 paths that DO reach BOS,
+how far does price go against the entry first:
+
+    median   6.27R of the raid-extreme stop distance
+    75th    13.63R
+    90th    22.79R
+
+A stop wide enough to survive 80% of the WINNING paths is ~20x wider, and BOS
+then sits at ~0.6R of that risk.
+
+    tight stop → noise stops you out long before the structural move
+    wide stop  → the reward no longer covers the risk
+
+THERE IS NO STOP DISTANCE AT WHICH THIS ENTRY PAYS. §72's naked continuation is
+refuted on its own terms.
+
+WHY THIS IS A GOOD RESULT, NOT A DEAD END
+The premise survived and the ENTRY LOCATION is what failed. Price travels a
+median 6.3x the raid-bar distance against you before going to BOS - which is
+precisely the excursion POI zones exist to capture. The reference does not
+chase the IDM break; it waits for the retrace into a Decisional/Extreme zone,
+takes SCOB confirmation, and puts its stop behind structure rather than behind
+a single bar. Stage A has just measured why that architecture exists.
+
+So the design's gate is met in substance: it existed to stop us decorating a
+distribution with no edge, and the edge is demonstrably there (83% to a 12R
+target). What is missing is a place to stand.
+
+TWO HARNESS BUGS FOUND AND FIXED MID-RUN, both mine:
+  - the "fixed" control moved the stop to entry and then held with no target,
+    so it could only ever return 0R or -1R. It duly returned a 0.0% win rate
+    across every trade. That is not a control, it is a broken arm. A real
+    fixed-R control takes profit AT Active Price.
+  - the premise check measured "BOS before MY EXIT", which measures the exit
+    rule rather than the premise, and produced a nonsense 9.8%. Corrected to
+    BOS-before-CHoCH on the price path, independent of any exit, with same-bar
+    ties excluded rather than guessed.
+
+NEXT: not Stage B. The entry model is what needs replacing, so the next
+measurement is the reference's own - retrace to a zone, stop behind the zone -
+even in a crude form, before any filter is built on top of it.
