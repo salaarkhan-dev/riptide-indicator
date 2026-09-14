@@ -201,6 +201,9 @@ string mainPbRender = input.string("Hide if started in Boundary Lock",
      "Main PB during Boundary Lock", group = gPB,
      options = ["Show all", "Hide if started in Boundary Lock"],
      tooltip = "Visual policy only. The detector and structure engine are unchanged. When hidden, a Main correction that STARTED while Main was already in Boundary Lock is not drawn as a historical pullback zone after confirmation. Internal/Deep zones are unaffected.")
+string idmAnchor = input.string("Pivot bar", "IDM line starts at", group = gPB,
+     options = ["Pivot bar", "Pullback start"],
+     tooltip = "Renderer only - the analytical IDM level is the pullback's pivot either way.\n\nPivot bar: the line begins on the candle that actually made the level, which is what the reference shows.\n\nPullback start: the line begins at the correction's first candle. That draws the segment between the correction's start and its extreme at a price the market had not reached yet, which is the floating IDM.")
 bool markHiddenPb = input.bool(true, "Debug mark hidden Main PB", group = gPB,
      tooltip = "When Debug is on, place a tiny marker where a Main pullback zone was suppressed by the visual Boundary-Lock policy.")
 
@@ -1301,14 +1304,23 @@ paint(Ctx x, bool on, string pre, int w, int fade, string sz) =>
         color be = color.new(cBear, fade)
         bool bull = x.dir == DIR_BULL
         color id = color.new(bull ? cIDMBull : cIDMBear, fade)
-        int idmX = not na(x.idmDrawT) ? x.idmDrawT : x.idm.barT
+        // FLOATING IDM FIX. The IDM PRICE is the pullback's pivot, and the
+        // pivot is made part-way THROUGH the correction - not at its first
+        // candle. Anchoring the line at the correction's start therefore draws
+        // everything between that start and the pivot at a level price had not
+        // yet reached, leaving the line hanging in empty space. Anchoring at
+        // the pivot bar starts the line on the candle that made the level,
+        // which is what the reference does. Analytical state is untouched:
+        // x.idm.px and x.idm.bar are unchanged either way.
+        int idmX = idmAnchor == "Pullback start" and not na(x.idmDrawT) ?
+             x.idmDrawT : x.idm.barT
         string idmStyle = x.depth == 0 ? line.style_solid : line.style_dotted
         string bosStyle = x.depth == 0 ? line.style_solid : line.style_dashed
         string chStyle = x.depth == 0 ? line.style_solid : line.style_dashed
         if x.idm.on and showIDM
             // The IDM PRICE is the pivot emitted by the completed pullback.
-            // Visual geometry starts at the pullback's left edge, matching the
-            // reference while keeping the analytical level anchored to the pivot.
+            // Where the line STARTS is the idmAnchor input above; see the
+            // floating-IDM note. The level itself is the pivot either way.
             x.lnIdm := drawLvl(x.lnIdm, idmX, x.idm.px, id, 1, idmStyle)
             x.lbIdm := tagLvl(x.lbIdm, idmX, x.idm.px, pre + "IDM", id,
                  sz, not bull, x.depth == 0 ? labelClearAtr : labelClearAtr * 0.78)
