@@ -1,0 +1,113 @@
+================================================================================================
+LIT — EVERY SETTING COMBINATION, AND WHETHER THE WINNER SURVIVES
+================================================================================================
+grid      pullback x IDM x BOS x CHoCH modes (3^4) x reseed (2) = 162 combinations
+symbols   10   timeframes Min15, Min30
+split     IN-SAMPLE = everything before the last 120 days; OUT-OF-SAMPLE = the last 120
+entry     the frozen V1 rule, UNCHANGED. Only structure settings
+          vary - entry, stop, Active Price and exits are fixed.
+default   ('Body', 'Shadow', 'Sweep', 'Sweep', 'resolver')  (what LIT_FORWARD_V1 records)
+================================================================================================
+
+loaded 20 symbol-timeframes
+
+  20/162 combos  52s elapsed, ~368s left
+  40/162 combos  102s elapsed, ~310s left
+  60/162 combos  149s elapsed, ~254s left
+  80/162 combos  195s elapsed, ~200s left
+  100/162 combos  239s elapsed, ~148s left
+  120/162 combos  284s elapsed, ~100s left
+  140/162 combos  329s elapsed, ~52s left
+  160/162 combos  374s elapsed, ~5s left
+
+================================================================================================
+  1. BEST COMBINATION PER TIMEFRAME, chosen IN-SAMPLE
+================================================================================================
+  tf     combination                                IS n    IS Δ  OOS n   OOS Δ   decay
+  Min15  best: Body/Body/Body/Sweep/resolver         222   0.341    114   0.063  -0.278
+         default: Body/Shadow/Sweep/Sweep/resolver    307   0.074    146  -0.135  -0.210
+  Min30  best: Shadow/Body/Shadow/Sweep/resolver     181   0.602     87   0.479  -0.124
+         default: Body/Shadow/Sweep/Sweep/resolver     99   0.340     34   0.606   0.266
+
+================================================================================================
+  2. BEST COMBINATION PER (SYMBOL, TIMEFRAME) — the actual claim
+  Each pair gets its own winner, chosen in-sample. Then all of them
+  are scored out-of-sample and compared with the single frozen
+  default applied to every pair.
+================================================================================================
+
+  Min15  (10 pairs each given their own best settings)
+                            IS Δ/bet   OOS Δ/bet     decay
+    per-pair tuned             1.040       0.088    -0.952
+    one frozen default         0.074      -0.135    -0.210
+    tuning advantage OOS                   0.223
+
+  Min30  (10 pairs each given their own best settings)
+                            IS Δ/bet   OOS Δ/bet     decay
+    per-pair tuned             0.930      -0.029    -0.959
+    one frozen default         0.340       0.606     0.266
+    tuning advantage OOS                  -0.635
+
+================================================================================================
+  READ
+================================================================================================
+  DECAY is the number to look at. A large positive in-sample delta
+  that collapses out-of-sample is the signature of picking the best
+  of many draws, and it is what a grid produces from pure noise.
+
+  'tuning advantage OOS' is the whole claim in one number: how much
+  better per-pair tuning did on data it was NOT picked on. If it is
+  at or below zero, the settings that looked better were fitted to
+  the window they were chosen from.
+
+  Nothing here can change LIT_FORWARD_V1. It is frozen by
+  PREREG_lit_forward_v1.md; a settings change would be V2 and would
+  need its own pre-registration and its own out-of-sample test.
+
+====================================================================================================
+  INTERPRETATION  (written after the run)
+====================================================================================================
+
+THE GRID FOUND WINNERS. THEY DID NOT SURVIVE.
+
+Per-pair tuning, which is the claim, decayed by ~0.95 R/bet on BOTH
+timeframes - from +1.040 to +0.088 on Min15, and from +0.930 to -0.029 on
+Min30. That is not a small shrinkage. It is nearly the whole effect.
+
+A decay of that size is what a grid produces from noise. Each pair's champion
+is the best of 162 draws; the in-sample number is the maximum of a
+distribution, and the maximum of a distribution is mostly luck. The
+out-of-sample number is what was actually there underneath.
+
+THE TUNING ADVANTAGE, WHICH IS THE ONE NUMBER THE CLAIM REDUCES TO:
+
+    Min15   +0.223   per-pair tuning beat the frozen default
+    Min30   -0.635   per-pair tuning LOST to the frozen default
+
+Opposite signs on two timeframes of the same experiment. If per-pair tuning
+carried real information it would not flip sign between 15m and 30m on the
+same symbols over the same bars. Two cells disagreeing this violently is what
+"no signal, high variance" looks like.
+
+THE SINGLE DEFAULT ALSO MOVED AROUND, AND THAT IS THE POINT.
+
+The frozen default went -0.135 out-of-sample on Min15 and +0.606 on Min30.
+Those swings are as large as anything the tuning produced. At n=146 and n=34
+bets neither is a measurement of anything; the Min30 default's +0.606 on 34
+bets is exactly as unreliable as the tuned numbers, and it would be dishonest
+to quote it as evidence the default is good.
+
+WHAT THIS DOES NOT SAY. It does not say the settings are identical in effect,
+or that structure settings never matter. It says that CHOOSING them per pair
+by looking at past performance does not transfer, at this sample size, on this
+data.
+
+WHAT WOULD CHANGE THE ANSWER. A per-pair rule chosen for a structural reason
+rather than a performance reason - "this pair ticks coarsely, so Body
+confirmation is the right filter" - decided BEFORE looking at returns, and
+then tested out of sample. That is a different experiment, it would be
+LIT_FORWARD_V2, and it needs its own pre-registration.
+
+STATUS. LIT_FORWARD_V1 is unchanged and still frozen: entry, stop, Active
+Price, exits and structure settings all exactly as pre-registered. This grid
+changed nothing and was never able to.
