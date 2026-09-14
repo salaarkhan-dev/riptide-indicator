@@ -944,3 +944,113 @@ have, and it is worth more than any further instrumentation on our side.
 Until then nothing is adopted, Arm A is canonical and untouched, and the two
 rejected models stay in `research/lit_of.py` so the next candidate can be
 measured against them rather than argued about.
+
+---
+
+# v0.3.7 — the zoomed reference plus our own chart. The premise was wrong.
+
+No behaviour change. Arm A untouched.
+
+## The finding that reframes everything
+
+**Every structural label in the reference between 11 Sep 15:00 and 14 Sep is
+PREFIXED.** `iiIDM`, `iBOS`, `iIDM`, `iiDM`, `iiChoch`, `iiBOS`, `iChoch`.
+There is **no unprefixed Main IDM, BOS or Choch anywhere in that window.**
+
+So the answer to the focus question — are the successive pink pullbacks from
+12 Sep ~11:00 through 13 Sep ~15:00 order-flow reversals, same-direction IDM
+migration, or nested Internal/Deep events? — is **nested Internal/Deep**, on
+label evidence, high confidence.
+
+**The reference's Main is quiet through that stretch. So is ours:**
+
+```
+zoom window bars 11306..11518   (11 Sep 15:00 .. 13 Sep 20:00)
+  MAIN      events:  0
+  INTERNAL  events: 18   PB 11  IDM 2  taken 2  BOS 1  CHoCH 1  flip 1
+  DEEP      events: 39   PB 17  IDM 10 taken 6  BOS 3  CHoCH 3
+reference labels in the same window: iiIDM iBOS iIDM iiDM iiChoch iiBOS iChoch
+reference unprefixed Main labels:    NONE
+```
+
+**Main being silent there is a MATCH, not a defect.** The last two rounds —
+OF-A and OF-B, and the whole hunt for a flow-orientation rule — were aimed at
+making Main produce events in a region where the reference produces none
+either. That work stands as a correct rejection of two rules, but it was
+solving a problem that does not exist in this region.
+
+This also corrects my own v0.3.5 ledger, where I classified the 12–13 Sep
+boxes as `MAIN_EXTERNAL` at MEDIUM confidence. The zoom shows that was wrong.
+
+## Our Main population is roughly right
+
+From the debug panel on our chart against the reference's stat table:
+
+```
+              ours (Main)      reference
+PB                    155              —
+IDM                    76              —
+IDM taken              35              24
+BOS                    24              37
+CHoCH                  24              39
+flips                  13              —
+```
+
+Same order of magnitude on every comparable row. **Population was never the
+problem.**
+
+## What IS wrong, and it is narrow
+
+Our chart draws **one enormous pink box from ~11 Sep 09:00 to ~14 Sep 03:00**,
+roughly 1070–1220, covering the whole quiet stretch. The reference draws no
+Main box there at all.
+
+The debug panel says why:
+
+```
+pullback   active from 7208, confirms at 1062.72
+leg from   1295.43  bar 6778
+BOS base 1054.38 act 1041.86 drift 1.19% n1 age 291
+CHoCH base 1295.43 act 1295.43 drift 0% n0 age 311
+last event latent cached
+```
+
+Main holds **one correction open across the entire boundary lock**, and when
+such a correction eventually confirms it is drawn as a single box spanning
+everything it covered. The reference has no equivalent object on the chart.
+
+So the discrepancy is not flow orientation. It is that **a correction which
+spans a boundary lock is a different animal from an external pullback, and
+should not be rendered as one.**
+
+## A–I
+
+**A.** Visible Main external PBs in the target region: **0**.
+**B.** Inferred Main OF direction changes there: **0**.
+**C.** Multiple PBs inside one persistent direction: yes — but at Internal and
+Deep degree, not Main.
+**D.** Preceding event for each Main OF transition: **not applicable, none
+exist in this region.**
+**E.** OF-1 … OF-7 score table: **not scoreable.** There are zero Main
+order-flow transitions in the chosen window to score against. A candidate
+cannot be ranked on a region containing none of the events it governs.
+**F.** OF-3 (IDM-qualified) and OF-4 (PB+IDM handshake): **undecidable from
+this fixture** for the same reason. Both remain plausible and neither is
+tested.
+**G.** Are Internal events necessary to trigger Main OF? **Undecidable here** —
+Main does not transition in this window at all.
+**H.** Minimal orientation rule supported by every visible transition:
+**NEED_MORE_REFERENCE**, and the region to look at is *not* this one. It has to
+be a stretch containing unprefixed Main IDM activity — on this chart that is
+**9 Sep** and **11 Sep 06:00–09:00**, where the reference does show `IDM` and
+`Choch` without a prefix.
+**I.** No behaviour changed.
+
+## The question worth asking before more work
+
+On your Riptide chart, the giant box is Main. On the reference, the same
+stretch has Internal and Deep boxes and nothing from Main. Both engines agree
+Main is quiet. Before any orientation rule is chased further, the cheaper
+question is whether a Main correction that opens and then spans a boundary lock
+should be drawn at all — or whether the reference simply does not carry such an
+object.
