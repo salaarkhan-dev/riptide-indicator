@@ -1921,3 +1921,118 @@ CUMULATIVE PROGRESSION, all measured, none positive:
 
 Every source filter is now measured except the two that need T6 first. T6 is no
 longer one hole among several — it is the only road left open.
+
+---
+
+## T6 — WHAT THE TRAILING STOP TRAILS (research/lit_exit.py)
+
+The source is explicit that everything measured before this used an exit it
+rules out:
+
+    [SRC Ch.20] "Index Algo relies on a Trailing Stop logic rather than fixed
+    take-profit targets." — "This CONTRADICTS master prompt §74, which names
+    BOS as 'the natural structural target'. The reference does not target BOS."
+
+So this is not a refinement of Variants 2-4, it is a different question.
+
+TWO HARNESS CHANGES, both of which change how earlier work should be read.
+
+1. SETUPS ARE COLLECTED ONCE AND SHARED. Every prior variant allowed one live
+   trade, so a longer-held exit blocks later entries and n differs per arm —
+   the same slot-competition confound that muddied the obstacle check. Here all
+   ten arms run over an identical 277-setup set.
+
+2. A STANDARD-ERROR COLUMN. This should have been there from the start.
+
+    exit rule                      n    win%    NET R      se   avgW   avgL
+    CONTROL initial stop only    277    17.3%    0.360   0.346   7.58  -1.15
+    CONTROL exit at BOS          277    36.1%   -0.020   0.138   2.06  -1.20
+    CONTROL fixed 1R             277    47.7%   -0.198   0.069   0.89  -1.19
+    CONTROL fixed 2R             277    34.7%   -0.126   0.092   1.83  -1.16
+    CONTROL fixed 3R             277    28.5%   -0.049   0.111   2.71  -1.15
+    T6 break-even only           277    28.9%   -0.005   0.143   1.78  -0.73
+    T6 pivot trail               277    32.9%   -0.011   0.128   1.55  -0.77
+    T6 structure trail           277    31.4%    0.026   0.137   1.73  -0.76
+    T6 mfe - 0.5R                277    58.5%   -0.129   0.080   0.67  -1.25
+    T6 mfe - 1.0R                277    39.7%   -0.057   0.091   1.16  -0.86
+    T6 mfe - 1.5R                277    36.8%    0.017   0.106   1.46  -0.82
+
+### T6 IS ANSWERED, IN THE NEGATIVE
+
+The design said: "Measured against a fixed-R control, which is the honest
+baseline: if no trailing variant beats a fixed exit, that is the result and it
+gets recorded as one." That is the result. The best trailing arm is +0.026 with
+se 0.137 — a fifth of one standard error from zero, and indistinguishable from
+the BOS control at -0.020. Nothing in this table separates.
+
+What trailing DOES do is real but not an edge: it cuts avgL from -1.20 to about
+-0.76 and pays for it in win rate (36.1% -> 31.4%) and avgW (2.06 -> 1.73). It
+reshapes the distribution and nets zero. The worst trade is -5.82 in every
+single arm, because it gapped through the INITIAL stop before the trail could
+ever arm. No exit rule reaches that trade.
+
+### THE BEST-LOOKING ARM IS AN ARTEFACT, NOT A FINDING
+
+"Initial stop only" (hold, no target, no trail) posts the highest NET at +0.360
+— on se 0.346, 17.3% win rate, avgW 7.58. That shape is a warning, so:
+
+    exit=stop   219 trades   79.1% of set   NET  -1.194
+    exit=cap     58 trades   20.9% of set   NET  +6.226
+    LONG  125 trades NET -0.124 se 0.484   SHORT 152 trades NET +0.758 se 0.488
+    median hold 39 bars, mean 146 bars (cap 500)
+
+The entire result is 58 positions that never closed, marked to market at an
+arbitrary 500-bar cutoff. Those are not exits. NOT A FINDING.
+
+### THE ARMED SUBSET LOOKS GREAT AND IS NOT TRADEABLE
+
+Restricted to the 182 setups whose MFE reached Active Price, every arm is
+strongly positive (BOS control +0.503, structure trail +0.579). That is
+selection on the outcome — you cannot know at entry which trades will reach
+0.5R. Recorded only because it shows that even there, trailing does not beat
+the control: +0.579 against +0.503 on se ~0.20.
+
+### THE ROOT CAUSE, AND IT IS NOT THE EXIT
+
+MFE measured with no target and no trail, so the exit rule cannot truncate it:
+
+    reached Active Price (0.5R)  65.7%      reached 2R  35.4%
+    reached 1R                   50.5%      reached 3R  27.8%
+    median MFE 1.01R   p75 3.35R   p90 9.55R
+
+A setup whose median best-case excursion is 1.01R against a 1R stop has no room
+for any exit rule to work in. A third never reach 0.5R at all, so on those the
+trail never arms and every trailing arm IS the control. The exit was never the
+binding constraint — the entry does not generate enough favourable excursion
+relative to its own stop.
+
+### THE OBSTACLE CHECK, RE-TESTED UNCONFOUNDED
+
+Variant 4 could not read this filter because BOS was both the obstacle and the
+exit. Under a trailing exit that circularity is gone:
+
+    structure trail   path clear    250   0.012  se 0.149
+                      path blocked   27   0.156  se 0.272
+    mfe - 1.5R        path clear    250  -0.024  se 0.113
+                      path blocked   27   0.395  se 0.311
+
+The blocked set still reads no worse than the kept set, so there is still no
+evidence the filter helps. But at n=27 and se ~0.3 this cannot be read either
+way. Correct status: NO EVIDENCE OF BENEFIT, SAMPLE TOO SMALL TO REFUTE.
+
+### WHAT THE se COLUMN DOES TO THE EARLIER WRITE-UPS
+
+The cumulative progression was recorded as "each source filter helped and each
+helped less": -0.46 -> -0.11 (FVG) -> -0.085 (SCOB). At n~270 the se on these
+is roughly 0.10-0.14. The first step, 0.35R, is around 3 se and is probably
+real. The FVG -> SCOB step of 0.025R is a fifth of one se and is NOT
+distinguishable from nothing. Variant 4's obstacle arm, "0.008 -> -0.027", was
+read as a degradation; it is noise. Those small deltas were over-read, and this
+correction applies to every table in this file before this section.
+
+### STATUS
+
+T6 was the last large hole and the only road left open. It is now measured and
+it does not open. Across ten exit rules on a shared setup set, nothing is
+distinguishable from zero. The MFE ceiling says why, and it is an entry problem,
+not an exit problem.
