@@ -1133,3 +1133,108 @@ The object is now identified precisely and the coupling question is closed.
 What is not settled is the rule: "crosses a lock" is too broad, and the exact
 narrower class needs stating properly before it is worth coding. Nothing
 adopted; Arm A canonical and untouched.
+
+
+────────────────────────────────────────────────────────────────────────────
+v0.7.16 — FULL AUDIT: riptide-lit.pine against the master prompt (82 §)
+────────────────────────────────────────────────────────────────────────────
+
+Line-by-line audit of every numbered section. Diagnostic only. Nothing in
+this pass changes engine behaviour or rendering.
+
+THE TWO THINGS SUSPECTED MISSING ARE PRESENT AND CORRECT
+--------------------------------------------------------
+
+§24-§30 HIDDEN SHADOW — implemented, matches the MD.
+  §25 candidate: armed on the candle that pushes past the level without
+      resolving it.
+  §26 skip-inside: `h < b.hsMomHi and l > b.hsMomLo` — strict, as §26 asks.
+  §27 synthetic candle: open = candidate.open, high/low = span extremes,
+      close = resolver.close.
+  §28/§29 resolution: only the resolver CLOSE is tested against hsLvl.
+      hsHi/hsLo are tracked but deliberately unread — correct, the MD says
+      only syntheticClose decides.
+  §30 B&S after rejection: present.
+  §60 inputs present with the documented defaults
+      PB false / IDM false / BOS true / CHoCH true.
+  §31 break-mode defaults correct: Shadow / Shadow / B&S / B&S.
+
+§8-§12 INSIDE BARS — implemented, persistent mother range, not prev-bar.
+  §8  inside = not (rh > n.hi) and not (rl < n.lo)  — strict both sides.
+  §10 exit is geometric (range), never Body or B&S.
+  §11 equality: exact touch is NOT a break, so it falls through to inside.
+      The MD is internally ambiguous at exact equality (§8 and §10 both want
+      strict, which leaves equality unclassified); resolving it as inside is
+      the only reading consistent with §11. Code comment should say so.
+  §12 OUTSIDE_BOTH counted in n.bothCount; the group emits and the offending
+      candle seeds the next mother range, so no two structural events come
+      off one bar. See DEFECT 2 for the missing debug output.
+
+ALSO VERIFIED CONFORMING
+------------------------
+  §3   forbidden constructs: zero uses of ta.pivothigh / ta.pivotlow.
+  §4   non-repainting: cfgConfirm default true.
+  §23  pullback-zone boundary input present (pbEdge), visual only.
+  §33  IDM migration: one active IDM per depth, retire-and-replace.
+  §34  structural leg anchor: legHi/legLo/legHiBar/legLoBar maintained
+       independently of IDM migration; BOS reads the LEG extreme, not the
+       latest IDM. This is the one the MD calls out as important, and it
+       is right.
+  §42  latent pullbacks during boundary lock: cached, not dropped.
+  §45  child context starts UNDEFINED (DIR_NONE).
+  §46  Deep only runs with Internal (runDeep = runInt and showDeep).
+  §47  strong/weak are derived display labels; nothing in the engine reads
+       them.
+  §57  bounded history: 8 / 6 / 3 levels, 10 zones per depth.
+  §59  break-mode inputs all four exposed with the documented defaults.
+
+DEFECTS — ordered by how much they cost
+---------------------------------------
+
+DEFECT 1  §58/§81 default view is not clean. Five defaults are wrong.
+    showDeep      true   → MD says false
+    pbDeepOn      true   → MD says false
+    showStats     true   → MD says false
+    showNearScan  true   → a research table on by default; §81 says
+                           "no giant table"
+    showInside    false  → MD §58/§61 say Color Inside Bars = true
+  The first four make the default chart noisier than the MD asks for; the
+  fifth makes it quieter. §81 is explicit about what a first load should
+  look like and this is not it.
+
+DEFECT 2  §63 Debug Mode is unreachable. `bool showDbg = false` on line 239
+  is a hardcoded constant, not an input. Everything gated on it is dead:
+  the §63 debug surface, the §12 outside-both debug output the MD calls
+  mandatory ("must not silently corrupt structure"), and markHiddenPb —
+  whose own tooltip says "When Debug is on", which can never happen.
+  markHiddenPb is therefore a live input wired to nothing.
+
+DEFECT 3  §51/§52 depth is not graded by line width. paint() takes an `int w`
+  parameter and then every drawLvl call passes a hardcoded 1. Main,
+  Internal and Deep all render at width 1. The MD wants Main "slightly
+  thicker" and Internal "thinner". Depth is currently carried only by line
+  style and fade. The parameter is accepted and ignored — dead argument.
+
+DEFECT 4  §55/§51 label placement. tagLvl puts every label at 50% along the
+  live segment (`x1t + int((time - x1t) * 0.50)`). The MD says BOS and
+  CHoCH labels sit near the line's RIGHT EDGE, and §51 repeats it: "not
+  floating in middle of candles". The reference screenshots agree. As
+  written, on a long-lived Main level the label sits in open chart space
+  far from the current bar.
+
+NOT DEFECTS — optional, recorded so they are not re-raised
+----------------------------------------------------------
+  §76A event journal: 6 `lastEvent :=` assignments, not the 14-event
+       journal. §76 is headed "Improvement Suggestions".
+  §76B structure IDs: sc.id exists; no per-cycle structure ID. Same.
+  §57  the MD's suggested caps are 20/30/30/30 but it permits "sensible
+       fixed limits"; 8/6/3/10 is inside that.
+
+ONE HOUSEKEEPING ITEM
+---------------------
+  The indicator() title still reads "Riptide LIT Structure — v0.7.9 CAL"
+  while the file header says v0.7.15.
+
+NOTHING CHANGED IN THIS PASS. Defects 1 and 2 are one-line each and carry no
+engine risk. Defects 3 and 4 are rendering and should be settled against the
+reference screenshots, not against the MD text alone.
