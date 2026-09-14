@@ -1293,3 +1293,88 @@ no function assigns a global scalar (CE10088), every drawing stays anchored in
 xloc.bar_time (RE10026), continuation indents follow the file's 9-space
 convention, and no `[]` history is taken on an object field. Compile errors on
 first paste are still possible and are the expected next round.
+
+
+────────────────────────────────────────────────────────────────────────────
+v0.7.17 — NEAR CALIBRATION: the scan was scoring against the wrong target
+────────────────────────────────────────────────────────────────────────────
+
+Measured on ZEC 30m, viewport ≈ 11 Sep 06:00 → 14 Sep, Main depth.
+
+                          reference        ours
+  IDM → BOS touch         20  13  65.0%    31  19  61.3%
+  IDM → Choch touch       20   7  35.0%    31  12  38.7%
+  BOS near → Opp PB       29  20  69.0%    34  17  50.0%
+  BOS near → BOS break    29   9  31.0%    34  17  50.0%
+  Choch near → Opp PB     14   7  50.0%    18   6  33.3%
+  Choch near → Choch brk  14   7  50.0%    18  12  66.7%
+
+THE FINDING
+-----------
+Row 1 is not a "near" statistic at all - it uses no near rule - and it says
+the reference resolves 20 lock episodes in this window where we resolve 31.
+Our Main structure runs about 1.55x hotter than the reference's on the same
+bars. That single number reframes everything below it.
+
+Near events per lock episode:
+    reference   29/20 = 1.45 BOS      14/20 = 0.70 CHoCH
+    ours        34/31 = 1.10 BOS      18/31 = 0.58 CHoCH
+
+So our near rule fires LESS often per opportunity than the reference's, not
+more. The raw totals (34 vs 29, 18 vs 14) looked close and pointed the other
+way, which is exactly the trap.
+
+The calibration scan has been scored against the reference's raw 29 / 14 since
+it was built. Against a raw target, a candidate is rewarded for firing LESS -
+so the scan has been steering every prior round toward a stricter rule when
+the evidence says the rule is already too strict. Rescored on the normalized
+target (1.45 and 0.70 applied to OUR race count, so 45 / 22 at 31 races):
+
+    candidate              BOS  Choch    old error    new error
+    Raw level touch         48     19       24            6
+    ≤10% range              82     35       74           50
+    ≤20% range              83     45       85           61
+    IN USE: armed touch     34     18        9           15
+
+Raw level touch, the simplest reading of the source word, goes from worst-but-
+one to best once the comparison is like-for-like. The armed rule currently
+driving the live table goes the other way.
+
+WHY THIS ALSO EXPLAINS THE SPLITS
+---------------------------------
+Both near rows are biased the same way - we break where the reference reaches
+the opposite pullback. The arm rule allows one race in flight per boundary, so
+a second or third approach to a still-live boundary is not counted. Those
+repeat approaches are by construction ones that already failed once, and a
+failed approach is far more likely to retreat to the opposite pullback than to
+break. Excluding them removes mostly-reach events from the denominator, which
+drives the split toward break. One cause, both symptoms, and it is falsifiable:
+loosening the arm should raise the totals AND the reach share together.
+
+CHANGED IN THIS PASS — instrumentation only, no rule adopted
+------------------------------------------------------------
+  - The scan's Error column is now scored against the density-normalized
+    target, and the target row prints it alongside our race count. If our race
+    count ever reaches 20, the target collapses back to 29 / 14 by itself.
+  - The rule actually driving the live table ("armed touch") is now a row in
+    the scan, scored on the same target. It was never in the scan, so it was
+    never comparable to the rows it was being selected against.
+  - Removed statBosNearSeenLevel / statChNearSeenLevel: declared, never
+    written, never read.
+
+CHECKED AND CLEAN, recorded so it is not re-investigated
+--------------------------------------------------------
+  - The `if not moved` gate on the Opp-PB reach branch looked like an
+    asymmetry that would bias toward break. It is not: `moved` is set only by
+    the IDM, BOS and CHoCH break branches, both break branches disarm BOTH
+    races before the gate is reached, and a race cannot be armed on an IDM
+    break bar (the arm site runs after it, and bosArmedThisBar excludes it).
+    The gate is redundant, not harmful. Left alone.
+  - The cross-invalidation IS symmetric: BOS break clears the CHoCH race and
+    CHoCH break clears the BOS race.
+
+NOT ADOPTED. No near rule changed. The next round needs one reload to read the
+rescored table, and one A/B on statsWindow ("Visible chart" vs "All loaded
+bars") to settle whether the reference table is window-cohorted at all - if it
+is not, our windowed totals are not comparable to its totals in the first
+place and the ratios above are the only sound comparison.

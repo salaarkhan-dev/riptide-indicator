@@ -442,11 +442,9 @@ type Ctx
     // structural boundary instead of blindly using the latest PB.
     array<float> statPbTops
     array<float> statPbBots
-    // A structural boundary may be approached repeatedly. The reference table
-    // appears to count a boundary opportunity once, not re-arm the same level
-    // after an Opp-PB excursion. Track the exact level instance by createdBar.
-    int statBosNearSeenLevel = na
-    int statChNearSeenLevel = na
+    // (The once-per-level fields that used to sit here were dead: declared,
+    // never written, never read. The one-race-in-flight restriction that is
+    // actually in force is the `not statBosNearArmed` guard at the arm site.)
     // Near-rule calibration scan. These counters are DIAGNOSTIC ONLY. A count
     // is a rising-edge entry into the candidate zone while BOS+CHoCH are both
     // active. No candidate feeds the state machine.
@@ -1774,7 +1772,7 @@ if showStats and barstate.islast
 // the reference-shaped result table so candidate research cannot be mistaken
 // for a validated statistic. Targets from the supplied ZEC 30m reference are
 // BOS near Total=29 and CHoCH near Total=14.
-var table nearTbl = table.new(position.middle_right, 4, 9,
+var table nearTbl = table.new(position.middle_right, 4, 10,
      bgcolor = color.new(chart.bg_color, 5), border_width = 1,
      border_color = color.new(#b0b3b8, 55))
 if showNearScan and barstate.islast
@@ -1784,17 +1782,37 @@ if showNearScan and barstate.islast
     table.cell(nearTbl, 1, 0, "BOS", bgcolor = nh, text_color = #263238, text_size = size.small)
     table.cell(nearTbl, 2, 0, "Choch", bgcolor = nh, text_color = #263238, text_size = size.small)
     table.cell(nearTbl, 3, 0, "Error", bgcolor = nh, text_color = #263238, text_size = size.small)
-    table.cell(nearTbl, 0, 1, "Reference target", text_color = cTxt, text_size = size.small)
-    table.cell(nearTbl, 1, 1, "29", text_color = cBull, text_size = size.small)
-    table.cell(nearTbl, 2, 1, "14", text_color = cBull, text_size = size.small)
-    table.cell(nearTbl, 3, 1, "0", text_color = cBull, text_size = size.small)
-    int eTouch = math.abs(ns.calBosTouch - 29) + math.abs(ns.calChTouch - 14)
-    int e10 = math.abs(ns.calBos10 - 29) + math.abs(ns.calCh10 - 14)
-    int e20 = math.abs(ns.calBos20 - 29) + math.abs(ns.calCh20 - 14)
-    int e25 = math.abs(ns.calBos25 - 29) + math.abs(ns.calCh25 - 14)
-    int e33 = math.abs(ns.calBos33 - 29) + math.abs(ns.calCh33 - 14)
-    int e50 = math.abs(ns.calBos50 - 29) + math.abs(ns.calCh50 - 14)
-    int ePb = math.abs(ns.calBosPb - 29) + math.abs(ns.calChPb - 14)
+    // ── THE TARGET, AND WHY IT WAS WRONG ────────────────────────────────
+    // Every earlier round scored these candidates against the reference's raw
+    // 29 / 14. That is only the right target if our engine produces the same
+    // number of lock episodes as the reference's, and it does not: the IDM
+    // race row counts 20 for the reference and 31 for us on this fixture, so
+    // we run about 1.55x hotter at Main depth. Against a raw 29 the scan
+    // rewarded whichever candidate fired LEAST, which is the opposite of what
+    // a like-for-like comparison asks for.
+    //
+    // The reference's near events per lock episode are 29/20 = 1.45 for BOS
+    // and 14/20 = 0.70 for CHoCH. Those RATIOS are the quantity that should
+    // carry across two engines of different granularity, so the target here is
+    // the ratio applied to OUR race count. If our race count ever matches 20,
+    // the normalized target collapses back to 29 / 14 on its own.
+    float refBosPer = 29.0 / 20.0
+    float refChPer = 14.0 / 20.0
+    int races = ns.statIdmRaceTotal
+    int tgtBos = races > 0 ? int(math.round(refBosPer * races)) : 29
+    int tgtCh = races > 0 ? int(math.round(refChPer * races)) : 14
+    table.cell(nearTbl, 0, 1, "Target /" + str.tostring(races) + " races",
+         text_color = cTxt, text_size = size.small)
+    table.cell(nearTbl, 1, 1, str.tostring(tgtBos), text_color = cBull, text_size = size.small)
+    table.cell(nearTbl, 2, 1, str.tostring(tgtCh), text_color = cBull, text_size = size.small)
+    table.cell(nearTbl, 3, 1, "ref 29/14 @20", text_color = cTxt, text_size = size.small)
+    int eTouch = math.abs(ns.calBosTouch - tgtBos) + math.abs(ns.calChTouch - tgtCh)
+    int e10 = math.abs(ns.calBos10 - tgtBos) + math.abs(ns.calCh10 - tgtCh)
+    int e20 = math.abs(ns.calBos20 - tgtBos) + math.abs(ns.calCh20 - tgtCh)
+    int e25 = math.abs(ns.calBos25 - tgtBos) + math.abs(ns.calCh25 - tgtCh)
+    int e33 = math.abs(ns.calBos33 - tgtBos) + math.abs(ns.calCh33 - tgtCh)
+    int e50 = math.abs(ns.calBos50 - tgtBos) + math.abs(ns.calCh50 - tgtCh)
+    int ePb = math.abs(ns.calBosPb - tgtBos) + math.abs(ns.calChPb - tgtCh)
     table.cell(nearTbl, 0, 2, "Raw level touch", text_color = cTxt, text_size = size.small)
     table.cell(nearTbl, 1, 2, str.tostring(ns.calBosTouch), text_color = cVal, text_size = size.small)
     table.cell(nearTbl, 2, 2, str.tostring(ns.calChTouch), text_color = cVal, text_size = size.small)
@@ -1823,6 +1841,15 @@ if showNearScan and barstate.islast
     table.cell(nearTbl, 1, 8, str.tostring(ns.calBosPb), text_color = cVal, text_size = size.small)
     table.cell(nearTbl, 2, 8, str.tostring(ns.calChPb), text_color = cVal, text_size = size.small)
     table.cell(nearTbl, 3, 8, str.tostring(ePb), text_color = ePb <= 4 ? cBull : cVal, text_size = size.small)
+    // The rule the LIVE statistics table above is actually built on, scored on
+    // the same normalized target as every candidate. It was never in this scan,
+    // so it was never comparable to the rows it was being chosen against.
+    int eArm = math.abs(ns.statBosNearTotal - tgtBos) +
+         math.abs(ns.statChNearTotal - tgtCh)
+    table.cell(nearTbl, 0, 9, "IN USE: armed touch", text_color = cHS, text_size = size.small)
+    table.cell(nearTbl, 1, 9, str.tostring(ns.statBosNearTotal), text_color = cHS, text_size = size.small)
+    table.cell(nearTbl, 2, 9, str.tostring(ns.statChNearTotal), text_color = cHS, text_size = size.small)
+    table.cell(nearTbl, 3, 9, str.tostring(eArm), text_color = eArm <= 4 ? cBull : cHS, text_size = size.small)
 
 // ═══════════════════════════ 10. ALERTS ═════════════════════════════════════
 // Separate event types. None of them is a trade: this phase measures
