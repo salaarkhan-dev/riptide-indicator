@@ -205,6 +205,12 @@ float sigFee = input.float(0.032, "Round-trip fee, %", minval = 0.0, maxval = 1.
 bool sigTrail = input.bool(true, "Arm pivot trail at Active Price", group = gSig,
      tooltip = "T6_PIVOT: once Active Price is reached, the stop follows each newly confirmed pullback pivot in the trade direction, and never moves against the position.\n\nWhat the reference's trailing stop actually trails is never stated in the source - this is a research policy, not a documented rule.")
 bool sigBox = input.bool(true, "Shade the risk band", group = gSig)
+// INTERNAL ENTRIES ARE UNMEASURED. Stages A, B and C all ran MAIN depth and
+// nothing else; the Python forward record is MAIN-only and frozen there. This
+// draws Internal setups so they can be WATCHED, and the panel keeps the two
+// depths in separate columns so they can never blend into one number.
+bool sigInt = input.bool(false, "Also take entries from Internal", group = gSig,
+     tooltip = "Internal structure produces far more setups than Main, which is the honest answer to 'too few signals'.\n\nBut NOTHING IS KNOWN ABOUT THEM. Every measurement in this project - Stage A, B and C - used MAIN depth. Internal has never been scored, so its expectancy is not small or large, it is unmeasured.\n\nThe forward record keeps Main and Internal in separate columns and never pools them. The Python forward experiment records MAIN only and this switch cannot reach it.")
 bool sigLog = input.bool(true, "Forward record panel", group = gSig,
      tooltip = "Counts what these signals have actually done on the bars currently loaded. This is the only number here that is not borrowed from a backtest.")
 color cLong = input.color(#26a69a, "Long", inline = "sc", group = gSig)
@@ -1333,7 +1339,8 @@ sigClose(Sig g, float px, bool stopped) =>
     r
 
 // Open a setup. The drawings are created once and only extended afterwards.
-sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct) =>
+sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct,
+     int fade) =>
     float risk = math.abs(entry - stop)
     g.on := true
     g.armed := false
@@ -1347,15 +1354,17 @@ sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct) =>
     // clear its own costs before it is worth arming anything for.
     float fee = entry * feePct / 100.0
     g.active := dir > 0 ? entry + rr * risk + fee : entry - rr * risk - fee
-    color cd = dir > 0 ? cLong : cShort
+    color cd = color.new(dir > 0 ? cLong : cShort, fade)
     g.enLn := line.new(time, entry, time, entry, xloc = xloc.bar_time,
-         color = cd, width = 2)
+         color = cd, width = fade > 0 ? 1 : 2)
     g.slLn := line.new(time, stop, time, stop, xloc = xloc.bar_time,
-         color = cStop, width = 1, style = line.style_dashed)
+         color = color.new(cStop, fade), width = 1,
+         style = line.style_dashed)
     g.acLn := line.new(time, g.active, time, g.active, xloc = xloc.bar_time,
          color = color.new(cActive, 35), width = 1, style = line.style_dotted)
     int lx = time + barMs * labelGapBars
     g.enLb := label.new(lx, entry + (dir > 0 ? atr * 0.28 : -atr * 0.28),
+         (fade > 0 ? "i" : "") +
          (dir > 0 ? "LONG " : "SHORT ") + str.tostring(entry, format.mintick),
          xloc = xloc.bar_time, yloc = yloc.price, style = label.style_none,
          color = na, textcolor = cd, size = size.tiny)
@@ -1523,14 +1532,24 @@ if runDeep and deepScope.active and engineOk and not childCont
 // Internal and Deep publish structure; they do not publish setups. The
 // pre-registrations measured MAIN depth and nothing else, so nothing else is
 // shown here.
+// MAIN and INTERNAL keep SEPARATE setups and SEPARATE books. They are never
+// pooled: Main is the depth every pre-registered measurement used, Internal has
+// never been scored at all, and one number covering both would hide exactly
+// that difference.
 var Sig sig = Sig.new()
 var int sigN = 0
 var int sigWin = 0
-var int sigLoss = 0
 var float sigR = 0.0
 var float sigBest = 0.0
 var float sigWorst = 0.0
 var float sigR2 = 0.0        // sum of squares, for the standard error
+var Sig sigI = Sig.new()
+var int sigNI = 0
+var int sigWinI = 0
+var float sigRI = 0.0
+var float sigBestI = 0.0
+var float sigWorstI = 0.0
+var float sigR2I = 0.0
 
 if showSig and engineOk
     // Manage what is open BEFORE opening anything new, so a setup can never
@@ -1540,10 +1559,7 @@ if showSig and engineOk
     if not na(done)
         sigN += 1
         sigR += done
-        if done > 0
-            sigWin += 1
-        else
-            sigLoss += 1
+        sigWin += done > 0 ? 1 : 0
         sigR2 += done * done
         sigBest := math.max(sigBest, done)
         sigWorst := math.min(sigWorst, done)
@@ -1551,7 +1567,21 @@ if showSig and engineOk
     // what the research measured and is also the only honest thing to draw.
     if mainC.sigNew and not sig.on
         sigOpen(sig, mainC.sigDir, mainC.sigEntry, mainC.sigStop, sigRR,
-             sigFee)
+             sigFee, 0)
+
+if showSig and sigInt and engineOk and runInt
+    float pivI = sigI.dir > 0 ? intC.pbTrailBull : intC.pbTrailBear
+    float doneI = sigStep(sigI, high, low, pivI, sigTrail, false)
+    if not na(doneI)
+        sigNI += 1
+        sigRI += doneI
+        sigWinI += doneI > 0 ? 1 : 0
+        sigR2I += doneI * doneI
+        sigBestI := math.max(sigBestI, doneI)
+        sigWorstI := math.min(sigWorstI, doneI)
+    if intC.sigNew and not sigI.on
+        sigOpen(sigI, intC.sigDir, intC.sigEntry, intC.sigStop, sigRR,
+             sigFee, 45)
 // An object field carries no [] history, so the arming EDGE is tracked in a
 // plain series instead of being read as sig.armed[1].
 var bool sigArmedPrev = false
@@ -1880,57 +1910,75 @@ if showDbg and barstate.islast
 // counts what these signals have done on the bars currently loaded. Read it as
 // a log, not as a verdict: a few dozen closed setups says nothing at all, and
 // the pre-registered work needed ~3000 bets to put a standard error on this.
-var table sigT = table.new(position.middle_right, 2, 9,
+var table sigT = table.new(position.middle_right, 3, 9,
      bgcolor = color.new(#111418, 12), border_width = 1,
      border_color = color.new(#2a2e39, 40), frame_width = 1,
      frame_color = color.new(#2a2e39, 40))
 
+// One column per depth, NEVER a combined total. Main is the depth every
+// pre-registered measurement used; Internal has never been scored. Averaging
+// them would bury exactly that.
+color sigMu = color.new(#9598a1, 0)
+
+cell2(int row, string lab, string a, string b, color ca, color cb) =>
+    table.cell(sigT, 0, row, lab, text_color = sigMu, text_size = size.small)
+    table.cell(sigT, 1, row, a, text_color = ca, text_size = size.small)
+    table.cell(sigT, 2, row, sigInt ? b : "", text_color = cb,
+         text_size = size.small)
+
+fmtSE(int n, float sum, float sq) =>
+    float m = n > 0 ? sum / n : 0.0
+    float v = n > 1 ? (sq - n * m * m) / (n - 1) : 0.0
+    float se = n > 1 and v > 0 ? math.sqrt(v / n) : 0.0
+    [m, se, se > 0 ? m / se : 0.0]
+
 if showSig and sigLog and barstate.islast
     color hd = color.new(#d7e5f2, 0)
-    color mu = color.new(#9598a1, 0)
-    float wr = sigN > 0 ? 100.0 * sigWin / sigN : 0.0
+    color mu = sigMu
+    [mM, seM, tM] = fmtSE(sigN, sigR, sigR2)
+    [mI, seI, tI] = fmtSE(sigNI, sigRI, sigR2I)
     table.cell(sigT, 0, 0, "Forward record", bgcolor = hd,
          text_color = #263238, text_size = size.small)
-    table.cell(sigT, 1, 0, "loaded bars", bgcolor = hd, text_color = #263238,
+    table.cell(sigT, 1, 0, "Main", bgcolor = hd, text_color = #263238,
          text_size = size.small)
-    table.cell(sigT, 0, 1, "closed", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 1, str.tostring(sigN), text_color = mu,
-         text_size = size.small)
-    table.cell(sigT, 0, 2, "win rate", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 2, str.tostring(wr, "0.0") + "%", text_color = mu,
-         text_size = size.small)
-    table.cell(sigT, 0, 3, "total R", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 3, fmtR(sigR),
-         text_color = sigR >= 0 ? cLong : cShort, text_size = size.small)
-    // R/setup WITHOUT its error bar is the number that misleads. A 20-trade
-    // sample carrying one +13R outlier reads as +1.02R and is not
-    // distinguishable from zero; the panel now says both.
-    float mean = sigN > 0 ? sigR / sigN : 0.0
-    float vari = sigN > 1 ? (sigR2 - sigN * mean * mean) / (sigN - 1) : 0.0
-    float se = sigN > 1 and vari > 0 ? math.sqrt(vari / sigN) : 0.0
-    float tv = se > 0 ? mean / se : 0.0
-    table.cell(sigT, 0, 4, "R / setup", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 4, sigN > 0 ? fmtR(mean) +
-         (se > 0 ? " ± " + str.tostring(se, "0.00") : "") : "-",
-         text_color = sigN > 0 and mean >= 0 ? cLong : cShort,
-         text_size = size.small)
+    table.cell(sigT, 2, 0, sigInt ? "Internal" : "—", bgcolor = hd,
+         text_color = #263238, text_size = size.small)
+
+    cell2(1, "closed", str.tostring(sigN), str.tostring(sigNI), mu, mu)
+    cell2(2, "win rate",
+         sigN > 0 ? str.tostring(100.0 * sigWin / sigN, "0.0") + "%" : "-",
+         sigNI > 0 ? str.tostring(100.0 * sigWinI / sigNI, "0.0") + "%" : "-",
+         mu, mu)
+    cell2(3, "total R", fmtR(sigR), fmtR(sigRI),
+         sigR >= 0 ? cLong : cShort, sigRI >= 0 ? cLong : cShort)
+    // R per setup is never shown without its error bar. A twenty-trade sample
+    // carrying one large winner reads as a strong number and is not one.
+    cell2(4, "R / setup",
+         sigN > 0 ? fmtR(mM) + (seM > 0 ? " ± " + str.tostring(seM, "0.00")
+              : "") : "-",
+         sigNI > 0 ? fmtR(mI) + (seI > 0 ? " ± " + str.tostring(seI, "0.00")
+              : "") : "-",
+         sigN > 0 and mM >= 0 ? cLong : cShort,
+         sigNI > 0 and mI >= 0 ? cLong : cShort)
     // |t| under 2 is consistent with zero, whatever the headline says.
-    table.cell(sigT, 0, 5, "t", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 5, se > 0 ? str.tostring(tv, "0.0") +
-         (math.abs(tv) < 2 ? "  (~0)" : "") : "-",
-         text_color = math.abs(tv) >= 2 ? cLong : mu, text_size = size.small)
+    cell2(5, "t",
+         seM > 0 ? str.tostring(tM, "0.0") +
+              (math.abs(tM) < 2 ? "  (~0)" : "") : "-",
+         seI > 0 ? str.tostring(tI, "0.0") +
+              (math.abs(tI) < 2 ? "  (~0)" : "") : "-",
+         math.abs(tM) >= 2 ? cLong : mu, math.abs(tI) >= 2 ? cLong : mu)
     // Concentration. One trade carrying most of the P&L is not an edge.
-    table.cell(sigT, 0, 6, "top trade", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 6, sigR > 0 and sigBest > 0 ?
-         str.tostring(100 * sigBest / sigR, "0") + "% of total" : "-",
-         text_color = mu, text_size = size.small)
-    table.cell(sigT, 0, 7, "best / worst", text_color = mu,
-         text_size = size.small)
-    table.cell(sigT, 1, 7, fmtR(sigBest) + " / " + fmtR(sigWorst),
-         text_color = mu, text_size = size.small)
-    table.cell(sigT, 0, 8, "open", text_color = mu, text_size = size.small)
-    table.cell(sigT, 1, 8, sig.on ? (sig.armed ? "yes, armed" : "yes") : "no",
-         text_color = mu, text_size = size.small)
+    cell2(6, "top trade",
+         sigR > 0 and sigBest > 0 ?
+              str.tostring(100 * sigBest / sigR, "0") + "% of total" : "-",
+         sigRI > 0 and sigBestI > 0 ?
+              str.tostring(100 * sigBestI / sigRI, "0") + "% of total" : "-",
+         mu, mu)
+    cell2(7, "best / worst", fmtR(sigBest) + " / " + fmtR(sigWorst),
+         fmtR(sigBestI) + " / " + fmtR(sigWorstI), mu, mu)
+    cell2(8, "open",
+         sig.on ? (sig.armed ? "yes, armed" : "yes") : "no",
+         sigI.on ? (sigI.armed ? "yes, armed" : "yes") : "no", mu, mu)
 
 // ═══════════════════════════ 13. ALERTS ═════════════════════════════════════
 // Structure events only. None of these is a trade signal, and this phase makes
