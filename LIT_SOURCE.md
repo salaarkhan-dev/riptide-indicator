@@ -1736,6 +1736,92 @@ of machinery we have had working since v0.7.
 
 ---
 
+## Chapter 24 — The strategy build's ACTUAL DEFAULTS, and two corrections
+
+### [SRC] The settings panel of the STRATEGY build
+
+    Start Time                        2000-01-01 02:00
+    Breakout type for pullbacks       BODY            ← not Shadow
+    Breakout type for BOS Level       Body & Sweep
+    Breakout type for CHoCH Level     Body & Sweep
+    (no IDM break-type control in this build)
+    Breakout type for SCOB Level      Body
+    SCOB Level Behavior               Move With Deeper Candle
+    Stop Loss Approach                LowRisk
+    Hidden Shadow for SL management   ON
+    POI Natures                       Demand→Long ON, Supply→Short ON
+    POI Types                         Decisional, Extreme, Breaker, Flip — all ON
+    Liquidity Grab Levels             IDM, BOS, CHoCH — all ON
+    Commission                        0.05 %
+    Minimum Reward/Risk               0.5
+    Max Acceptable Loss per position  1 % of balance
+    Second Max Loss cap (Body)        OFF, value 2 %
+    When BOS Box Touched, remove opposite POIs      OFF
+    When OrderFlow mitigated, remove its OrderBlocks OFF
+
+### [SRC] !! THE PULLBACK BREAK MODE IS *BODY* IN THE STRATEGY BUILD !!
+
+The Market Structure v06 build (Ch.11) ships Pullback = **Shadow**. This
+strategy build ships Pullback = **Body**.
+
+This does NOT revive the density hypothesis that Ch.11 refuted. That comparison
+was against the structure indicator, which really is on Shadow, so the
+refutation stands. What it means is narrower and still important: **the author
+runs a stricter pullback rule when money is at stake.** A Body pullback
+confirms later and less often, producing fewer and larger corrections — the
+complex-pullback shape — and therefore fewer, better-separated POI zones.
+
+For the strategy family, Body is the default to build and measure against, and
+`mPB` is no longer a setting we inherit unchanged from the structure work.
+
+### [SRC] !! MINIMUM REWARD/RISK IS 0.5 — AND IT IS NOT THE EXIT !!
+
+A 0.5 minimum RR reads absurd at first: 65% at +0.5R against 35% at −1R is
+0.325 − 0.35, a losing expectancy.
+
+It is not a target. Active Price is **where the trailing stop ARMS**. The trade
+does not close there — it stops being a fixed-risk trade there and starts being
+a trailing one. Winners run past it; 0.5R is the threshold at which the setup is
+judged to have enough room to be worth taking at all, net of commission.
+
+This corrects the Stage A design in LIT_STRATEGY_DESIGN.md, which measured
+"exit at BOS touch". The reference never exits at BOS. Stage A must measure
+MFE past Active Price, not first passage to a target.
+
+### [SRC] The realised loss can be 2.5x the planned risk
+
+The "Maximum acceptable loss in Body mode" slide is a worked example with
+numbers on it:
+
+    Maximum Acceptable Loss on a Position   1 % of balance ≈ $30
+    Loss on a Position at Exit Point        2.5 % of balance ≈ $75
+
+Because the stop is judged on a BODY break and Hidden Shadow can defer the exit
+another candle, price can be well past the SL by the time the position actually
+closes. The Second Max Loss Cap exists for exactly this, and it ships **OFF**.
+
+This is the honest cost of Hidden Shadow on the stop, stated by the author
+rather than inferred, and it must be measured rather than assumed beneficial:
+HS saves trades that would have been stopped on a wick, and pays for it with a
+fatter left tail. Stage F has to report realised-loss distribution, not just
+win rate.
+
+### [SRC] POI removal is structural, and both switches default OFF
+
+    "When BOS Box Touched, Opposite POIs are removed"          OFF
+    "When OrderFlow is mitigated, remove all Orderblocks in it" OFF
+
+The accompanying diagram shows, in both trend directions, a **BOS Candle** box
+at the BOS level, and at the invalidating structural event the Decisional and
+Extreme zones below are marked **"Remove POI Zone"** with **"Check SCOB ✗"** — SCOB
+is not even evaluated once a zone is dead.
+
+New object: the **BOS Candle box** — the BOS candle's own range as a zone, which
+is what "BOS Box Touched" refers to. We do not have it; it is cheap, since the
+BOS already carries its originating bar.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,

@@ -89,16 +89,25 @@ candles, measure the simplest possible expression of §72:
 long  when a bullish IDM is taken and a BOS is locked above
 entry at the IDM break bar's close
 stop  below the IDM raid extreme                       (§73)
-exit  at BOS touch, or at CHoCH touch, whichever first
+arm   a trailing stop at +0.5R net of commission       (Ch.24: minimum RR)
+exit  on the stop, initial or trailed
 ```
 
-Record per setup: **R at exit, MFE, MAE, bars held, BOS-before-CHoCH, and the
-distance to BOS in R at entry.**
+**CORRECTED after Ch.24.** An earlier draft of this stage exited at BOS touch.
+The reference never exits at BOS — 0.5R is where the trailing stop ARMS, not a
+target, and winners run past it. Measuring first passage to BOS would measure
+the wrong quantity and would have made every later stage uninterpretable.
 
-The decisive number is not the win rate. It is **the R distribution of the 65%
-that reach BOS against the 35% that don't**, because the stop distance is set by
-the raid extreme and has no reason to be proportionate to the BOS distance. If
-the winners average less than ~0.54R per unit of loser, 65% is not enough.
+Record per setup: **R at exit, MFE, MAE, bars held, whether Active Price was
+reached, BOS-before-CHoCH, and distance to BOS in R at entry.**
+
+The decisive number is not the win rate and not the BOS hit rate. It is
+**MFE beyond Active Price on the winners** — that is the entire source of edge
+in a trail-based system, and it is what decides whether a 0.5R arming threshold
+with a raid-extreme stop can pay for the losers at all.
+
+Note also, per Ch.24, that the strategy build runs **Pullback = Body**, not the
+Shadow the structure indicator uses. Stage A runs Body.
 
 **Stage A can kill the whole strategy, and that is what it is for.** If the
 naked version has no edge, adding POI, SCOB and an obstacle filter is
