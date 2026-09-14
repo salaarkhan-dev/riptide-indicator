@@ -796,6 +796,114 @@ all.
 
 ---
 
+## Chapter 8 — The SMC / SMC-Trap / LIT Master Diagrams
+
+Again read as geometry from stylized slides. Confidence is noted per item,
+because some of this is inferred from pixel positions rather than stated.
+
+### The SMC slide — the strawman, no LIT rules
+
+Classic SMC: a BOS label on every broken high, CHoCH when a low breaks the
+other way. This is the model LIT replaces, per Chapter 3. Nothing to extract
+beyond confirming what "all those moves we used to treat as BOS" refers to.
+
+### [SRC] The SMC Trap slide — IDM line anchoring
+
+Labels an early correction "Pullback", the SMC-style breaks "Invalid BOS", the
+true structural high "Valid BOS", and a red dashed level "IDM / Inducement"
+carrying "$ $ $" with a down arrow. Where price later returns to that level, a
+circle is labelled "liquidity grab / Hunt", with a retail trader in a spider web
+beside it.
+
+The useful geometric detail: the IDM dashed line starts AT THE PULLBACK'S LOW
+and extends rightward to the point where price comes back and takes it. It does
+not begin at the correction's first candle.
+
+That confirms the floating-IDM fix made earlier in this log. `idmAnchor`
+defaults to "Pivot bar", which starts the line on the candle that made the
+level. Correct, and now source-backed rather than inferred from a screenshot.
+
+It also confirms the Chapter 4 definition applies here: the grab is price
+touching the level, and it is drawn as a touch, not as a penetration.
+
+### [SRC] !! THE ✗ MARKER — A LEVEL IS RETYPED IN PLACE !!
+
+High confidence. The LIT master diagram carries two ✗ marks, and both sit at the
+SAME PRICE as the dashed line running through them, with the label changing
+across the mark:
+
+    upper:   BOS ⋯⋯⋯⋯⋯ ✗ ⋯⋯⋯⋯⋯ Choch     (one line, one price)
+    lower:   BOS ⋯⋯⋯⋯⋯ ✗ ⋯⋯⋯⋯⋯ Choch     (one line, one price)
+
+The line does not stop and restart. The ✗ marks the moment the level's ROLE
+changes from BOS to CHoCH while its price is unchanged, which is §41 drawn
+rather than described:
+
+> "the previous bullish BOS level becomes our bullish change of character level
+> because that's still our valid high. ... Do not discard the prior valid
+> external extreme. Retype its structural role."
+
+Our engine does this correctly — `clearLvl(x.bos)` then
+`setLvl(x.ch, oldBos, oldBar, oldT, ...)` carries the exact price. Our RENDERER
+does not: it deletes the BOS line and label and starts a fresh CHoCH line, with
+a comment explaining that keeping both would stack two lines at one price.
+
+So the analytics match and the picture does not. The reference shows one
+continuous level with a role-change marker on it; we show a retired line and a
+new one at the same price. Worth changing, and cheap — but it is a rendering
+change and nothing here is urgent. Recorded, not implemented.
+
+### [SRC] IDM colour convention — bullish blue, bearish amber
+
+High confidence. In the diagram's bullish (cyan) stretches the active IDM
+labels render blue; in the bearish (red) stretches they render amber/yellow.
+
+Our palette is already `cIDMBull = #2962ff` and `cIDMBear = #ffb300`. Match.
+
+### [SRC] Retired IDMs stay on the chart, faded, with migration arrows
+
+Medium-high confidence. The left bullish stretch shows a chain of GREY "IDM"
+labels at successive pullback lows, each joined to the next by a curved yellow
+arrow pointing up and right, ending at one BRIGHT "IDM" — the live one.
+
+That is §33 migration drawn as a trail: grey for retired, bright for active,
+arrow for the move. Our `showRetired` option instead leaves a small "x" where an
+inducement was taken, and defaults OFF.
+
+Different choice, same information. Not a defect — §56 explicitly permits
+"optionally keep short historical segment, fade it". Recorded so the option is
+understood as a deliberate divergence rather than an oversight.
+
+### [SRC] Pullback boxes on every correction, coloured by side
+
+The diagram shades a box on every correction in both directions — blue boxes in
+bullish stretches, red/maroon in bearish. Matches §53 / §54 and our `zone()`.
+
+Note the count: roughly five boxes before the first BOS in the left stretch.
+Pullbacks are frequent; it is IDM PUBLICATION that is not, because each new
+pullback retires the previous IDM rather than adding one.
+
+### [SRC] Level colours track structure, not direction
+
+BOS renders in the continuation colour and CHoCH in the reversal colour, which
+swaps as the structure flips — green BOS with red CHoCH while bullish, red BOS
+with green CHoCH while bearish. That is our `col = bull ? bu : be` for BOS and
+the inverse for CHoCH. Match.
+
+### Net from Chapter 8
+
+Nothing here contradicts the engine. Two renderer items surface:
+
+  1. A retyped level should be ONE continuous line with a role-change marker,
+     not a deleted line plus a new one at the same price.
+  2. Retired IDMs are shown as a faded trail with migration arrows rather than
+     as a small "x".
+
+Both are cosmetic and both are optional under §56. Neither is implemented in
+this pass, and neither affects a single statistic.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
