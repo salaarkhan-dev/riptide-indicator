@@ -1,0 +1,45 @@
+============================================================================================
+LIT STAGE A-PRIME — the T8 countertrend question
+============================================================================================
+EVENT     a BOS GRAB: price reaches the live BOS level on a bar
+          where the break engine does NOT confirm a break.
+RACE      opposite pullback pivot reached  vs  BOS validly breaks.
+SCOPE     STRUCTURAL ONLY. No entry, no stop, no P&L. Never
+          combined with Stage A. Countertrend is NOT shipped.
+============================================================================================
+
+  A. opposite pullback CARRIED across cycles
+  cell             grabs   OPP PB  BOS brk    opp%   unres
+  ALL               3860      221     3329    6.2%     310
+  Min15             2373      136     2047    6.2%     190
+  Min30             1004       51      869    5.5%      84
+  Min60              483       34      413    7.6%      36
+  discovery         2038      134     1748    7.1%     156
+  held-out          1822       87     1581    5.2%     154
+  distance from BOS level to the target, when reached: median 7.76% of price
+
+  B. opposite pullback scoped to the LIVE BOS cycle
+  cell             grabs   OPP PB  BOS brk    opp%   unres
+  no qualifying grabs at all
+
+============================================================================================
+  READ — T8 IS NOT RESOLVED BY THIS, AND WHY
+============================================================================================
+  The two definitions BRACKET the source's object without hitting
+  it, and neither result should be quoted as the T8 answer.
+
+  A carries a pivot from an earlier structure, so the target sits
+    a median 7.8% of price away and loses the race by construction.
+  B scopes it to the live cycle and finds NO qualifying grabs at
+    all: at the moment of a BOS grab the opposite pullback has not
+    formed yet. It forms during the reaction the grab causes.
+
+  So the countertrend target is not a level that exists in
+  lit_v3's event stream when the grab happens. The Pine engine
+  maintains BOTH directions live via the P8 idle observer, which
+  is where its 'BOS near -> Opp PB reach' figure comes from; the
+  Python engine used here does not expose that.
+
+  T8 THEREFORE REMAINS UNRESOLVED. Resolving it needs the
+  dual-direction detector ported to Python first. No countertrend
+  behaviour is shipped, and no rate is claimed.

@@ -2129,3 +2129,101 @@ sample available. The earlier near-zero readings were an underpowered recent
 window, not a breakeven system. Combined with the T6 finding — median MFE 1.01R
 against a 1R stop — the conclusion is consistent: this is an entry problem, and
 no exit rule, filter or timeframe selection measured so far changes it.
+
+---
+
+## STAGE A, PRE-REGISTERED — AND TWO ERRORS IN ALL EARLIER LIT WORK
+
+Checking the LIT research against the repository's own conventions rather than
+against itself found two errors in it. They push in opposite directions.
+
+### ERROR 1 — the fee model was the reference's, not the repository's
+
+Every LIT measurement charged COMMISSION = 0.0005 per side, 0.10% round trip,
+from `LIT_SOURCE.md` Ch.24. `research/harness.py` defines the repo's model:
+maker 0.010%, taker 0.022%, charged in R as fee_pct / risk_pct. The
+conservative round trip is 0.032% — roughly a third of what was charged.
+
+### ERROR 2 — the unit of evidence was the trade, not the bet
+
+`research/studies/fvg_continuation.py` and six other studies average trades
+sharing a bar open time into one observation. LIT counted each trade
+separately, understating standard error and overstating significance.
+
+`research/lit_recheck.py` isolates both. The fee correction did most of the
+work; bet-grouping only reduced 860 trades to 683 bets.
+
+    pooled, older window       NET R      se       t
+    source fee, trades        -0.192   0.042    -4.5
+    source fee, BETS          -0.181   0.044    -4.1
+    repo fee,   trades        -0.131   0.042    -3.1
+    repo fee,   BETS          -0.115   0.044    -2.6   (structure trail)
+
+    exit at BOS,  repo + BETS -0.056   0.061    -0.9
+    mfe - 1.5R,   repo + BETS -0.033   0.044    -0.7
+
+**This retracts the previous section's headline.** "Significantly negative on
+the best-powered sample" does not survive the corrections: two of three exit
+rules on the out-of-sample window are indistinguishable from zero once the
+repo's own fee and unit of evidence are used. Only the structure trail stays
+significantly negative. The correct statement is weaker and duller — the
+zone-entry strategy is not demonstrably profitable AND not demonstrably dead.
+
+### STAGE A — frozen in PREREG_lit_stage_a.md, committed at 50801c7 before the run
+
+Naked continuation: enter at the IDM-break close, stop at the raid extreme, no
+buffer, with-trend only, MAIN depth. 60 symbols, three timeframes, 333 days,
+5112 setups / 3632 bets, scored through `harness.simulate_market`.
+
+    policy          bets    R/bet     SE      t     win     PF
+    FIXED_1R        3632   -0.478  0.021  -22.3   36.0%   0.39
+    FIXED_2R        3632   -0.296  0.027  -11.1   33.4%   0.63
+    BOS_TARGET      3632    0.806  0.256    3.1   20.0%   1.82
+    T6_PIVOT        3632    0.564  0.149    3.8   21.0%   1.59
+    T6_STRUCTURE    3632    0.772  0.311    2.5   11.5%   1.61
+
+**VERDICT: INCONCLUSIVE.** Criterion 1 met by BOS_TARGET; criterion 2 failed,
+P(realized loss > 1.5R) = 14.3% against a 10% ceiling. Work stops.
+
+### THE STOP IS DEGENERATE, AND CRITERION 2 CAUGHT IT
+
+    stop distance, % of entry: median 0.422%  p25 0.179%  p10 0.076%
+    distance to BOS at entry:  median 8.67R   p90 49.43R
+    hold time: median 1 bar    MAE: median -1.35R
+    P(realized loss > 1.0R): 98.6-99.9%       worst 22.45R
+
+The specified stop is the break bar's own wick measured from that bar's close.
+A quarter of setups risk under 0.18% of price — inside crypto noise. So the
+risk unit is fictional: 99% of losses exceed it, and BOS sitting a median
+8.67R away is a tiny denominator rather than a rich target. BOS_TARGET's
++0.806R is 20% of trades paying ~8R. A lottery ticket, not an edge.
+
+This also explains the old "no stop distance works at all": at the p10 stop the
+0.10% fee cost 1.31R per trade, more than the whole risk unit. The fee error
+was catastrophic *because* the stop is degenerate.
+
+The failure is located in the STOP DEFINITION, not demonstrated in the entry
+event. Among the 60.0% of setups reaching Active Price, median MFE is 1.91R and
+48.3% exceed 2R — there is real favourable excursion; the risk unit under it is
+broken. Testing a wider stop now, after seeing this, is the post-hoc fitting
+PREREG §10 forbids. It needs its own pre-registration.
+
+### STAGE A-PRIME (T8) — NOT RESOLVED, AND THE REASON IS SPECIFIC
+
+Two definitions of "the opposite pullback" bracket the source's object without
+hitting it. Carried across cycles it sits a median 7.76% of price away and
+loses every race by construction (6.2% reach). Scoped to the live BOS cycle
+there are no qualifying grabs at all — at the moment of a grab the opposite
+pullback has not formed yet; it forms during the reaction the grab causes.
+
+The Pine engine keeps both directions live through the P8 idle observer, which
+is where its "BOS near → Opp PB reach" figure comes from. `lit_v3` does not
+expose that. **T8 stays unresolved and no rate is claimed.**
+
+### AND A LIMIT THAT IS NOT WORKED AROUND
+
+The specified Pine→Python parity gate CANNOT be executed here: there is no Pine
+compiler in this environment and `riptide-lit-v2.pine` has never been compiled.
+Agreement between it and `lit_v3` is unverified and no parity claim is made
+anywhere. The external validation that does exist is against the reference
+indicator's own published statistics (ZEC 30m IDM→BOS 65.6% vs 65.0%).
