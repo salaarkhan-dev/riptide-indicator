@@ -217,3 +217,90 @@ harness reports the same set across all symbols at once.
 - The §27 visual checklist needs the ZEC screenshots.
 - Deep's 29.2% mirroring.
 - No Python bot port — that is explicitly a later phase.
+
+---
+
+# v0.3 diagnosis — why the giant pullback box exists
+
+Measured, not inferred. `research/lit_v02.py` over ZEC 15m, 120 days.
+
+## The box is not a drawing bug
+
+`zone()` already draws `left = pb.startBar, right = pb.confirmBar` and freezes
+at creation, which is what §16 asks for. §12's hypothesis — that a structural
+range is being used to draw the box — is wrong; I checked before changing
+anything.
+
+The correction genuinely ran that long:
+
+```
+main  demand (bull ctx)   n  72   median  6   p90  71   p99 604   MAX  666
+main  supply (bear ctx)   n  39   median  1   p90  21   p99 167   MAX 7403
+```
+
+Median **1 bar**, p90 21 — and one at **7,403**.
+
+## The correction is frozen because the CONTEXT is frozen
+
+```
+longest Main phase run:   4917 bars in PH_BOUNDARY_LOCK, ending bar 9273
+longest open correction:  7402 bars, bars 1870..9272
+```
+
+The same event. §1 is right that pullback lifetime must be separate from
+structural lifetime, but the coupling is not in the detector — the detector is
+stuck oriented the wrong way because the context cannot leave the lock.
+
+This also explains §13-E and §14: across those 4,917 bars nothing confirmed, so
+**no latent pullbacks accumulated**, so there was nothing to reuse when the lock
+resolved. The missed IDMs and the giant box are one defect, not two.
+
+## Two compounding causes, both real
+
+Dumping both long locks:
+
+```
+LOCK bars 1934..9273  (4917 bars)
+  BOS   base 250.00   touched  0 times   sweeps 0   drift 0.0%
+  CHoCH base 644.48   touched  5 times   sweeps 2   drift 0.6%
+  close ranged 342.53 .. 648.99
+
+LOCK bars 9411..10541  (704 bars)
+  BOS   base 859.43   touched 72 times   sweeps 4   drift 3.4%
+  CHoCH base 730.61   touched  0 times   sweeps 0   drift 4.8%
+  close ranged 760.24 .. 914.20
+```
+
+**A. The Body & Sweep ratchet is unbounded.** Each failed wick migrates the
+active level further away and nothing ever resets it. Lock 2 is the signature:
+the BOS was touched **72 times**, swept 4 times, and its active level had
+walked **3.4%** beyond its base — 859 base, 889 active. A level price keeps
+testing becomes progressively harder to break, which inverts the intent. §6 of
+the brief states the migration rule and says nothing about when it ends.
+
+**B. A BOS locked at the full leg extreme can be unreachable, and in
+PH_BOUNDARY_LOCK nothing may supersede it.** Lock 1: BOS at 250 while price
+ranged 342–649 — 28% away, **touched zero times in 4,917 bars**. In PH_SEEK a
+later IDM break re-locks a nearer BOS (measured in v0.2: 31% of locks were
+superseded that way). §8 correctly forbids that in PH_LOCK, so a far BOS there
+is terminal until the CHoCH breaks — and the CHoCH is being walked away by (A).
+
+Invariant 11 was verified independently and is clean: BOS and CHoCH are always
+on the correct sides. Lock 1 was a bearish context, so BOS below and CHoCH
+above is correct geometry — the level is unreachable, not mis-sided.
+
+## What this means for the fix
+
+The repair belongs in boundary-lock resolution and in the sweep engine, not in
+the pullback detector. Neither rule is stated by the reference, so both are
+[INF] and both need deciding before v0.3 is written:
+
+1. When does a migrated sweep level reset? Candidates: on a close back beyond
+   the base level, or when the structural phase changes.
+2. What resolves a lock whose BOS was locked unreachably far? Candidates: the
+   BOS is not the full leg extreme but the extreme of the segment the IDM
+   belonged to; or price leaving the BOS↔CHoCH range entirely re-scopes the
+   context.
+
+**Regression fixture:** the correction-lifetime distribution above. `MAX` should
+fall to the p99 range (~170 bars) without any size, ATR or bar-count filter.
