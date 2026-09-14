@@ -2036,3 +2036,96 @@ T6 was the last large hole and the only road left open. It is now measured and
 it does not open. Across ten exit rules on a shared setup set, nothing is
 distinguishable from zero. The MFE ceiling says why, and it is an entry problem,
 not an exit problem.
+
+---
+
+## THE Min30 CELL DOES NOT REPLICATE (research/lit_repl.py)
+
+Min30 had come up best twice — Variant 3 (+0.071, n=88) and T6 (+0.245, se
+0.240, n=91). Neither was claimed, because both readings came from the SAME 30
+symbols over the SAME 120 days: one observation seen twice, not two
+confirmations. The rank split is the precedent — positive at n=102 on two
+agreeing arms, every rank negative at n=1214.
+
+So: a 2x2 of {discovery, held-out} symbols x {recent 120d, older window}.
+Held-out symbols are turnover ranks 31+, built the way
+research/studies/trend_holdout.py builds its hold-out — the ones the bot does
+not scan. The older window is the part of 333 days of deep history ending
+before the recent 120 begin, so the windows share no bars. One engine pass per
+symbol over the full history, setups split by timestamp, first 500 bars dropped
+for warm-up.
+
+### Min30, the cell under test
+
+    exit at BOS            n    NET R      se       t
+    discovery / recent    70    0.298   0.300     1.0    <- the original claim
+    discovery / older    131   -0.162   0.138    -1.2    <- SAME syms, sign flip
+    held-out  / recent    62    0.340   0.217     1.6
+    held-out  / older    119   -0.082   0.167    -0.5    <- the real OOS cell
+
+    structure trail
+    discovery / recent    70    0.112   0.279     0.4
+    discovery / older    131   -0.130   0.120    -1.1
+    held-out  / recent    62    0.564   0.422     1.3
+    held-out  / older    119   -0.240   0.091    -2.6   >2se NEGATIVE
+
+Same symbols on a different window flips the sign. New symbols on a new window
+are negative, significantly so under the structure trail. The Min30 reading
+does not survive either change.
+
+### IT WAS NEVER A TIMEFRAME EFFECT — IT WAS THE WINDOW
+
+Every recent cell was positive and every older cell negative, in both symbol
+sets and all three exit rules. Pooling on window alone, all timeframes and both
+symbol sets together:
+
+                          n    win%    NET R      se       t
+    exit at BOS
+      recent 120d       457    39.2%    0.033   0.101     0.3
+      older window      860    35.9%   -0.137   0.057    -2.4   >2se
+    structure trail
+      recent 120d       457    38.1%    0.073   0.106     0.7
+      older window      860    37.6%   -0.192   0.042    -4.5   >2se
+    mfe - 1.5R
+      recent 120d       457    44.0%    0.139   0.083     1.7
+      older window      860    41.3%   -0.117   0.041    -2.9   >2se
+
+Two things follow, and the second is the important one.
+
+1. THE RECENT WINDOW IS NOT POSITIVE EITHER. +0.033, +0.073, +0.139 at t of
+   0.3, 0.7, 1.7. All inside noise. "Min30 is good" was a slice of a window
+   that is not itself distinguishable from zero.
+
+2. THE OLDER WINDOW IS SIGNIFICANTLY NEGATIVE, on nearly twice the sample and
+   on every exit rule. This is the best-powered measurement in the whole
+   programme — 860 setups, 333 days, discovery and held-out symbols pooled —
+   and it says the setup loses.
+
+The long/short split in the recent window rules out a simple drift story:
+LONG +0.009/+0.109/+0.183 and SHORT +0.052/+0.045/+0.104 across the three exit
+rules, neither direction significant.
+
+### THE SURVIVORSHIP DIRECTION MAKES THIS STRONGER, NOT WEAKER
+
+research/deep.py: "The universe is the sixty most liquid perpetuals TODAY.
+Walking those same sixty back a year over-samples coins that went up... A
+replication that comes back BETTER than the 42-day result is evidence of that
+bias, not of a stronger edge."
+
+The older window sits further back, so it carries MORE of that bias and should
+if anything look better. It looks worse. The negative is not a survivorship
+artefact; survivorship was pushing the other way.
+
+### THE ONE POSITIVE CELL, AND WHY IT IS NOT CLAIMED
+
+held-out / recent, Min30, mfe-1.5R: +0.442 on se 0.193, t=2.3. It is one cell
+out of 36 tested, where roughly two beyond 2se are expected by chance alone,
+and its own held-out/older counterpart is -0.141. Not claimed.
+
+### STATUS
+
+The entry model as implemented has negative expectancy on the best-powered
+sample available. The earlier near-zero readings were an underpowered recent
+window, not a breakeven system. Combined with the T6 finding — median MFE 1.01R
+against a 1R stop — the conclusion is consistent: this is an entry problem, and
+no exit rule, filter or timeframe selection measured so far changes it.
