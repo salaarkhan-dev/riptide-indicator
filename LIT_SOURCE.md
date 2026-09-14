@@ -490,6 +490,98 @@ pullback yields ONE pivot at the overall extreme.
 
 ---
 
+## Chapter 5 — Hidden Shadow
+
+### [SRC] The rationale, and it is the same one as everywhere else
+
+> "if the candle had closed just a few seconds earlier or later, or if we were
+> looking at a different time frame, for example, a slightly higher one, that
+> breakout that first looked like a body break might actually have been treated
+> as a shadow break."
+
+Same objection as the fixed-N pivot rejection (Chapter 2) and the
+multi-timeframe rejection (Chapter 3): a result that depends on an arbitrary
+boundary is not a result. Hidden Shadow exists to remove candle-boundary luck
+from a body break. Consistent design philosophy across all five chapters.
+
+### [SRC] The synthetic candle — exactly our construction
+
+> "The open of the combined candle is the open of the first candle. The high and
+> low become the highest and lowest points of those two candles. And the close
+> of the combined candle is the close of the second candle."
+
+Confirms §27. Our synthetic is open = candidate.open, high/low = span extremes,
+close = resolver.close.
+
+### [SRC] ONLY THE CLOSE DECIDES — stated twice, once by counter-example
+
+> "Suppose the close of the second candle moves higher. The combined candle
+> becomes BULLISH, but the break still happens with a shadow. So again, we have
+> a hidden shadow."
+
+> "Now suppose the close of the last candle goes above the BOS level. In that
+> case, we can say a body break has happened."
+
+The synthetic candle's DIRECTION is explicitly irrelevant. Only synthetic close
+against the level decides. Confirms §28 / §29, and confirms that our `hsHi` /
+`hsLo` being tracked-but-never-read is faithful rather than sloppy: the source
+builds the combined high and low too, and also never uses them to decide.
+
+### [SRC] Inside bars cannot resolve, and the test is against the FIRST candle
+
+> "Suppose the high of the second candle came lower and that candle ended up
+> inside the range of the FIRST candle. In that case, we have an inside bar
+> candle and we shouldn't take it into account. That means we still can't draw
+> the hidden shadow and we have to wait for the next candle."
+
+Then three more inside bars, each skipped:
+
+> "So basically the candles are just playing around inside an internal
+> structure. Then the next candle comes in and its high moves outside the range.
+> So now it's no longer an inside bar candle. Now we can combine these candles.
+> The open is the open of the first candle and the close is the close of the
+> last candle."
+
+Confirms §26 and, importantly, WHICH range the containment test uses: the
+candidate (breaking) candle's own range, not a running span. Our `hsMomHi` /
+`hsMomLo` are set once from the candidate bar and never updated, and the skip
+test is `h < b.hsMomHi and l > b.hsMomLo` — strict, matching Chapter 1.
+
+Note the skipped bars cannot change the synthetic high/low anyway, since being
+inside the candidate's range is exactly what disqualifies them.
+
+### [SRC] One resolution attempt
+
+The worked example resolves on the first non-inside candle and judges there.
+Our `b.pend` clears on that bar and the outcome is either a confirmed break or
+`b.shadow := true`. We do not re-arm and re-test. Matches.
+
+### [SRC] Available on all four levels
+
+> "You can turn on hidden shadow for level breaks, whether it's during pullback
+> formation, an IDM break, a BOS break, or a change of character"
+
+Confirms §60 and our four inputs.
+
+### [GAP] What happens AFTER a rejection is not stated
+
+The chapter ends at the rejection. It does not say whether the level survives
+for a later break attempt, nor — for Body & Sweep — whether the threshold
+resets to base or keeps the level it had already migrated to.
+
+Our behaviour is [INF] and is commented as such in `brkStep`: the level stays
+armed and Body & Sweep keeps its migrated `act`. §30 covers this in the master
+prompt but the source does not confirm it.
+
+### Verdict on Chapter 5
+
+Hidden Shadow is implemented correctly on every point the source states. This
+was the specific thing suspected missing at the start of the MD audit; it was
+not missing then and it is now source-confirmed rather than merely
+MD-conformant.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
