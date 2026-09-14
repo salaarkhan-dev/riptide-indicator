@@ -256,6 +256,240 @@ inventing it now is the exact failure mode §3 and this chapter both warn about.
 
 ---
 
+## Chapter 3 — Formation of Market Structure (LIT)
+
+### [SRC] The LIT reframing of SMC
+
+An SMC "change of character" is, in LIT, a liquidity grab:
+
+> "In LIIT, when that low gets broken, it's seen as a liquidity grab, meaning
+> the market just takes the liquidity below that low and nothing more. So, this
+> move isn't a real change of character at all. ... And from here on, we call it
+> inducement or IDM for short. So, in this model, the breaks we used to call BOS
+> aren't really valid BOS's at all. ... And all those moves we used to treat as
+> BOS were actually just pullbacks."
+
+### [SRC] IDM migration
+
+> "Once a pullback forms, we draw the IDM level from the low of that pullback,
+> which is the pivot low. Now, two things can happen. Either price comes down
+> and breaks the IDM level or price keeps moving higher and a new pullback
+> forms. ... In that case, we move the IDM level to the low of the new pullback."
+
+Confirms §33. One active IDM, retired and replaced by each new pullback.
+
+### [SRC] The leg anchor — confirmed word for word
+
+> "Once the IDM gets broken, we take the highest point from the start of the
+> move up to the moment of that break as the BOS level."
+
+"From the start of the move", not from the latest IDM. Confirms §34 exactly,
+and confirms our legHi/legLo, which IDM migration never resets.
+
+### [SRC] BOS break sets the new CHoCH from the BOS leg
+
+> "Once the BOS level gets broken, we take the lowest point from the start of
+> that BOS up to the moment it breaks as a valid low. And from there, we draw
+> the change of character level."
+
+### [SRC] Boundary lock
+
+> "Now, we have a BOS level and a change of character level. So, we stop looking
+> for a new pullback or drawing a new IDM and wait to see which one price
+> breaks."
+
+Confirms §39 / §40 and our PH_LOCK.
+
+### [SRC] Latent pullback after a CONTINUATION — confirmed
+
+> "The trend is still bullish and from here we start identifying pullbacks
+> again. ... But here before the BOS gets broken, we already had a pullback. So
+> before a new pullback forms, we use this pullback and draw the IDM level from
+> its low."
+
+Confirms §42, and we implement it: the BOS-break branch activates the cached
+latent pullback.
+
+### [SRC] CHoCH break retypes the old BOS
+
+> "the previous bullish BOS level becomes our bullish change of character level
+> because that's still our valid high."
+
+Confirms §41. We do this.
+
+### [SRC] !! LATENT PULLBACK AFTER A FLIP — AND WE DO NOT DO THIS !!
+
+> "From here on, we don't draw the IDM level from the lows of bullish pullbacks
+> anymore. and we have to draw it from the highs of bearish pullbacks. **First,
+> we check whether there was already a bearish pullback before the change of
+> character got broken.** If there was, we draw the IDM level from the high of
+> that same pullback. If there wasn't, we have to wait for a new bearish
+> pullback to form here."
+
+And again after the bearish BOS break:
+
+> "let's see whether there was a bearish pullback before the BOS got broken.
+> Here before the BOS got broken, we didn't have a bearish pullback. So we wait
+> for a bearish pullback to form."
+
+Read it carefully. While the structure is BULLISH and locked, the engine is
+already observing BEARISH pullbacks — otherwise there would be nothing to look
+back at the moment the CHoCH breaks. Both orientations are live during the lock.
+
+OUR CODE DOES NOT. `x.det` is oriented to the current trend, so during a bullish
+lock we track bullish corrections only. The CHoCH-break branch then does
+`x.latPx := na` and reorients the detector, so the flip starts from nothing and
+must wait for a fresh bearish pullback.
+
+THIS IS ALSO THE ANSWER TO A QUESTION THAT HAS BEEN OPEN SINCE v0.3.6. The
+"what orients Main order flow" experiment tested two readings and rejected both:
+OF-A (flow carries the structural direction) and OF-B (an opposite confirmation
+RE-ORIENTS the flow). The source describes a third that was never tested — the
+opposite-direction pullback is merely OBSERVED so it is ready, and the flow
+direction is still set by the structural break, never by the pullback. Neither
+rejected arm is this.
+
+Not implemented in this pass. It is a real engine change and it needs measuring.
+
+### [SRC] Internal structure replaces multi-timeframe analysis
+
+> "When you analyze the market on a time frame like the five-minute chart ...
+> looking at that same structure on the one five-minute chart basically means
+> you're combining three five-minute candles together. ... So whether you
+> combine three candles, six candles, or any other number, you're still using an
+> arbitrary number. Instead of using multi-time frame analysis, it makes much
+> more sense to stay on the same main time frame where the structure is forming
+> and use the internal structure inside that same time frame."
+
+### [GAP] Internal structure looks like it is owned by the BOUNDARY LOCK
+
+The internal-structure section opens on the lock, and then the transcript ends:
+
+> "Sometimes in the market, price gets trapped between a valid high and a valid
+> low. In other words, when we have both a BOS level and a change of character
+> level at the same time ... we stop looking for a new pullback or an IDM break.
+> In this situation, price is just moving between those two levels."
+
+Our Internal context is owned by a parent PULLBACK scope (v0.7 hierarchy), not
+by the boundary lock. If internal structure exists specifically to read the
+lock, that is a different ownership model. The chapter is cut off exactly here,
+so this is unresolved — flagged, not acted on. Third consecutive chapter
+pointing at how the child degree is fed.
+
+---
+
+## Chapter 4 — Level Breakouts
+
+### [SRC] Three break types, per level, user-selectable
+
+> "In the indicator settings, you can choose the breakout type for pullback,
+> IDM, BOS, and change of character."
+
+Confirms §59 and our four inputs. Also confirms the recommended defaults:
+
+> "Of course, the shadow option is used less often for BOS breaks, and usually
+> body or body and sweep level is used instead. A change of character break
+> works exactly the same way as a BOS break."
+
+### [SRC] Shadow is intrabar
+
+> "In this case, as soon as price moves past the level, the breakout counts as
+> valid and there's no need to wait for the candle to close."
+
+We evaluate on closed bars (`cfgConfirm` default on). Same LEVEL, same bar's
+high/low, so historically identical; the difference is one bar of live latency
+in exchange for not repainting. Noted, not a defect — §4 requires it.
+
+### [SRC] Body & Sweep — the sweep target is the poking candle's extreme
+
+> "we don't keep extending that same level. We sweep it instead, meaning we move
+> the level up to the high of the new candle. And now, this new level has to be
+> broken with the body. **And even if the previous level gets broken with the
+> body, it still doesn't count.**"
+
+Confirms §21 and our Brk.base / Brk.act split, including that `act` and not
+`base` is what judges once a sweep has happened.
+
+### [SRC] !! THE TWO-LEVEL PULLBACK TRACKER, STATED OUTRIGHT !!
+
+> "The first candle comes in. It has a high and a low. We mark these two levels
+> and wait for the next candle. In a bullish trend ... if the upper level gets
+> broken, but the lower one doesn't, we move BOTH levels to the new candle. ...
+> The next candle comes and this time breaks the lower level. That means the low
+> gets taken, and that shows price is starting to pull back. From here on, we
+> don't move the levels anymore."
+
+> "So, we fix the upper level at the high of this same candle and keep going
+> until this level gets broken."
+
+This is our detector exactly: trkHi and trkLo advance together while the
+impulse side breaks; the correction OPENS when the opposite side breaks; the
+confirmation level is FROZEN at that same candle's high and never chases price.
+§14 confirmed, and the v0.1 deviation that was struck out is confirmed struck.
+
+### [SRC] Pullback range and pivot
+
+> "From the moment that level gets fixed, meaning the pullback starts, until the
+> moment it gets broken, we treat that whole area as the pullback range. The
+> lowest point inside that range is the pivot low. Pay attention here. We didn't
+> count the candles before and after the pivot low, and the number of candles on
+> each side might not even be the same."
+
+Confirms §15 / §16 and our hitFrom → hit range with the pivot at the extreme.
+
+### [SRC] The pullback-zone boundary input is a real reference setting
+
+> "Should the upper level of the pullback be on the initial level or on the
+> final level that got swept? Both ways are valid, which is why you can choose
+> in the indicator settings under pullback level where the pullback level should
+> be placed."
+
+Confirms §23 and our `pbEdge` input, including both of its options by name.
+
+### [SRC] "Liquidity grab" is defined — and it is the NEAR geometry
+
+> "A liquidity grab means that price touches a level, but does not actually
+> break it."
+
+Touch without break. That is exactly what our Near statistic arms on, and it is
+what the rescored scan ranked best (Raw level touch, error 6, against 50+ for
+every proximity band). The word "near" is not used, so this stays [INF] for the
+statistic — but the geometry the source cares about is a touch, not a distance
+band. The percentage-band candidates can be retired.
+
+---
+
+## THE 31-vs-20 ANSWER IS PROBABLY AN INPUT, NOT A BUG
+
+Chapter 2 deferred the noise filter — "How do we filter out that noise and find
+the real pullbacks? We'll get to that in a bit." Chapter 4 IS that answer, and
+it is not a new mechanism. Noise is filtered by two things already in the
+engine: the inside-bar normalizer, and THE BREAK TYPE CHOSEN FOR PULLBACK
+DETECTION.
+
+> "But one view is that the breakout has to happen with the body, otherwise the
+> pullback doesn't count as valid."
+
+Our `mPB` defaults to Shadow, which confirms a correction on the first wick back
+through the frozen level. Body, and more so Body & Sweep, confirm strictly
+later and therefore strictly fewer times — fewer pullbacks, fewer IDMs, fewer
+lock episodes. Our 31 against the reference's 20 is exactly the shape of a
+looser pullback break mode.
+
+NEXT TEST, and it needs no code change: set Pullback confirmation to Body, read
+the IDM race Total; then Body & Sweep, read it again. If either lands near 20
+the density question is closed and the near-statistic splits should move with
+it. The master prompt's §59 default of Shadow would then be wrong for the
+reference profile, which is a documentation fix, not an engine one.
+
+No "complex pullback" rule needs inventing if this is the explanation — a
+complex pullback is simply what a stricter break mode produces, because the
+internal sub-moves fail to confirm and the correction keeps running to its true
+extreme. That also matches Chapter 2's worked examples, where a complex
+pullback yields ONE pivot at the overall extreme.
+
+---
+
 ## Curriculum stated in the intro — what is still to come
 
 > "In the market structure section, we go through these: inside bar candles,
@@ -265,11 +499,13 @@ inventing it now is the exact failure mode §3 and this chapter both warn about.
 
     1. inside bar candles              ← done, Chapter 1
     2. pivot points / swing points     ← done, Chapter 2
-    3. pullback AND order flow         ← NEXT. Carries the deferred noise
-                                          filter. Decides the 31-vs-20.
-    4. market structure, SMC or LIT
-    5. how market structure forms with LIT
-    6. different types of level breaks ← Shadow / Body / Body & Sweep
+    3. pullback AND order flow         ← done, Chapters 2 and 4
+    4. market structure, SMC or LIT    ← done, Chapter 3
+    5. how market structure forms with LIT   ← done, Chapter 3
+    6. different types of level breaks ← done, Chapter 4
+
+Still wanted: the internal-structure chapter, which was cut off mid-sentence,
+and anything on the statistics table.
 
 Two things worth noting in advance:
 
