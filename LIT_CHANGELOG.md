@@ -1736,3 +1736,46 @@ confirmation - every one of those is a filter on WHICH zone to take.
 establish is the rule for what happens next: no filter gets built on a hunch,
 and the next thing to move is whichever filter can be MEASURED on this existing
 trade list without being built first.
+
+
+────────────────────────────────────────────────────────────────────────────
+FVG — the source's own filter, tested retrospectively. A LARGE, REAL effect.
+────────────────────────────────────────────────────────────────────────────
+
+Tested as a TAG on the 1214 trades that already existed, not as a new system.
+[SRC Ch.14] FVG is the gap between two CONSECUTIVE PULLBACKS - "if a new
+Pullback penetrates into the previous Pullback, the orders ... are considered
+to have been consumed" and "if there is a price gap between two Pullbacks ...
+the orders from the previous Pullback may not have been fully consumed". Those
+two statements are one test: do the consecutive ranges overlap?
+
+    arm      group      n     win%     expR     armed%
+    fixed    FVG      234    55.6%   -0.220     55.6%
+             no FVG   978    32.8%   -0.589     32.8%
+    bos      FVG      236    19.5%   -0.135     55.5%
+             no FVG   978    20.0%   -0.537     33.5%
+    mfe      FVG      228    54.4%   -0.105     54.8%
+             no FVG   930    32.5%   -0.542     32.7%
+
+IT ROUGHLY QUARTERS THE LOSS, and the mechanism is visible rather than
+inferred: armed% goes from ~33% to ~55%. Zones the next pullback did NOT
+consume actually hold when price returns to them. That is what the source says
+an unconsumed transactional node is, and it behaves like one.
+
+STILL NOT ENOUGH. Best arm ≈ -0.105R. Per timeframe on the bos arm, 30m is
+-0.020 (effectively breakeven) and 15m is -0.211.
+
+WHY THIS IS BELIEVED WHERE THE RANK SPLIT WAS NOT
+The rank split looked equally good at n=10 and evaporated at n=1200. FVG:
+  - was predicted BY THE SOURCE before being measured, not found by slicing
+  - holds at n=234 against n=978
+  - moves the INTERMEDIATE quantity it ought to move (armed%), not just the
+    outcome
+Three independent reasons the rank split never had.
+
+NEXT: SCOB, and it is the obvious one. Our entry is a bare TOUCH of the zone,
+and Ch.16 exists to forbid exactly that - "Reaching a valid zone or level is
+not enough on its own to justify an entry ... it also evaluates how the market
+behaves after reaching that zone." SCOB is testable on this same trade list by
+changing WHEN the entry fires (wait inside the zone for the confirmation break)
+rather than building anything new.
