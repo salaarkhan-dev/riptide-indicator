@@ -1,0 +1,2139 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  Riptide LIT Structure — VARIANT 2
+//
+//  A ground-up rebuild against LIT_V2_DESIGN.md. riptide-lit.pine (v1) is
+//  untouched and stays the working build until this one is measured.
+//
+//  WHAT IS DIFFERENT, AND WHY THERE IS A VARIANT 2 AT ALL
+//
+//  v1's RULES are all source-confirmed (see LIT_SOURCE.md, 13 chapters of the
+//  reference author's own material). What was wrong with v1 was its UNDEFINED
+//  CASES: wherever the source is silent, v1 resolved the question implicitly
+//  through statement order - an `if` arm that happened to be written first.
+//  Those decisions are real, they move the output, and they were invisible.
+//
+//  V2 turns every one of them into a NAMED POLICY with an explicit default and
+//  a switch, so they can be measured instead of argued. See §1 below.
+//
+//  ─────────────────────────────────────────────────────────────────────────
+//  v3.0 REPAIRS A TRAP STATE. riptide-lit-v2.pine IS UNTOUCHED.
+//
+//  v2 had a one-way door in it, and so did every build before it.
+//
+//  The CHoCH level is created when a BOS BREAKS. So the FIRST cycle after
+//  bootstrap reaches PH_SEEK with no opposing boundary, and PH_SEEK with no
+//  CHoCH cannot be left: the CHoCH branch needs a CHoCH to break, a new IDM
+//  is only published in DISCOVER or TRACK, and there is no timeout. If that
+//  first BOS is never broken, Main structure STOPS EMITTING for the rest of
+//  the chart.
+//
+//  This is not rare and it is not theoretical. Measured over 333 days on 191
+//  symbol-timeframes, it killed 7.3% of them - and on BTC 30m the Main
+//  tracker stopped at bar 25 of 15,983 and never emitted again. If you have
+//  ever loaded a chart, seen Main draw nothing, and assumed the market was
+//  quiet, this is why. Internal kept working throughout, which is the proof
+//  that the silence belonged to the engine and not to price.
+//
+//  [P9] gives the first cycle the shape every later cycle already has: a
+//  CHoCH at the leg extreme AGAINST the trend, the exact mirror of the BOS,
+//  which sits at the leg extreme with it. No new number is introduced.
+//
+//  Measured under two pre-registrations - PREREG_lit_seek_escape.md and
+//  PREREG_lit_seek_escape_v2.md, results in research/LIT_SEEK_ESCAPE.md:
+//
+//      14 of 14 latched panels repaired, across two samples
+//      99.8% of existing IDM breaks preserved where nothing was broken
+//      zero engine invariant violations, zero panels made worse
+//
+//  IT IS ON BY DEFAULT, and that makes this chart LIT_FORWARD_V2. Set
+//  'Bootstrap CHoCH [P9]' to 'Off (V1)' to get v2.3's exact behaviour back.
+//  V1 and V2 records are NEVER pooled - the structure differs, so the setups
+//  are a different population, not more of the same one.
+//
+//  A SECOND trap was found and is NOT fixed here: PH_LOCK with both
+//  boundaries outside the range price goes on to trade, 1.6% of panels. It
+//  needs its own diagnosis. If Main goes quiet on a chart running v3, that
+//  is the first thing to suspect.
+//  ─────────────────────────────────────────────────────────────────────────
+//
+//  v2.3 MAKES A SETUP FINDABLE, AND SAYS WHICH DEPTH IT CAME FROM.
+//
+//  A setup is a one-bar EVENT, and unfilled text in the right margin - which
+//  reads well for a structural level that persists - reads badly for one. So a
+//  setup now gets a filled pin on its own bar, carrying "MAIN ▲ LONG" or
+//  "INT ▼ SHORT", and every one of its labels carries a HOVER TOOLTIP with the
+//  entry, the stop and its risk as a percent, Active Price, and which depth it
+//  came from - including whether that depth has ever been measured.
+//
+//  Structure levels keep the house style unchanged. Only setups get a pin.
+//
+//  v2.2 DEFAULTS NOW MATCH THE PYTHON FORWARD RECORD.
+//
+//  Two defaults changed so the chart shows the setups the Python forward
+//  record actually
+//  collects, rather than a different structure that merely looks similar:
+//
+//    Pullback confirmation   Shadow -> Body   [SRC Ch.24] the reference
+//                                             STRATEGY build is Body; its
+//                                             STRUCTURE build is Shadow
+//    Track both directions   on -> off        research/lit_v3.py carries one
+//                                             detector per context, not a pair
+//
+//  Setting Shadow / dual-on gives the reference's structure view, which is a
+//  legitimate thing to look at and is NOT what the experiment records. The
+//  signal layer follows a "Signals follow" selector: Main, Internal or Both.
+//  Main is the default and the only depth any stage measured.
+//
+//  v2.1 ADDED AN ENTRY-SIGNAL LAYER, AND IT SHIPS OFF.
+//
+//  Settings group 9 draws the Stage B/C setup: enter at the close of the
+//  IDM-break bar, with-trend only, stop at the PRIOR confirmed pullback pivot,
+//  Active Price arming a pivot trail. It is implemented exactly as
+//  pre-registered and it is NOT a validated edge.
+//
+//  Three pre-registered experiments (PREREG_lit_stage_a/b/c.md) all returned
+//  INCONCLUSIVE. On symbols none of the earlier work touched, the trailing arm
+//  came in at +0.114 R/bet against a control at +0.047 - a paired difference
+//  of +0.068 that did not clear its pre-set bar. The honest pooled estimate is
+//  around +0.09 R with a standard error that contains zero.
+//
+//  So the layer exists to be FORWARD-RECORDED on bars no backtest here has
+//  seen, and the forward-record panel is the only number in this indicator
+//  that is not borrowed from a backtest. Nothing places an order; this project
+//  places no orders anywhere.
+//
+//  SOURCE TAGS, per master prompt §79:
+//    [SRC] stated outright by the reference author. LIT_SOURCE.md quotes it.
+//    [INF] our inference. The source does not settle it.
+//    [P n] a registered policy - an undefined case made explicit.
+//
+//  PINE GOTCHAS this file is written around, all learned the hard way:
+//    - a function may MUTATE an object but may not ASSIGN a global scalar
+//    - no `[]` history on object fields
+//    - drawing coordinates must be xloc.bar_time, never bar_index (RE10026)
+//    - functions must be declared before use
+//    - continuation lines must not land on a multiple-of-4 indent
+// ═══════════════════════════════════════════════════════════════════════════
+//@version=6
+indicator("Riptide LIT Structure — v3.0", "Riptide LIT v3",
+     overlay          = true,
+     max_lines_count  = 500,
+     max_labels_count = 500,
+     max_boxes_count  = 500)
+
+// ═══════════════════════════ 1. INPUTS ══════════════════════════════════════
+string gEng = "1. Engine"
+string gPol = "2. Policies (undefined cases)"
+string gBrk = "3. Breakout rules"
+string gHS  = "4. Hidden Shadow"
+string gShow = "5. Structure"
+string gPB  = "6. Pullback zones"
+string gCol = "7. Appearance"
+string gDbg = "8. Panels and debug"
+string gSig = "9. Entry signals (research)"
+
+bool cfgConfirm = input.bool(true, "Only update structure on closed bars",
+     group = gEng,
+     tooltip = "On: a bar is read once it has closed, so what you see now is what the chart would have said then.\n\n[SRC] The author calls a Shadow break valid the instant price crosses. That is a live-latency difference of one bar, not a different level - the same bar's high/low decides either way.")
+string devMode = input.string("All depths", "Development mode", group = gEng,
+     options = ["All depths", "MAIN ONLY"],
+     tooltip = "MAIN ONLY silences Internal and Deep entirely, engine and drawing both.")
+
+// ── POLICIES ────────────────────────────────────────────────────────────────
+// Each of these is a case the source does not cover. v1 answered all of them
+// by accident. Defaults here are the v1-equivalent answer EXCEPT P8, which the
+// source states outright. To parity-test the port against v1, set P8 to
+// "Single (v1)" and leave everything else alone.
+string pOutside = input.string("Close decides", "Outside group in impulse",
+     group = gPol, options = ["Close decides", "Correction wins", "Impulse wins"],
+     tooltip = "[P1] A group that breaks BOTH tracker levels at once. The source never covers it.\n\nClose decides: the group's own close direction picks - closing with the impulse extends it, closing against it opens the correction. This follows master prompt §12, the only guidance anywhere for a both-sides break, and is the only option that uses information OHLC actually contains.\n\nCorrection wins is what v1 does, purely because that branch is written first.")
+string pReseed = input.string("Resolver group", "Tracker re-seed after confirm",
+     group = gPol, options = ["Resolver group", "Pivot anchored"],
+     tooltip = "[P3] Where the two trackers go once a correction confirms.\n\nResolver group (= v1): both take the confirming group's high and low. That group is by construction a strong impulse group, so its low sits high, so the next mild dip opens another correction.\n\nPivot anchored: the impulse-side tracker takes the resolver, the opposite tracker is held at the pivot. Corrections then have to give back more before a new one opens.")
+bool pEqBreak = input.bool(false, "Exact equality counts as a break",
+     group = gPol,
+     tooltip = "[P4] A high or low exactly equal to a level. Master prompt §11 says equality is NOT a break, which is the default. The source defines both 'inside' and 'broken' with strict inequality and so never resolves the tie. Round numbers make it less rare than it sounds.")
+string pSeekCh = input.string("Leg extreme (V2)", "Bootstrap CHoCH [P9]",
+     group = gPol, options = ["Leg extreme (V2)", "Off (V1)"],
+     tooltip = "[P9] What the FIRST cycle after bootstrap uses as its CHoCH.\n\nThe CHoCH level is normally created when a BOS breaks, so the first cycle has no opposing boundary and PH_SEEK becomes a one-way door: the CHoCH branch needs a CHoCH to break, a new IDM is only published in DISCOVER or TRACK, and nothing times out. If that first BOS is never broken, Main stops emitting for the rest of the chart. Measured over 333 days it killed 7.3% of symbol-timeframes, BTC 30m among them - where Main stopped at bar 25 of 15,983.\n\nLeg extreme (V2) - the CHoCH goes at the leg extreme AGAINST the trend, the exact mirror of the BOS, which sits at the leg extreme with it. Parameter-free. Repairs 14 of 14 latched panels across two samples while preserving 99.8% of existing IDM breaks on charts that were never broken.\n\nOff (V1) - v2.3 behaviour exactly, trap included. Use it to reproduce anything recorded before this build. It is not a safer setting; it is the older one.\n\nA third arm - CHoCH at the IDM raid extreme - exists in the research engine and was MEASURED AND REJECTED: it converted one latched chart into a different kind of stall. It is deliberately not offered here.\n\nThis switch decides whether the chart is LIT_FORWARD_V1 or V2. The two are never pooled.")
+string pChild = input.string("Continuous, raw candles", "Child structure feed",
+     group = gPol,
+     options = ["Continuous, raw candles", "Scoped to parent pullback (v1)"],
+     tooltip = "[P7b] What Internal and Deep actually read, and when they are allowed to exist.\n\nScoped to parent pullback (v1): a child runs its OWN normalizer over raw candles only while its owning parent pullback holds the scope, and restarts each time. It is drawn only while scoped. Faithful to 'nested inside', but a scope lasts a handful of bars, so the child rarely survives long enough to reach BOS or CHoCH.\n\nContinuous, raw candles: Internal reads RAW candles with NO normalizer - exactly the granularity Main throws away - and runs without interruption. This is the other reading of chapter 1's 'inside bar candles only form fractal and internal structures', and it is the only feed that makes Internal genuinely FINER than Main rather than identical to it. Deep stays owned by a confirmed Internal pullback, because there is no third granularity on one timeframe and ownership is what makes it deeper.")
+bool pDual = input.bool(false, "Track both pullback directions",
+     group = gPol,
+     tooltip = "[P8] [SRC] The one confirmed divergence from the reference, with two independent witnesses.\n\nChapter 3: 'First, we check whether there was already a bearish pullback before the change of character got broken.' Chapter 12: the display option is literally 'Show Latest Bullish & Bearish' - you cannot draw both unless you hold both.\n\nOn: a pullback detector runs in EACH direction at every depth. Only the one matching the structural direction may publish an IDM or open a child scope; the other is observed so it is ready the moment the trend flips.\n\nOff reproduces v1 for parity testing.\n\nTHIS BUILD DEFAULTS TO OFF. research/lit_v3.py, which produces the Python forward record, carries a SINGLE detector per context plus a bootstrap - there is no bull/bear pair in it. On is the better reading of the source; off is what the recorded experiment actually runs. They are not the same chart.")
+
+// ── BREAKOUT RULES ──────────────────────────────────────────────────────────
+// [SRC] Chapter 11: these four defaults are the reference's own settings.
+string mPB = input.string("Body", "Pullback confirmation", group = gBrk,
+     options = ["Shadow", "Body", "Body & Sweep"],
+     tooltip = "[SRC] 'Shadow confirms by wick; Body confirms by close; Body & Sweep Level keeps the sweep route.' - the reference's own tooltip.\n\nThis is also the noise filter. A stricter mode lets a correction survive its internal oscillations and run on to the true extreme, which is what a COMPLEX PULLBACK is. The reference runs Shadow here.\n\nTHIS BUILD DEFAULTS TO BODY, not Shadow, because research/lit_v3.py - the engine behind the Python forward record - ships M_PB = BRK_BODY per [SRC Ch.24]: the reference STRATEGY build uses Body while its STRUCTURE build uses Shadow. Setting Shadow here gives you the reference's structure view, and a chart that no longer matches what the Python forward record is recording.")
+string mIDM = input.string("Shadow", "IDM break", group = gBrk,
+     options = ["Shadow", "Body", "Body & Sweep"],
+     tooltip = "Taking inducement IS a wick event - the stops under that low fill whether or not the candle closes there.")
+string mBOS = input.string("Body & Sweep", "BOS break", group = gBrk,
+     options = ["Shadow", "Body", "Body & Sweep"])
+string mCH = input.string("Body & Sweep", "CHoCH break", group = gBrk,
+     options = ["Shadow", "Body", "Body & Sweep"])
+
+bool hsPB = input.bool(false, "Hidden Shadow on pullback", group = gHS,
+     tooltip = "[SRC] Inert while the matching break mode is Shadow: a wick break is already a wick break. The reference greys these out; Pine cannot, so they are simply ignored.")
+bool hsIDM = input.bool(false, "Hidden Shadow on IDM", group = gHS)
+bool hsBOS = input.bool(true, "Hidden Shadow on BOS", group = gHS)
+bool hsCH = input.bool(true, "Hidden Shadow on CHoCH", group = gHS)
+
+// ── STRUCTURE ───────────────────────────────────────────────────────────────
+bool showMain = input.bool(true, "Main", group = gShow, inline = "d")
+bool showInt = input.bool(true, "Internal", group = gShow, inline = "d")
+bool showDeep = input.bool(false, "Deep", group = gShow, inline = "d",
+     tooltip = "[SRC] 'Available only when Internal Structure is enabled.' Off by default per master prompt §58/§81 - note the reference's own profile has it ON, so turn it on before comparing charts by eye.")
+bool showIDM = input.bool(true, "IDM", group = gShow, inline = "l")
+bool showBOS = input.bool(true, "BOS", group = gShow, inline = "l")
+bool showCH = input.bool(true, "CHoCH", group = gShow, inline = "l")
+bool showSW = input.bool(true, "Strong / Weak labels", group = gShow,
+     tooltip = "[SRC] Display semantics only - master prompt §47. Nothing in the engine reads them. The reference calls this Label Swing and has it on.")
+bool swAllDepths = input.bool(false, "  ...at every depth", group = gShow,
+     tooltip = "Off: Main only, which is the readable default. On: Internal and Deep mark their extremes too.")
+bool showInside = input.bool(true, "Tint inside bars", group = gShow,
+     tooltip = "[SRC] The reference ships this ON. A subtle neutral grey marking the candles the engine treats as noise inside the active mother range.")
+int histMain = input.int(20, "History: BOS/CHoCH", minval = 1, maxval = 60,
+     group = gShow, inline = "h",
+     tooltip = "Retired BOS and CHoCH segments kept per depth (Main / Internal / Deep). TradingView caps a script at 500 lines and 500 labels.\n\nTaken IDMs have their OWN budget below - sharing one with BOS/CHoCH churn evicted every IDM within a few structural events, which is why the chart came back with almost no IDM history.")
+int histInt = input.int(12, "", minval = 1, maxval = 60, group = gShow, inline = "h")
+int histDeep = input.int(6, "", minval = 1, maxval = 60, group = gShow, inline = "h")
+int histIdm = input.int(25, "History: taken IDMs", minval = 1, maxval = 80,
+     group = gShow,
+     tooltip = "Taken inducements kept per depth. A taken IDM is the inducement actually being grabbed, which is the whole point of the model, so it gets its own budget rather than competing with retired BOS/CHoCH segments.")
+
+// ── PULLBACK ZONES ──────────────────────────────────────────────────────────
+// [SRC] Chapter 12 - the reference's own three display options, by name.
+string pbShow = input.string("Show Latest Bullish & Bearish",
+     "External pullback (order flow)", group = gPB,
+     options = ["Show Latest Bullish & Bearish", "Show All", "Hide"],
+     tooltip = "[SRC] The reference's own control, options and default. 'Show Latest Bullish & Bearish' needs both directions tracked, which is policy P8.")
+bool pbIntOn = input.bool(true, "Internal zones", group = gPB, inline = "p")
+bool pbDeepOn = input.bool(false, "Deep zones", group = gPB, inline = "p")
+int histPB = input.int(20, "Zones kept per depth", minval = 1, maxval = 40,
+     group = gPB,
+     tooltip = "Confirmed pullback zones kept per depth. The reference shows a dozen or more on one screen, so this needs headroom.")
+string pbEdge = input.string("Initial level", "Zone boundary", group = gPB,
+     options = ["Initial level", "Final swept level"],
+     tooltip = "[SRC] 'Should the upper level of the pullback be on the initial level or on the final level that got swept? Both ways are valid, which is why you can choose.' Visual only - the pivot and the structure are identical either way.")
+
+// ── APPEARANCE ──────────────────────────────────────────────────────────────
+color cBull = input.color(#26a69a, "Bullish", group = gCol, inline = "c1")
+color cBear = input.color(#ef5350, "Bearish", group = gCol, inline = "c1")
+color cIDMBull = input.color(#2962ff, "Bullish IDM", group = gCol, inline = "c2")
+color cIDMBear = input.color(#ffb300, "Bearish IDM", group = gCol, inline = "c2")
+color cHS = input.color(#9c27b0, "Hidden Shadow", group = gCol, inline = "c3")
+int fadeMain = input.int(0, "Fade: Main", minval = 0, maxval = 80, group = gCol,
+     inline = "f")
+int fadeInt = input.int(10, "Internal", minval = 0, maxval = 80, group = gCol,
+     inline = "f")
+int fadeDeep = input.int(28, "Deep", minval = 0, maxval = 80, group = gCol,
+     inline = "f")
+int mainW = input.int(1, "Main line width", minval = 1, maxval = 3, group = gCol,
+     tooltip = "[SRC] Master prompt §51 asks for Main 'slightly thicker'. On a real chart width 2 reads as heavy rather than as hierarchy - Main is already separated by solid style and zero fade - so the default is 1. Main IDM sits one step below this, floored at 1; children are always 1.")
+string labelSizeMain = input.string("Normal", "Main label size", group = gCol,
+     options = ["Tiny", "Small", "Normal"])
+string labelSizeChild = input.string("Small", "Child labels", group = gCol,
+     options = ["Tiny", "Small", "Normal"])
+int labelGapBars = input.int(3, "Label gap (bars)", minval = 0, maxval = 12,
+     group = gCol,
+     tooltip = "Horizontal gap between a LIVE level's right endpoint and its tag, in bars. The tag sits in the empty margin past the line instead of on top of it. Retired tags centre on their own frozen span.")
+float labelClearAtr = input.float(0.24, "Label clearance × ATR", minval = 0.00,
+     maxval = 0.50, step = 0.01, group = gCol)
+
+// ── PANELS ──────────────────────────────────────────────────────────────────
+bool showPanel = input.bool(false, "Guidance panel", group = gDbg)
+bool showDbg = input.bool(false, "Debug mode", group = gDbg,
+     tooltip = "[SRC] Master prompt §63. Mother range and inside-bar state, both pullback trackers and their frozen confirmation levels, the Body & Sweep threshold, Hidden Shadow pending state, the leg anchor, IDM/BOS/CHoCH, phase and depth, the §12 outside-group counts, and every structural invariant.")
+bool showStats = input.bool(false, "Structure statistics", group = gDbg,
+     tooltip = "[SRC] The reference's twelve-row LIT Statistics Table.")
+string statsDepth = input.string("Main", "Statistics / debug depth", group = gDbg,
+     options = ["Main", "Internal", "Deep"])
+string statsWindow = input.string("All loaded bars", "Statistics window",
+     group = gDbg, options = ["All loaded bars", "Visible chart"],
+     tooltip = "[SRC] All loaded bars is the default because THE REFERENCE TABLE IS NOT VIEWPORT-COHORTED. Its panel exposes one checkbox and no window control at all, and its numbers hold still across changes of viewport.\n\nVisible chart is useful for reading one stretch in isolation, but its totals are not comparable to the reference's.")
+
+// ── 9. ENTRY SIGNALS ────────────────────────────────────────────────────────
+// SHIPS OFF, and the tooltip says why rather than the changelog alone.
+//
+// This is the Stage B/C entry, implemented exactly as pre-registered: enter at
+// the close of the IDM-break bar, with-trend only, stop at the PRIOR confirmed
+// pullback pivot, Active Price arms a pivot trail. It is NOT a validated edge.
+// Three pre-registered experiments returned INCONCLUSIVE; the measured
+// expectancy is about +0.09 R per bet with a standard error that contains
+// zero. It is here to be FORWARD-RECORDED on data none of those tests saw.
+bool showSig = input.bool(false, "Show entry signals", group = gSig,
+     tooltip = "OFF by default and that is deliberate.\n\nThese signals were measured across three pre-registered experiments (PREREG_lit_stage_a/b/c.md). All three returned INCONCLUSIVE. On symbols that took no part in the earlier work the trailing arm came in at +0.114 R/bet against a control at +0.047, a paired difference of +0.068 that did NOT clear its pre-set bar.\n\nSo: no claim of an edge is made here. The purpose of this layer is to record what happens FORWARD, on bars no backtest in this project has seen. Treat every signal as data collection, not as advice.")
+float sigRR = input.float(0.5, "Active Price, in R", minval = 0.1, maxval = 3.0,
+     step = 0.1, group = gSig,
+     tooltip = "[SRC Ch.18/24] Active Price is NOT a take-profit. It is the level at which the trailing stop ARMS. Below it the initial stop is the only exit. 0.5R is the reference's own minimum reward/risk threshold.")
+float sigFee = input.float(0.032, "Round-trip fee, %", minval = 0.0, maxval = 1.0,
+     step = 0.001, group = gSig,
+     tooltip = "The repository's own assumption (research/harness.py): maker 0.010% + taker 0.022%. It is folded into Active Price exactly as the research did.\n\nThis is a DISTRIBUTION, not a constant - it moves with VIP tier, the MX deduction and zero-fee promotions - so read any conclusion that turns on it as a range.")
+bool sigTrail = input.bool(true, "Arm pivot trail at Active Price", group = gSig,
+     tooltip = "T6_PIVOT: once Active Price is reached, the stop follows each newly confirmed pullback pivot in the trade direction, and never moves against the position.\n\nWhat the reference's trailing stop actually trails is never stated in the source - this is a research policy, not a documented rule.")
+bool sigBox = input.bool(true, "Shade the risk band", group = gSig)
+// WHICH STRUCTURE THE SIGNALS FOLLOW. Main is what every pre-registered
+// measurement used and what the Python forward record collects. Internal has NEVER been
+// scored - its expectancy is unmeasured, not small or large - so the forward
+// panel keeps the two in separate columns and never pools them.
+string sigDepth = input.string("Main", "Signals follow", group = gSig,
+     options = ["Main", "Internal", "Both"],
+     tooltip = "Which structure publishes entry signals.\n\nMain - the depth Stages A, B and C measured, and the only depth the Python forward record collects. This is the default because it is the one with evidence attached.\n\nInternal - far more setups, and NOTHING is known about them: no stage ever scored Internal. Watch them, do not read them as validated.\n\nBoth - draws each in its own colour and books them SEPARATELY. The panel never averages the two, because pooling a measured population with an unmeasured one hides the difference that matters.\n\nThis setting is chart-only. The Python experiment records MAIN regardless.")
+bool sigMain = sigDepth != "Internal"
+bool sigInt = sigDepth != "Main"
+bool sigLog = input.bool(true, "Forward record panel", group = gSig,
+     tooltip = "Counts what these signals have actually done on the bars currently loaded. This is the only number here that is not borrowed from a backtest.")
+color cLong = input.color(#26a69a, "Long", inline = "sc", group = gSig)
+color cShort = input.color(#ef5350, "Short", inline = "sc", group = gSig)
+color cStop = input.color(#e05252, "Stop", inline = "sc2", group = gSig)
+color cActive = input.color(#9598a1, "Active", inline = "sc2", group = gSig)
+
+// One bar in milliseconds, computed once so the label placers and the retire
+// path all read the same value instead of each opening a `time[1]` buffer.
+int barMs = nz(time - time[1], 0)
+
+// Declared here because the break engine counts Hidden Shadow outcomes.
+inStatsWindow(int t) =>
+    statsWindow == "All loaded bars" or
+     (t >= chart.left_visible_bar_time and t <= chart.right_visible_bar_time)
+
+// ═══════════════════════════ 2. CONSTANTS ═══════════════════════════════════
+int DIR_NONE = 0
+int DIR_BULL = 1
+int DIR_BEAR = -1
+
+int PH_DISCOVER = 0   // direction known, no IDM yet
+int PH_TRACK    = 1   // IDM active, may migrate
+int PH_SEEK     = 2   // IDM taken, BOS locked, no opposing CHoCH
+int PH_LOCK     = 3   // BOS and CHoCH both active - no IDM may exist
+
+int BRK_SHADOW = 0
+int BRK_BODY   = 1
+int BRK_SWEEP  = 2
+
+int PB_IMPULSE = 1
+int PB_CORRECT = 2
+
+// ═══════════════════════════ 3. TYPES ═══════════════════════════════════════
+// [SRC] One break engine, four users: pullback, IDM, BOS, CHoCH.
+type Brk
+    float base = na          // the level as first set - BODY judges this
+    float act = na           // BODY & SWEEP migrates this and judges it instead
+    int dir = 0
+    int mode = 0
+    bool useHS = false
+    bool pend = false        // a body candidate waiting on Hidden Shadow
+    float hsLvl = na
+    float hsMomHi = na       // the CANDIDATE candle's own range. Never updated:
+    float hsMomLo = na       // containment is tested against it, not a span.
+    bool swept = false
+    bool shadow = false      // a Hidden Shadow rejection fired this bar
+    int sweeps = 0
+    float lastSweepPx = na
+    // Hidden Shadow outcome tally for the statistics table. arm() deliberately
+    // does NOT reset these - one Brk lives for the whole context, so the count
+    // spans every level that Brk has ever held.
+    int nHsArm = 0
+    int nHsBrk = 0
+
+// [SRC] Persistent mother range. PER DEPTH: Main may ignore a candle while
+// Internal or Deep still sees it through its own mother lifecycle.
+type Norm
+    float hi = na
+    float lo = na
+    float op = na
+    float cl = na
+    int hiBar = na
+    int loBar = na
+    int hiT = na
+    int loT = na
+    int insideCount = 0
+    int bothCount = 0
+
+// One confirmed correction. Immutable once emitted.
+type PB
+    int dir = 0
+    int startBar = na
+    int startT = na
+    int confirmBar = na
+    int confirmT = na
+    float pivot = na
+    int pivotBar = na
+    int pivotT = na
+    float edge = na          // the zone's far boundary, per pbEdge
+    float conf = na          // the frozen confirmation level
+    bool live = false        // there is a record here at all
+    bool fresh = false       // not yet consumed by a post-flip lookback
+
+// [SRC] The documented two-level tracker, ORIENTED to one direction.
+type PBDet
+    int dir = 1
+    int state = 1
+    float trkHi = na
+    float trkLo = na
+    int startBar = na
+    int startT = na
+    bool startedInLock = false
+    float conf = na          // FROZEN at correction start - never chases price
+    float initLvl = na
+    float rngHi = na
+    int rngHiBar = na
+    int rngHiT = na
+    float rngLo = na
+    int rngLoBar = na
+    int rngLoT = na
+    Brk b
+    bool hit = false         // a correction confirmed on THIS bar
+    PB last                  // the most recent confirmed correction
+
+// [§11] createdBar is what stops a level being broken by the bar that made it.
+type Lvl
+    float px = na
+    int bar = na
+    int barT = na            // the anchor as a TIMESTAMP - see the RE10026 note
+    int createdBar = na
+    bool on = false
+    Brk b
+    line ln = na
+    label lb = na
+
+// One live research setup. It owns its own drawings so the render path never
+// has to reconstruct where a trade was.
+type Sig
+    bool on = false
+    bool armed = false       // Active Price reached, the trail is live
+    int dir = 0
+    float entry = na
+    float stop0 = na         // the stop as placed, kept for the R calculation
+    float stop = na          // the stop as it stands now
+    float active = na
+    float risk = na
+    int barT = na
+    line enLn = na
+    line slLn = na
+    line acLn = na
+    label enLb = na
+    label slLb = na
+    label mark = na          // the filled arrow at the entry bar
+    string depth = ""        // "MAIN" or "INT" - shown, not inferred
+    box band = na
+
+// [SRC] Child structure is owned by a confirmed parent PULLBACK.
+type Scope
+    bool active = false
+    int id = 0
+    int fromT = na
+    int confirmT = na
+
+type Ctx
+    int depth = 0
+    int dir = 0
+    int phase = 0
+    Norm norm
+    PBDet detBull            // [P8] both always run; only the one matching
+    PBDet detBear            //      x.dir may publish.
+    PBDet boot               // direction bootstrap before x.dir is known
+    // [SRC §34] The leg anchor. IDM migration never touches it.
+    int legBar = na
+    float legHi = na
+    int legHiBar = na
+    int legHiT = na
+    float legLo = na
+    int legLoBar = na
+    int legLoT = na
+    // extremes since the BOS was locked, for the next CHoCH
+    float phHi = na
+    int phHiBar = na
+    int phHiT = na
+    float phLo = na
+    int phLoBar = na
+    int phLoT = na
+    Lvl idm
+    Lvl bos
+    Lvl ch
+    array<line> junkL        // retired BOS / CHoCH segments
+    array<label> junkB
+    array<line> idmL         // TAKEN IDM segments - their own history, because
+    array<label> idmB        // sharing one with BOS/CHoCH evicted them instantly
+    array<box> zones
+    array<label> marks
+    label weakDot = na
+    label weakTxt = na
+    label strongDot = na
+    label strongTxt = na
+    // counters
+    int nPivot = 0
+    int nIdm = 0
+    int nIdmBreak = 0
+    int nBos = 0
+    int nCh = 0
+    int nFlip = 0
+    int nLatent = 0
+    int nOutsideImp = 0      // [P1] how often the undefined case actually fires
+    int nInvariant = 0
+    string lastEvent = ""
+    // ── entry layer handoff ─────────────────────────────────────────────────
+    // The stop is the PRIOR confirmed pullback pivot: the most recent one IS
+    // the IDM being broken, so the one behind it is the structural level that
+    // gives a risk unit wide enough to survive contact with the market.
+    // Stage B: median 2.9% of price against the raid extreme's 0.42%.
+    float pbLast = na        // cycle-scoped: the IDM being broken
+    float pbPrior = na       // cycle-scoped: the STOP, the level behind it
+    // PARITY. research/studies/lit_stage_a.py::trails forward-fills the TRAIL
+    // pivot ACROSS structural cycles - it is simply the most recent confirmed
+    // pullback pivot of that direction, and it is NOT reset at an IDM break.
+    // v2.1 reset it with the stop pair, which made the Pine trail freeze where
+    // the Python one kept trailing. Two accumulators, not one.
+    float pbTrailBull = na
+    float pbTrailBear = na
+    bool sigNew = false      // set for ONE bar, read by the RUN section
+    int sigDir = 0
+    float sigEntry = na
+    float sigStop = na
+    // ── statistics ──────────────────────────────────────────────────────────
+    int stRaceTot = 0
+    int stRaceBos = 0
+    int stRaceCh = 0
+    bool stRaceArmed = false
+    int stBosNearTot = 0
+    int stBosNearReach = 0
+    int stBosNearBrk = 0
+    bool stBosArmed = false
+    float stBosTgtHi = na
+    float stBosTgtLo = na
+    int stChNearTot = 0
+    int stChNearReach = 0
+    int stChNearBrk = 0
+    bool stChArmed = false
+    float stChTgtHi = na
+    float stChTgtLo = na
+
+// ═══════════════════════════ 4. BREAK ENGINE ════════════════════════════════
+modeOf(string s) =>
+    s == "Shadow" ? BRK_SHADOW : s == "Body" ? BRK_BODY : BRK_SWEEP
+
+// [P4] Every geometric comparison in the engine funnels through these two, so
+// the equality policy is decided in exactly one place.
+above(float v, float lvl) =>
+    pEqBreak ? v >= lvl : v > lvl
+
+below(float v, float lvl) =>
+    pEqBreak ? v <= lvl : v < lvl
+
+arm(Brk b, float lvl, int d, int mode, bool useHS) =>
+    b.base := lvl
+    b.act := lvl
+    b.dir := d
+    b.mode := mode
+    b.useHS := useHS
+    b.pend := false
+    b.swept := false
+    b.shadow := false
+    b.sweeps := 0
+    b.hsLvl := na
+
+disarm(Brk b) =>
+    b.base := na
+    b.act := na
+    b.pend := false
+    b.swept := false
+    b.shadow := false
+
+// True only on the bar the break is CONFIRMED. For a Hidden Shadow candidate
+// that is the RESOLVER bar, not the candidate bar.
+brkStep(Brk b, float o, float h, float l, float c) =>
+    bool done = false
+    b.swept := false
+    b.shadow := false
+    if not na(b.base)
+        bool up = b.dir > 0
+        if b.pend
+            // [SRC Ch.5/Ch.9] Bars contained by the CANDIDATE's own range
+            // cannot resolve it. Wait for the first that escapes, then judge a
+            // synthetic candle spanning candidate through resolver ON ITS
+            // CLOSE. The synthetic's direction is explicitly irrelevant - the
+            // author's own worked example rejects a bullish combined candle.
+            if not (below(h, b.hsMomHi) and above(l, b.hsMomLo))
+                b.pend := false
+                if up ? above(c, b.hsLvl) : below(c, b.hsLvl)
+                    done := true
+                    if inStatsWindow(time)
+                        b.nHsBrk += 1
+                else
+                    // [INF] After a rejection the level stays armed, and Body &
+                    // Sweep keeps the threshold it had already migrated to
+                    // rather than resetting to base. The source stops here.
+                    b.shadow := true
+        else
+            bool raw = false
+            if b.mode == BRK_SHADOW
+                raw := up ? above(h, b.base) : below(l, b.base)
+            else if b.mode == BRK_BODY
+                raw := up ? above(c, b.base) : below(c, b.base)
+            else
+                // [SRC Ch.4] A wick through that closes back inside has SWEPT.
+                // The threshold moves to that candle's extreme and the OLD
+                // level is no longer enough: "even if the previous level gets
+                // broken with the body, it still doesn't count."
+                if up and above(h, b.act) and not above(c, b.act)
+                    b.act := h
+                    b.swept := true
+                    b.sweeps += 1
+                    b.lastSweepPx := h
+                else if not up and below(l, b.act) and not below(c, b.act)
+                    b.act := l
+                    b.swept := true
+                    b.sweeps += 1
+                    b.lastSweepPx := l
+                raw := up ? above(c, b.act) : below(c, b.act)
+            if raw
+                if b.useHS and b.mode != BRK_SHADOW
+                    if inStatsWindow(time)
+                        b.nHsArm += 1
+                    b.pend := true
+                    b.hsLvl := b.mode == BRK_SWEEP ? b.act : b.base
+                    b.hsMomHi := h
+                    b.hsMomLo := l
+                else
+                    done := true
+    done
+
+// ═══════════════════════════ 5. INSIDE BARS ═════════════════════════════════
+// [SRC Ch.1] "Once a candle forms until its high or low gets broken, every
+// candle that stays within its range is an inside bar candle." A mother owns
+// every following candle - NOT a previous-bar comparison. Exit is geometric on
+// high OR low; Body and Body & Sweep must never touch this classification.
+seedNorm(Norm n, float o, float h, float l, float c, int i, int t) =>
+    n.hi := h
+    n.lo := l
+    n.op := o
+    n.cl := c
+    n.hiBar := i
+    n.loBar := i
+    n.hiT := t
+    n.loT := t
+
+normStep(Norm n, float ro, float rh, float rl, float rc, int i, int t,
+     bool enabled) =>
+    bool emit = false
+    bool insideNow = false
+    bool bothNow = false
+    float eo = na
+    float eh = na
+    float el = na
+    float ec = na
+    int eHiBar = na
+    int eLoBar = na
+    int eHiT = na
+    int eLoT = na
+    if enabled
+        if na(n.hi)
+            seedNorm(n, ro, rh, rl, rc, i, t)
+        else
+            bool over = above(rh, n.hi)
+            bool under = below(rl, n.lo)
+            if not over and not under
+                // [P4] With equality NOT a break, an exact touch lands here and
+                // resolves as inside - master prompt §11 by elimination.
+                insideNow := true
+                n.cl := rc
+                n.insideCount += 1
+            else
+                bothNow := over and under
+                if bothNow
+                    n.bothCount += 1
+                emit := true
+                eo := n.op
+                eh := n.hi
+                el := n.lo
+                ec := n.cl
+                eHiBar := n.hiBar
+                eLoBar := n.loBar
+                eHiT := n.hiT
+                eLoT := n.loT
+                // The breaking candle becomes the next mother.
+                seedNorm(n, ro, rh, rl, rc, i, t)
+    [emit, eo, eh, el, ec, eHiBar, eLoBar, eHiT, eLoT, insideNow, bothNow]
+
+// ═══════════════════════════ 6. PULLBACK DETECTOR ═══════════════════════════
+// [SRC Ch.4] "The first candle comes in. It has a high and a low. We mark these
+// two levels ... if the upper level gets broken, but the lower one doesn't, we
+// move BOTH levels to the new candle. ... The next candle comes and this time
+// breaks the lower level. That means the low gets taken ... So, we fix the
+// upper level at the high of this same candle and keep going until this level
+// gets broken."
+//
+// THERE IS NO COMPLEX-PULLBACK RULE HERE, DELIBERATELY. A complex pullback is
+// the EMERGENT SHAPE of this machine: oscillations that fail to break the
+// frozen `conf` leave the correction running, the range keeps ratcheting, and
+// one pullback comes out with one pivot at the true extreme. That is exactly
+// the course diagram, where the internal peaks sit at or below the box's top
+// edge and only the confirming move clears it. Writing a rule for it would be
+// inventing the thing Chapter 2 spends its length warning against.
+detReorient(PBDet d, int dir, float h, float l) =>
+    d.dir := dir
+    d.state := PB_IMPULSE
+    d.trkHi := h
+    d.trkLo := l
+    d.startBar := na
+    d.conf := na
+    d.hit := false
+    disarm(d.b)
+
+detStep(PBDet d, int i, float o, float h, float l, float c, int hiBar,
+     int loBar, int hiT, int loT, int mode, bool useHS, int phase) =>
+    d.hit := false
+    int outsideImp = 0
+    if na(d.trkHi)
+        d.trkHi := h
+        d.trkLo := l
+    else
+        bool up = d.dir == DIR_BULL
+        if d.state == PB_IMPULSE
+            bool extended = up ? above(h, d.trkHi) : below(l, d.trkLo)
+            bool gaveBack = up ? below(l, d.trkLo) : above(h, d.trkHi)
+            bool openIt = false
+            bool extendIt = false
+            if extended and gaveBack
+                // [P1] The undefined case. Counted either way so the debug
+                // panel shows how often the policy is actually load-bearing.
+                outsideImp := 1
+                if pOutside == "Correction wins"
+                    openIt := true
+                else if pOutside == "Impulse wins"
+                    extendIt := true
+                else
+                    // Close decides, per master prompt §12: a close WITH the
+                    // impulse extends it, a close against it opens the
+                    // correction. The only reading that uses real information.
+                    bool withImpulse = up ? c > o : c < o
+                    extendIt := withImpulse
+                    openIt := not withImpulse
+            else if gaveBack
+                openIt := true
+            else if extended
+                extendIt := true
+            if extendIt
+                d.trkHi := h
+                d.trkLo := l
+            else if openIt
+                // Everything below is FIXED on this group and never moves.
+                d.state := PB_CORRECT
+                d.startBar := i
+                d.startT := time
+                d.startedInLock := phase == PH_LOCK
+                d.conf := up ? h : l          // [SRC] the impulse-side extreme
+                d.initLvl := d.conf
+                d.rngHi := h
+                d.rngHiBar := hiBar
+                d.rngHiT := hiT
+                d.rngLo := l
+                d.rngLoBar := loBar
+                d.rngLoT := loT
+                arm(d.b, d.conf, up ? 1 : -1, mode, useHS)
+        else
+            // [P2] ORDER IS LOAD-BEARING. The range must absorb this group
+            // BEFORE the break is tested, or the group that confirms cannot
+            // contribute its own extreme and the pivot is silently wrong.
+            if above(h, d.rngHi)
+                d.rngHi := h
+                d.rngHiBar := hiBar
+                d.rngHiT := hiT
+            if below(l, d.rngLo)
+                d.rngLo := l
+                d.rngLoBar := loBar
+                d.rngLoT := loT
+            if brkStep(d.b, o, h, l, c)
+                d.hit := true
+                d.last.dir := d.dir
+                d.last.startBar := d.startBar
+                d.last.startT := d.startT
+                d.last.confirmBar := i
+                d.last.confirmT := time
+                d.last.pivot := up ? d.rngLo : d.rngHi
+                d.last.pivotBar := up ? d.rngLoBar : d.rngHiBar
+                d.last.pivotT := up ? d.rngLoT : d.rngHiT
+                d.last.conf := d.initLvl
+                d.last.edge := pbEdge == "Initial level" or na(d.b.act) ?
+                     d.initLvl : d.b.act
+                d.last.live := true
+                d.last.fresh := true
+                // [P3] Where the trackers go next.
+                if pReseed == "Pivot anchored"
+                    d.trkHi := up ? h : d.last.pivot
+                    d.trkLo := up ? d.last.pivot : l
+                else
+                    d.trkHi := h
+                    d.trkLo := l
+                d.state := PB_IMPULSE
+                disarm(d.b)
+    outsideImp
+
+// ═══════════════════════════ 7. STRUCTURE ENGINE ════════════════════════════
+newCtx(int d) =>
+    Ctx.new(depth = d, norm = Norm.new(),
+         detBull = PBDet.new(dir = DIR_BULL, b = Brk.new(), last = PB.new()),
+         detBear = PBDet.new(dir = DIR_BEAR, b = Brk.new(), last = PB.new()),
+         boot = PBDet.new(dir = DIR_BEAR, b = Brk.new(), last = PB.new()),
+         idm = Lvl.new(b = Brk.new()), bos = Lvl.new(b = Brk.new()),
+         ch = Lvl.new(b = Brk.new()), junkL = array.new<line>(),
+         junkB = array.new<label>(), idmL = array.new<line>(),
+         idmB = array.new<label>(), zones = array.new<box>(),
+         marks = array.new<label>())
+
+setLvl(Lvl v, float px, int bar, int barT, int i, int d, int mode, bool useHS) =>
+    v.px := px
+    v.bar := bar
+    v.barT := barT
+    v.createdBar := i
+    v.on := true
+    arm(v.b, px, d, mode, useHS)
+
+clearLvl(Lvl v) =>
+    v.on := false
+    v.px := na
+    disarm(v.b)
+
+// [§11] A level may not be broken by the bar that created it.
+ready(Lvl v, int i) =>
+    v.on and not na(v.createdBar) and i > v.createdBar
+
+// [SRC §34] A new directional leg. IDM migration NEVER calls this.
+legStart(Ctx x, float px, int bar, float h, float l, int hiBar, int loBar,
+     int hiT, int loT) =>
+    x.legBar := bar
+    x.legHi := h
+    x.legHiBar := hiBar
+    x.legHiT := hiT
+    x.legLo := l
+    x.legLoBar := loBar
+    x.legLoT := loT
+
+// [SRC Ch.10] "price moves toward and reaches THE LAST OPPOSITE PULLBACK".
+//
+// WRONG READING, CORRECTED BY MEASUREMENT. V2 first read "opposite" as the
+// opposite-DIRECTION detector. That is a different quantity, and the numbers
+// caught it: CHoCH-near landed on the reference almost exactly (50.0/50.0
+// against 50.0/50.0 on 30m, 75.0% against 79.5% on 15m) while BOS-near sat far
+// too low (25.8-54.8% against 68-69%). The asymmetry is the tell.
+//
+// In a bearish structure the CHoCH is the UPPER boundary, so the
+// opposite-direction detector's pivots happen to lie below it - correct by
+// accident. The BOS is the LOWER boundary, and those same pivots lie below it
+// too, which is the WRONG side: price that fails at the BOS retraces UP.
+//
+// "Opposite" is geometric - the side AWAY from the boundary that was
+// approached - exactly as v1 had it. Among the pullbacks on that side, take
+// the most RECENTLY confirmed, and only from the CURRENT leg: a zone left
+// behind several legs ago is not "the last" pullback in any sense the
+// reference would recognise, and the race could only ever resolve as a break.
+// Leg-relative, never a distance threshold - §2's determinism rules out a
+// number, and every proximity band scored an order of magnitude worse than
+// raw touch when the calibration scan was rescored.
+considerPb(Lvl v, PB p, int legBar, float bestTop, float bestBot, int bestBar) =>
+    float outTop = bestTop
+    float outBot = bestBot
+    int outBar = bestBar
+    if p.live and not na(legBar) and p.confirmBar >= legBar
+        float top = math.max(p.pivot, p.edge)
+        float bot = math.min(p.pivot, p.edge)
+        bool eligible = v.b.dir > 0 ? top < v.px : bot > v.px
+        if eligible and (na(outBar) or p.confirmBar > outBar)
+            outTop := top
+            outBot := bot
+            outBar := p.confirmBar
+    [outTop, outBot, outBar]
+
+pickTarget(Ctx x, Lvl v) =>
+    float top = na
+    float bot = na
+    int bar = na
+    [t1, b1, r1] = considerPb(v, x.detBull.last, x.legBar, top, bot, bar)
+    [t2, b2, r2] = considerPb(v, x.detBear.last, x.legBar, t1, b1, r1)
+    [t2, b2]
+
+flag(Ctx x, bool bad, string why) =>
+    if bad
+        x.nInvariant += 1
+        x.lastEvent := "INVARIANT " + why
+    0
+
+// ═══════════════════════════ 8. DRAWING HELPERS ═════════════════════════════
+float atr = ta.atr(50)
+
+sizeOf(string s) =>
+    s == "Tiny" ? size.tiny : s == "Small" ? size.small : size.normal
+
+// RE10026: a bar-index drawing coordinate has to sit within max_bars_back of
+// the current bar, and a structural anchor routinely does not. Timestamps carry
+// no such limit, so EVERY drawing in this file is anchored in bar_time.
+drawLvl(line cur, int x1t, float y, color col, int w, string st) =>
+    line out = cur
+    if na(out)
+        out := line.new(x1t, y, time, y, xloc = xloc.bar_time, color = col,
+             style = st, width = w)
+    else
+        line.set_xy1(out, x1t, y)
+        line.set_xy2(out, time, y)
+        line.set_color(out, col)
+    out
+
+// A LIVE level tags PAST its right endpoint, in the empty margin. That endpoint
+// is the current bar, so the text sits next to price where it is read, and the
+// gap keeps it off its own line.
+tagLvl(label cur, float y, string txt, color col, string sz, bool above_,
+     float clearance) =>
+    label out = cur
+    int xx = time + barMs * labelGapBars
+    float yy = y + (above_ ? atr * clearance : -atr * clearance)
+    if na(out)
+        out := label.new(xx, yy, txt, xloc = xloc.bar_time, yloc = yloc.price,
+             style = label.style_none, color = na, textcolor = col, size = sz)
+    else
+        label.set_xy(out, xx, yy)
+        label.set_text(out, txt)
+        label.set_textcolor(out, col)
+    out
+
+// A RETIRED level has no live edge, so its frozen tag recentres on its own
+// closed span. Tagging a dead segment's right end crowds whatever replaced it.
+retire(Ctx x, line ln, label lb, int cap) =>
+    if not na(ln)
+        line.set_x2(ln, time)
+        if not na(lb)
+            int lx1 = line.get_x1(ln)
+            label.set_x(lb, lx1 + int((time - lx1) * 0.50))
+        array.push(x.junkL, ln)
+        if array.size(x.junkL) > cap
+            line.delete(array.shift(x.junkL))
+    if not na(lb)
+        array.push(x.junkB, lb)
+        if array.size(x.junkB) > cap
+            label.delete(array.shift(x.junkB))
+    0
+
+// AN IDM ENDS IN ONE OF TWO WAYS, AND THEY RENDER DIFFERENTLY.
+//
+// MIGRATED - a newer pullback superseded it before price ever came back for it.
+// That IDM never became anything; it was a level the market ignored. DELETE it.
+// This is the clutter the reference's faded trail accumulates, and the user's
+// decision is to drop it: "we move the idm up and after moving we will delete
+// the previous IDM that we created in a float so that our chart will be
+// cleaned."
+dropIdm(Ctx x) =>
+    if not na(x.idm.ln)
+        line.delete(x.idm.ln)
+        x.idm.ln := na
+    if not na(x.idm.lb)
+        label.delete(x.idm.lb)
+        x.idm.lb := na
+    0
+
+// TAKEN - price came back and broke it. That is the inducement actually being
+// taken, which is the whole point of the model, so it is KEPT as a frozen
+// segment running pivot bar -> break bar. Both endpoints sit on real candles,
+// nothing floats, and the chart carries a readable record of where liquidity
+// was grabbed. Capped by the depth's history limit like any other retired
+// level.
+keepIdm(Ctx x, int cap) =>
+    if not na(x.idm.ln)
+        // Both ends land on real candles: x1 is the pivot bar that made the
+        // level, x2 is the bar that took it.
+        line.set_x2(x.idm.ln, time)
+        if not na(x.idm.lb)
+            int lx1 = line.get_x1(x.idm.ln)
+            label.set_x(x.idm.lb, lx1 + int((time - lx1) * 0.50))
+        array.push(x.idmL, x.idm.ln)
+        if array.size(x.idmL) > cap
+            line.delete(array.shift(x.idmL))
+    if not na(x.idm.lb)
+        array.push(x.idmB, x.idm.lb)
+        if array.size(x.idmB) > cap
+            label.delete(array.shift(x.idmB))
+    x.idm.ln := na
+    x.idm.lb := na
+    0
+
+// [SRC Ch.8] A ✗ where a level's ROLE ended - a swept threshold, or a BOS
+// retyped into a CHoCH. The reference uses one glyph for both.
+markX(Ctx x, float px, color col, int cap) =>
+    label m = label.new(time, px, "✗", xloc = xloc.bar_time, yloc = yloc.price,
+         style = label.style_none, color = na, textcolor = col, size = size.tiny)
+    array.push(x.marks, m)
+    if array.size(x.marks) > cap
+        label.delete(array.shift(x.marks))
+    0
+
+// [SRC Ch.12/Ch.13] Zones NEST: external large and translucent, internal
+// smaller and more saturated inside it, deep fainter still.
+zone(Ctx x, PBDet d, bool on, int fade, int border, int cap) =>
+    if on and d.hit and d.last.live
+        bool bull = d.last.dir == DIR_BULL
+        color col = bull ? cBull : cBear
+        box bx = box.new(d.last.startT, math.max(d.last.edge, d.last.pivot),
+             d.last.confirmT, math.min(d.last.edge, d.last.pivot),
+             xloc = xloc.bar_time, border_color = color.new(col, border),
+             border_width = 1, bgcolor = color.new(col, fade))
+        array.push(x.zones, bx)
+        if array.size(x.zones) > cap
+            box.delete(array.shift(x.zones))
+    0
+
+// WRONG READING, CORRECTED. This was implemented as "keep exactly two boxes,
+// one per direction", which left the chart almost empty. The reference draws
+// MANY zones under this same setting - its own screenshots show a dozen or more
+// across one screen - so "latest bullish & bearish" cannot mean a cap of two.
+// Its exact semantics are unconfirmed, so both visible modes now simply cap at
+// the history limit and the difference between them is left unclaimed rather
+// than guessed at a second time.
+trimZones(Ctx x) =>
+    0
+
+int zCap = histPB
+bool zOn = pbShow != "Hide"
+
+// ═══════════════════════════ 9. CONTEXT STEP ════════════════════════════════
+// One analytical group, one depth. Returns whether a MAJOR transition fired,
+// which is what opens a child scope.
+//
+// INVARIANT: at most one major transition per bar per depth. Every branch below
+// is guarded by `not moved`, and the order is the order the source describes.
+ctxStep(Ctx x, bool reset, int seedDir, int i, float o, float h, float l,
+     float c, int hiBar, int loBar, int hiT, int loT, int cap) =>
+    int cIdm = modeOf(mIDM)
+    int cBos = modeOf(mBOS)
+    int cCh = modeOf(mCH)
+    int cPb = modeOf(mPB)
+    bool major = false
+    bool justSeeded = false
+    // One bar's life. The RUN section reads it on the same bar it is set.
+    x.sigNew := false
+
+    if reset
+        // ENGINE BUG IN THE FIRST BUILD: the child normalizer survived the
+        // scope reset, so a new Internal scope inherited the mother range of
+        // the previous one and spent its first bars classifying real candles as
+        // inside bars of a range that belonged to different price action. The
+        // symptom was Internal accumulating thousands of inside bars and never
+        // building structure. A scope starts clean.
+        x.norm.hi := na
+        x.norm.lo := na
+        x.norm.op := na
+        x.norm.cl := na
+        x.dir := DIR_NONE
+        x.phase := PH_DISCOVER
+        x.pbLast := na
+        x.pbPrior := na
+        x.pbTrailBull := na
+        x.pbTrailBear := na
+        clearLvl(x.idm)
+        clearLvl(x.bos)
+        clearLvl(x.ch)
+        dropIdm(x)
+        retire(x, x.bos.ln, x.bos.lb, cap)
+        retire(x, x.ch.ln, x.ch.lb, cap)
+        x.bos.ln := na
+        x.bos.lb := na
+        x.ch.ln := na
+        x.ch.lb := na
+        x.detBull.last.live := false
+        x.detBear.last.live := false
+        detReorient(x.detBull, DIR_BULL, h, l)
+        detReorient(x.detBear, DIR_BEAR, h, l)
+        detReorient(x.boot, DIR_BEAR, h, l)
+
+    // ── direction bootstrap ────────────────────────────────────────────────
+    // Until a direction exists the context runs two opposed detectors and takes
+    // whichever confirms first. [§45] A child starts UNDEFINED; it is not
+    // forced opposite its parent.
+    if x.dir == DIR_NONE
+        justSeeded := true
+        if seedDir != DIR_NONE
+            x.dir := seedDir
+            detReorient(x.detBull, DIR_BULL, h, l)
+            detReorient(x.detBear, DIR_BEAR, h, l)
+            legStart(x, seedDir == DIR_BULL ? l : h, i, h, l, hiBar, loBar,
+                 hiT, loT)
+        else
+            detStep(x.detBull, i, o, h, l, c, hiBar, loBar, hiT, loT, cPb,
+                 hsPB, x.phase)
+            detStep(x.boot, i, o, h, l, c, hiBar, loBar, hiT, loT, cPb, hsPB,
+                 x.phase)
+            if x.detBull.hit
+                x.dir := DIR_BULL
+                legStart(x, x.detBull.last.pivot, x.detBull.last.pivotBar, h, l,
+                     hiBar, loBar, hiT, loT)
+                detReorient(x.detBear, DIR_BEAR, h, l)
+            else if x.boot.hit
+                x.dir := DIR_BEAR
+                legStart(x, x.boot.last.pivot, x.boot.last.pivotBar, h, l,
+                     hiBar, loBar, hiT, loT)
+                detReorient(x.detBull, DIR_BULL, h, l)
+                detReorient(x.detBear, DIR_BEAR, h, l)
+    // A bar that bootstraps the direction has already advanced its detectors
+    // inside the block above. Advancing them again here would step the same
+    // group twice and is the kind of bug that only shows up as a density
+    // discrepancy three rounds later.
+    if x.dir == DIR_NONE or justSeeded
+        major := false
+    else
+        bool up = x.dir == DIR_BULL
+
+        // ── the leg extreme grows continuously ─────────────────────────────
+        if na(x.legHi) or above(h, x.legHi)
+            x.legHi := h
+            x.legHiBar := hiBar
+            x.legHiT := hiT
+        if na(x.legLo) or below(l, x.legLo)
+            x.legLo := l
+            x.legLoBar := loBar
+            x.legLoT := loT
+        // extremes since the BOS locked, for the CHoCH that follows it
+        if na(x.phHi) or above(h, x.phHi)
+            x.phHi := h
+            x.phHiBar := hiBar
+            x.phHiT := hiT
+        if na(x.phLo) or below(l, x.phLo)
+            x.phLo := l
+            x.phLoBar := loBar
+            x.phLoT := loT
+
+        // ── [P8] BOTH detectors advance, ALWAYS ────────────────────────────
+        // Publication below is strictly single-direction. The opposite
+        // detector is observed and never acted on, which is what keeps this
+        // from re-opening the order-flow question: it has no say in direction.
+        x.nOutsideImp += detStep(up ? x.detBull : x.detBear, i, o, h, l, c,
+             hiBar, loBar, hiT, loT, cPb, hsPB, x.phase)
+        if pDual
+            detStep(up ? x.detBear : x.detBull, i, o, h, l, c, hiBar, loBar,
+                 hiT, loT, cPb, hsPB, x.phase)
+
+        PBDet dActive = up ? x.detBull : x.detBear
+        bool moved = false
+
+        // ── a confirmed correction publishes, or is cached ─────────────────
+        if dActive.hit
+            x.nPivot += 1
+            // The prior pivot is the entry layer's stop. Recorded for every
+            // confirmed correction, published or cached, so a setup born in
+            // any phase has the same level behind it.
+            x.pbPrior := x.pbLast
+            x.pbLast := dActive.last.pivot
+            if up
+                x.pbTrailBull := dActive.last.pivot
+            else
+                x.pbTrailBear := dActive.last.pivot
+            if x.phase == PH_DISCOVER or x.phase == PH_TRACK
+                // [SRC Ch.3] IDM migration. The previous IDM is retired and
+                // replaced - and per the user's decision, DELETED outright.
+                if x.idm.on
+                    dropIdm(x)       // MIGRATED - the market never came for it
+                int legWas = x.legBar
+                setLvl(x.idm, dActive.last.pivot, dActive.last.pivotBar,
+                     dActive.last.pivotT, i, up ? -1 : 1, cIdm, hsIDM)
+                dActive.last.fresh := false
+                x.phase := PH_TRACK
+                x.nIdm += 1
+                x.lastEvent := "IDM published"
+                // [SRC §34] IDM migration must not move the leg anchor.
+                flag(x, x.legBar != legWas, "I7 leg moved with IDM")
+            else
+                // [SRC §42] Latent. Observed silently, activated when the lock
+                // resolves. Not published, not drawn.
+                x.nLatent += 1
+                x.lastEvent := "latent cached"
+
+        // ── IDM break ──────────────────────────────────────────────────────
+        // [SRC Ch.3] "Once the IDM gets broken, we take the highest point from
+        // the START OF THE MOVE up to the moment of that break as the BOS."
+        if not moved and ready(x.idm, i) and brkStep(x.idm.b, o, h, l, c)
+            int was = x.dir
+            clearLvl(x.idm)
+            keepIdm(x, histIdm)      // TAKEN - freeze it, do not delete it
+            setLvl(x.bos, up ? x.legHi : x.legLo, up ? x.legHiBar : x.legLoBar,
+                 up ? x.legHiT : x.legLoT, i, up ? 1 : -1, cBos, hsBOS)
+            x.nBos += 1
+            x.phHi := h
+            x.phHiBar := hiBar
+            x.phHiT := hiT
+            x.phLo := l
+            x.phLoBar := loBar
+            x.phLoT := loT
+            // [P9] THE BOOTSTRAP CHoCH. Without this the first cycle
+            // reaches PH_SEEK holding a BOS and nothing else, and PH_SEEK
+            // with no CHoCH cannot be left - see the v3.0 note in the
+            // header. The BOS above is the leg extreme WITH the trend, so
+            // its mirror is the leg extreme AGAINST it. Guarded so the two
+            // boundaries can never sit on the wrong sides of each other.
+            if pSeekCh != "Off (V1)" and not x.ch.on
+                float p9px = up ? x.legLo : x.legHi
+                int p9bar = up ? x.legLoBar : x.legHiBar
+                int p9t = up ? x.legLoT : x.legHiT
+                bool p9ok = not na(p9px) and (up ? p9px < x.bos.px : p9px > x.bos.px)
+                if p9ok
+                    // nCh is deliberately NOT incremented. It mirrors the
+                    // engine's choch_create + choch_move, and the engine
+                    // books a bootstrap CHoCH under its own separate key.
+                    // Counting it here would make the panel disagree with
+                    // the record. The phase reading 'boundary lock' instead
+                    // of 'BOS locked' is the visible sign that P9 fired.
+                    setLvl(x.ch, p9px, p9bar, p9t, i, up ? 1 : -1, cCh, hsCH)
+            x.phase := x.ch.on ? PH_LOCK : PH_SEEK
+            x.stRaceArmed := x.phase == PH_LOCK and inStatsWindow(time)
+            x.nIdmBreak += 1
+            x.lastEvent := x.phase == PH_LOCK ? "IDM taken - lock" : "IDM taken"
+            moved := true
+            major := true
+            // ── entry layer ────────────────────────────────────────────────
+            // With-trend only, and the BOS the thesis targets must lie beyond
+            // the entry or there is nothing to be right about. The stop is the
+            // PRIOR pivot; where none exists the setup is SKIPPED rather than
+            // given a substitute, exactly as the pre-registration specifies.
+            float sEnt = c
+            float sStp = x.pbPrior
+            bool okSide = not na(sStp) and (up ? sStp < sEnt : sStp > sEnt)
+            bool okBos = up ? x.bos.px > sEnt : x.bos.px < sEnt
+            if okSide and okBos
+                x.sigNew := true
+                x.sigDir := up ? DIR_BULL : DIR_BEAR
+                x.sigEntry := sEnt
+                x.sigStop := sStp
+            // A new cycle starts here, so the STOP pair is re-earned in it.
+            // pbTrailBull/Bear deliberately survive - see the parity note.
+            x.pbLast := na
+            x.pbPrior := na
+            // [SRC §35] A broken IDM is liquidity taken. It never flips trend.
+            flag(x, x.dir != was, "I2 IDM break flipped direction")
+
+        // ── statistics: the IDM → boundary race ────────────────────────────
+        if x.stRaceArmed and not moved
+            bool tb = ready(x.bos, i) and
+                 (x.bos.b.dir > 0 ? above(h, x.bos.px) : below(l, x.bos.px))
+            bool tc = ready(x.ch, i) and
+                 (x.ch.b.dir > 0 ? above(h, x.ch.px) : below(l, x.ch.px))
+            if tb != tc
+                if inStatsWindow(time)
+                    x.stRaceTot += 1
+                    x.stRaceBos += tb ? 1 : 0
+                    x.stRaceCh += tc ? 1 : 0
+                x.stRaceArmed := false
+            else if tb and tc
+                // Same bar. OHLC cannot order them, so the case leaves the
+                // sample rather than having a path invented for it.
+                x.stRaceArmed := false
+
+        // ── statistics: NEAR ───────────────────────────────────────────────
+        // [SRC Ch.4] "A liquidity grab means that price touches a level, but
+        // does not actually break it." [SRC Ch.10] the target is "the LAST
+        // opposite pullback". No distance band, no percentage - Chapter 2's
+        // determinism requirement forbids one, and every proximity band scored
+        // an order of magnitude worse than raw touch when rescored.
+        bool bosArmedNow = false
+        bool chArmedNow = false
+        bool bosReachNow = false
+        bool chReachNow = false
+        if x.phase == PH_LOCK and x.bos.on and x.ch.on
+            if x.stBosArmed
+                bosReachNow := above(h, x.stBosTgtLo) and below(l, x.stBosTgtHi)
+            if x.stChArmed
+                chReachNow := above(h, x.stChTgtLo) and below(l, x.stChTgtHi)
+            // The LAST opposite-direction pullback, snapshotted at arm time so
+            // later migration cannot move the goalposts. Under P8 this is
+            // literal; with P8 off it degrades to the active detector's last.
+            [bTop, bBot] = pickTarget(x, x.bos)
+            [cTop, cBot] = pickTarget(x, x.ch)
+            if not x.stBosArmed and not na(bTop) and inStatsWindow(time) and
+                 (x.bos.b.dir > 0 ? above(h, x.bos.px) : below(l, x.bos.px))
+                x.stBosArmed := true
+                x.stBosTgtHi := bTop
+                x.stBosTgtLo := bBot
+                bosArmedNow := true
+            if not x.stChArmed and not na(cTop) and inStatsWindow(time) and
+                 (x.ch.b.dir > 0 ? above(h, x.ch.px) : below(l, x.ch.px))
+                x.stChArmed := true
+                x.stChTgtHi := cTop
+                x.stChTgtLo := cBot
+                chArmedNow := true
+
+        // ── BOS break: continuation. Never flips. ──────────────────────────
+        if not moved and ready(x.bos, i) and brkStep(x.bos.b, o, h, l, c)
+            if x.stBosArmed
+                if not bosReachNow and not bosArmedNow
+                    x.stBosNearTot += 1
+                    x.stBosNearBrk += 1
+                x.stBosArmed := false
+            x.stChArmed := false          // [P6] discard the other race
+            int was = x.dir
+            clearLvl(x.bos)
+            retire(x, x.bos.ln, x.bos.lb, cap)
+            x.bos.ln := na
+            x.bos.lb := na
+            if x.ch.on
+                retire(x, x.ch.ln, x.ch.lb, cap)
+                x.ch.ln := na
+                x.ch.lb := na
+            // [SRC Ch.3] "the lowest point from the start of that BOS up to the
+            // moment it breaks" becomes the new CHoCH.
+            setLvl(x.ch, up ? x.phLo : x.phHi, up ? x.phLoBar : x.phHiBar,
+                 up ? x.phLoT : x.phHiT, i, up ? -1 : 1, cCh, hsCH)
+            x.nCh += 1
+            legStart(x, x.ch.px, x.ch.bar, h, l, hiBar, loBar, hiT, loT)
+            x.phase := PH_DISCOVER
+            x.lastEvent := "BOS broken - continuation"
+            moved := true
+            major := true
+            flag(x, x.dir != was, "I3 BOS break flipped direction")
+            // [SRC §42] Activate the cached same-direction pullback rather than
+            // waiting for a new one.
+            if dActive.last.live and dActive.last.fresh
+                setLvl(x.idm, dActive.last.pivot, dActive.last.pivotBar,
+                     dActive.last.pivotT, i, up ? -1 : 1, cIdm, hsIDM)
+                dActive.last.fresh := false
+                x.phase := PH_TRACK
+                x.nIdm += 1
+                x.lastEvent := "BOS broken - latent IDM activated"
+
+        // ── CHoCH break: the ONLY event allowed to flip ────────────────────
+        if not moved and ready(x.ch, i) and brkStep(x.ch.b, o, h, l, c)
+            if x.stChArmed
+                if not chReachNow and not chArmedNow
+                    x.stChNearTot += 1
+                    x.stChNearBrk += 1
+                x.stChArmed := false
+            x.stBosArmed := false         // [P6]
+            int was = x.dir
+            float oldBos = x.bos.on ? x.bos.px : (up ? x.legHi : x.legLo)
+            int oldBar = x.bos.on ? x.bos.bar : (up ? x.legHiBar : x.legLoBar)
+            int oldT = x.bos.on ? x.bos.barT : (up ? x.legHiT : x.legLoT)
+            // [SRC Ch.3/Ch.8] RETYPE IN PLACE. "the previous bullish BOS level
+            // becomes our bullish change of character level because that's
+            // still our valid high." The reference draws ONE line through a ✗
+            // where the role changes - so the line object is transferred, not
+            // deleted and recreated.
+            retire(x, x.ch.ln, x.ch.lb, cap)
+            x.ch.ln := na
+            x.ch.lb := na
+            if x.bos.on
+                markX(x, oldBos, color.new(#787b86, 20), cap)
+                x.ch.ln := x.bos.ln       // the SAME line carries on
+                x.ch.lb := x.bos.lb
+                x.bos.ln := na
+                x.bos.lb := na
+                clearLvl(x.bos)
+            if x.idm.on
+                // Invalidated by the flip, not taken. Same class as a
+                // migration: the market never came back for it.
+                clearLvl(x.idm)
+                dropIdm(x)
+            x.dir := -was
+            setLvl(x.ch, oldBos, oldBar, oldT, i, was == DIR_BULL ? 1 : -1,
+                 cCh, hsCH)
+            legStart(x, oldBos, oldBar, h, l, hiBar, loBar, hiT, loT)
+            x.phase := PH_DISCOVER
+            x.nFlip += 1
+            x.lastEvent := "CHoCH broken - flip"
+            moved := true
+            major := true
+            flag(x, x.dir == was, "I1 CHoCH break did not flip")
+            // ── [SRC Ch.3] THE POST-FLIP LOOKBACK ──────────────────────────
+            // "First, we check whether there was already a bearish pullback
+            // before the change of character got broken. If there was, we draw
+            // the IDM level from the high of that same pullback. If there
+            // wasn't, we have to wait for a new bearish pullback to form."
+            // This is what P8 exists for: without a detector running in the
+            // opposite direction there is nothing here to look back at.
+            PBDet dNew = x.dir == DIR_BULL ? x.detBull : x.detBear
+            if pDual and dNew.last.live and dNew.last.fresh
+                setLvl(x.idm, dNew.last.pivot, dNew.last.pivotBar,
+                     dNew.last.pivotT, i, x.dir == DIR_BULL ? -1 : 1, cIdm,
+                     hsIDM)
+                dNew.last.fresh := false
+                x.phase := PH_TRACK
+                x.nIdm += 1
+                x.lastEvent := "CHoCH flip - opposite PB already existed"
+            else
+                detReorient(dNew, x.dir, h, l)
+
+        // ── statistics: the reach resolves if nothing structural did ───────
+        if not moved
+            if x.stBosArmed and bosReachNow and not bosArmedNow
+                x.stBosNearTot += 1
+                x.stBosNearReach += 1
+                x.stBosArmed := false
+            if x.stChArmed and chReachNow and not chArmedNow
+                x.stChNearTot += 1
+                x.stChNearReach += 1
+                x.stChArmed := false
+
+        // ── [P8] THE IDLE OBSERVER RESTARTS AT EVERY STRUCTURAL EVENT ──────
+        // Without this it can open a correction whose confirmation level price
+        // never returns to, and sit in it indefinitely. Measured on ZEC 30m:
+        // the bear detector held trackers at 316/292 with a frozen conf of
+        // 298.47 while price traded at 1130 - stale by thousands of bars and a
+        // factor of four. Its stale `last` then became the near statistic's
+        // target, which is why BOS near -> Opp PB reach read 0 of 20.
+        //
+        // The rule is structural, not a number: the opposite-direction
+        // detector is an OBSERVER of the current leg, and a structural event
+        // is what ends a leg. Losing an in-flight opposite correction there
+        // costs nothing, because the event redefines the leg anyway.
+        if major and pDual
+            PBDet dIdle = x.dir == DIR_BULL ? x.detBear : x.detBull
+            detReorient(dIdle, dIdle.dir, h, l)
+
+        // ── invariants, checked rather than assumed ────────────────────────
+        if x.phase == PH_LOCK
+            flag(x, x.idm.on, "I5 IDM alive during lock")
+        if x.bos.on and x.ch.on
+            flag(x, up ? not (x.bos.px > x.ch.px) : not (x.bos.px < x.ch.px),
+                 "I11 BOS/CHoCH sides crossed")
+    major
+
+// ═══════════════════════ 8b. ENTRY SIGNAL ENGINE ════════════════════════════
+// Declared before section 10 because RUN drives it. Every function here
+// MUTATES the Sig it is handed and assigns no global - CE10088.
+
+fmtR(float r) =>
+    (r >= 0 ? "+" : "") + str.tostring(r, "0.00") + "R"
+
+// Close a setup and stamp the result on the chart where it happened.
+sigClose(Sig g, float px, bool stopped) =>
+    float r = g.dir > 0 ? (px - g.entry) / g.risk : (g.entry - px) / g.risk
+    if not na(g.enLn)
+        line.set_x2(g.enLn, time)
+    if not na(g.slLn)
+        line.set_x2(g.slLn, time)
+    if not na(g.acLn)
+        line.set_x2(g.acLn, time)
+    if not na(g.band)
+        box.set_right(g.band, time)
+    color rc = r >= 0 ? cLong : cShort
+    label.new(time + barMs * labelGapBars, px, g.depth + " " + fmtR(r),
+         xloc = xloc.bar_time, yloc = yloc.price, style = label.style_none,
+         color = na, textcolor = rc, size = size.small)
+    // The pin keeps the result, so a closed setup reads without hovering.
+    if not na(g.mark)
+        label.set_text(g.mark, g.depth + " " + fmtR(r))
+        label.set_color(g.mark, color.new(rc, 25))
+    // A finished tag is CENTRED over the span it describes, which is what
+    // retire() does to a closed BOS or CHoCH. Live reads on the right, done
+    // reads in the middle, and the two are never confused at a glance.
+    if not na(g.enLn)
+        int ex1 = line.get_x1(g.enLn)
+        int mid = ex1 + int((time - ex1) * 0.50)
+        if not na(g.enLb)
+            label.set_xy(g.enLb, mid, g.entry +
+                 (g.dir > 0 ? atr * 0.28 : -atr * 0.28))
+        if not na(g.slLb)
+            label.set_xy(g.slLb, mid, g.stop +
+                 (g.dir > 0 ? -atr * 0.28 : atr * 0.28))
+            label.set_text(g.slLb, "SL " + str.tostring(g.stop0,
+                 format.mintick))
+    g.on := false
+    g.armed := false
+    r
+
+// Open a setup. The drawings are created once and only extended afterwards.
+sigOpen(Sig g, int dir, float entry, float stop, float rr, float feePct,
+     int fade, string depth) =>
+    float risk = math.abs(entry - stop)
+    g.on := true
+    g.armed := false
+    g.dir := dir
+    g.entry := entry
+    g.stop0 := stop
+    g.stop := stop
+    g.risk := risk
+    g.barT := time
+    g.depth := depth
+    // [SRC Ch.18] Active Price carries the round trip, because a setup has to
+    // clear its own costs before it is worth arming anything for.
+    float fee = entry * feePct / 100.0
+    g.active := dir > 0 ? entry + rr * risk + fee : entry - rr * risk - fee
+    color cd = color.new(dir > 0 ? cLong : cShort, fade)
+    g.enLn := line.new(time, entry, time, entry, xloc = xloc.bar_time,
+         color = cd, width = fade > 0 ? 1 : 2)
+    g.slLn := line.new(time, stop, time, stop, xloc = xloc.bar_time,
+         color = color.new(cStop, fade), width = 1,
+         style = line.style_dashed)
+    g.acLn := line.new(time, g.active, time, g.active, xloc = xloc.bar_time,
+         color = color.new(cActive, 35), width = 1, style = line.style_dotted)
+    // THE MARKER. A filled pin ON the entry bar, because "hard to find" was the
+    // actual complaint: unfilled text in the right margin reads well for a
+    // structural level that persists and badly for a one-bar event. Structure
+    // levels keep the house style; a setup gets a pin.
+    float riskPct = 100.0 * math.abs(entry - stop) / entry
+    string tip = depth + " · " + (dir > 0 ? "LONG" : "SHORT") + "\n" +
+         "Entry   " + str.tostring(entry, format.mintick) + "\n" +
+         "Stop    " + str.tostring(stop, format.mintick) + "   (" +
+         str.tostring(riskPct, "0.00") + "% = 1R)\n" +
+         "Active  " + str.tostring(g.active, format.mintick) +
+         "   arms the trail, NOT a target" +
+         (depth == "MAIN"
+              ? "\n\nMAIN depth - what Stages A/B/C measured, and the only depth the Python forward record collects."
+              : "\n\nINTERNAL depth - never scored by any stage. Its expectancy is UNMEASURED, not small or large.") +
+         (pSeekCh == "Off (V1)" ? "\n\nLIT_FORWARD_V1" : "\n\nLIT_FORWARD_V2 [P9 on]") + " · research only, not a trade signal."
+    g.mark := label.new(time, stop, depth + (dir > 0 ? " ▲ LONG" : " ▼ SHORT"),
+         xloc = xloc.bar_time, yloc = yloc.price,
+         style = dir > 0 ? label.style_label_up : label.style_label_down,
+         color = cd, textcolor = color.new(color.white, fade),
+         size = size.small, tooltip = tip)
+
+    // The level tags keep the house style - unfilled, right margin, padded off
+    // their own line - but now carry the DEPTH, so Main and Internal differ by
+    // a word rather than by one lowercase letter.
+    int lx = time + barMs * labelGapBars
+    g.enLb := label.new(lx, entry + (dir > 0 ? atr * 0.30 : -atr * 0.30),
+         depth + (dir > 0 ? " ▲ " : " ▼ ") + str.tostring(entry, format.mintick),
+         xloc = xloc.bar_time, yloc = yloc.price, style = label.style_none,
+         color = na, textcolor = cd, size = size.small, tooltip = tip)
+    g.slLb := label.new(lx, stop + (dir > 0 ? -atr * 0.30 : atr * 0.30),
+         "SL " + str.tostring(stop, format.mintick) + "  (" +
+         str.tostring(riskPct, "0.00") + "%)", xloc = xloc.bar_time,
+         yloc = yloc.price, style = label.style_none, color = na,
+         textcolor = color.new(cStop, fade), size = size.small, tooltip = tip)
+
+// One bar of management. Returns the realised R, or na while still open.
+// ORDER MATTERS: the stop is tested against the level it ALREADY held, then
+// the trail moves. A pivot confirmed on this bar cannot stop this bar - the
+// same rule research/harness.py applies by reading trail[k-1].
+sigStep(Sig g, float h, float l, float pivNow, bool useTrail,
+     bool shade) =>
+    float out = na
+    if g.on
+        bool hit = g.dir > 0 ? l <= g.stop : h >= g.stop
+        if hit
+            out := sigClose(g, g.stop, true)
+        else
+            if not g.armed
+                bool reach = g.dir > 0 ? h >= g.active : l <= g.active
+                if reach
+                    g.armed := true
+                    if not na(g.acLn)
+                        line.set_color(g.acLn, color.new(cActive, 70))
+            // A level already violated by this bar is not a stop, it is an
+            // exit that has happened. Only accept one still beyond price.
+            bool okPiv = not na(pivNow) and
+                 (g.dir > 0 ? pivNow < l : pivNow > h)
+            if g.armed and useTrail and okPiv
+                g.stop := g.dir > 0 ? math.max(g.stop, pivNow) :
+                     math.min(g.stop, pivNow)
+            line.set_x2(g.enLn, time)
+            line.set_xy2(g.slLn, time, g.stop)
+            line.set_y1(g.slLn, g.stop)
+            line.set_x2(g.acLn, time)
+            int lx = time + barMs * labelGapBars
+            if not na(g.slLb)
+                label.set_xy(g.slLb, lx, g.stop +
+                     (g.dir > 0 ? -atr * 0.30 : atr * 0.30))
+                label.set_text(g.slLb, (g.armed ? "⚑ SL " : "SL ") +
+                     str.tostring(g.stop, format.mintick) + "  (" +
+                     str.tostring(100.0 * math.abs(g.entry - g.stop) /
+                          g.entry, "0.00") + "%)")
+            if not na(g.enLb)
+                label.set_xy(g.enLb, lx, g.entry +
+                     (g.dir > 0 ? atr * 0.30 : -atr * 0.30))
+            if shade
+                if na(g.band)
+                    g.band := box.new(g.barT, math.max(g.entry, g.stop), time,
+                         math.min(g.entry, g.stop), xloc = xloc.bar_time,
+                         border_color = color.new(cStop, 80),
+                         bgcolor = color.new(cStop, 90))
+                else
+                    box.set_right(g.band, time)
+                    box.set_top(g.band, math.max(g.entry, g.stop))
+                    box.set_bottom(g.band, math.min(g.entry, g.stop))
+    out
+
+// ═══════════════════════════ 10. RUN ════════════════════════════════════════
+var Ctx mainC = newCtx(0)
+var Ctx intC = newCtx(1)
+var Ctx deepC = newCtx(2)
+var Scope intScope = Scope.new()
+var Scope deepScope = Scope.new()
+
+bool mainOnly = devMode == "MAIN ONLY"
+bool runInt = showInt and not mainOnly
+bool runDeep = runInt and showDeep      // [SRC] Deep only with Internal
+bool engineOk = cfgConfirm ? barstate.isconfirmed : true
+
+var bool resetInt = false
+var bool resetDeep = false
+
+// Main normalizes the whole raw chart. Children normalize RAW candles only
+// while their parent pullback scope owns them - [SRC Ch.12] "Internal
+// Pullbacks nested inside visible External Pullbacks."
+[mOn, mO, mH, mL, mC, mHiBar, mLoBar, mHiT, mLoT, mInside, mBoth] =
+     normStep(mainC.norm, open, high, low, close, bar_index, time, engineOk)
+
+if mOn
+    bool eMain = ctxStep(mainC, false, DIR_NONE, bar_index, mO, mH, mL, mC,
+         mHiBar, mLoBar, mHiT, mLoT, histMain)
+    // A confirmed MAIN pullback opens the Internal scope. Ownership is by
+    // PULLBACK, not by structural event - that is the nesting the reference
+    // describes and the screenshots show.
+    PBDet mDet = mainC.dir == DIR_BULL ? mainC.detBull : mainC.detBear
+    zone(mainC, mDet, zOn and showMain, 88, 82, zCap)
+    trimZones(mainC)
+    if mDet.hit and runInt
+        intScope.active := true
+        intScope.id += 1
+        intScope.fromT := mDet.last.startT
+        intScope.confirmT := mDet.last.confirmT
+        resetInt := true
+    if eMain and runInt
+        // A major Main transition invalidates the child scope it owned.
+        intScope.active := false
+        deepScope.active := false
+
+bool childCont = pChild == "Continuous, raw candles"
+
+// [P7b] CONTINUOUS: Internal reads RAW candles with no normalizer at all -
+// precisely the granularity Main discards - and is never reset. This is the
+// only feed that makes Internal genuinely finer than Main: running a second
+// normalizer over the same stream is idempotent and would reproduce Main's own
+// groups exactly, which is the measurement that closed that route earlier in
+// this project.
+if runInt and childCont and engineOk
+    bool eInt = ctxStep(intC, false, DIR_NONE, bar_index, open, high, low,
+         close, bar_index, bar_index, time, time, histInt)
+    PBDet iDet = intC.dir == DIR_BULL ? intC.detBull : intC.detBear
+    zone(intC, iDet, zOn and pbIntOn, 80, 74, zCap)
+    trimZones(intC)
+    if iDet.hit and runDeep
+        deepScope.active := true
+        deepScope.id += 1
+        deepScope.fromT := iDet.last.startT
+        deepScope.confirmT := iDet.last.confirmT
+        resetDeep := true
+    if eInt and runDeep
+        deepScope.active := false
+
+if runInt and not childCont and intScope.active and engineOk
+    [iOn, iO, iH, iL, iC, iHiBar, iLoBar, iHiT, iLoT, iInside, iBoth] =
+         normStep(intC.norm, open, high, low, close, bar_index, time, true)
+    if iOn
+        bool eInt = ctxStep(intC, resetInt, DIR_NONE, bar_index, iO, iH, iL, iC,
+             iHiBar, iLoBar, iHiT, iLoT, histInt)
+        resetInt := false
+        PBDet iDet = intC.dir == DIR_BULL ? intC.detBull : intC.detBear
+        zone(intC, iDet, zOn and pbIntOn, 80, 74, zCap)
+        trimZones(intC)
+        if iDet.hit and runDeep
+            deepScope.active := true
+            deepScope.id += 1
+            deepScope.fromT := iDet.last.startT
+            deepScope.confirmT := iDet.last.confirmT
+            resetDeep := true
+        if eInt and runDeep
+            deepScope.active := false
+
+// Deep stays owned by a confirmed INTERNAL pullback in both modes. There is no
+// third granularity available on one timeframe, so ownership is the only thing
+// that makes Deep deeper than Internal.
+if runDeep and deepScope.active and engineOk and childCont
+    ctxStep(deepC, resetDeep, DIR_NONE, bar_index, open, high, low, close,
+         bar_index, bar_index, time, time, histDeep)
+    resetDeep := false
+    zone(deepC, deepC.dir == DIR_BULL ? deepC.detBull : deepC.detBear,
+         zOn and pbDeepOn, 88, 86, zCap)
+    trimZones(deepC)
+
+if runDeep and deepScope.active and engineOk and not childCont
+    [dOn, dO, dH, dL, dC, dHiBar, dLoBar, dHiT, dLoT, dInside, dBoth] =
+         normStep(deepC.norm, open, high, low, close, bar_index, time, true)
+    if dOn
+        ctxStep(deepC, resetDeep, DIR_NONE, bar_index, dO, dH, dL, dC, dHiBar,
+             dLoBar, dHiT, dLoT, histDeep)
+        resetDeep := false
+        zone(deepC, deepC.dir == DIR_BULL ? deepC.detBull : deepC.detBear,
+             zOn and pbDeepOn, 88, 86, zCap)
+        trimZones(deepC)
+
+// ── the entry layer runs on MAIN only ───────────────────────────────────────
+// Internal and Deep publish structure; they do not publish setups. The
+// pre-registrations measured MAIN depth and nothing else, so nothing else is
+// shown here.
+// MAIN and INTERNAL keep SEPARATE setups and SEPARATE books. They are never
+// pooled: Main is the depth every pre-registered measurement used, Internal has
+// never been scored at all, and one number covering both would hide exactly
+// that difference.
+var Sig sig = Sig.new()
+var int sigN = 0
+var int sigWin = 0
+var float sigR = 0.0
+var float sigBest = 0.0
+var float sigWorst = 0.0
+var float sigR2 = 0.0        // sum of squares, for the standard error
+var Sig sigI = Sig.new()
+var int sigNI = 0
+var int sigWinI = 0
+var float sigRI = 0.0
+var float sigBestI = 0.0
+var float sigWorstI = 0.0
+var float sigR2I = 0.0
+
+if showSig and sigMain and engineOk
+    // Manage what is open BEFORE opening anything new, so a setup can never
+    // be replaced by its own successor mid-bar.
+    float pivNow = sig.dir > 0 ? mainC.pbTrailBull : mainC.pbTrailBear
+    float done = sigStep(sig, high, low, pivNow, sigTrail, sigBox)
+    if not na(done)
+        sigN += 1
+        sigR += done
+        sigWin += done > 0 ? 1 : 0
+        sigR2 += done * done
+        sigBest := math.max(sigBest, done)
+        sigWorst := math.min(sigWorst, done)
+    // One at a time. A second setup while one is live is not taken, which is
+    // what the research measured and is also the only honest thing to draw.
+    if mainC.sigNew and not sig.on
+        sigOpen(sig, mainC.sigDir, mainC.sigEntry, mainC.sigStop, sigRR,
+             sigFee, 0, "MAIN")
+
+if showSig and sigInt and engineOk and runInt
+    float pivI = sigI.dir > 0 ? intC.pbTrailBull : intC.pbTrailBear
+    float doneI = sigStep(sigI, high, low, pivI, sigTrail, false)
+    if not na(doneI)
+        sigNI += 1
+        sigRI += doneI
+        sigWinI += doneI > 0 ? 1 : 0
+        sigR2I += doneI * doneI
+        sigBestI := math.max(sigBestI, doneI)
+        sigWorstI := math.min(sigWorstI, doneI)
+    if intC.sigNew and not sigI.on
+        sigOpen(sigI, intC.sigDir, intC.sigEntry, intC.sigStop, sigRR,
+             sigFee, 45, "INT")
+// An object field carries no [] history, so the arming EDGE is tracked in a
+// plain series instead of being read as sig.armed[1].
+var bool sigArmedPrev = false
+bool sigJustArmed = showSig and sig.armed and not sigArmedPrev
+sigArmedPrev := showSig and sig.armed
+
+// ═══════════════════════════ 11. RENDER ═════════════════════════════════════
+// Presentation only. Nothing here infers a pivot, a level or a direction.
+paint(Ctx x, bool on, string pre, int w, int fade, string sz) =>
+    if on and x.dir != DIR_NONE
+        bool bull = x.dir == DIR_BULL
+        color bu = color.new(cBull, fade)
+        color be = color.new(cBear, fade)
+        color id = color.new(bull ? cIDMBull : cIDMBear, fade)
+        string idmStyle = x.depth == 0 ? line.style_solid : line.style_dotted
+        string lvlStyle = x.depth == 0 ? line.style_solid : line.style_dashed
+        // [§51] Main IDM one step thinner than Main BOS/CHoCH, floored at 1.
+        int idmW = w > 1 ? w - 1 : 1
+        float clear = x.depth == 0 ? labelClearAtr : labelClearAtr * 0.78
+        // NO FLOATING IDM. The line begins on the candle that MADE the level -
+        // the pullback's pivot - and runs right to the current bar. Anchoring
+        // it at the correction's first candle would draw the segment between
+        // that candle and the pivot at a price the market had not yet reached,
+        // which is the floating inducement. There is no input for this: the
+        // reference does it one way and it is the only correct way.
+        if x.idm.on and showIDM
+            x.idm.ln := drawLvl(x.idm.ln, x.idm.barT, x.idm.px, id, idmW,
+                 idmStyle)
+            x.idm.lb := tagLvl(x.idm.lb, x.idm.px, pre + "IDM", id, sz,
+                 not bull, clear)
+        if x.bos.on and showBOS
+            color col = bull ? bu : be
+            x.bos.ln := drawLvl(x.bos.ln, x.bos.barT, x.bos.px, col, w,
+                 lvlStyle)
+            x.bos.lb := tagLvl(x.bos.lb, x.bos.px, pre + "BOS", col, sz, bull,
+                 clear)
+        if x.ch.on and showCH
+            color col = bull ? be : bu
+            x.ch.ln := drawLvl(x.ch.ln, x.ch.barT, x.ch.px, col, w, lvlStyle)
+            x.ch.lb := tagLvl(x.ch.lb, x.ch.px, pre + "CHoCH", col, sz,
+                 not bull, clear)
+    0
+
+paint(mainC, showMain, "", mainW, fadeMain, sizeOf(labelSizeMain))
+// Under Continuous, Internal exists everywhere and is drawn everywhere - which
+// is what makes iIDM / iBOS / iCHoCH visible at all. Under Scoped it is drawn
+// only inside its owning parent pullback.
+paint(intC, runInt and (childCont or intScope.active), "i", 1, fadeInt,
+     sizeOf(labelSizeChild))
+paint(deepC, runDeep and deepScope.active, "ii", 1, fadeDeep,
+     sizeOf(labelSizeChild))
+
+// [SRC §47] Strong / Weak are DERIVED DISPLAY SEMANTICS. Nothing in the engine
+// reads them. Marked at the structural extreme itself, not parked at the edge.
+swPaint(Ctx x, bool on, int fade) =>
+    if on and barstate.islast and x.dir != DIR_NONE
+        label.delete(x.weakDot)
+        label.delete(x.weakTxt)
+        label.delete(x.strongDot)
+        label.delete(x.strongTxt)
+        bool bull = x.dir == DIR_BULL
+        string tag = x.depth == 0 ? "" : x.depth == 1 ? "i" : "ii"
+        if x.bos.on
+            color wc = color.new(bull ? cBull : cBear, fade + 10)
+            x.weakDot := label.new(x.bos.barT, x.bos.px, "",
+                 xloc = xloc.bar_time, yloc = yloc.price,
+                 style = label.style_circle, color = color.new(wc, 25),
+                 textcolor = wc, size = size.tiny)
+            x.weakTxt := label.new(x.bos.barT, x.bos.px + atr * 0.16,
+                 tag + (bull ? "HH | Weak High" : "LL | Weak Low"),
+                 xloc = xloc.bar_time, yloc = yloc.price,
+                 style = label.style_none, color = na, textcolor = wc,
+                 size = size.tiny)
+        if x.ch.on
+            color sc = color.new(bull ? cBear : cBull, fade + 10)
+            x.strongDot := label.new(x.ch.barT, x.ch.px, "",
+                 xloc = xloc.bar_time, yloc = yloc.price,
+                 style = label.style_circle, color = color.new(sc, 25),
+                 textcolor = sc, size = size.tiny)
+            x.strongTxt := label.new(x.ch.barT, x.ch.px - atr * 0.16,
+                 tag + (bull ? "HL | Strong Low" : "LH | Strong High"),
+                 xloc = xloc.bar_time, yloc = yloc.price,
+                 style = label.style_none, color = na, textcolor = sc,
+                 size = size.tiny)
+    0
+
+swPaint(mainC, showSW and showMain, fadeMain)
+swPaint(intC, showSW and swAllDepths and runInt and
+     (childCont or intScope.active), fadeInt)
+swPaint(deepC, showSW and swAllDepths and runDeep, fadeDeep)
+
+// [SRC Ch.6] Hidden Shadow candles render PURPLE. Inside bars get a neutral
+// tint - never a signal colour.
+bool anyHS = mainC.bos.b.shadow or mainC.ch.b.shadow or mainC.idm.b.shadow or
+     intC.bos.b.shadow or intC.ch.b.shadow
+barcolor(anyHS ? cHS : showInside and mInside ? color.new(#b0bec5, 70) : na,
+     title = "Structure tint")
+
+// ═══════════════════════════ 12. PANELS ═════════════════════════════════════
+dirTxt(int d) =>
+    d == DIR_BULL ? "Bullish" : d == DIR_BEAR ? "Bearish" : "—"
+
+phTxt(int p) =>
+    p == PH_DISCOVER ? "seeking IDM" : p == PH_TRACK ? "IDM active" :
+     p == PH_SEEK ? "BOS locked" : "boundary lock"
+
+fmtPx(float v) =>
+    na(v) ? "—" : str.tostring(v, format.mintick)
+
+pct(int n, int d) =>
+    d > 0 ? str.tostring(100.0 * n / d, "#.0") + "%" : "—"
+
+color cTxt = color.new(#787b86, 0)
+color cVal = chart.fg_color
+
+var table panel = table.new(position.top_right, 2, 5,
+     bgcolor = color.new(chart.bg_color, 20), border_width = 1,
+     border_color = color.new(#787b86, 60))
+if showPanel and barstate.islast
+    table.cell(panel, 0, 0, "Riptide LIT v2", text_color = cVal,
+         text_size = size.small)
+    table.cell(panel, 1, 0, mainOnly ? "MAIN ONLY" : "", text_color = cBear,
+         text_size = size.small)
+    table.cell(panel, 0, 1, "Main", text_color = cTxt, text_size = size.small)
+    table.cell(panel, 1, 1, dirTxt(mainC.dir) + " · " + phTxt(mainC.phase),
+         text_size = size.small, text_color = mainC.dir == DIR_BULL ? cBull :
+         mainC.dir == DIR_BEAR ? cBear : color.gray)
+    table.cell(panel, 0, 2, "Internal", text_color = cTxt, text_size = size.small)
+    table.cell(panel, 1, 2, runInt ? dirTxt(intC.dir) + " · " +
+         phTxt(intC.phase) : "off", text_size = size.small,
+         text_color = intC.dir == DIR_BULL ? cBull :
+         intC.dir == DIR_BEAR ? cBear : color.gray)
+    table.cell(panel, 0, 3, "Deep", text_color = cTxt, text_size = size.small)
+    table.cell(panel, 1, 3, runDeep ? dirTxt(deepC.dir) : "off",
+         text_size = size.small, text_color = deepC.dir == DIR_BULL ? cBull :
+         deepC.dir == DIR_BEAR ? cBear : color.gray)
+    table.cell(panel, 0, 4, "BOS / CHoCH", text_color = cTxt,
+         text_size = size.small)
+    table.cell(panel, 1, 4, (mainC.bos.on ? fmtPx(mainC.bos.px) : "—") + " / " +
+         (mainC.ch.on ? fmtPx(mainC.ch.px) : "—"), text_color = cVal,
+         text_size = size.small)
+
+// ── the reference's TWELVE-row statistics table ─────────────────────────────
+var table stat = table.new(position.bottom_right, 4, 13,
+     bgcolor = color.new(chart.bg_color, 8), border_width = 1,
+     border_color = color.new(#b0b3b8, 45))
+
+// [SRC Ch.10] "when Hidden Shadow is enabled, the percentage of cases in which
+// price returned back into the range after touching the level, causing HS to
+// become inactive, as well as the percentage of cases in which the level was
+// genuinely broken." A level on Shadow mode cannot produce a candidate at all
+// and reads "HS not active" - exactly as the reference's own IDM rows do.
+// A level whose break mode is Shadow can never produce a Hidden Shadow
+// candidate, so its two rows carry no information. They are omitted rather
+// than printed as "HS not active" - the function returns the next free row so
+// the table closes up around them.
+hsRows(int r, string nm, Brk b, bool on, color mu, color cv, color gd,
+     color bd) =>
+    int nextR = r
+    if on
+        nextR := r + 2
+        table.cell(stat, 0, r, "HS " + nm + " break", text_color = mu,
+             text_size = size.normal)
+        table.cell(stat, 0, r + 1, "HS " + nm + " cancel", text_color = mu,
+             text_size = size.normal)
+        int tot = b.nHsArm
+        int brk = b.nHsBrk
+        table.cell(stat, 1, r, str.tostring(tot), text_color = cv,
+             text_size = size.normal)
+        table.cell(stat, 2, r, str.tostring(brk), text_color = cv,
+             text_size = size.normal)
+        table.cell(stat, 3, r, pct(brk, tot), text_color = gd,
+             text_size = size.normal)
+        table.cell(stat, 1, r + 1, str.tostring(tot), text_color = cv,
+             text_size = size.normal)
+        table.cell(stat, 2, r + 1, str.tostring(tot - brk), text_color = cv,
+             text_size = size.normal)
+        table.cell(stat, 3, r + 1, pct(tot - brk, tot), text_color = bd,
+             text_size = size.normal)
+    nextR
+
+nearRow(int r, string nm, int tot, int cnt, color mu, color cv, color tone) =>
+    table.cell(stat, 0, r, nm, text_color = mu, text_size = size.normal)
+    table.cell(stat, 1, r, tot > 0 ? str.tostring(tot) : "—", text_color = cv,
+         text_size = size.normal)
+    table.cell(stat, 2, r, tot > 0 ? str.tostring(cnt) : "—", text_color = cv,
+         text_size = size.normal)
+    table.cell(stat, 3, r, tot > 0 ? pct(cnt, tot) : "—", text_color = tone,
+         text_size = size.normal)
+    0
+
+if showStats and barstate.islast
+    Ctx st = statsDepth == "Main" ? mainC :
+         statsDepth == "Internal" ? intC : deepC
+    color hdr = color.new(#d7e5f2, 0)
+    color good = cBull
+    color bad = cBear
+    color muted = color.new(cTxt, 10)
+    table.cell(stat, 0, 0, "Statistic", bgcolor = hdr, text_color = #263238,
+         text_size = size.normal)
+    table.cell(stat, 1, 0, "Total", bgcolor = hdr, text_color = #263238,
+         text_size = size.normal)
+    table.cell(stat, 2, 0, "Count", bgcolor = hdr, text_color = #263238,
+         text_size = size.normal)
+    table.cell(stat, 3, 0, "Rate", bgcolor = hdr, text_color = #263238,
+         text_size = size.normal)
+    nearRow(1, "IDM → BOS touch", st.stRaceTot, st.stRaceBos, muted, cVal, good)
+    nearRow(2, "IDM → Choch touch", st.stRaceTot, st.stRaceCh, muted, cVal, bad)
+    int rw = 3
+    rw := hsRows(rw, "IDM", st.idm.b, hsIDM and modeOf(mIDM) != BRK_SHADOW,
+         muted, cVal, good, bad)
+    rw := hsRows(rw, "BOS", st.bos.b, hsBOS and modeOf(mBOS) != BRK_SHADOW,
+         muted, cVal, good, bad)
+    rw := hsRows(rw, "Choch", st.ch.b, hsCH and modeOf(mCH) != BRK_SHADOW,
+         muted, cVal, good, bad)
+    nearRow(rw, "BOS near → Opp PB reach", st.stBosNearTot, st.stBosNearReach,
+         muted, cVal, good)
+    nearRow(rw + 1, "BOS near → BOS break", st.stBosNearTot, st.stBosNearBrk,
+         muted, cVal, bad)
+    nearRow(rw + 2, "Choch near → Opp PB reach", st.stChNearTot,
+         st.stChNearReach, muted, cVal, good)
+    nearRow(rw + 3, "Choch near → Choch break", st.stChNearTot, st.stChNearBrk,
+         muted, cVal, bad)
+
+// ── [SRC §63] Debug ─────────────────────────────────────────────────────────
+pbTxt(PBDet d) =>
+    d.state == PB_CORRECT ? "correcting" : "impulse"
+
+// Per-depth event tally. One screenshot answers "does this depth publish an IDM
+// at all", which the single-depth panel could not.
+tally(Ctx x) =>
+    str.tostring(x.nPivot) + "/" + str.tostring(x.nIdm) + "/" +
+     str.tostring(x.nIdmBreak) + "/" + str.tostring(x.nBos) + "/" +
+     str.tostring(x.nCh) + "/" + str.tostring(x.nFlip) + "/" +
+     str.tostring(x.nLatent) + "/" + str.tostring(x.nInvariant)
+
+var table dbg = table.new(position.bottom_left, 2, 18,
+     bgcolor = color.new(chart.bg_color, 10), border_width = 1,
+     border_color = color.new(#787b86, 60))
+if showDbg and barstate.islast
+    Ctx d = statsDepth == "Main" ? mainC :
+         statsDepth == "Internal" ? intC : deepC
+    Norm dn = d.norm
+    color dk = color.new(#787b86, 0)
+    color dv = chart.fg_color
+    table.cell(dbg, 0, 0, "LIT v2 DEBUG", text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 1, 0, statsDepth + " · depth " + str.tostring(d.depth),
+         text_color = cHS, text_size = size.tiny)
+    // Under P7b Continuous a child has NO normalizer - it reads raw candles -
+    // so an empty mother range there is correct, not a fault.
+    bool noNorm = childCont and d.depth > 0
+    table.cell(dbg, 0, 1, "mother range", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 1, noNorm ? "raw candles · no normalizer" :
+         fmtPx(dn.hi) + " / " + fmtPx(dn.lo), text_color = dv,
+         text_size = size.tiny)
+    table.cell(dbg, 0, 2, "inside bars", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 2, noNorm ? "—" : str.tostring(dn.insideCount),
+         text_color = dv, text_size = size.tiny)
+    // [§12] Groups that broke the mother range on BOTH sides in one move, where
+    // OHLC cannot say which side went first. And [P1] the same situation one
+    // level up, at the pullback trackers - how often the policy actually fires.
+    table.cell(dbg, 0, 3, "outside both §12 / P1", text_color = dk,
+         text_size = size.tiny)
+    table.cell(dbg, 1, 3, str.tostring(dn.bothCount) + "  /  " +
+         str.tostring(d.nOutsideImp), text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 0, 4, "bull trk hi/lo", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 4, fmtPx(d.detBull.trkHi) + " / " +
+         fmtPx(d.detBull.trkLo) + "  " + pbTxt(d.detBull), text_color = dv,
+         text_size = size.tiny)
+    table.cell(dbg, 0, 5, "bear trk hi/lo", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 5, fmtPx(d.detBear.trkHi) + " / " +
+         fmtPx(d.detBear.trkLo) + "  " + pbTxt(d.detBear), text_color = dv,
+         text_size = size.tiny)
+    table.cell(dbg, 0, 6, "conf bull / bear", text_color = dk,
+         text_size = size.tiny)
+    table.cell(dbg, 1, 6, fmtPx(d.detBull.conf) + " / " + fmtPx(d.detBear.conf),
+         text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 0, 7, "sweep BOS base→act", text_color = dk,
+         text_size = size.tiny)
+    table.cell(dbg, 1, 7, fmtPx(d.bos.b.base) + " → " + fmtPx(d.bos.b.act) +
+         "  (" + str.tostring(d.bos.b.sweeps) + ")", text_color = dv,
+         text_size = size.tiny)
+    bool hsOn = d.bos.b.pend or d.ch.b.pend or d.idm.b.pend
+    string hsWho = d.bos.b.pend ? "BOS" : d.ch.b.pend ? "CHoCH" : "IDM"
+    float hsAt = d.bos.b.pend ? d.bos.b.hsLvl :
+         d.ch.b.pend ? d.ch.b.hsLvl : d.idm.b.hsLvl
+    table.cell(dbg, 0, 8, "hidden shadow", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 8, hsOn ? "PENDING " + hsWho + " " + fmtPx(hsAt) : "—",
+         text_color = hsOn ? cHS : dv, text_size = size.tiny)
+    table.cell(dbg, 0, 9, "leg §34 hi/lo", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 9, fmtPx(d.legHi) + " / " + fmtPx(d.legLo),
+         text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 0, 10, "IDM", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 10, d.idm.on ? fmtPx(d.idm.px) : "—", text_color = dv,
+         text_size = size.tiny)
+    table.cell(dbg, 0, 11, "BOS / CHoCH", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 11, (d.bos.on ? fmtPx(d.bos.px) : "—") + " / " +
+         (d.ch.on ? fmtPx(d.ch.px) : "—"), text_color = dv, text_size = size.tiny)
+    table.cell(dbg, 0, 12, "phase / dir", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 12, phTxt(d.phase) + " · " + dirTxt(d.dir),
+         text_color = d.dir == DIR_BULL ? cBull : d.dir == DIR_BEAR ? cBear :
+         color.gray, text_size = size.tiny)
+    // Invariants are CHECKED, not assumed. A non-zero count is a real defect.
+    table.cell(dbg, 0, 13, "ALL DEPTHS  ↓", text_color = cHS,
+         text_size = size.tiny)
+    table.cell(dbg, 1, 13, "pv/idm/take/bos/ch/flip/latent/inv",
+         text_color = cHS, text_size = size.tiny)
+    table.cell(dbg, 0, 14, "Main", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 14, tally(mainC),
+         text_color = mainC.nInvariant > 0 ? cBear : dv, text_size = size.tiny)
+    table.cell(dbg, 0, 15, "Internal", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 15, runInt ? tally(intC) : "off",
+         text_color = intC.nInvariant > 0 ? cBear : dv, text_size = size.tiny)
+    table.cell(dbg, 0, 16, "Deep", text_color = dk, text_size = size.tiny)
+    table.cell(dbg, 1, 16, runDeep ? tally(deepC) : "off",
+         text_color = deepC.nInvariant > 0 ? cBear : dv, text_size = size.tiny)
+    // Whether the child feed policy is actually the one you think it is.
+    table.cell(dbg, 0, 17, "child feed [P7b]", text_color = dk,
+         text_size = size.tiny)
+    table.cell(dbg, 1, 17, childCont ? "continuous raw" :
+         "scoped · " + (intScope.active ? "open" : "closed"),
+         text_color = dv, text_size = size.tiny)
+
+// ── forward record ──────────────────────────────────────────────────────────
+// The ONLY number in this indicator that is not borrowed from a backtest. It
+// counts what these signals have done on the bars currently loaded. Read it as
+// a log, not as a verdict: a few dozen closed setups says nothing at all, and
+// the pre-registered work needed ~3000 bets to put a standard error on this.
+var table sigT = table.new(position.middle_right, 3, 9,
+     bgcolor = color.new(#111418, 12), border_width = 1,
+     border_color = color.new(#2a2e39, 40), frame_width = 1,
+     frame_color = color.new(#2a2e39, 40))
+
+// One column per depth, NEVER a combined total. Main is the depth every
+// pre-registered measurement used; Internal has never been scored. Averaging
+// them would bury exactly that.
+color sigMu = color.new(#9598a1, 0)
+
+cell2(int row, string lab, string a, string b, color ca, color cb) =>
+    table.cell(sigT, 0, row, lab, text_color = sigMu, text_size = size.small)
+    table.cell(sigT, 1, row, a, text_color = ca, text_size = size.small)
+    table.cell(sigT, 2, row, sigInt ? b : "", text_color = cb,
+         text_size = size.small)
+
+fmtSE(int n, float sum, float sq) =>
+    float m = n > 0 ? sum / n : 0.0
+    float v = n > 1 ? (sq - n * m * m) / (n - 1) : 0.0
+    float se = n > 1 and v > 0 ? math.sqrt(v / n) : 0.0
+    [m, se, se > 0 ? m / se : 0.0]
+
+if showSig and sigLog and barstate.islast
+    color hd = color.new(#d7e5f2, 0)
+    color mu = sigMu
+    [mM, seM, tM] = fmtSE(sigN, sigR, sigR2)
+    [mI, seI, tI] = fmtSE(sigNI, sigRI, sigR2I)
+    table.cell(sigT, 0, 0, "Forward record", bgcolor = hd,
+         text_color = #263238, text_size = size.small)
+    table.cell(sigT, 1, 0, sigMain ? "Main" : "—", bgcolor = hd,
+         text_color = #263238, text_size = size.small)
+    table.cell(sigT, 2, 0, sigInt ? "Internal" : "—", bgcolor = hd,
+         text_color = #263238, text_size = size.small)
+
+    cell2(1, "closed", sigMain ? str.tostring(sigN) : "-",
+         str.tostring(sigNI), mu, mu)
+    cell2(2, "win rate",
+         sigN > 0 ? str.tostring(100.0 * sigWin / sigN, "0.0") + "%" : "-",
+         sigNI > 0 ? str.tostring(100.0 * sigWinI / sigNI, "0.0") + "%" : "-",
+         mu, mu)
+    cell2(3, "total R", fmtR(sigR), fmtR(sigRI),
+         sigR >= 0 ? cLong : cShort, sigRI >= 0 ? cLong : cShort)
+    // R per setup is never shown without its error bar. A twenty-trade sample
+    // carrying one large winner reads as a strong number and is not one.
+    cell2(4, "R / setup",
+         sigN > 0 ? fmtR(mM) + (seM > 0 ? " ± " + str.tostring(seM, "0.00")
+              : "") : "-",
+         sigNI > 0 ? fmtR(mI) + (seI > 0 ? " ± " + str.tostring(seI, "0.00")
+              : "") : "-",
+         sigN > 0 and mM >= 0 ? cLong : cShort,
+         sigNI > 0 and mI >= 0 ? cLong : cShort)
+    // |t| under 2 is consistent with zero, whatever the headline says.
+    cell2(5, "t",
+         seM > 0 ? str.tostring(tM, "0.0") +
+              (math.abs(tM) < 2 ? "  (~0)" : "") : "-",
+         seI > 0 ? str.tostring(tI, "0.0") +
+              (math.abs(tI) < 2 ? "  (~0)" : "") : "-",
+         math.abs(tM) >= 2 ? cLong : mu, math.abs(tI) >= 2 ? cLong : mu)
+    // Concentration. One trade carrying most of the P&L is not an edge.
+    cell2(6, "top trade",
+         sigR > 0 and sigBest > 0 ?
+              str.tostring(100 * sigBest / sigR, "0") + "% of total" : "-",
+         sigRI > 0 and sigBestI > 0 ?
+              str.tostring(100 * sigBestI / sigRI, "0") + "% of total" : "-",
+         mu, mu)
+    cell2(7, "best / worst", fmtR(sigBest) + " / " + fmtR(sigWorst),
+         fmtR(sigBestI) + " / " + fmtR(sigWorstI), mu, mu)
+    cell2(8, "open",
+         sig.on ? (sig.armed ? "yes, armed" : "yes") : "no",
+         sigI.on ? (sigI.armed ? "yes, armed" : "yes") : "no", mu, mu)
+
+// ═══════════════════════════ 13. ALERTS ═════════════════════════════════════
+// Structure events only. None of these is a trade signal, and this phase makes
+// no claim that any of it is tradeable.
+bool aIdm = mainC.idm.on
+bool aBos = mainC.bos.on
+int aDir = mainC.dir
+alertcondition(aIdm and not aIdm[1], "LIT v2 IDM published",
+     "Riptide LIT v2: inducement published")
+alertcondition(not aIdm and aIdm[1], "LIT v2 IDM taken",
+     "Riptide LIT v2: inducement taken")
+alertcondition(aBos and not aBos[1], "LIT v2 BOS locked",
+     "Riptide LIT v2: BOS locked")
+alertcondition(not aBos and aBos[1], "LIT v2 BOS broken",
+     "Riptide LIT v2: BOS broken - continuation")
+alertcondition(aDir != aDir[1] and aDir != 0, "LIT v2 trend flip",
+     "Riptide LIT v2: CHoCH broken - trend flipped")
+
+// ── entry layer ─────────────────────────────────────────────────────────────
+// RESEARCH ALERTS. Three pre-registered experiments returned INCONCLUSIVE, so
+// these fire to be RECORDED, not acted on. Nothing here places an order and
+// this project places no orders anywhere.
+bool aLong = showSig and mainC.sigNew and mainC.sigDir == DIR_BULL
+bool aShort = showSig and mainC.sigNew and mainC.sigDir == DIR_BEAR
+alertcondition(aLong, "LIT v2 LONG setup",
+     "Riptide LIT v2 research LONG - entry at close, SL at prior pullback pivot. Not validated; record it.")
+alertcondition(aShort, "LIT v2 SHORT setup",
+     "Riptide LIT v2 research SHORT - entry at close, SL at prior pullback pivot. Not validated; record it.")
+alertcondition(sigJustArmed, "LIT v2 Active Price reached",
+     "Riptide LIT v2: Active Price reached - trailing stop armed")

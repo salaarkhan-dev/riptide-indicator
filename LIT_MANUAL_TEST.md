@@ -1,4 +1,4 @@
-# LIT_FORWARD_V1 — how to read a setup by hand
+# LIT_FORWARD_V2 — how to read a setup by hand
 
 For testing on a live chart and on existing bars. Rules copied from the frozen
 definition (`riptide/strategies/lit/types.py`, rules hash `4b105c593bc48469`),
@@ -18,6 +18,13 @@ money.** Three pre-registered experiments each returned INCONCLUSIVE:
 A 162-combination settings grid then showed per-pair tuning decays ~0.95 R/bet
 out of sample, and flips sign between 15m and 30m.
 
+All three stages were measured under the V1 engine, which latched on 7.3% of
+symbol-timeframes — those charts contributed nothing. That makes their samples
+smaller than recorded, and selected toward symbols whose first BOS happened to
+break. It does not overturn the verdicts: less power means less evidence, not
+contrary evidence. Re-running them under V2 would be a new experiment needing
+its own pre-registration, and nobody has done it.
+
 So the honest description of what you are about to do: **collect observations
 on a candidate that has not been shown to work.** That is a real and useful
 thing to do. It is not the same as trading a tested edge, and if you find
@@ -25,8 +32,13 @@ yourself feeling confident after ten good ones, re-read this box.
 
 ## 0. CHART SETUP
 
-Load `riptide-lit-v2.pine`. Leave every default as shipped — the defaults were
-matched to the Python record deliberately:
+Load **`riptide-lit-v3.pine`**, not v2. v2 carries a trap state that stops
+Main structure emitting altogether on about 7% of charts — BTC 30m is one of
+them — and v3 repairs it with the P9 bootstrap CHoCH. `riptide-lit-v2.pine` is
+left in the repo untouched so anything recorded under V1 can be reproduced.
+
+Leave every default as shipped — the defaults were matched to the Python
+record deliberately:
 
     Pullback confirmation    Body
     IDM break                Shadow
@@ -37,16 +49,17 @@ matched to the Python record deliberately:
     Tracker re-seed [P3]     Resolver group
     Exact equality [P4]      off
     Track both directions    off
+    Bootstrap CHoCH [P9]     Leg extreme (V2)
     Signals follow           Main
 
 Then turn ON, in group 9: **Show entry signals**.
 
-Changing any structure setting means you are no longer testing V1, and your
+Changing any structure setting means you are no longer testing V2, and your
 results cannot be compared with anything already measured.
 
 ## 1. THE TREND
 
-Read `Main` structure only. Internal and Deep publish no V1 setups.
+Read `Main` structure only. Internal and Deep publish no V2 setups.
 
 * Bullish while the most recent **BOS** is above and unbroken.
 * Bearish while it is below.
@@ -177,13 +190,13 @@ You have both enabled. They are **not** the same kind of thing:
 Using Riptide as confirmation for a LIT setup — "I'll take the LIT entry when
 Riptide agrees" — feels prudent and creates a **third strategy that nobody has
 ever measured**. It is not Riptide, whose entry, stop and target are different.
-It is not LIT_FORWARD_V1, whose whole sample is every setup rather than the
+It is not LIT_FORWARD_V2, whose whole sample is every setup rather than the
 agreeing subset. Filtering by another signal is exactly the kind of choice that
 looked good in the settings grid and then decayed by 0.95 R out of sample.
 
 If you want to know whether confluence helps, it is answerable: record the LIT
 setups **unfiltered**, note separately whether Riptide also fired within some
-window, and compare afterwards. That keeps V1's sample intact and still gets
+window, and compare afterwards. That keeps V2's sample intact and still gets
 you the answer. Deciding at the chart, one setup at a time, gets you neither.
 
 **Do not size positions off either of them on the strength of this document.**

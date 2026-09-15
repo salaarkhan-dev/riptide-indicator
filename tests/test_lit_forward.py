@@ -66,7 +66,7 @@ def mk(sid="s1", direction=1, entry=100.0, stop=90.0, sig_t=1_700_000_000):
 print("\n1. the frozen rules cannot change silently")
 h1 = rules_hash()
 check("rules_hash is stable across calls", rules_hash(), h1)
-check("version is V1", FWD_VERSION, "LIT_FORWARD_V1")
+check("version is V2", FWD_VERSION, "LIT_FORWARD_V2")
 check("primary arm is T6_PIVOT", RULES["primary_arm"], "T6_PIVOT")
 check("control arm is BOS_TARGET", RULES["control_arm"], "BOS_TARGET")
 check("stop is the prior pullback pivot", RULES["stop"],
@@ -75,6 +75,22 @@ check("a missing stop is a SKIP", RULES["stop_missing"], "skip")
 check("no stop buffer", RULES["stop_buffer"], 0.0)
 check("horizon matches Stage C", RULES["horizon_bars"], 500)
 check("min_rr matches Stage C", RULES["min_rr"], 0.5)
+
+# THE POLICIES ARE PART OF THE RULES. Before this block, flipping a policy
+# inside research.lit_v3 left rules_hash() unmoved — the rules named the engine
+# module but not how it was configured, so the one thing this file promises to
+# make impossible was possible. P9 is the policy that carried V1 to V2.
+import research.lit_v3 as _lit                                   # noqa: E402
+check("P9 is on", RULES["policies"]["seekCh"], "leg")
+for _p in ("outside", "reseed", "eqBreak", "seekCh"):
+    check(f"RULES records the engine's real {_p}",
+          RULES["policies"][_p], getattr(_lit.POL, _p))
+_sp = RULES["policies"]["seekCh"]
+RULES["policies"]["seekCh"] = "none"
+check("flipping a POLICY changes the hash too", rules_hash() != h1, True)
+RULES["policies"]["seekCh"] = _sp
+check("and restoring it restores the hash", rules_hash(), h1)
+
 _saved = RULES["min_rr"]
 RULES["min_rr"] = 0.6
 check("changing a rule CHANGES the hash", rules_hash() != h1, True)
@@ -117,8 +133,11 @@ b = signals.setup_id(FWD_VERSION, "BTC_USDT", "Min30", 1, 1700)
 check("deterministic", a, b)
 check("direction is part of the key",
       a != signals.setup_id(FWD_VERSION, "BTC_USDT", "Min30", -1, 1700), True)
-check("version is part of the key",
-      a != signals.setup_id("LIT_FORWARD_V2", "BTC_USDT", "Min30", 1, 1700),
+# Named V1 explicitly rather than "some other version": this is the guard that
+# stops a V2 setup colliding with the V1 row for the same bar of the same
+# symbol, which is what "never pooled" rests on.
+check("version is part of the key — V1 and V2 cannot collide",
+      a != signals.setup_id("LIT_FORWARD_V1", "BTC_USDT", "Min30", 1, 1700),
       True)
 
 print("\n6. ONE entry and ONE stop, TWO independent exits")

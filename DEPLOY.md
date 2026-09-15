@@ -171,12 +171,29 @@ No API key, no order placement, no code path that could place one. No Docker,
 no reverse proxy, no inbound port. One Python process under systemd, one
 dependency (`aiohttp`). Engine logic and `Cfg` defaults are untouched.
 
-## LIT forward research (LIT_FORWARD_V1)
+## LIT forward research (LIT_FORWARD_V2)
 
 A prospective data-collection experiment. It is **not** a trading strategy and
 it changes nothing about production alerting. Read `PREREG_lit_forward_v1.md`
 before enabling; the historical LIT family is CLOSED and this collects new
 evidence rather than reopening it.
+
+**If you already ran V1, read this first.** The engine now carries the P9
+bootstrap CHoCH (`research/LIT_SEEK_ESCAPE.md`), which repairs a trap state
+that silently killed Main structure on 7.3% of symbol-timeframes including
+BTC 30m. That changes the structure setups come from, so the version moved to
+`LIT_FORWARD_V2` and the rules hash to `ec15663860a09853`.
+
+V1 rows stay exactly as they are — every query is scoped by
+`strategy_version` — but **any V1 setup still PENDING will never resolve**,
+because the resolver only reads the current version. Those are censored
+observations. Count them first if you care about the V1 sample:
+
+```bash
+sqlite3 /home/ubuntu/riptide/riptide.db \
+  "SELECT state, COUNT(*) FROM lit_forward
+   WHERE strategy_version='LIT_FORWARD_V1' GROUP BY state;"
+```
 
 Ships OFF. To enable on the box:
 

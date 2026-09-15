@@ -2509,3 +2509,83 @@ outside the range price goes on to trade, 3 of 191 panels (1.6%).
 **The default remains `"none"` and the frozen engine is byte-identical under
 it.** Switching it on is a user decision, and in production it would be
 LIT_FORWARD_V2 — never a patch to V1, and the two records never pooled.
+
+---
+
+## P9 TURNED ON — the forward record is now LIT_FORWARD_V2
+
+`POL.seekCh` defaults to `"leg"`. `FWD_VERSION` is `LIT_FORWARD_V2` and
+`rules_hash()` is `ec15663860a09853` (V1 was `4b105c593bc48469`).
+
+Confirmed end to end rather than assumed: with the new default, the latch study
+reports **0/28 latched on Min30 and 0/28 on Min15**, against 4 and 1 before.
+BTC Min30 goes from 10 Main events at 0.05 coverage to **229 at 0.98**.
+
+### `RULES["policies"]` — a hole in the hash, closed
+
+`RULES` named the engine module but not how it was configured, so a policy flip
+inside `research.lit_v3` left `rules_hash()` **unmoved** — the exact silent
+change that file's docstring promises to make impossible. The policies are now
+part of `RULES`, and `tests/test_lit_forward.py` asserts each one against the
+live `POL` and checks that flipping one moves the hash.
+
+### V1 rows, and the part that costs something
+
+Every query in `forward.py` filters on `strategy_version`, and
+`signals.setup_id` mixes the version into the key, so V1 and V2 cannot collide
+even on the same bar of the same symbol. V1 rows are not touched.
+
+**Any V1 setup still PENDING at the switch will never resolve** — the resolver
+only reads the current version. Those are *censored* observations and must be
+reported as censored, not as timeouts. `DEPLOY.md` and
+`research/LIT_FORWARD_STATUS.md` carry the SQL to count them. Nothing rewrites
+them, because a rewrite would be worse than the censoring.
+
+### riptide-lit-v3.pine
+
+A new file. **`riptide-lit-v2.pine` is untouched** so anything recorded under
+V1 stays reproducible.
+
+Built from v2 by five asserted anchor replacements, each required to match
+exactly once, so a silent mis-patch of a 2,000-line file was not possible.
+Changes: the header note, the `Bootstrap CHoCH [P9]` input (two options — "Leg
+extreme (V2)" default, "Off (V1)" for v2.3's exact behaviour), the engine block
+at the IDM break, and a setup tooltip that names whichever version the switch
+selects.
+
+`nCh` is deliberately NOT incremented by the P9 block. It mirrors the engine's
+`choch_create + choch_move`, and the engine books a bootstrap CHoCH under its
+own separate key; counting it in Pine would make the debug panel disagree with
+the record.
+
+The third arm, `raid`, is **not offered in Pine**. It was measured and rejected
+— it converted one latched chart into a different kind of stall — and shipping
+a rejected arm as a setting invites misuse.
+
+### deploy/pine-static-check.py
+
+No Pine compiler exists in this environment, so v3 was checked statically
+against v2 as a control: v2 compiles, so any finding present in both is a
+checker false positive and only a finding unique to v3 is real. **11 findings,
+all 11 present in v2, none unique to v3.**
+
+The checker was itself verified against a file with five planted errors — a
+reserved word as an identifier, a comma-separated declaration, a comma-joined
+assignment, a function used before declaration, and a continuation line on a
+multiple-of-4 indent — and catches all five without flagging a normal
+`input.int(..., group = g, tooltip = t)` line. A clean result from a checker
+that cannot fail would mean nothing.
+
+**This is still not a compile.** Pine↔Python parity remains open, and
+`research/LIT_FORWARD_STATUS.md` still lists it as the blocking precondition.
+
+### What this does NOT do
+
+It does not revisit stages A, B or C. They were measured under the latching
+engine, so their samples were smaller than recorded and selected toward symbols
+whose first BOS broke — but a smaller sample is less evidence, not contrary
+evidence, and all three stay INCONCLUSIVE. Re-running them is a new experiment
+needing its own pre-registration.
+
+A second trap state remains **open and unfixed**: `PH_LOCK` with both
+boundaries outside the range price goes on to trade, 1.6% of panels.

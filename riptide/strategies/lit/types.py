@@ -1,4 +1,4 @@
-"""The frozen LIT_FORWARD_V1 definition, and the record it produces.
+"""The frozen LIT_FORWARD_V2 definition, and the record it produces.
 
 EVERY VALUE IN `RULES` IS FROZEN. They are copied literally from the Stage C
 code and pre-registration, not reconstructed from memory:
@@ -7,9 +7,32 @@ code and pre-registration, not reconstructed from memory:
     PREREG_lit_stage_c.md §3, §4      the rule as registered
 
 Changing any of them is not an edit. It is a new experiment, and it requires a
-new `FWD_VERSION` — LIT_FORWARD_V2 — whose results are never pooled with V1's.
+new `FWD_VERSION` whose results are never pooled with the previous version's.
 `rules_hash()` exists so that a silent change cannot happen: every stored setup
 carries the hash of the rules that produced it, and a mismatch is visible.
+
+── V1 → V2, and why ────────────────────────────────────────────────────────
+
+V2 differs from V1 in exactly one thing: the engine's P9 policy is `"leg"`
+rather than `"none"`. Nothing about the entry, the stop, the exits, the
+scoring or the inference changed.
+
+P9 repairs a trap state. `PH_SEEK` with no CHoCH was a one-way door, so on
+7.3% of symbol-timeframes — BTC Min30 among them — Main structure stopped
+emitting within the first 200 bars and never resumed. Those panels contributed
+nothing to V1. Measured in `research/LIT_SEEK_ESCAPE.md` under
+`PREREG_lit_seek_escape.md` and `PREREG_lit_seek_escape_v2.md`.
+
+**V1 and V2 records are never pooled.** Every query in `forward.py` is scoped
+by `strategy_version`, and `signals.setup_id` mixes the version in, so the two
+populations cannot collide even on the same bar of the same symbol. V1 rows
+already collected stay exactly as they are and stay readable as V1.
+
+`RULES["policies"]` was added at the same time. Before it, a policy flip inside
+`research.lit_v3` would NOT have moved `rules_hash()` — the rules named the
+engine module but not how it was configured. That was a real hole in the
+promise this file's docstring makes, and it is closed: the hash now covers the
+policies as well as the rules.
 """
 
 from __future__ import annotations
@@ -19,7 +42,7 @@ import json
 from dataclasses import dataclass, asdict, field
 
 FWD_FAMILY = "lit"
-FWD_VERSION = "LIT_FORWARD_V1"
+FWD_VERSION = "LIT_FORWARD_V2"
 
 # ── the frozen rules ────────────────────────────────────────────────────────
 # Sources, so a reader can check each line rather than trust it:
@@ -34,6 +57,16 @@ RULES: dict = {
     # structure
     "depth": "MAIN",                 # Internal and Deep publish no setups
     "engine": "research.lit_v3",     # the frozen engine, imported not copied
+    # HOW that engine is configured. Naming the module was not enough: a
+    # policy flip inside it used to leave rules_hash() unmoved, which is
+    # exactly the silent change this file claims to prevent. Mirrors
+    # research.lit_v3.POL and is asserted against it by tests/test_lit_forward.
+    "policies": {
+        "outside": "close",          # P1
+        "reseed": "resolver",        # P3
+        "eqBreak": False,            # P4
+        "seekCh": "leg",             # P9 — "none" in V1; see the docstring
+    },
     # entry
     "entry": "close_of_idm_break_bar",
     "direction": "with_trend_only",  # the locked BOS must lie beyond the entry

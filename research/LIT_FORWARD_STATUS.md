@@ -1,4 +1,4 @@
-# LIT_FORWARD_V1 — durable status
+# LIT_FORWARD_V2 — durable status
 
 **Read this before proposing any LIT work.** It exists so a future session
 cannot reopen research that is already closed.
@@ -22,9 +22,40 @@ FVG/POI/SCOB to rescue it · call the historical family profitable.
 ## Forward status
 
     State:            WIRED AND ARMED — awaiting the .env flag
-    Pre-registration: PREREG_lit_forward_v1.md
-    Version:          LIT_FORWARD_V1
-    Rules hash:       4b105c593bc48469
+    Pre-registration: PREREG_lit_forward_v1.md (rules), plus
+                      PREREG_lit_seek_escape.md and _v2.md (the P9 change)
+    Version:          LIT_FORWARD_V2
+    Rules hash:       ec15663860a09853      (V1 was 4b105c593bc48469)
+
+### V1 → V2 — what changed and what it costs
+
+One thing changed: the engine's P9 policy is `"leg"` rather than `"none"`.
+Entry, stop, exits, scoring and inference are all identical to V1.
+
+P9 repairs a trap state. `PH_SEEK` with no CHoCH was a one-way door, so on
+7.3% of symbol-timeframes — **BTC Min30 among them** — Main structure stopped
+emitting inside the first 200 bars and never resumed. Those panels contributed
+nothing to V1 at all. Evidence: `research/LIT_SEEK_ESCAPE.md`.
+
+**V1 rows are not touched and are never pooled with V2.** Every query in
+`forward.py` filters on `strategy_version`, and `signals.setup_id` mixes the
+version into the key, so the two populations cannot collide even on the same
+bar of the same symbol.
+
+**The cost, stated plainly: any V1 setup still PENDING at the switch will
+never resolve.** The resolver only reads rows matching the current
+`FWD_VERSION`, so those become *censored* observations — not wins, not losses,
+not timeouts. They must be reported as censored if V1 is ever written up.
+Count them before or after the switch:
+
+```bash
+sqlite3 /home/ubuntu/riptide/riptide.db \
+  "SELECT COUNT(*) FROM lit_forward
+   WHERE state='pending' AND strategy_version='LIT_FORWARD_V1';"
+```
+
+Rewriting them to look finished would be worse than leaving them censored, so
+nothing does that.
     Started:          (not started — no forward_start_timestamp stamped)
     Primary outcome:  paired_delta_R = t6_pivot_R − control_R
     Unit:             market-event bet (riptide/decide.py::event_span)

@@ -50,9 +50,19 @@ class Pol:
     reseed = "resolver"    # P3: resolver | pivot
     eqBreak = False        # P4: exact equality counts as a break
     # P9: what the FIRST cycle after bootstrap uses as its CHoCH.
-    #     none | leg | raid. "none" is the frozen behaviour and the default;
-    #     see the block at step 6 for why the other two exist.
-    seekCh = "none"
+    #     none | leg | raid. See the block at step 6 for the mechanism.
+    #
+    # "none" is the frozen LIT_FORWARD_V1 behaviour and was the default until
+    # P9 was measured. It is now "leg", which repairs 14 of 14 PH_SEEK latches
+    # across two samples while preserving 99.8% of existing events on panels
+    # that were never broken — research/LIT_SEEK_ESCAPE.md, pre-registered in
+    # PREREG_lit_seek_escape.md and PREREG_lit_seek_escape_v2.md.
+    #
+    # Flipping this is NOT an edit. It changes the structure every setup comes
+    # from, so it carries FWD_VERSION to LIT_FORWARD_V2 and changes
+    # rules_hash(). V1 and V2 records are never pooled. Set it back to "none"
+    # to reproduce anything measured before that change.
+    seekCh = "leg"
 
 
 POL = Pol()
