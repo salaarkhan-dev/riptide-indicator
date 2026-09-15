@@ -148,10 +148,15 @@ def main(argv):
          "the bearish half of the same toggle."),
     ]
 
-    # conditions the port gained by construction, not by changing meaning
+    # Conditions the port gained by construction, not by changing meaning.
+    # `IF not na(msLx)` is the label-crowding guard: labelSlot() returns na
+    # when an identical label already sits on that spot, so the duplicate is
+    # not drawn. It gates a label.new and nothing else — no engine value is
+    # read or written behind it.
     IGNORE_NEW = re.compile(r"^(IF msOn|IF barstate|SET msExt|"
                             r"IF msShowChoch$|IF msShowBos$|IF msShowIdm$|"
-                            r"IF msShowSweeps$|IF msShow)")
+                            r"IF msShowSweeps$|IF msShow|IF not na\(msLx\)$|"
+                            r"SET msLx = )")
     only_orig = sorted(x for x in a - b)
     only_port = sorted(x for x in b - a if not IGNORE_NEW.match(x))
 

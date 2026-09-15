@@ -1021,35 +1021,53 @@ seedHighBar = bar_index + ta.highestbars(high, pivotRight + 1)
 string lblSize = msLabelSize == "Normal" ? size.normal :
      msLabelSize == "Small" ? size.small : size.tiny
 
-var array<int>   lblBar = array.new<int>()
-var array<float> lblPx  = array.new<float>()
+var array<int>    lblBar = array.new<int>()
+var array<float>  lblPx  = array.new<float>()
+var array<string> lblTxt = array.new<string>()
 
-// A bar for a label at (wantBar, y) that nothing already occupies, recorded
-// so the next caller sees it. Shifts RIGHT in whole bars, so a crowded pair
-// reads side by side rather than stacked. Gives up after four tries: past
-// that the area is busy enough that moving further does not help.
-labelSlot(int wantBar, float y, float tol) =>
+// The bar to put a label at, or `na` when an identical one is already there.
+//
+// Two cases, and they want opposite treatment:
+//   DIFFERENT text on the same spot — an IDM and a $$$ — is two facts about
+//     one place, so the second is nudged right and the pair reads side by
+//     side. Both are worth seeing.
+//   THE SAME text on the same spot is not two facts, it is one fact found
+//     twice: the narrow and the wide grab instance landing on a level that
+//     is both a 3/3 and a 10/10 swing. Nudging those apart draws "$$$ $$$"
+//     across one band and invents a second event. The duplicate is dropped.
+//
+// The price tolerance makes that last call fuzzy on purpose — two grabs a
+// fraction of an ATR apart collapse to one mark. That is the intended
+// trade: at that distance the two bands overlap anyway and two marks read
+// as clutter, not as information.
+labelSlot(int wantBar, float y, float tol, string txt) =>
     int x = wantBar
     int tries = 0
+    bool dupe = false
     while tries < 4
         bool clash = false
         if lblBar.size() > 0
             for i = 0 to lblBar.size() - 1
                 if lblBar.get(i) == x and math.abs(lblPx.get(i) - y) <= tol
+                    if lblTxt.get(i) == txt
+                        dupe := true
                     clash := true
                     break
-        if not clash
+        if dupe or not clash
             break
         x += 3
         tries += 1
-    lblBar.push(x)
-    lblPx.push(y)
-    // Bounded, and small on purpose: a slot from hundreds of bars ago is off
-    // the left of the screen and must not still be reserving space.
-    while lblBar.size() > 200
-        lblBar.shift()
-        lblPx.shift()
-    x
+    if not dupe
+        lblBar.push(x)
+        lblPx.push(y)
+        lblTxt.push(txt)
+        // Bounded, and small on purpose: a slot from hundreds of bars ago is
+        // off the left of the screen and must not still reserve space.
+        while lblBar.size() > 200
+            lblBar.shift()
+            lblPx.shift()
+            lblTxt.shift()
+    dupe ? na : x
 dirCol(bool isHigh) =>
     isHigh ? bearCol : bullCol
 
@@ -2688,7 +2706,9 @@ msPrune() =>
 // Every level this section draws is horizontal, so one y serves both ends.
 msDraw(int x1, int x2, float y, color c, string lineStyle, string txt, string lblStyle) =>
     msLineBuf.push(line.new(x1, y, x2, y, xloc = xloc.bar_index, color = c, style = lineStyle))
-    msLabelBuf.push(label.new(labelSlot(int(math.avg(x2, x1)), y, na(atr) ? 0.0 : atr * 0.3), y, txt, xloc = xloc.bar_index, color = color(na), style = lblStyle, textcolor = c, size = lblSize))
+    int msLx = labelSlot(int(math.avg(x2, x1)), y, na(atr) ? 0.0 : atr * 0.3, txt)
+    if not na(msLx)
+        msLabelBuf.push(label.new(msLx, y, txt, xloc = xloc.bar_index, color = color(na), style = lblStyle, textcolor = c, size = lblSize))
     msPrune()
 
 msSwings(simple int msL) =>
@@ -2923,29 +2943,23 @@ Liq.LLF(msLiqSPP, msLiqDPP, msLiqSLLS, msLiqDLLS, msShow and msLiq and msLiqSH, 
 //    * LABELS ARE NUDGED APART when two would land on the same spot, and
 //      every label in sections 12 and 13 takes its size from one input,
 //      "Label size" in panel group 16. The original has neither.
-//    * THE GLYPH SPLITS. The original writes "$$$" on every grab. Here a grab
-//      whose two candles share a colour keeps "$$$" and one whose candles
-//      oppose is "$$" — same detection, same bands, only the text differs.
-//      Neither collides with the original's "$", which there means a SWEEP:
-//      the level taken and closed THROUGH. That matters because both scripts
-//      may be on one chart, and it is why the narrower glyph is "$$".
-//
-//      READ THIS BEFORE TRUSTING THE SPLIT. Colour is ABSOLUTE and the grab
-//      direction is not, so "same colour" does not mean one thing. On a
-//      sell-side grab the reclaim is upward, so two green candles run WITH
-//      it and two red candles run AGAINST it — and both get "$$$". Measured
-//      over 2,721 grabs on 23 symbols at 15m, "$$$" splits almost exactly in
-//      half: 436 where both candles ran with the reclaim, 447 where both ran
-//      against it. So the mark says "these two candles matched", and nothing
-//      about whether the rejection was quick, strong or one-barred. An
-//      earlier version of this comment and of the tooltip claimed it meant
-//      the latter; it does not, and the claim is withdrawn.
-//
-//      A direction-aware rule is one line away if the split is meant to
-//      carry meaning: test whether bar N-1 closed in the RECLAIM direction
-//      (bullish for a sell-side grab, bearish for a buy-side one). That is
-//      true on 16% of grabs rather than 32%, and it is true of the thing the
-//      withdrawn claim described.
+//      THE GLYPH IS THE ORIGINAL'S. Every grab is marked "$$$", centred on
+//      its band, exactly as the script this came from does it. A version of
+//      this file split the mark by whether the grab's two candles shared a
+//      colour; that is gone, and the reason is worth keeping so it is not
+//      reinvented. Two faults, both measured:
+//        - "same colour" does not mean one thing. Colour is ABSOLUTE and the
+//          grab direction is not, so on a sell-side grab two green candles
+//          run WITH the reclaim and two red run AGAINST it, and both counted
+//          as "same". audit/grab_candle_mix.py: of 883 such grabs, 436 ran
+//          with and 447 against — a coin flip.
+//        - a centred mark cannot describe two specific candles.
+//          audit/grab_label_distance.py: the midpoint sits a median of 6
+//          bars from them on the narrow instance and 15 on the wide one,
+//          3+ bars away 100% of the time. The candles under the mark were
+//          never the pair that chose it, which is exactly how it was caught.
+//      "$$$" describes the LEVEL that was taken. The centre is the right
+//      place for that, and nothing about it can disagree with the candles.
 //
 //  A pivot cannot be pierced between printing and confirming — by definition
 //  no bar inside its right window exceeds it — so testing only the previous
@@ -2987,12 +3001,8 @@ var GrabSet gsWide = GrabSet.new(
 // NOT `drawGrab`: that name is already taken, at line 1141, by the function
 // that draws Riptide's raid X. deploy/pine-static-check.py caught the
 // collision, which is the whole reason it checks declaration order.
-drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sameCol) =>
+drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick) =>
     int x2 = bar_index - 1
-    // The original marks every grab "$$$". This splits the mark on whether
-    // the two candles share a colour. That is ALL it tests — see the warning
-    // in the section header before reading more into it than that.
-    string glyph = sameCol ? "$$$" : "$$"
     line lvl = line.new(fromBar, px, x2, px,
          xloc  = xloc.bar_index,
          color = s.col,
@@ -3002,33 +3012,34 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sam
          xloc  = xloc.bar_index,
          color = color(na))
     linefill.new(lvl, edge, color.new(s.col, 80))
-    // CENTRED on the band, as the original places it and as asked for: at
-    // the right-hand edge the text sat on the candles and was hard to read.
-    // KNOW WHAT THAT COSTS. The glyph is chosen by the candles at N-1 and N,
-    // and the midpoint is nowhere near them — audit/grab_label_distance.py
-    // measures a median of 6 bars left of N on the narrow instance and 15 on
-    // the wide one, 3 or more bars away 100% of the time. So the candles
-    // under a $$$ are NOT the ones that chose it, and reading them as such
-    // is what makes the mark look wrong. The tooltip names the real pair.
-    label tag = label.new(labelSlot(int(math.avg(fromBar, x2)), px, na(atr) ? 0.0 : atr * 0.3), px, glyph,
-         xloc      = xloc.bar_index,
-         color     = color(na),
-         textcolor = color.new(s.col, 30),
-         size      = lblSize,
-         style     = isHigh ? label.style_label_down : label.style_label_up,
-         tooltip   = s.tag + (isHigh ? "Buy-side" : "Sell-side") +
-                     " liquidity grabbed @ " + f2s(px) +
-                     "\nWick reached " + f2s(wick) + ", price closed back " +
-                     (isHigh ? "below" : "above") + " the level." +
-                     (sameCol
-                      ? "\n$$$ — the two candles share a colour."
-                      : "\n$$ — the two candles are opposite colours.") +
-                     "\nContext only — no alert, no setup, no claim.")
+    // CENTRED on the band, where the original puts it — and now correct to
+    // put there. "$$$" describes the LEVEL that was taken, and the middle of
+    // the band is the right place to say "this level". A previous version
+    // split the mark on whether the two candles shared a colour, which made
+    // the centre wrong: audit/grab_label_distance.py measures the midpoint
+    // sitting a median of 6 bars from those candles on the narrow instance
+    // and 15 on the wide one, 3+ bars away 100% of the time, so the pair
+    // under the mark was never the pair that chose it. Dropping the split
+    // removes the contradiction rather than papering over it.
+    int lx = labelSlot(int(math.avg(fromBar, x2)), px, na(atr) ? 0.0 : atr * 0.3, "$$$")
+    if not na(lx)
+        label tag = label.new(lx, px, "$$$",
+             xloc      = xloc.bar_index,
+             color     = color(na),
+             textcolor = color.new(s.col, 30),
+             size      = lblSize,
+             style     = isHigh ? label.style_label_down : label.style_label_up,
+             tooltip   = s.tag + (isHigh ? "Buy-side" : "Sell-side") +
+                         " liquidity grabbed @ " + f2s(px) +
+                         "\nWick reached " + f2s(wick) + ", price closed back " +
+                         (isHigh ? "below" : "above") + " the level." +
+                         "\nContext only — no alert, no setup, no claim.")
+        s.lbs.push(tag)
     // A linefill dies with either of its lines, so tracking the lines is
-    // enough to free it.
+    // enough to free it. The label is pushed in the branch above, because a
+    // duplicate is never created and so has nothing to track.
     s.lns.push(lvl)
     s.lns.push(edge)
-    s.lbs.push(tag)
     while s.lns.size() > s.keep * 2
         line.delete(s.lns.shift())
     while s.lbs.size() > s.keep
@@ -3044,7 +3055,7 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sam
 // `isHigh ? s.hi : s.lo` because this file has no precedent for a ternary that
 // returns a collection, nor for a locally declared array<> type, and there is
 // no Pine compiler here to settle either. An argument costs nothing.
-scanGrabs(GrabSet s, pend, bool isHigh, float wick, bool sameCol) =>
+scanGrabs(GrabSet s, pend, bool isHigh, float wick) =>
     if pend.size() > 0
         int i = pend.size() - 1
         while i >= 0
@@ -3055,7 +3066,7 @@ scanGrabs(GrabSet s, pend, bool isHigh, float wick, bool sameCol) =>
                 bool back    = isHigh ? close <= g.px : close  >= g.px
                 bool through = isHigh ? close >  g.px : close  <  g.px
                 if pierced and back
-                    drawGrabBand(s, g.px, g.bar, isHigh, wick, sameCol)
+                    drawGrabBand(s, g.px, g.bar, isHigh, wick)
                     resolved := true
                 else if through
                     // Closed beyond the level: the liquidity was taken and
@@ -3079,25 +3090,19 @@ float bgPH = ta.pivothigh(high, bgLeft, bgRight)
 float bgPL = ta.pivotlow(low,  bgLeft, bgRight)
 float grabPrvH = high[1]
 float grabPrvL = low[1]
-// Do the two candles of the grab point the same way? A doji (close == open)
-// counts as not-bullish, so it groups with the bearish side; there is no
-// third case and inventing one would put a glyph on the chart that means
-// "neither".
-bool grabSameCol = (close[1] > open[1]) == (close > open)
-
 bool grabBarOk = not confirmOnBarClose or barstate.isconfirmed
 
 if sgOn and grabBarOk
-    scanGrabs(gsNarrow, gsNarrow.hi, true,  grabPrvH, grabSameCol)
-    scanGrabs(gsNarrow, gsNarrow.lo, false, grabPrvL, grabSameCol)
+    scanGrabs(gsNarrow, gsNarrow.hi, true,  grabPrvH)
+    scanGrabs(gsNarrow, gsNarrow.lo, false, grabPrvL)
     if not na(sgPH)
         addGrabPivot(gsNarrow, gsNarrow.hi, sgPH, true)
     if not na(sgPL)
         addGrabPivot(gsNarrow, gsNarrow.lo, sgPL, false)
 
 if bgOn and grabBarOk
-    scanGrabs(gsWide, gsWide.hi, true,  grabPrvH, grabSameCol)
-    scanGrabs(gsWide, gsWide.lo, false, grabPrvL, grabSameCol)
+    scanGrabs(gsWide, gsWide.hi, true,  grabPrvH)
+    scanGrabs(gsWide, gsWide.lo, false, grabPrvL)
     if not na(bgPH)
         addGrabPivot(gsWide, gsWide.hi, bgPH, true)
     if not na(bgPL)

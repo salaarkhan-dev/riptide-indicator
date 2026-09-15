@@ -55,6 +55,10 @@ EXPECTED = {
         ("IF msOn and msShowChoch", "drawing gate"),
         ("IF msOn and msShowBos", "drawing gate"),
         ("IF barstate.islast", "the live-extension block has no Python analogue"),
+        ("IF msLx IS_SET",
+         "label-crowding guard — labelSlot() returns na when an identical "
+         "label already occupies that spot, so the duplicate is not drawn. "
+         "Gates a label.new only; the Python draws nothing"),
         ("IF msOs == 1", "direction split inside the drawing gate"),
         ("IF msShowChoch", "drawing gate"),
         ("IF msShowBos", "drawing gate"),
