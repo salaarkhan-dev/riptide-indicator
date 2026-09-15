@@ -66,6 +66,14 @@ DAYS = 333
 TFS = (("Min15", 192), ("Min30", 96), ("Min60", 48))
 ARMS = ("A1", "A2", "A3")
 
+# `--gross` zeroes the fees. This is a POST-HOC DIAGNOSTIC and is NOT one of
+# the pre-registered arms: it does not get a verdict and cannot rescue one. It
+# answers a single question the net numbers cannot — is a losing arm losing
+# because the edge is absent, or because the edge is smaller than the cost of
+# taking it? Those have completely different next steps.
+GROSS = "--gross" in sys.argv
+FEE_KW = {"fee_pct": 0.0} if GROSS else {}
+
 
 def clustered(rows, key) -> tuple[float, float, int]:
     """Mean and a cluster-robust SE, clustering by `key`.
@@ -126,7 +134,8 @@ def build(cs, a, tf: str, sym: str, horizon: int) -> list[dict]:
             continue                                   # wrong side: SKIP
 
         o = simulate_market(cs, sig, entry, stop, is_long,
-                            target_r=TARGET_R, horizon_bars=horizon)
+                            target_r=TARGET_R, horizon_bars=horizon,
+                            **FEE_KW)
         if o is None:
             continue
 
@@ -159,7 +168,8 @@ def build(cs, a, tf: str, sym: str, horizon: int) -> list[dict]:
                      else max(struct, centry + cfloor))
             if ((cstop < centry) if is_long else (cstop > centry)):
                 co = simulate_market(cs, csig, centry, cstop, is_long,
-                                     target_r=TARGET_R, horizon_bars=horizon)
+                                     target_r=TARGET_R, horizon_bars=horizon,
+                                     **FEE_KW)
                 if co is not None:
                     row["c0"] = co.r
         out.append(row)
@@ -181,14 +191,20 @@ def panel(rows, label: str) -> None:
     mc, sc, nc = clustered(c0, key) if c0 else (float("nan"), float("nan"), 0)
     risk = sorted(r["risk_pct"] for r in rows)
     med = risk[len(risk) // 2]
+    p25, p75 = risk[len(risk) // 4], risk[3 * len(risk) // 4]
+    # Fees are charged in R as fee% / risk%, so the cost of a trade is 1/risk
+    # — convex. The small-risk tail, not the median, is what sets the mean
+    # drag, and quoting only the median hides that by a factor of two.
+    drag = sum(0.044 / r["risk_pct"] for r in rows) / len(rows)
 
     print(f"  {label}")
     print(f"    {'B  every grab':<34}{nb:>7} bets   "
           f"R {mb:+.3f} ± {sb:.3f}")
     print(f"    {'C0 random bar within 20':<34}{nc:>7} bets   "
           f"R {mc:+.3f} ± {sc:.3f}")
-    print(f"    median risk {med:.2f}% of price"
-          + ("   << BELOW 0.42%, UNMEASURABLE ON ITS STOP"
+    print(f"    risk % of price: p25 {p25:.2f}  median {med:.2f}  "
+          f"p75 {p75:.2f}   mean fee drag {drag:.3f} R"
+          + ("   << MEDIAN BELOW 0.42%, UNMEASURABLE ON ITS STOP"
              if med < RISK_FLOOR_PCT else ""))
 
     for arm in ARMS:
