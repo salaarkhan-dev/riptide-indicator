@@ -1,0 +1,93 @@
+========================================================================================================
+  INDUCEMENT COUNT vs RIPTIDE'S R   (pre-registered v2)
+========================================================================================================
+  covariate    k = distinct takes of type X, matching side, in [raid - 50, raid) — the raid bar EXCLUDED
+  metric       OLS slope of a bet's R on min(k, 3)
+  population   Riptide's own setups, real entry and stop, target 2.0R; unit = the bet
+  symbols      30 requested   timeframes Min30, Min15   days 333
+  control      F_PIVOT
+========================================================================================================
+
+  Min30: 28 symbols, 2486 bets (46s elapsed)
+
+  Min15: 28 symbols, 4177 bets (201s elapsed)
+
+========================================================================================================
+  Min30  OLDER HALF   1324 bets      mean R per k bucket, then the slope
+========================================================================================================
+  definition                 k=0             k=1             k=2            k=3+     beta      SE      z
+  F_PIVOT           0.000(9         0.277(69        0.036(220      -0.058(1026     -0.119   0.053  -2.26
+  A1_LIT_MAIN      -0.026(1255      0.015(68       -1.000(1                    —    0.010   0.138   0.07
+  A2_LIT_INT       -0.021(1155     -0.034(148      -0.143(21                   —   -0.031   0.080  -0.39
+  B_RETRACE        -0.016(1159     -0.061(151      -0.314(14                   —   -0.075   0.084  -0.89
+  C_EQUAL           0.035(145       0.067(231       0.025(272      -0.088(676      -0.055   0.030  -1.86
+  D_RANGE           0.000(8         0.242(33        0.239(71       -0.047(1212     -0.144   0.071  -2.03
+  E_GRAB           -0.168(61        0.050(171      -0.002(258      -0.036(834      -0.005   0.036  -0.13
+
+========================================================================================================
+  Min30  NEWER HALF   1162 bets      mean R per k bucket, then the slope
+========================================================================================================
+  definition                 k=0             k=1             k=2            k=3+     beta      SE      z
+  F_PIVOT           0.333(9        -0.092(65        0.023(198       0.013(890       0.006   0.055   0.10
+  A1_LIT_MAIN       0.010(1136      0.000(25        2.000(1                    —    0.130   0.216   0.60
+  A2_LIT_INT        0.000(1060      0.167(96       -0.500(6                    —    0.080   0.110   0.73
+  B_RETRACE         0.021(1025     -0.069(124       0.083(12       -1.000(1        -0.070   0.090  -0.77
+  C_EQUAL           0.093(133       0.031(221      -0.003(210      -0.009(598      -0.028   0.031  -0.90
+  D_RANGE           0.500(8        -0.233(30       -0.006(79        0.016(1045      0.018   0.073   0.24
+  E_GRAB           -0.106(47        0.024(152       0.102(239      -0.014(724      -0.010   0.039  -0.27
+
+========================================================================================================
+  Min15  OLDER HALF   2152 bets      mean R per k bucket, then the slope
+========================================================================================================
+  definition                 k=0             k=1             k=2            k=3+     beta      SE      z
+  F_PIVOT          -0.071(28        0.000(146      -0.051(408      -0.016(1570      0.010   0.040   0.26
+  A1_LIT_MAIN      -0.016(2068     -0.159(82       -1.000(2                    —   -0.174   0.132  -1.32
+  A2_LIT_INT       -0.016(1925     -0.071(206      -0.050(20       -1.000(1        -0.053   0.075  -0.70
+  B_RETRACE        -0.030(1888      0.040(250      -0.231(13        2.000(1         0.059   0.074   0.79
+  C_EQUAL          -0.016(322      -0.051(458      -0.039(449      -0.002(923       0.011   0.024   0.44
+  D_RANGE           0.074(27       -0.167(72        0.000(169      -0.020(1884      0.015   0.049   0.30
+  E_GRAB           -0.221(95        0.037(313      -0.007(481      -0.027(1263      0.008   0.030   0.26
+
+========================================================================================================
+  Min15  NEWER HALF   2025 bets      mean R per k bucket, then the slope
+========================================================================================================
+  definition                 k=0             k=1             k=2            k=3+     beta      SE      z
+  F_PIVOT           0.500(22        0.047(129      -0.044(361      -0.047(1513     -0.063   0.042  -1.50
+  A1_LIT_MAIN      -0.040(1933      0.044(91        2.000(1                    —    0.124   0.127   0.97
+  A2_LIT_INT       -0.047(1827      0.062(178       0.200(20                   —    0.114   0.079   1.43
+  B_RETRACE        -0.052(1799      0.079(215       0.455(11                   —    0.153   0.080   1.91
+  C_EQUAL          -0.029(309       0.005(420      -0.075(411      -0.037(885      -0.009   0.024  -0.36
+  D_RANGE           0.500(22       -0.013(79        0.013(153      -0.047(1771     -0.077   0.050  -1.56
+  E_GRAB            0.102(98       -0.090(300      -0.059(439      -0.023(1188      0.002   0.030   0.07
+
+========================================================================================================
+  VERDICT AGAINST THE FOUR PRE-REGISTERED BARS
+========================================================================================================
+   1 k takes >=3 values each holding >=5% of bets, every panel
+   2 beta keeps one sign in all four panels
+   3 beta exceeds the control's, same direction, in both halves
+   4 |z| >= 2.0 on the pooled newer half
+
+  definition      1 spread   2 sign   3 ctrl     4 z   verdict
+  F_PIVOT              yes       NO       NO   -1.16   CONTROL — the bar everything else must clear
+  A1_LIT_MAIN           NO       NO       NO    1.09   INCONCLUSIVE
+  A2_LIT_INT            NO       NO       NO    1.58   INCONCLUSIVE
+  B_RETRACE             NO       NO       NO    1.04   INCONCLUSIVE
+  C_EQUAL              yes       NO       NO   -0.73   INCONCLUSIVE
+  D_RANGE               NO       NO      yes   -1.16   INCONCLUSIVE
+  E_GRAB               yes       NO       NO   -0.05   INCONCLUSIVE
+
+========================================================================================================
+  READ
+========================================================================================================
+  The control is computable this time, so bar 3 means something.
+  In v1 it was reported as satisfied while the control had no
+  variance at all, which made it vacuous — that is corrected here.
+
+  A negative beta would say Riptide's setups get WORSE the more
+  minor levels were cleared on the way in, which is the opposite
+  of the usual claim and would be just as useful if it held up.
+
+  Per the prereg there is no v3 of this covariate. If nothing
+  passes, the finding is that inducement does not sort Riptide's
+  setups, and any structure layer ships as context with no claim.
