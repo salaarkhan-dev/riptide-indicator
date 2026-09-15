@@ -1,0 +1,67 @@
+================================================================================================
+  EARLY VS LATE IN A STRUCTURE CYCLE
+================================================================================================
+  engine     research.ms_struct (msLen=50, msShortLen=3) — unchanged, not swept
+  entry      a bar's close, cycle's own direction; stop = live short opposing swing
+  exit       2.0R or stop, 48h horizon, Riptide fees
+  sampling   4 uniform draws per cycle, seeded
+================================================================================================
+  Min30: 28 symbols, 5153 trades (3s)
+  Min15: 28 symbols, 15200 trades (7s)
+
+================================================================================================
+  A. REPLICATION — mean R by decile of cycle position (FRACTION)
+================================================================================================
+  panel               0.0    0.1    0.2    0.3    0.4    0.5    0.6    0.7    0.8    0.9
+  Min30 older       -0.24  -0.36  -0.25  -0.21  -1.60  -0.36  -0.42  -0.61  -0.65  -0.97
+  Min30 newer       -0.27  -0.23  -0.29  -0.31  -0.34  -0.33  -0.54  -0.48  -0.71  -1.10
+  Min15 older       -0.17  -0.29  -0.51  -0.31  -0.33  -0.43  -0.52  -0.68  -0.81  -1.07
+  Min15 newer       -0.31  -0.49  -0.35  -0.39  -0.44  -0.55  -0.72  -0.78  -0.95  -1.29
+
+  panel             first 30%   last 30%      gap      SE      z
+  Min30 older          -0.282     -0.719    0.437   0.083   5.29
+  Min30 newer          -0.262     -0.741    0.479   0.082   5.87
+  Min15 older          -0.317     -0.849    0.532   0.061   8.69
+  Min15 newer          -0.377     -0.997    0.620   0.052  11.89
+
+================================================================================================
+  B. THE TAUTOLOGY TEST — the pre-specified decider
+================================================================================================
+  CONFINED = the structure did not flip at any point during the
+  trade, so no entry here sits just before a confirmed reversal.
+
+  sample                         n  first 30%   last 30%      gap      SE      z
+  all entries                15200     -0.321     -0.861    0.540   0.033  16.36
+  CONFINED only               5427     -0.049     -0.031   -0.017   0.121  -0.14
+  flipped during trade        9773     -0.705     -0.911    0.205   0.038   5.46
+
+  unrestricted significant: True   confined significant: False
+  -> DEFINITIONAL. The pre-specified reading: the effect is
+     an artefact of the cycle definition, not a property of
+     structure. There is no reformulation that rescues it.
+
+================================================================================================
+  C. THE USABLE VERSION — R against ELAPSED bars since the CHoCH
+================================================================================================
+  elapsed quartile cuts: 34, 90, 194 bars
+
+  panel                  Q1       Q2       Q3       Q4  below-above      SE      z    cov
+  Min30 older        -0.537   -0.473   -0.276   -0.914        0.076   0.295   0.26    yes
+  Min30 newer        -0.628   -0.435   -0.375   -0.328       -0.181   0.069  -2.63    yes
+  Min15 older        -0.566   -0.580   -0.506   -0.314       -0.167   0.049  -3.38    yes
+  Min15 newer        -0.664   -0.588   -0.651   -0.540       -0.029   0.044  -0.67    yes
+
+  sign stable across four panels: False
+  pooled newer half: d=-0.079 z=-2.14 -> bar 3 met
+
+================================================================================================
+  READ
+================================================================================================
+  B decides. A large FRACTION effect that vanishes once trades are
+  confined inside their cycle is the cycle definition talking: the
+  last bars of a bull cycle ARE the bars before a break of its low.
+
+  C is the only version a rule could use, because the fraction of a
+  cycle a bar sits at is not knowable until the cycle has ended.
+  Note its bias runs the other way: a bar at a high ELAPSED exists
+  only in cycles that lasted, and those are the persistent ones.
