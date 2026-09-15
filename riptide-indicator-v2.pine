@@ -2876,6 +2876,12 @@ Liq.LLF(msLiqSPP, msLiqDPP, msLiqSLLS, msLiqDLLS, msShow and msLiq and msLiqSH, 
 //    * NOT PORTED: the original's `$` sweep mark, the level taken and CLOSED
 //      THROUGH. It is the complement of the grab, not a weaker version of it,
 //      and it is a separate decision from the one that was asked for.
+//    * THE GLYPH SPLITS. The original writes "$$$" on every grab. Here a grab
+//      whose two candles share a colour is "$$" and one whose candles oppose
+//      is "$" — same detection, same bands, only the text differs. WORTH
+//      KNOWING IF YOU RUN BOTH SCRIPTS AT ONCE: "$" means a sweep in the
+//      original (level taken and closed THROUGH) and a grab here. Same
+//      character, two meanings, on one chart.
 //
 //  A pivot cannot be pierced between printing and confirming — by definition
 //  no bar inside its right window exceeds it — so testing only the previous
@@ -2917,8 +2923,16 @@ var GrabSet gsWide = GrabSet.new(
 // NOT `drawGrab`: that name is already taken, at line 1141, by the function
 // that draws Riptide's raid X. deploy/pine-static-check.py caught the
 // collision, which is the whole reason it checks declaration order.
-drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick) =>
+drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sameCol) =>
     int x2 = bar_index - 1
+    // The original marks every grab "$$$". This tells the two shapes apart
+    // instead, because they are not the same event drawn twice:
+    //   $$  both candles the same colour — the piercing bar already closed
+    //       back over the level and the next one carried on. The rejection
+    //       happened inside one bar.
+    //   $   opposite colours — the piercing bar closed one way and the
+    //       reclaim bar the other. A two-bar reversal.
+    string glyph = sameCol ? "$$" : "$"
     line lvl = line.new(fromBar, px, x2, px,
          xloc  = xloc.bar_index,
          color = s.col,
@@ -2928,7 +2942,7 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick) =>
          xloc  = xloc.bar_index,
          color = color(na))
     linefill.new(lvl, edge, color.new(s.col, 80))
-    label tag = label.new(fromBar + (x2 - fromBar) / 2, px, "$$$",
+    label tag = label.new(fromBar + (x2 - fromBar) / 2, px, glyph,
          xloc      = xloc.bar_index,
          color     = color(na),
          textcolor = color.new(s.col, 30),
@@ -2938,6 +2952,9 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick) =>
                      " liquidity grabbed @ " + f2s(px) +
                      "\nWick reached " + f2s(wick) + ", price closed back " +
                      (isHigh ? "below" : "above") + " the level." +
+                     (sameCol
+                      ? "\n$$ — both candles the same colour: the piercing bar itself closed back over the level."
+                      : "\n$ — opposite colours: the piercing bar closed one way and the reclaim bar the other.") +
                      "\nContext only — no alert, no setup, no claim.")
     // A linefill dies with either of its lines, so tracking the lines is
     // enough to free it.
@@ -2959,7 +2976,7 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick) =>
 // `isHigh ? s.hi : s.lo` because this file has no precedent for a ternary that
 // returns a collection, nor for a locally declared array<> type, and there is
 // no Pine compiler here to settle either. An argument costs nothing.
-scanGrabs(GrabSet s, pend, bool isHigh, float wick) =>
+scanGrabs(GrabSet s, pend, bool isHigh, float wick, bool sameCol) =>
     if pend.size() > 0
         int i = pend.size() - 1
         while i >= 0
@@ -2970,7 +2987,7 @@ scanGrabs(GrabSet s, pend, bool isHigh, float wick) =>
                 bool back    = isHigh ? close <= g.px : close  >= g.px
                 bool through = isHigh ? close >  g.px : close  <  g.px
                 if pierced and back
-                    drawGrabBand(s, g.px, g.bar, isHigh, wick)
+                    drawGrabBand(s, g.px, g.bar, isHigh, wick, sameCol)
                     resolved := true
                 else if through
                     // Closed beyond the level: the liquidity was taken and
@@ -2994,20 +3011,25 @@ float bgPH = ta.pivothigh(high, bgLeft, bgRight)
 float bgPL = ta.pivotlow(low,  bgLeft, bgRight)
 float grabPrvH = high[1]
 float grabPrvL = low[1]
+// Do the two candles of the grab point the same way? A doji (close == open)
+// counts as not-bullish, so it groups with the bearish side; there is no
+// third case and inventing one would put a glyph on the chart that means
+// "neither".
+bool grabSameCol = (close[1] > open[1]) == (close > open)
 
 bool grabBarOk = not confirmOnBarClose or barstate.isconfirmed
 
 if sgOn and grabBarOk
-    scanGrabs(gsNarrow, gsNarrow.hi, true,  grabPrvH)
-    scanGrabs(gsNarrow, gsNarrow.lo, false, grabPrvL)
+    scanGrabs(gsNarrow, gsNarrow.hi, true,  grabPrvH, grabSameCol)
+    scanGrabs(gsNarrow, gsNarrow.lo, false, grabPrvL, grabSameCol)
     if not na(sgPH)
         addGrabPivot(gsNarrow, gsNarrow.hi, sgPH, true)
     if not na(sgPL)
         addGrabPivot(gsNarrow, gsNarrow.lo, sgPL, false)
 
 if bgOn and grabBarOk
-    scanGrabs(gsWide, gsWide.hi, true,  grabPrvH)
-    scanGrabs(gsWide, gsWide.lo, false, grabPrvL)
+    scanGrabs(gsWide, gsWide.hi, true,  grabPrvH, grabSameCol)
+    scanGrabs(gsWide, gsWide.lo, false, grabPrvL, grabSameCol)
     if not na(bgPH)
         addGrabPivot(gsWide, gsWide.hi, bgPH, true)
     if not na(bgPL)
