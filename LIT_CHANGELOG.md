@@ -2703,3 +2703,68 @@ every new swing — so a level cannot go stale and the state machine cannot
 deadlock. The LIT engine fixes its boundaries at creation, which is exactly
 what produced the `PH_SEEK` latch and the `PH_LOCK` stall. Migration is not
 free: structure re-reads itself as swings form. But it cannot hang.
+
+---
+
+## riptide-indicator-v2.pine section 13 — the ledger and stats table
+
+A measurement instrument, not a scoreboard. It books a virtual trade on every
+structure BOS **and** on a control that trades continuously in the same
+structure with the same stop and target, and puts the two side by side.
+
+**The control is the point.** A win rate alone cannot say whether the trigger
+did any work, because the same stop and target traded continuously earn
+something too. The table's footer says *read the GAP*, and the GAP row is
+BOS minus control in R per trade.
+
+**How this control differs from the study's, stated in the file.** The study
+drew a uniformly random bar inside each cycle. A uniform draw needs the cycle's
+length, which is unknown until the cycle ends, so it cannot be computed
+bar-by-bar on a live chart. This one opens a trade on the first bar after the
+previous closed — parameter-free, online, and a closely related question: what
+does this stop and target earn if you just trade them? The two differ in level;
+the gap is what is readable.
+
+Columns: trades · win rate · TOTAL R · R/trade · ± SE · t · **GAP** · profit
+factor · max drawdown R · longest win run · **longest LOSS run** · best trade as
+% of gross · **TOTAL R without it** · stop/target/gave-up · still open.
+
+Scoring matches the Python harness: confirmed bars only, the entry bar resolves
+nothing, the stop is tested before the target, fees charged in R as
+fee%/risk%, and **a stop that gaps fills at the open, not at the stop**.
+
+`Mark BOS entries` ships **off**, with a tooltip saying the trigger measured
+INCONCLUSIVE and pools to z = −0.17. The IDM and SWEEP triggers are
+deliberately **not offered at all**: their stop sits adjacent to the entry by
+construction (median risk 0.16% and 0.20% of price against 2.4%), so any R they
+displayed would be gap noise.
+
+### Two bugs caught before commit that no checker would have found
+
+* **The ledger could never have fired.** Section 13 re-derived the BOS
+  condition, but the section-12 BOS block clears `msSBtmCrossed` on its way out
+  and the trailing block then moves `msMax` — so by the time section 13 ran the
+  condition was already false. The table would have read zero trades forever.
+  The signal is now captured inside the block where it fires.
+* **A flat −1R on stops** would have hidden the exact effect that made two
+  models unmeasurable in the study. A gapped stop now fills at the open.
+
+Also fixed before commit: dead trades were only purged from the front of the
+open array, though a later trade can stop out before an earlier one; the table
+position input was declared and never used; and `best` started at −1e9, which
+would have printed nonsense on an empty ledger.
+
+### Checkers
+
+All four green, and each has been shown able to fail:
+`pine-static-check` (no findings unique to v2), `ms-port-check` (every
+condition and assignment matches the pasted source, with the six ledger-capture
+lines listed explicitly rather than swept into a regex), `ms-py-parity` (every
+logic statement pairs with `research/ms_struct.py`), and `check-parity` (all 24
+shared settings still agree with `riptide.conf`).
+
+Both port checkers are now scoped to section 12, since section 13 is
+instrumentation added on top of the port rather than part of it.
+
+**Still not a compile.** `riptide-indicator.pine` and `riptide-lit-v2.pine` are
+untouched.
