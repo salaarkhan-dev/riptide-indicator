@@ -137,7 +137,14 @@ def check(path: str) -> list[str]:
         opens = depth > 0
         cont = opens or prev.rstrip().endswith(
             ("+", "-", "*", "/", "?", ":", ",", "and", "or", "("))
-        ind = len(c) - len(c.lstrip())
+        # Indentation is a property of the RAW line. Measuring it on the
+        # string-stripped copy was wrong: strip_strings blanks a literal's
+        # contents, so a continuation beginning with a string of spaces —
+        # `         "  (pin needs <= " + ...` — lost its quote and its padding
+        # to lstrip and reported an indent of 28 for a line indented 9. Every
+        # such line was a false positive.
+        raw = lines[i]
+        ind = len(raw) - len(raw.lstrip())
         if cont and c.strip() and ind % 4 == 0 and ind > 0 and not prev.rstrip().endswith(("=>",)):
             bad(i, f"continuation line at indent {ind} (multiple of 4) — "
                    f"Pine will read it as a new statement")
