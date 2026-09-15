@@ -64,11 +64,35 @@ def field(decl: str, key: str) -> str | None:
 
 
 def title_of(decl: str) -> str:
-    # first or second positional string, depending on whether a default is one
-    ss = re.findall(r'"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'', decl)
-    vals = [a or b for a, b in ss]
-    return vals[1] if len(vals) > 1 and vals[0] and not vals[0].startswith(
-        ("group", "tooltip")) else (vals[0] if vals else "")
+    """The title is a POSITIONAL string — the second one for a string input,
+    the first otherwise.
+
+    It used to be "the second quoted string anywhere in the declaration", which
+    printed the whole tooltip as the title of every bool input that has one:
+    `input.bool(false, "Grabs", tooltip = "...")` has two quoted strings and
+    the second is the tooltip. Named arguments are now skipped, so only real
+    positional strings are considered.
+    """
+    body = decl[decl.index("(", decl.index("input")) + 1:]
+    args, buf, depth = [], "", 0
+    for ch in body:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            if depth == 0:
+                break
+            depth -= 1
+        if ch == "," and depth == 0:
+            args.append(buf)
+            buf = ""
+            continue
+        buf += ch
+    args.append(buf)
+    pos = [a.strip() for a in args
+           if not re.match(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=[^=]", a)]
+    strs = [a[1:-1] for a in pos
+            if len(a) > 1 and a[0] in "\"'" and a[-1] == a[0]]
+    return strs[1] if len(strs) > 1 else (strs[0] if strs else "")
 
 
 def inventory(path: str) -> dict:
