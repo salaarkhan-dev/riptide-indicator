@@ -151,7 +151,7 @@ type SignalState
 type Ledger
     int   n = 0
     int   win = 0
-    int   to = 0
+    int   touts = 0        // 'to' is a Pine keyword (for i = 1 TO n)
     float R = 0.0
     float R2 = 0.0
     float best = 0.0
@@ -457,7 +457,7 @@ if barstate.isconfirmed and array.size(open_tr) > 0
                 float r = t.is_long ? (close - t.entry) / risk
                      : (t.entry - close) / risk
                 bookTrade(st, r - feeR)
-                st.to := st.to + 1
+                st.touts := st.touts + 1
                 done := true
             if done
                 st.tp2 := st.tp2 + (t.hit2 ? 1 : 0)
@@ -712,6 +712,6 @@ if barstate.islast
              str.tostring(100.0 * st.tp2 / st.n, "0.0") + '%' : '—', alt, mut)
         row(21, '  TP3 reached', st.n > 0 ?
              str.tostring(100.0 * st.tp3 / st.n, "0.0") + '%' : '—', odd, mut)
-        row(22, '  timeouts', str.tostring(st.to) + ' of ' +
+        row(22, '  timeouts', str.tostring(st.touts) + ' of ' +
              str.tostring(st.n), alt, mut)
         row(23, '  still open', str.tostring(array.size(open_tr)), odd, mut)
