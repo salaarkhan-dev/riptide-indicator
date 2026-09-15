@@ -1,0 +1,107 @@
+Is there a tradeable entry in the CCP-at-grab mark?
+
+23 symbols, 333 days, pivot 3/3, CCP 2/2, body ≤ 0.15, wick ≥ 0.7
+target 2.0R, stop floor 0.25 ATR, SE clustered by (symbol, day)
+
+Min15: 23 symbols, 43429 scored grabs
+Min30: 23 symbols, 22213 scored grabs
+Min60: 23 symbols, 10655 scored grabs
+
+═══ Min15 ═══
+  OLDER half
+    B  every grab                       21714 bets   R -0.101 ± 0.010
+    C0 random bar within 20             21714 bets   R -0.124 ± 0.010
+    risk % of price: p25 0.33  median 0.63  p75 1.15   mean fee drag 0.109 R
+    A1     3636 accepted   R -0.085 ± 0.024   Δ +0.020   z +0.74
+    A2     8152 accepted   R -0.070 ± 0.017   Δ +0.049   z +2.27
+    A3      948 accepted   R -0.094 ± 0.049   Δ +0.007   z +0.14
+
+  NEWER half
+    B  every grab                       21715 bets   R -0.119 ± 0.010
+    C0 random bar within 20             21692 bets   R -0.178 ± 0.011
+    risk % of price: p25 0.27  median 0.52  p75 0.97   mean fee drag 0.136 R
+    A1     3671 accepted   R -0.116 ± 0.024   Δ +0.004   z +0.15
+    A2     8184 accepted   R -0.119 ± 0.017   Δ +0.001   z +0.03
+    A3      969 accepted   R -0.066 ± 0.046   Δ +0.056   z +1.20
+
+═══ Min30 ═══
+  OLDER half
+    B  every grab                       11106 bets   R -0.063 ± 0.014
+    C0 random bar within 20             11106 bets   R -0.103 ± 0.014
+    risk % of price: p25 0.48  median 0.93  p75 1.68   mean fee drag 0.073 R
+    A1     1870 accepted   R -0.021 ± 0.034   Δ +0.051   z +1.36
+    A2     4175 accepted   R -0.007 ± 0.025   Δ +0.090   z +2.95
+    A3      456 accepted   R -0.029 ± 0.068   Δ +0.035   z +0.51
+
+  NEWER half
+    B  every grab                       11107 bets   R -0.081 ± 0.014
+    C0 random bar within 20             11071 bets   R -0.127 ± 0.014
+    risk % of price: p25 0.41  median 0.78  p75 1.46   mean fee drag 0.088 R
+    A1     1881 accepted   R -0.139 ± 0.032   Δ -0.069   z -1.95
+    A2     4133 accepted   R -0.090 ± 0.024   Δ -0.015   z -0.50
+    A3      475 accepted   R -0.176 ± 0.066   Δ -0.099   z -1.47
+
+═══ Min60 ═══
+  OLDER half
+    B  every grab                        5327 bets   R -0.027 ± 0.020
+    C0 random bar within 20              5327 bets   R -0.018 ± 0.020
+    risk % of price: p25 0.70  median 1.37  p75 2.59   mean fee drag 0.048 R
+    A1      778 accepted   R -0.080 ± 0.049   Δ -0.062   z -1.16
+    A2     1908 accepted   R -0.026 ± 0.034   Δ +0.001   z +0.04
+    A3      149 accepted   R +0.247 ± 0.119   Δ +0.283   z +2.34   BAR 1 FAIL: 149 < 200 bets
+
+  NEWER half
+    B  every grab                        5328 bets   R -0.065 ± 0.020
+    C0 random bar within 20              5302 bets   R -0.072 ± 0.020
+    risk % of price: p25 0.62  median 1.17  p75 2.16   mean fee drag 0.058 R
+    A1      828 accepted   R -0.078 ± 0.050   Δ -0.015   z -0.29
+    A2     1951 accepted   R -0.091 ± 0.033   Δ -0.042   z -1.02
+    A3      209 accepted   R -0.069 ± 0.101   Δ -0.005   z -0.05
+
+═══ VERDICT AGAINST THE PRE-REGISTERED BARS ═══
+Family: 3 arms x 3 timeframes x 2 halves = 18 tests. At z >= 2.0
+each, the chance of at least one false positive is about 60%, so
+bar 5 alone carries nothing.
+
+  A1
+      Min15 old: Δ +0.020  z +0.74  R -0.085  n 3636
+      Min15 new: Δ +0.004  z +0.15  R -0.116  n 3671
+      Min30 old: Δ +0.051  z +1.36  R -0.021  n 1870
+      Min30 new: Δ -0.069  z -1.95  R -0.139  n 1881
+      Min60 old: Δ -0.062  z -1.16  R -0.080  n 778
+      Min60 new: Δ -0.015  z -0.29  R -0.078  n 828
+      bar 1  PASS  200+ bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats what it rejected, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 5  FAIL  clustered |z| >= 2 pooled newer half (Δ -0.021, z -0.97)
+      → FAILS   (and bar 5 alone carries nothing — 18 tests)
+
+  A2
+      Min15 old: Δ +0.049  z +2.27  R -0.070  n 8152
+      Min15 new: Δ +0.001  z +0.03  R -0.119  n 8184
+      Min30 old: Δ +0.090  z +2.95  R -0.007  n 4175
+      Min30 new: Δ -0.015  z -0.50  R -0.090  n 4133
+      Min60 old: Δ +0.001  z +0.04  R -0.026  n 1908
+      Min60 new: Δ -0.042  z -1.02  R -0.091  n 1951
+      bar 1  PASS  200+ bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats what it rejected, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 5  FAIL  clustered |z| >= 2 pooled newer half (Δ -0.010, z -0.57)
+      → FAILS   (and bar 5 alone carries nothing — 18 tests)
+
+  A3
+      Min15 old: Δ +0.007  z +0.14  R -0.094  n 948
+      Min15 new: Δ +0.056  z +1.20  R -0.066  n 969
+      Min30 old: Δ +0.035  z +0.51  R -0.029  n 456
+      Min30 new: Δ -0.099  z -1.47  R -0.176  n 475
+      Min60 old: Δ +0.283  z +2.34  R +0.247  n 149
+      Min60 new: Δ -0.005  z -0.05  R -0.069  n 209
+      bar 1  FAIL  200+ bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats what it rejected, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 5  FAIL  clustered |z| >= 2 pooled newer half (Δ +0.003, z +0.08)
+      → FAILS   (and bar 5 alone carries nothing — 18 tests)
+
