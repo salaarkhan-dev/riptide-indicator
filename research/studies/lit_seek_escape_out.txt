@@ -1,0 +1,93 @@
+================================================================================================
+  P9 — THE BOOTSTRAP CHoCH. Does it repair the PH_SEEK latch?
+================================================================================================
+  arms         none, leg, raid   ('none' is frozen and the incumbent)
+  symbols      30   timeframes Min30, Min15   days 333
+  judged on    liveness. Setup R is printed and is barred from
+               the selection by the pre-registration.
+================================================================================================
+  none   56 panels (10s)
+  leg    56 panels (21s)
+  raid   56 panels (33s)
+
+================================================================================================
+  G1  LIVENESS — 5 panels latched under 'none'
+================================================================================================
+  panel                 arm       main cov  main idm  int cov   still latched?
+  BNB_USDT Min15        none          0.00         1     0.98   YES
+  BNB_USDT Min15        leg           0.98        20     1.00   no
+  BNB_USDT Min15        raid          0.00         1     0.98   YES
+
+  BNB_USDT Min30        none          0.00         1     0.99   YES
+  BNB_USDT Min30        leg           0.99        10     1.00   no
+  BNB_USDT Min30        raid          0.99        10     1.00   no
+
+  BTC_USDT Min30        none          0.05         1     0.98   YES
+  BTC_USDT Min30        leg           0.98        28     1.00   no
+  BTC_USDT Min30        raid          0.98        28     1.00   no
+
+  ONDO_USDT Min30       none          0.00         1     0.77   YES
+  ONDO_USDT Min30       leg           0.77        27     0.94   no
+  ONDO_USDT Min30       raid          0.77        27     0.94   no
+
+  TIA_USDT Min30        none          0.01         1     0.99   YES
+  TIA_USDT Min30        leg           0.99        51     1.00   no
+  TIA_USDT Min30        raid          0.99        51     1.00   no
+
+================================================================================================
+  GATES
+================================================================================================
+  arm       G1 latched   G2 invariants   G3 new latches   verdict
+  none               5               0                0   FAILS  (incumbent — it IS the defect)
+  leg                0               0                0   PASSES
+  raid               1               0                0   FAILS
+
+================================================================================================
+  S1  RETENTION on the 50 panels that were ALREADY HEALTHY
+================================================================================================
+  A repair confined to the bootstrap cycle should be nearly
+  invisible where nothing was broken.
+
+  arm       base idm    kept  retention   arm idm    new  inflation
+  none          2473    2473     100.0%      2473      0       0.0%
+  leg           2473    2467      99.8%      2508     41       1.6%
+  raid          2473    2467      99.8%      2510     43       1.7%
+
+================================================================================================
+  S2  ECONOMICS — REPORTED, AND BARRED FROM THE SELECTION
+================================================================================================
+  arm         bets    mean R      SE   total R
+  none        1903     0.192   0.110     365.5
+  leg         2090     0.150   0.100     313.3
+  raid        2077     0.152   0.101     316.4
+
+  If an arm wins on retention and loses here, it still wins.
+================================================================================================
+  SELECTION
+================================================================================================
+  arms clearing every gate: leg
+    leg    retention 99.8%
+
+  SELECTED: leg
+
+================================================================================================
+  CONFIRMATION — G1 on symbols that were never in the sample
+================================================================================================
+  24 symbols, none of them in DISCOVERY
+
+  panels                       48
+  latched under 'none'         6  ['ASTER_USDT Min30', 'ETHFI_USDT Min30', 'FARTCOIN_USDT Min30', 'PENGU_USDT Min30', 'PYTH_USDT Min30', 'XMR_USDT Min30']
+  still latched under 'leg'   1
+  NEW latches under 'leg'     0
+
+  G1 does NOT hold out of sample. The arm is rejected and
+  'none' stands.
+
+================================================================================================
+  WHAT THIS DOES NOT AUTHORISE
+================================================================================================
+  The default stays 'none'. Turning this on is the user's call,
+  and doing it in production means LIT_FORWARD_V2 — never a
+  patch to V1, and the two records are never pooled.
+  It does not revisit stages A, B or C: re-running them under a
+  repaired engine is a new experiment needing its own prereg.
