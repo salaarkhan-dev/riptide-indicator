@@ -1,0 +1,379 @@
+//@version=6
+// =============================================================================
+//  RIPTIDE CCP  —  a test bench, not a trading indicator
+// =============================================================================
+//  WHY THIS FILE EXISTS. Combining adjacent candles into one synthetic candle
+//  and naming the shape it makes is an experiment. Experiments do not belong
+//  in riptide-indicator-v2.pine, which draws the marks that match live alerts,
+//  and they certainly do not belong in riptide-indicator.pine, which is the
+//  production file. So this is its own script: nothing here can disturb
+//  either of those, and either of those can be switched off while this runs.
+//
+//  WHAT IS IN IT TODAY. The grab detector, and nothing else. It is copied
+//  VERBATIM from section 13 of riptide-indicator-v2.pine — same types, same
+//  functions, same conditions, same drawing — so that anything this bench
+//  learns about grabs transfers back without a translation step.
+//  deploy/ccp-grab-check.py compares the two files statement by statement and
+//  fails if they drift apart.
+//
+//  WHAT IS NOT IN IT. The CCP merge logic. That is section 3 below, which is
+//  a stub carrying the design and no code. It goes in next, on this bench,
+//  where a wrong answer costs a chart redraw and nothing else.
+//
+//  NO ALERTS ANYWHERE, ON PURPOSE. Nothing about the grab has been measured:
+//  research/POOL_PIVOT_LENGTH.md came back UNDERPOWERED, and
+//  audit/liquidity_grab_rate.py found it fires at least 1.8x as often as
+//  Riptide's own raid with two thirds of its marks where Riptide says
+//  nothing. An alert on an unmeasured mark trains you to act on it. When
+//  alerts come, they come from the bot as a heads-up digest on the terms
+//  riptide/watch.py already set — see GRAB_ALERTS_SKELETON.md.
+//
+//  ATTRIBUTION. The grab detector is borrowed from "Liquidity & inducements"
+//  (© mickes, MPL-2.0). Four defects of that script are not reproduced here;
+//  they are listed in section 2's header, the same list as in v2.
+// =============================================================================
+indicator("Riptide CCP", overlay = true,
+     max_lines_count  = 500,
+     max_labels_count = 500,
+     max_boxes_count  = 500)
+
+// ═════════════════════════════ 1. INPUTS ════════════════════════════════════
+gGrab   = "1. Grabs"
+gBGrab  = "2. Big grabs"
+gCCP    = "3. Combined candles (not built yet)"
+gEng    = "4. Engine"
+sgOn = input.bool(false, "Grabs", group = gGrab,
+     tooltip = "A swing gets wicked through and price closes back on the original side. The band spans from the swing to the bar that ran it; the $$$ sits on the level that was taken.\n\nThis is the NARROW instance — 3/3, the reference's own default. It watches minor swings, so it fires often. The wide instance is group 19; they share one detector and differ only in pivot width and colour.\n\nOFF BY DEFAULT AND CARRYING NO CLAIM. Context only — no alert fires from it, nothing reads it, and every Riptide entry, stop and target is identical with it on or off.\n\nWHY NO CLAIM. Measured against Riptide's own raid on the same pivots, this fires at least 1.8x as often and two thirds of its marks are places Riptide says nothing (audit/liquidity_grab_rate.py). It is earlier because it asks for less: a close back over the level, where Riptide wants a break of the structure the raid created. research/POOL_PIVOT_LENGTH.md then tested whether the extra marks are worth anything and came back UNDERPOWERED. A thing to look at, not to trade.")
+sgLeft = input.int(3, "Pivot", minval = 1, inline = "sg1", group = gGrab, active = sgOn)
+sgRight = input.int(3, "", minval = 1, inline = "sg1", group = gGrab, active = sgOn,
+     tooltip = "Bars left and right that must be lower (for a swing high) before the swing counts. 3/3 is the reference's default for the ordinary grab.\n\nThe swing confirms this many bars after it printed, so a grab cannot be marked before then. Honest lag, not repainting.")
+sgLookback = input.int(5, "Lookback", minval = 1, maxval = 20, group = gGrab, active = sgOn,
+     tooltip = "How many untaken swings per side stay eligible. Older ones are dropped, so a level from far back cannot suddenly be marked. The reference's own default.")
+sgKeep = input.int(20, "Keep this many bands", minval = 2, maxval = 100, group = gGrab, active = sgOn,
+     tooltip = "This instance prunes its own drawings on this budget, the same way section 12 and the 'All imbalances' layer do.\n\nBUDGET ARITHMETIC. Each band costs two lines and one label, so 20 here is 40 lines and 20 labels out of Pine's 500 of each. Both grab instances and section 12's structure drawings come out of the same allowance, and so do Riptide's own entry, stop and liquidity lines — which is why both instances ship off.\n\nThe script this is borrowed from has no such cap at all: it creates the drawings and deletes none of them.")
+sgCol = input.color(color.orange, "Color", group = gGrab, active = sgOn)
+
+bgOn = input.bool(false, "Big grabs", group = gBGrab,
+     tooltip = "A wide swing gets wicked through and price closes back on the original side. The band spans from the swing to the bar that ran it; the $$$ sits on the level that was taken.\n\nOFF BY DEFAULT AND CARRYING NO CLAIM. It is CONTEXT — no alert fires from it, nothing reads it, and every Riptide entry, stop and target is identical with it on or off.\n\nWHY NO CLAIM. Measured against Riptide's own raid on the same pivots, this fires at least 1.8x as often and two thirds of its marks are places Riptide says nothing (audit/liquidity_grab_rate.py). It is earlier because it asks for less: a close back over the level, where Riptide wants a break of the structure the raid created. Whether the extra marks are worth anything was then tested directly — research/POOL_PIVOT_LENGTH.md, six pivot widths, preregistered — and the answer came back UNDERPOWERED: the direction was consistent but the largest difference was +0.7 SE and setups collapsed 256 to 26. So this is a thing to look at, not a thing to trade.")
+bgLeft = input.int(10, "Pivot", minval = 1, inline = "bg1", group = gBGrab, active = bgOn)
+bgRight = input.int(10, "", minval = 1, inline = "bg1", group = gBGrab, active = bgOn,
+     tooltip = "Bars left and right that must be lower (for a swing high) before the swing counts. mickes ships 10/10 for the big grab against 3/3 for the ordinary one, and that width IS the whole difference between them.\n\nThe swing confirms this many bars after it printed, so a grab cannot be marked before then. Honest lag, not repainting.")
+bgLookback = input.int(5, "Lookback", minval = 1, maxval = 20, group = gBGrab, active = bgOn,
+     tooltip = "How many untaken swings per side stay eligible. Older ones are dropped, so a level from far back cannot suddenly be marked. mickes' own default.")
+bgKeep = input.int(20, "Keep this many bands", minval = 2, maxval = 100, group = gBGrab, active = bgOn,
+     tooltip = "This layer prunes its own drawings on this budget, the same way section 12 and the 'All imbalances' layer do.\n\nThe script this is borrowed from has no such cap — it creates two lines, a fill and a label per grab and deletes none of them, so on a long chart it quietly eats the shared 500-drawing allowance. That defect is not reproduced here.")
+bgCol = input.color(color.aqua, "Color", group = gBGrab, active = bgOn)
+
+// ── 3. Combined candles ─────────────────────────────────────────────────────
+// Declared now so the panel shows what is coming; nothing reads them yet.
+ccpOn = input.bool(false, "Merge candles and name the shape", group = gCCP,
+     tooltip = "NOT IMPLEMENTED YET. Section 3 is a stub. This input exists so the panel shows the shape of what is coming and so turning it on tells you plainly that it does nothing, rather than leaving you to wonder why no marks appear.")
+ccpBack = input.int(3, "Merge up to — before", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn)
+ccpFwd = input.int(3, "after", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn,
+     tooltip = "How many neighbours either side of the anchor candle may be merged into it. A window is any run of candles containing the anchor, so 3 and 3 means every window from the anchor alone up to seven candles wide.\n\nBoth sides matter: the shape can need candles from before the anchor, from after it, from both, or from neither.")
+ccpBodyMax = input.float(0.35, "Pin: body at most (fraction of range)", minval = 0.05, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn)
+ccpWickMin = input.float(0.50, "Pin: longer wick at least", minval = 0.2, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn,
+     tooltip = "The two numbers that define a pin, and they are inputs rather than constants so the definition is arguable on the chart instead of buried in the code.")
+
+// ── 4. Engine ───────────────────────────────────────────────────────────────
+confirmOnBarClose = input.bool(true, "Only update on closed bars", group = gEng,
+     tooltip = "Keep this on. Off lets the marks move while a bar is forming.")
+msLabelSize = input.string("Small", "Label size",
+     options = ["Tiny", "Small", "Normal"], group = gEng,
+     tooltip = "Pine offers named sizes, not a point value: Tiny is roughly 7px, Small roughly 10, Normal roughly 14.")
+
+// ═════════════════════════════ 2. TYPES ═════════════════════════════════════
+// One untaken swing waiting to be run. Section 13.
+type BigGrab
+    float px
+    int   bar
+    bool  isHigh
+
+// One INSTANCE of the grab detector — its settings and its own state. Two of
+// these exist, narrow and wide, which is how the script this came from does it
+// (LiquidityGrabsSettings + LiquidityGrabs, constructed twice). Holding the
+// state here rather than in globals is what lets one set of functions serve
+// both without a single line of the logic being written twice.
+type GrabSet
+    int    right
+    int    lookback
+    int    keep
+    color  col
+    string tag
+    array<BigGrab> hi
+    array<BigGrab> lo
+    array<line>    lns
+    array<label>   lbs
+
+// ═════════════════════════ 3. HELPERS ══════════════════════════════════════
+// ATR is used for one thing only here — the price tolerance that decides
+// whether two labels are sitting on top of each other. Fixed at 14 rather
+// than given an input, because nothing in this file trades off it.
+atr = ta.atr(14)
+f2s(float v) =>
+    str.tostring(v, format.mintick)
+
+// ── label size and label crowding ───────────────────────────────────────────
+// Sections 12 and 13 both draw labels, each centred on its own span, and
+// neither knows the other exists — so an IDM and a $$ can land on the same
+// spot and become unreadable. audit/grab_label_clash.py measures it: over
+// 2,721 narrow grabs, 5.5% collide with a section-12 label, and 0% on the
+// wide instance whose bands are longer. Uncommon, but a collision is
+// illegible rather than merely untidy, and a larger size makes each one
+// worse — which is why the size control and this rule arrived together.
+string lblSize = msLabelSize == "Normal" ? size.normal :
+     msLabelSize == "Small" ? size.small : size.tiny
+
+var array<int>    lblBar = array.new<int>()
+var array<float>  lblPx  = array.new<float>()
+var array<string> lblTxt = array.new<string>()
+
+// The bar to put a label at, or `na` when an identical one is already there.
+//
+// Two cases, and they want opposite treatment:
+//   DIFFERENT text on the same spot — an IDM and a $$$ — is two facts about
+//     one place, so the second is nudged right and the pair reads side by
+//     side. Both are worth seeing.
+//   THE SAME text on the same spot is not two facts, it is one fact found
+//     twice: the narrow and the wide grab instance landing on a level that
+//     is both a 3/3 and a 10/10 swing. Nudging those apart draws "$$$ $$$"
+//     across one band and invents a second event. The duplicate is dropped.
+//
+// The price tolerance makes that last call fuzzy on purpose — two grabs a
+// fraction of an ATR apart collapse to one mark. That is the intended
+// trade: at that distance the two bands overlap anyway and two marks read
+// as clutter, not as information.
+labelSlot(int wantBar, float y, float tol, string txt) =>
+    int x = wantBar
+    int tries = 0
+    bool dupe = false
+    while tries < 4
+        bool clash = false
+        if lblBar.size() > 0
+            for i = 0 to lblBar.size() - 1
+                if lblBar.get(i) == x and math.abs(lblPx.get(i) - y) <= tol
+                    if lblTxt.get(i) == txt
+                        dupe := true
+                    clash := true
+                    break
+        if dupe or not clash
+            break
+        x += 3
+        tries += 1
+    if not dupe
+        lblBar.push(x)
+        lblPx.push(y)
+        lblTxt.push(txt)
+        // Bounded, and small on purpose: a slot from hundreds of bars ago is
+        // off the left of the screen and must not still reserve space.
+        while lblBar.size() > 200
+            lblBar.shift()
+            lblPx.shift()
+            lblTxt.shift()
+    dupe ? na : x
+
+
+// ═════════════════════ 4. GRABS AND BIG GRABS ═══════════════════════════════
+//  COPIED VERBATIM from section 13 of riptide-indicator-v2.pine. Do not edit
+//  one without the other: deploy/ccp-grab-check.py compares them and fails on
+//  drift. The full header, port changes and measurements live in v2; this is
+//  the same code, not a variant of it.
+// ─────────────────────────────────────────────────────────────────────────────
+var GrabSet gsNarrow = GrabSet.new(
+     right    = sgRight,
+     lookback = sgLookback,
+     keep     = sgKeep,
+     col      = sgCol,
+     tag      = "",
+     hi       = array.new<BigGrab>(),
+     lo       = array.new<BigGrab>(),
+     lns      = array.new<line>(),
+     lbs      = array.new<label>())
+var GrabSet gsWide = GrabSet.new(
+     right    = bgRight,
+     lookback = bgLookback,
+     keep     = bgKeep,
+     col      = bgCol,
+     tag      = "Big ",
+     hi       = array.new<BigGrab>(),
+     lo       = array.new<BigGrab>(),
+     lns      = array.new<line>(),
+     lbs      = array.new<label>())
+
+// A function may MUTATE an object but may not ASSIGN a global — CE10088 — so
+// the buffers it prunes arrive as fields of `s` rather than as globals.
+//
+// NOT `drawGrab`: that name is already taken, at line 1141, by the function
+// that draws Riptide's raid X. deploy/pine-static-check.py caught the
+// collision, which is the whole reason it checks declaration order.
+drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick) =>
+    int x2 = bar_index - 1
+    line lvl = line.new(fromBar, px, x2, px,
+         xloc  = xloc.bar_index,
+         color = s.col,
+         style = line.style_dotted,
+         width = 1)
+    line edge = line.new(fromBar, wick, x2, wick,
+         xloc  = xloc.bar_index,
+         color = color(na))
+    linefill.new(lvl, edge, color.new(s.col, 80))
+    // CENTRED on the band, where the original puts it — and now correct to
+    // put there. "$$$" describes the LEVEL that was taken, and the middle of
+    // the band is the right place to say "this level". A previous version
+    // split the mark on whether the two candles shared a colour, which made
+    // the centre wrong: audit/grab_label_distance.py measures the midpoint
+    // sitting a median of 6 bars from those candles on the narrow instance
+    // and 15 on the wide one, 3+ bars away 100% of the time, so the pair
+    // under the mark was never the pair that chose it. Dropping the split
+    // removes the contradiction rather than papering over it.
+    int lx = labelSlot(int(math.avg(fromBar, x2)), px, na(atr) ? 0.0 : atr * 0.3, "$$$")
+    if not na(lx)
+        label tag = label.new(lx, px, "$$$",
+             xloc      = xloc.bar_index,
+             color     = color(na),
+             textcolor = color.new(s.col, 30),
+             size      = lblSize,
+             style     = isHigh ? label.style_label_down : label.style_label_up,
+             tooltip   = s.tag + (isHigh ? "Buy-side" : "Sell-side") +
+                         " liquidity grabbed @ " + f2s(px) +
+                         "\nWick reached " + f2s(wick) + ", price closed back " +
+                         (isHigh ? "below" : "above") + " the level." +
+                         "\nContext only — no alert, no setup, no claim.")
+        s.lbs.push(tag)
+    // A linefill dies with either of its lines, so tracking the lines is
+    // enough to free it. The label is pushed in the branch above, because a
+    // duplicate is never created and so has nothing to track.
+    s.lns.push(lvl)
+    s.lns.push(edge)
+    while s.lns.size() > s.keep * 2
+        line.delete(s.lns.shift())
+    while s.lbs.size() > s.keep
+        label.delete(s.lbs.shift())
+
+// Walks one side's pending swings backwards so a removal cannot skip the next.
+// `wick` is the previous bar's extreme on this side, read at the top level and
+// passed in rather than referenced here. `high[1]` on a global built-in would
+// almost certainly be fine inside a function called under a toggle, but
+// "almost certainly" is not something this file can check without a compiler,
+// and the hoist costs one argument.
+// `pend` is s.hi or s.lo, chosen by the caller. It is a parameter rather than
+// `isHigh ? s.hi : s.lo` because this file has no precedent for a ternary that
+// returns a collection, nor for a locally declared array<> type, and there is
+// no Pine compiler here to settle either. An argument costs nothing.
+scanGrabs(GrabSet s, pend, bool isHigh, float wick) =>
+    if pend.size() > 0
+        int i = pend.size() - 1
+        while i >= 0
+            BigGrab g = pend.get(i)
+            bool resolved = false
+            if bar_index - 1 > g.bar
+                bool pierced = isHigh ? wick  >= g.px : wick   <= g.px
+                bool back    = isHigh ? close <= g.px : close  >= g.px
+                bool through = isHigh ? close >  g.px : close  <  g.px
+                if pierced and back
+                    drawGrabBand(s, g.px, g.bar, isHigh, wick)
+                    resolved := true
+                else if through
+                    // Closed beyond the level: the liquidity was taken and
+                    // kept, which is not a grab and never will be.
+                    resolved := true
+            if resolved
+                pend.remove(i)
+            i -= 1
+
+addGrabPivot(GrabSet s, pend, float px, bool isHigh) =>
+    pend.push(BigGrab.new(px = px, bar = bar_index - s.right, isHigh = isHigh))
+    while pend.size() > s.lookback
+        pend.shift()
+
+// ta.* runs unconditionally. Calling it inside the toggle is how a series
+// quietly grows a different history when the toggle is flipped. Same reason
+// the previous bar's extremes are read here rather than inside the scan.
+float sgPH = ta.pivothigh(high, sgLeft, sgRight)
+float sgPL = ta.pivotlow(low,  sgLeft, sgRight)
+float bgPH = ta.pivothigh(high, bgLeft, bgRight)
+float bgPL = ta.pivotlow(low,  bgLeft, bgRight)
+float grabPrvH = high[1]
+float grabPrvL = low[1]
+bool grabBarOk = not confirmOnBarClose or barstate.isconfirmed
+
+if sgOn and grabBarOk
+    scanGrabs(gsNarrow, gsNarrow.hi, true,  grabPrvH)
+    scanGrabs(gsNarrow, gsNarrow.lo, false, grabPrvL)
+    if not na(sgPH)
+        addGrabPivot(gsNarrow, gsNarrow.hi, sgPH, true)
+    if not na(sgPL)
+        addGrabPivot(gsNarrow, gsNarrow.lo, sgPL, false)
+
+if bgOn and grabBarOk
+    scanGrabs(gsWide, gsWide.hi, true,  grabPrvH)
+    scanGrabs(gsWide, gsWide.lo, false, grabPrvL)
+    if not na(bgPH)
+        addGrabPivot(gsWide, gsWide.hi, bgPH, true)
+    if not na(bgPL)
+        addGrabPivot(gsWide, gsWide.lo, bgPL, false)
+
+
+// ═════════════════ 5. COMBINED CANDLE PATTERNS — NOT BUILT ═══════════════════
+//  THE DESIGN, SO THE NEXT EDIT HAS SOMETHING TO BUILD AGAINST.
+//
+//  THE MERGE IS UNAMBIGUOUS. Merging a run of candles into one synthetic
+//  candle is four lines and no judgement:
+//
+//      open  = open  of the FIRST in the run
+//      close = close of the LAST  in the run
+//      high  = max of the highs
+//      low   = min of the lows
+//
+//  THE SEARCH IS THE HARD PART, and it is what makes this more than a
+//  three-bar pattern matcher. A shape can need neighbours from before the
+//  anchor, from after it, from both ends at once, or from neither — and the
+//  run can be anything from one candle to about seven. So the anchor is not
+//  merged with a fixed window; every window CONTAINING the anchor is a
+//  candidate:
+//
+//      for b = 0 to ccpBack
+//          for f = 0 to ccpFwd
+//              merge bars [anchor - b .. anchor + f] and classify
+//
+//  SIZE DOES NOT MATTER, SHAPE DOES — so the classifier reads ratios, never
+//  absolute prices:
+//
+//      bodyFrac = |close - open|              / (high - low)
+//      upWick   = (high - math.max(open, close)) / (high - low)
+//      dnWick   = (math.min(open, close) - low) / (high - low)
+//      pin      = bodyFrac <= ccpBodyMax and math.max(upWick, dnWick) >= ccpWickMin
+//
+//  THE NAME COMES FROM MMC_CP_Confirmations.pdf AND ITS RULE IS NOT THE
+//  OBVIOUS ONE. From the sheet: "A hammer and a hanging man are the identical
+//  candle in two colours, and both are bullish. So are the inverted hammer and
+//  the shooting star, and both are bearish." SHAPE decides direction; the body
+//  colour only decides which of the two names it gets. A long LOWER wick is
+//  bullish whichever colour the body is.
+//
+//      dnWick > upWick  ->  bullish  ->  close >= open ? "Hammer" : "Hanging man"
+//      upWick > dnWick  ->  bearish  ->  close >= open ? "Inv hammer" : "Shooting star"
+//
+//  The sheet also records a mistake not to repeat: an earlier version drew the
+//  bearish pins by FLIPPING the bullish ones, and flipping a hammer produces
+//  an inverted hammer — the flip is exactly the operation that turns one shape
+//  into the other. The bearish pins are the same four SHIFTED, not flipped.
+//
+//  WHICH WINDOW WINS when several classify. Undecided, and it is the first
+//  real question this bench has to answer. Candidates: the smallest run that
+//  qualifies (a shape that needs no merging is the cleanest reading of it);
+//  the one with the most extreme wick ratio; the one whose run is most
+//  centred on the anchor. Try them, look at charts, then pick — this is
+//  exactly the sort of choice that should not be made from an armchair.
+//
+//  REPAINTING, AND HOW IT IS AVOIDED. A window that reaches FORWARD cannot be
+//  judged until those bars close, so the verdict is computed at
+//  `anchor + ccpFwd` and the mark is drawn BACK at the anchor with that many
+//  bars of honest lag. Once a window is chosen it is never revisited. A
+//  version that re-scanned and changed an earlier verdict would repaint, and
+//  the difference between the two is entirely whether the window is frozen.
+//
+//  WHAT IT DRAWS. A faint box over the run so the merge is visible, the
+//  merged candle itself beside it as a body rectangle and a wick line, and
+//  the name once, under the run. Seeing the synthetic candle is the point:
+//  the classifier can only be trusted once its input is on screen.
