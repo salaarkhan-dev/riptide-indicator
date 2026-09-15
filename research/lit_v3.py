@@ -49,6 +49,10 @@ class Pol:
     outside = "close"      # P1: close | correction | impulse
     reseed = "resolver"    # P3: resolver | pivot
     eqBreak = False        # P4: exact equality counts as a break
+    # P9: what the FIRST cycle after bootstrap uses as its CHoCH.
+    #     none | leg | raid. "none" is the frozen behaviour and the default;
+    #     see the block at step 6 for why the other two exist.
+    seekCh = "none"
 
 
 POL = Pol()
@@ -519,6 +523,39 @@ def ctx_step(x, resetMe, real, i, o, h, l, c, hiBar, loBar):
                   M_BOS, HS_BOS)
         x.phHi, x.phHiBar = h, i
         x.phLo, x.phLoBar = l, i
+        # [P9] THE BOOTSTRAP CHoCH — off by default, frozen behaviour unchanged.
+        #
+        # The CHoCH level is created when a BOS BREAKS, at step 7. So the first
+        # cycle after bootstrap reaches PH_SEEK with no opposing boundary, and
+        # PH_SEEK is then a one-way door: step 8 needs ch.ready(), step 5 will
+        # not publish an IDM outside DISCOVER/TRACK, and there is no timeout
+        # and no invalidation. If that first BOS is never broken, this context
+        # emits nothing for the rest of the chart — 14% of Min30 symbols,
+        # BTC among them. Proven in research/studies/lit_main_latch.py.
+        #
+        # These arms give the first cycle the shape every later one already
+        # has, and differ only in where its CHoCH sits:
+        #   "leg"   the leg extreme AGAINST the trend — the exact mirror of
+        #           the BOS, which is the leg extreme with it.
+        #   "raid"  the IDM raid extreme, the level Stage A already takes as
+        #           its stop. Tighter, so it flips sooner.
+        # An expiry arm — abandon an unbroken BOS after N bars — was considered
+        # and rejected: it needs a bar count, and no policy here may introduce
+        # a number.
+        if POL.seekCh != "none" and not x.ch.on:
+            if POL.seekCh == "leg":
+                cp = x.legLo if x.dir == DIR_BULL else x.legHi
+                cb = x.legLoBar if x.dir == DIR_BULL else x.legHiBar
+            else:
+                cp, cb = (l, i) if x.dir == DIR_BULL else (h, i)
+            # Never on the wrong side of the BOS: invariant I11 holds by
+            # construction rather than by luck.
+            if cp is not None and ((cp < x.bos.px) if x.dir == DIR_BULL
+                                   else (cp > x.bos.px)):
+                x.ch.set(cp, cb, i, 1 if x.dir == DIR_BULL else -1,
+                         M_CH, HS_CH)
+                x.lvlLog.append(("CHOCH", round(cp, 10), cb))
+                x.ev["choch_bootstrap"] += 1
         x.phase = PH_LOCK if x.ch.on else PH_SEEK
         x.racing = x.ch.on
         x.ev["idm_break"] += 1
