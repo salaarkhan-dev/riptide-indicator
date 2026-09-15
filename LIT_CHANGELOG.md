@@ -2837,3 +2837,44 @@ and simply draws nothing when off — a library call inside a conditional is how
 a series quietly grows a different history.
 
 All four checkers pass and `riptide-indicator.pine` is untouched.
+
+### RE10045 on v2 — a pre-existing defect, not a new one
+
+Reported from a live chart: `array.get()` index −1, array size 0, on bar 0, at
+`#main():797`.
+
+**It is not the liquidity import.** Line 797 of v2 is line **721 of
+`riptide-indicator.pine`**, unchanged; the import (13 lines) plus the liquidity
+inputs (63 lines) shift it by exactly 76. The line is:
+
+```pine
+if poiOn and not na(dTm) and (d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm)
+```
+
+**`size() == 0 or get(size() - 1)` is not a safe guard.** Pine does not
+reliably short-circuit a boolean operator the way C does, so `get(-1)` on an
+empty array stays reachable on bar 0 even though the left side has just said
+the array is empty. Fixed in v2 by splitting it into control flow, where the
+empty case cannot fall through to the read.
+
+A sweep for the same shape across every Pine file in the repo found **one
+more**, in the same POI block:
+
+```pine
+while zTm.size() > 0 and (dTm - zTm.get(0)) > poiMaxAgeDays * 86400000
+```
+
+It has not fired, but it is the same bet on short-circuiting. Also fixed in v2,
+by moving the test inside the loop after the size check has gated entry.
+
+**Both live unchanged in `riptide-indicator.pine` at lines 721 and 744.** The
+production file has not been touched — that is the user's call, not mine — but
+the first of them is a crash on bar 0 and it is there now.
+
+`deploy/pine-static-check.py` has learned the pattern, so it cannot recur
+silently. Pointed at the production file it reports both lines; pointed at v2
+against the production file as control, v2 is clean of them.
+
+The one piece of good news in the report: **it compiled.** The v5-library-into-
+v6-script import works, which was the risk flagged when the liquidity lines
+went in.

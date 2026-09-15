@@ -113,6 +113,15 @@ def check(path: str) -> list[str]:
         if m and m.group(1) in RESERVED:
             bad(i, f"reserved word used as a function name: {m.group(1)!r}")
 
+        # An array read guarded only by a boolean operator. RE10045 was hit
+        # live on `size() == 0 or get(size() - 1)`: Pine does not reliably
+        # short-circuit, so the read stays reachable on an empty array. The
+        # size check has to gate the read through CONTROL FLOW, not `and`/`or`.
+        if re.search(r"size\(\) *(?:== *0 *or|> *0 *and|!= *0 *and)"
+                     r"[^\n]*(?:\.get\(|\.first\(\)|\.last\(\))", c):
+            bad(i, "array read guarded only by and/or — Pine may not "
+                   "short-circuit; gate it with an if/else instead")
+
         # comma-separated declarations, and comma-joined statements
         if DECL.match(c) and re.search(
                 r",\s*(?:(?:int|float|bool|string|color)\s+)?"

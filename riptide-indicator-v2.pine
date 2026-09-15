@@ -794,7 +794,21 @@ pushZone(int t, bool bull, float lo, float hi) =>
 // engine.daily_zones exactly: bar 2 is the newest, and a zone is dated by the
 // bar it COMPLETED on, never the bar it started from — a three-candle gap is
 // not knowable until the third candle closes.
-if poiOn and not na(dTm) and (d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm)
+// RE10045 FIX, reported from a live chart: `size() == 0 or get(size() - 1)`
+// is not a safe guard. Pine does not reliably short-circuit a boolean operator
+// the way C does, so `get(-1)` on an empty array stays reachable on bar 0 even
+// though the left side says the array is empty. Split into control flow, where
+// the empty case cannot fall through to the read.
+//
+// The identical line is in riptide-indicator.pine, which has NOT been changed.
+// It is the same latent defect there.
+bool dNewBar = false
+if poiOn and not na(dTm)
+    if d3t.size() == 0
+        dNewBar := true
+    else if d3t.get(d3t.size() - 1) != dTm
+        dNewBar := true
+if dNewBar
     d3o.push(dOp)
     d3h.push(dHi)
     d3l.push(dLo)
@@ -817,7 +831,13 @@ if poiOn and not na(dTm) and (d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm)
             pushZone(dTm, true, d3l.get(1), d3h.get(1))
         else if d3o.get(2) - d3c.get(2) > dAtr and d3c.get(1) > d3o.get(1)
             pushZone(dTm, false, d3l.get(1), d3h.get(1))
-    while zTm.size() > 0 and (dTm - zTm.get(0)) > poiMaxAgeDays * 86400000
+    // Same hazard as the guard above, one loop down: `size() > 0 and get(0)`
+    // also reads the array inside a boolean operator. It has not fired, but it
+    // is the same bet. The test now sits inside the loop, after the size check
+    // has actually gated entry.
+    while zTm.size() > 0
+        if (dTm - zTm.get(0)) <= poiMaxAgeDays * 86400000
+            break
         zTm.shift()
         zBl.shift()
         zLo.shift()
