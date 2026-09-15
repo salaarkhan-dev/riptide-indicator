@@ -1,0 +1,247 @@
+==============================================================================
+LIT_FORWARD_V1 — SEQUENTIAL BACKTEST, 15m and 30m
+==============================================================================
+population   30 symbols, 333 days
+rules        the frozen V1 setup, unchanged. Entry at the
+             IDM-break close, stop at the prior pullback pivot,
+             Active Price arms the trail at 0.5R.
+execution    ONE POSITION AT A TIME PER SYMBOL, chronological.
+             A setup during an open trade is SKIPPED, as on a
+             chart. Entry bar resolves nothing; stop before
+             target; fees charged every trade.
+arms         T6 PIVOT TRAIL (the candidate) and BOS TARGET (the
+             frozen control), scored on the SAME setups.
+generated    2026-09-15 01:54 UTC
+==============================================================================
+  Min15: 28 symbols, 1259 trades taken
+  Min30: 28 symbols, 580 trades taken
+
+
+==============================================================================
+  Min15
+==============================================================================
+
+──────────────────────────────────────────────────────────────────────────────
+  Min15 · T6 PIVOT TRAIL  (the candidate)
+──────────────────────────────────────────────────────────────────────────────
+  trades              1259
+  win rate            38.9%  (490W / 769L)
+  TOTAL R             +365.3
+  R per trade         +0.290  ± 0.162   t = 1.80   <-- below 2, consistent with zero
+  median trade        -0.135
+  avg win / avg loss  +1.94 / -0.76
+  profit factor       1.63
+  expectancy          +0.290 R per trade
+
+  MAX DRAWDOWN        86.7 R   (longest 335 trades below the prior peak)
+  recovery factor     4.21   (total R / max DD)
+
+  CONCENTRATION — is the R real, or a few trades?
+    best trade            +132.05 R   = 14% of all gross profit
+    top 5 trades          +386.50 R   = 41% of all gross profit
+    TOTAL without best    +233.3 R   (+0.185 per trade)
+    TOTAL without top 5   -21.2 R   (-0.017 per trade)
+    trades needed for 50% of gross profit: 10 of 490 winners
+
+  STREAKS
+    longest win run     9
+    longest LOSS run    19   <- the one that makes people stop
+    avg win run         2.0     avg loss run 3.2
+    loss runs >= 5      57 of 244 losing runs
+
+  BY MONTH — steady, or one good window?
+    12 months, 7 positive (58%)
+    25-10  -15.9   25-11  +36.4   25-12  -43.1   26-01  +40.3   26-02 +112.4
+    26-03  +31.0   26-04  -22.8   26-05   -2.9   26-06  +28.0   26-07   -7.8
+    26-08 +185.6   26-09  +24.2
+    best month 2026-08 +185.6 R = 51% of total R
+
+  EXITS  stop=1210 (96%)  timeout=49 (4%)
+
+──────────────────────────────────────────────────────────────────────────────
+  Min15 · BOS TARGET  (the frozen control)
+──────────────────────────────────────────────────────────────────────────────
+  trades              1306
+  win rate            46.9%  (613W / 693L)
+  TOTAL R             +13.1
+  R per trade         +0.010  ± 0.076   t = 0.13   <-- below 2, consistent with zero
+  median trade        -1.007
+  avg win / avg loss  +1.27 / -1.11
+  profit factor       1.02
+  expectancy          +0.010 R per trade
+
+  MAX DRAWDOWN        95.8 R   (longest 864 trades below the prior peak)
+  recovery factor     0.14   (total R / max DD)
+
+  CONCENTRATION — is the R real, or a few trades?
+    best trade            +74.08 R   = 10% of all gross profit
+    top 5 trades          +148.43 R   = 19% of all gross profit
+    TOTAL without best    -60.9 R   (-0.047 per trade)
+    TOTAL without top 5   -135.3 R   (-0.104 per trade)
+    trades needed for 50% of gross profit: 75 of 613 winners
+
+  STREAKS
+    longest win run     16
+    longest LOSS run    21   <- the one that makes people stop
+    avg win run         2.4     avg loss run 2.7
+    loss runs >= 5      38 of 261 losing runs
+
+  BY MONTH — steady, or one good window?
+    12 months, 4 positive (33%)
+    25-10   -5.8   25-11   -8.3   25-12  -50.3   26-01  +25.6   26-02  +37.1
+    26-03  -40.2   26-04  -21.6   26-05   -3.4   26-06  +79.7   26-07   -9.8
+    26-08  +20.7   26-09  -10.6
+    best month 2026-06 +79.7 R = 607% of total R
+
+  EXITS  stop=677 (52%)  target=608 (47%)  timeout=21 (2%)
+
+
+==============================================================================
+  Min30
+==============================================================================
+
+──────────────────────────────────────────────────────────────────────────────
+  Min30 · T6 PIVOT TRAIL  (the candidate)
+──────────────────────────────────────────────────────────────────────────────
+  trades              580
+  win rate            37.9%  (220W / 360L)
+  TOTAL R             +6.6
+  R per trade         +0.011  ± 0.077   t = 0.15   <-- below 2, consistent with zero
+  median trade        -0.156
+  avg win / avg loss  +1.25 / -0.75
+  profit factor       1.02
+  expectancy          +0.011 R per trade
+
+  MAX DRAWDOWN        64.2 R   (longest 524 trades below the prior peak)
+  recovery factor     0.10   (total R / max DD)
+
+  CONCENTRATION — is the R real, or a few trades?
+    best trade            +22.26 R   = 8% of all gross profit
+    top 5 trades          +71.06 R   = 26% of all gross profit
+    TOTAL without best    -15.6 R   (-0.027 per trade)
+    TOTAL without top 5   -64.4 R   (-0.112 per trade)
+    trades needed for 50% of gross profit: 19 of 220 winners
+
+  STREAKS
+    longest win run     10
+    longest LOSS run    12   <- the one that makes people stop
+    avg win run         1.8     avg loss run 2.9
+    loss runs >= 5      26 of 124 losing runs
+
+  BY MONTH — steady, or one good window?
+    12 months, 5 positive (42%)
+    25-10   -6.5   25-11   +9.3   25-12  -32.9   26-01   -1.9   26-02   +1.7
+    26-03   -6.7   26-04   -3.7   26-05   +4.0   26-06  +32.9   26-07   -6.1
+    26-08  +20.0   26-09   -3.5
+    best month 2026-06 +32.9 R = 497% of total R
+
+  EXITS  stop=557 (96%)  timeout=23 (4%)
+
+──────────────────────────────────────────────────────────────────────────────
+  Min30 · BOS TARGET  (the frozen control)
+──────────────────────────────────────────────────────────────────────────────
+  trades              597
+  win rate            43.0%  (257W / 340L)
+  TOTAL R             -66.6
+  R per trade         -0.112  ± 0.060   t = -1.86   <-- below 2, consistent with zero
+  median trade        -1.006
+  avg win / avg loss  +1.14 / -1.06
+  profit factor       0.81
+  expectancy          -0.112 R per trade
+
+  MAX DRAWDOWN        79.0 R   (longest 562 trades below the prior peak)
+  recovery factor     -0.84   (total R / max DD)
+
+  CONCENTRATION — is the R real, or a few trades?
+    best trade            +10.33 R   = 4% of all gross profit
+    top 5 trades          +39.72 R   = 14% of all gross profit
+    TOTAL without best    -77.0 R   (-0.129 per trade)
+    TOTAL without top 5   -106.4 R   (-0.180 per trade)
+    trades needed for 50% of gross profit: 39 of 257 winners
+
+  STREAKS
+    longest win run     15
+    longest LOSS run    18   <- the one that makes people stop
+    avg win run         2.3     avg loss run 3.0
+    loss runs >= 5      19 of 114 losing runs
+
+  BY MONTH — steady, or one good window?
+    12 months, 3 positive (25%)
+    25-10   -6.8   25-11   +0.4   25-12  -20.6   26-01   +5.4   26-02  -21.7
+    26-03   -4.6   26-04   -4.4   26-05   -4.5   26-06  +12.6   26-07   -4.7
+    26-08   -9.4   26-09   -8.3
+    best month 2026-06 +12.6 R = -19% of total R
+
+  EXITS  stop=327 (55%)  target=252 (42%)  timeout=18 (3%)
+
+
+==============================================================================
+  HOW TO READ THIS
+==============================================================================
+  1. t below 2 means R per trade is not distinguishable from zero,
+     however good the total looks.
+  2. 'TOTAL without best' and 'without top 5' are the honest
+     version of total R. If they collapse, the total was a handful
+     of trades and will not repeat.
+  3. 'best month as % of total' is the same test in time. A
+     strategy can be spread across trades and still be one month.
+  4. Longest LOSS run and max drawdown are what you would actually
+     have had to sit through.
+  5. These are HISTORICAL bars the candidate was developed on.
+     Stage C already showed the effect halves out of sample. Read
+     this as a description of the past, not a forecast.
+
+====================================================================================================
+  VERDICT  (written after the run)
+====================================================================================================
+
+THE ANSWER TO "IS THE R JUST A FEW TRADES?" IS YES. Emphatically, on every arm.
+
+    arm                 total R   without top 5   best month as % of total
+    Min15 T6 trail       +365.3          -21.2                         51%
+    Min15 BOS control     +13.1         -135.3                        607%
+    Min30 T6 trail         +6.6          -64.4                        497%
+    Min30 BOS control     -66.6         -106.4                        -19%
+
+Min15's trail is the only headline that looks like a strategy: +365 R over 1259
+trades, profit factor 1.63, recovery factor 4.21. Remove FIVE trades out of
+1259 and it is -21.2 R. Ten winners out of 490 produce half of all gross
+profit. One month, August 2026, is 51% of the total.
+
+That is not a strategy with some luck in it. That is luck with a strategy
+around it. And t = 1.80 says the same thing without any of the arithmetic.
+
+WHAT WOULD HAVE HAPPENED TO A PERSON TRADING IT
+
+    Min15 trail   max drawdown 86.7 R, and 335 consecutive trades spent below
+                  the previous equity peak. Longest losing run 19. 57 losing
+                  runs of 5 or more.
+    Min30 trail   max drawdown 64.2 R to finish at +6.6 R. 524 trades below
+                  the prior peak, out of 580 taken.
+
+The Min30 trail ends up +6.6 R after a 64 R drawdown. Nobody sits through that
+for that. The recovery factor of 0.10 is the number that says so.
+
+THE CONTROL IS WORSE, WHICH DOES NOT HELP THE TRAIL
+
+Both BOS-target arms are near zero or negative, and their median trade is
+-1.006 R - the majority of control trades are simply full losses. The trail
+beating a bad control is not evidence the trail is good, and the paired test in
+Stage C already put that difference at +0.068 R/bet at z=1.5.
+
+A NOTE ON WHY THESE NUMBERS DIFFER FROM STAGE C
+
+Stage C scored every setup and reported per BET. This report takes ONE POSITION
+AT A TIME PER SYMBOL, chronologically, and reports per TRADE. That is the more
+realistic execution and the less favourable statistic, because the skipped
+overlaps were not random. Neither is wrong; they answer different questions.
+The per-bet number is the one the pre-registration uses for inference.
+
+WHAT THIS IS AND IS NOT
+
+This is a description of 333 days of HISTORICAL bars the candidate was built
+on. It is not a forecast. Stage C already showed the effect halves on symbols
+the work never touched, and the settings grid showed per-pair tuning decays by
+0.95 R out of sample.
+
+Nothing here changes LIT_FORWARD_V1, which stays frozen and collecting.
