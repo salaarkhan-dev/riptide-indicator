@@ -1,0 +1,36 @@
+==========================================================================
+  A. MEDIAN RISK AS A % OF PRICE, per model
+==========================================================================
+  model               n    median      p25      p75
+  E1_IDM           2683      0.16     0.07     0.32
+  E2_BOS           3431      2.37     1.51     3.80
+  E3_CHOCH         2240      2.21     1.38     3.48
+  E4_SWEEP         2822      0.20     0.09     0.44
+  E5_IDM_BOS       3431      2.37     1.51     3.80
+
+  Stage A died at a 0.42% median stop. Anything near that is the
+  same failure: a stop too tight to survive a gap, so losses land
+  far beyond -1R and the mean says nothing about the trigger.
+
+==========================================================================
+  B. THE CONTROL'S R BY POSITION IN ITS CYCLE
+==========================================================================
+  decile           n    mean R
+  0.0            665    -0.250
+  0.1            523    -0.279
+  0.2            561    -0.503
+  0.3            544    -0.338
+  0.4            539    -0.543
+  0.5            523    -0.388
+  0.6            558    -0.467
+  0.7            524    -0.845
+  0.8            512    -0.893
+  0.9            482    -1.204
+
+  first 30% of a cycle:  -0.340 R  (n=1749)
+  last  30% of a cycle:  -0.975 R  (n=1518)
+  gap                 :   0.636 R
+
+  E3_CHOCH enters at position 0.0 of every cycle BY DEFINITION.
+  If that gap is large and positive, E3's delta vs a random
+  bar is measuring the gap, not the trigger.
