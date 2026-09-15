@@ -2878,3 +2878,59 @@ against the production file as control, v2 is clean of them.
 The one piece of good news in the report: **it compiled.** The v5-library-into-
 v6-script import works, which was the risk flagged when the liquidity lines
 went in.
+
+### v2 input panel — audited and re-categorised, presentation only
+
+`deploy/pine-input-audit.py` counts what "too many inputs" actually means
+rather than guessing, and `--diff` proves a reorganisation changed nothing.
+
+**What the audit found:**
+
+| | before |
+|---|---|
+| inputs | 152 |
+| **dead — declared and never read** | **0** |
+| largest group | **51** (`5. Appearance`) — a third of the panel |
+| parity-locked by `check-parity` | 23 |
+| without a tooltip | 65 |
+
+Zero dead inputs is the finding that shaped the fix: **there was nothing to
+delete.** The complaint is real but its cause is organisation, not redundancy,
+so anything removed would have been a feature someone uses.
+
+**The one non-cosmetic finding.** `earlyMaxBars` and `earlyMaxRiskATR` are
+parity-locked — `check-parity` matches them against `riptide.conf` so the chart
+and the bot agree — and both were filed under **Appearance**. Two settings that
+change what the engine does, under a cosmetics heading. They now have their own
+`Early signal` section.
+
+**What changed.** The 51-input Appearance group is gone, split by concern; the
+22-input market-structure group is split into structure and liquidity. Largest
+group is now **18**, down from 51.
+
+    Preset                             9.  Show — day / week / session levels
+    1.  What creates a signal          10. Colours and sizing
+    2.  Trading sessions               11. Higher-timeframe context
+    3.  Sensitivity                    12. Alerts
+    4.  Entry, stop and targets        13. Performance stats
+    5.  Show — setups and structure    14. Advanced tuning
+    6.  Show — liquidity and raids     15. Engine and debug
+    7.  Show — entry zones and blocks  16. Market structure (context only)
+    8.  Early signal                   17. Market structure — liquidity lines
+
+Group numbers follow the order TradingView actually renders — first
+declaration wins — not a preferred order that would have read 9, 10, 11, 5.
+
+**Nothing behavioural moved, and it is checked rather than asserted.** Every
+input keeps its name, type and default; declarations were not reordered, only
+relabelled, so saved chart settings should carry over. The two block colours
+stayed with the blocks they colour rather than being pulled into the colour
+group, which also lets the colour group fall after the other Show sections.
+
+**On the 65 tooltips.** Most are inline sub-fields with deliberately empty
+titles (session rows) or colour pickers whose title says everything. The audit
+counts them because a count should not be editorialised, but they are not a
+backlog.
+
+All five checkers pass — static, port, Pine↔Python parity, chart-to-bot parity,
+and the new input diff. `riptide-indicator.pine` untouched.
