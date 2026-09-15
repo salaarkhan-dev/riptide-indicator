@@ -2883,6 +2883,23 @@ Liq.LLF(msLiqSPP, msLiqDPP, msLiqSLLS, msLiqDLLS, msShow and msLiq and msLiqSH, 
 //      the level taken and closed THROUGH. That matters because both scripts
 //      may be on one chart, and it is why the narrower glyph is "$$".
 //
+//      READ THIS BEFORE TRUSTING THE SPLIT. Colour is ABSOLUTE and the grab
+//      direction is not, so "same colour" does not mean one thing. On a
+//      sell-side grab the reclaim is upward, so two green candles run WITH
+//      it and two red candles run AGAINST it — and both get "$$$". Measured
+//      over 2,721 grabs on 23 symbols at 15m, "$$$" splits almost exactly in
+//      half: 436 where both candles ran with the reclaim, 447 where both ran
+//      against it. So the mark says "these two candles matched", and nothing
+//      about whether the rejection was quick, strong or one-barred. An
+//      earlier version of this comment and of the tooltip claimed it meant
+//      the latter; it does not, and the claim is withdrawn.
+//
+//      A direction-aware rule is one line away if the split is meant to
+//      carry meaning: test whether bar N-1 closed in the RECLAIM direction
+//      (bullish for a sell-side grab, bearish for a buy-side one). That is
+//      true on 16% of grabs rather than 32%, and it is true of the thing the
+//      withdrawn claim described.
+//
 //  A pivot cannot be pierced between printing and confirming — by definition
 //  no bar inside its right window exceeds it — so testing only the previous
 //  bar's wick, as the original does, misses nothing.
@@ -2925,13 +2942,9 @@ var GrabSet gsWide = GrabSet.new(
 // collision, which is the whole reason it checks declaration order.
 drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sameCol) =>
     int x2 = bar_index - 1
-    // The original marks every grab "$$$". This tells the two shapes apart
-    // instead, because they are not the same event drawn twice:
-    //   $$$  both candles the same colour — the piercing bar already closed
-    //        back over the level and the next one carried on. The rejection
-    //        happened inside one bar.
-    //   $$   opposite colours — the piercing bar closed one way and the
-    //        reclaim bar the other. A two-bar reversal.
+    // The original marks every grab "$$$". This splits the mark on whether
+    // the two candles share a colour. That is ALL it tests — see the warning
+    // in the section header before reading more into it than that.
     string glyph = sameCol ? "$$$" : "$$"
     line lvl = line.new(fromBar, px, x2, px,
          xloc  = xloc.bar_index,
@@ -2953,8 +2966,8 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sam
                      "\nWick reached " + f2s(wick) + ", price closed back " +
                      (isHigh ? "below" : "above") + " the level." +
                      (sameCol
-                      ? "\n$$$ — both candles the same colour: the piercing bar itself closed back over the level."
-                      : "\n$$ — opposite colours: the piercing bar closed one way and the reclaim bar the other.") +
+                      ? "\n$$$ — the two candles share a colour."
+                      : "\n$$ — the two candles are opposite colours.") +
                      "\nContext only — no alert, no setup, no claim.")
     // A linefill dies with either of its lines, so tracking the lines is
     // enough to free it.
