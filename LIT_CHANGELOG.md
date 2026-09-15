@@ -2637,3 +2637,69 @@ P9's was.
 buys. The cost of leaving it is bounded and now documented — about one chart in
 ninety goes quiet with a named cause, which is a different situation from BTC
 30m going quiet and being read as a quiet market.
+
+---
+
+## riptide-indicator-v2.pine — a market structure layer beside Riptide
+
+**`riptide-indicator.pine` is untouched** and stays the parity target
+`deploy/check-parity.py` reads against `riptide.conf` (still passing: all 24
+shared settings agree). v2 is that file plus one new section, 12, at the end.
+
+Section 12 draws CHoCH, BOS, inducements and sweeps from the "Market Structure
+with Inducements & Sweeps" script the user supplied, ported v5 → v6. It reads
+no Riptide state, writes none and feeds no signal, so every alert, entry, stop
+and target is identical with it on or off.
+
+**No claim is attached to it, and that is measured rather than modest.** Seven
+definitions of inducement — this engine's among them — were tested as a
+covariate on Riptide's own 6,663 bets and none sorted good setups from bad;
+every one changed sign across the four panels
+(`research/INDUCEMENT_ON_RIPTIDE.md`). Nothing in section 12 prints a win rate
+or calls anything high-probability, and the master tooltip says so outright.
+
+**Attribution.** The copy supplied carried no author or licence header.
+TradingView scripts are normally MPL-2.0 with a `// ©` line, and the header
+belongs at the top of this file before it is redistributed. Section 12 is not
+original work of this project and says so.
+
+### Port changes, all named in the file
+
+* v5 → v6, splitting the original's comma-joined statements
+  (`a.set_xy1(...), a.set_xy2(...)`), which v6 rejects
+* every identifier prefixed `ms` — `n`, `top` and `swings` all already exist in
+  this file and would have collided silently
+* `os[1]` read as `nz(os[1], 0)`: a `var`'s history is na on bar 0 and
+  `os := na` would poison every bar after it
+* `if top` → `if not na(msTop)`, and the per-direction draw guards restructured
+* **drawings recycled on their own budget.** The original creates two objects
+  per event and deletes none; dropped in as-is it would evict Riptide's own
+  entry and stop lines out of the shared 500-drawing allowance. Same rule the
+  "All imbalances" layer already follows.
+
+### Two checkers, both verified able to fail
+
+`deploy/pine-static-check.py` compares a Pine file against a known-good control
+— the original compiles, so a finding in both is a false positive and only one
+unique to v2 is real. **11 findings, all 11 in the control, none unique.** The
+checker itself catches five planted errors (reserved word as identifier,
+comma-separated declaration, comma-joined assignment, use-before-declaration,
+continuation line on a multiple-of-4 indent) without flagging a normal
+`input.int(..., group = g)` line.
+
+`deploy/ms-port-check.py` answers what the static checker cannot: is the port
+faithful? It extracts every condition and assignment from both sources, renames
+the original's identifiers, and pairs them. **EVERY CONDITION AND ASSIGNMENT
+MATCHES**, with 8 differences accounted for explicitly as renames or
+restructuring rather than normalised away silently. Planting a flipped `>` and
+a dropped `not` is caught with exact was/now pairs.
+
+Neither is a compile. Nothing here has been run through TradingView.
+
+### One property worth recording
+
+This engine's boundaries **migrate** — `msTopY` and `msBtmY` are re-seeded by
+every new swing — so a level cannot go stale and the state machine cannot
+deadlock. The LIT engine fixes its boundaries at creation, which is exactly
+what produced the `PH_SEEK` latch and the `PH_LOCK` stall. Migration is not
+free: structure re-reads itself as swings form. But it cannot hang.
