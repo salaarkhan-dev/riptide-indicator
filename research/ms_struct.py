@@ -74,7 +74,7 @@ def ms_swings(cs, msL):
     return tops, topxs, btms, btmxs
 
 
-def engine(cs, msLen=50, msShortLen=3):
+def engine(cs, msLen=15, msShortLen=3, msBosNeedsIdm=True):
     """One pass. Returns a list of events, each a dict:
 
     Returns (events, state). `state` holds per-bar os / cycle / stop levels.
@@ -163,7 +163,7 @@ def engine(cs, msLen=50, msShortLen=3):
                            cycle=cycle, sBtmY=msSBtmY, sTopY=msSTopY))
             msSBtmCrossed = True
 
-        if gt(cl, msMax) and msSBtmCrossed and msOs == 1:
+        if gt(cl, msMax) and (not msBosNeedsIdm or msSBtmCrossed) and msOs == 1:
             ev.append(dict(kind="bos", bar=i, dir=1, px=msMax, close=cl,
                            cycle=cycle, sBtmY=msSBtmY, sTopY=msSTopY))
             msSBtmCrossed = False
@@ -175,7 +175,7 @@ def engine(cs, msLen=50, msShortLen=3):
                            cycle=cycle, sBtmY=msSBtmY, sTopY=msSTopY))
             msSTopCrossed = True
 
-        if lt(cl, msMin) and msSTopCrossed and msOs == 0:
+        if lt(cl, msMin) and (not msBosNeedsIdm or msSTopCrossed) and msOs == 0:
             ev.append(dict(kind="bos", bar=i, dir=-1, px=msMin, close=cl,
                            cycle=cycle, sBtmY=msSBtmY, sTopY=msSTopY))
             msSTopCrossed = False

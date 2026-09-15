@@ -463,10 +463,12 @@ livePools = drawMode != "On MSS confirmation"
 // claim is attached to it.
 msShow = input.bool(true, "Show market structure", group = gMS,
      tooltip = "The whole of section 12 — CHoCH, BOS, inducements, sweeps and swing dots. Off makes this file draw exactly what riptide-indicator.pine draws.\n\nIt is CONTEXT. It reads nothing from Riptide and feeds nothing to it, so every alert, entry, stop and target is identical either way.\n\nWHAT IT IS NOT: a filter. Seven definitions of inducement, this engine's included, were measured as a covariate on 6,663 of Riptide's own bets and none of them sorted good setups from bad — every one changed sign across the four test panels. Reading an IDM as a reason to take or skip a Riptide signal is not supported by anything measured. research/INDUCEMENT_ON_RIPTIDE.md.")
-msLen = input.int(50, "CHoCH detection period", minval = 2, group = gMS, active = msShow,
-     tooltip = "The swing lookback that sets the trend boundaries. Larger = fewer, bigger structural swings.\n\nA swing is only confirmed this many bars after it printed, so the dots plot back in time. That is honest lag, not repainting — nothing already drawn moves.")
+msLen = input.int(15, "CHoCH detection period", minval = 5, group = gMS, active = msShow,
+     tooltip = "The swing lookback that sets the trend boundaries. Larger = fewer, bigger structural swings.\n\nA swing is only confirmed this many bars after it printed, so the dots plot back in time. That is honest lag, not repainting — nothing already drawn moves.\n\nWAS 50, the value the ported script shipped. Measured over 20.8 days of 15m data on BTC, ETH and SOL, 50 produced 29 CHoCH / 62 IDM / 30 BOS where 15 produces 70 / 116 / 50 — more of all three, and 15 is where BOS peaks. research/MS_BOS_GATE.md has the full sweep. Put it back to 50 if you want the coarser structure; nothing else depends on it.\n\nDO NOT TAKE IT BELOW ABOUT 10. This period and the IDM period feed two swing detectors, and as they converge they start finding the SAME swing — which the IDM rule rejects, because an inducement must differ from the structural level. At 6 that silently blocks 71 inducements; at 3 it blocks every one of them, and since a BOS here requires an inducement first, BOS AND IDM BOTH DROP TO ZERO. The minimum is 5 so the failure cannot be reached by accident, but 10 is the honest floor.")
 msShortLen = input.int(3, "IDM detection period", minval = 1, group = gMS, active = msShow,
-     tooltip = "The much shorter swing lookback whose levels become inducements. An inducement here is simply the nearest minor swing against the trend, taken before the structural break.")
+     tooltip = "The much shorter swing lookback whose levels become inducements. An inducement here is simply the nearest minor swing against the trend, taken before the structural break.\n\nKeep it well below the CHoCH period — see the warning on that input.")
+msBosNeedsIdm = input.bool(true, "BOS requires an inducement first", group = gMS, active = msShow,
+     tooltip = "ON is the ported script's own rule, and it is why this layer draws FEWER break-of-structure labels than most other SMC indicators.\n\nIn the ported engine a BOS is not simply 'price broke the running extreme'. The sequence is CHoCH → IDM → BOS: an inducement must be taken first, and only then does a break of the extreme get labelled. Measured over 20.8 days of 15m data on three symbols at the old default of 50, price broke the running extreme in the trend direction 113 times and only 30 of those were labelled — the other 83 were suppressed by this rule. At the new default of 15 it is 50 labelled and 167 suppressed.\n\nOFF labels every break of the running extreme, which is what indicators that mark each swing break do, and roughly quadruples the BOS count.\n\nNeither is 'correct' and nothing here measures which is better. ON is the faithful port and stays the default; OFF is a deliberate deviation and is recorded as one in the PORT CHANGES block of section 12.")
 msKeepN = input.int(40, "Keep this many structure drawings", minval = 5,
      maxval = 200, group = gMS, active = msShow,
      tooltip = "Section 12 prunes its OWN lines and labels on this budget. TradingView allows 500 drawings in total, and without a budget this layer would quietly evict Riptide's entry and stop lines — the same reason the 'All imbalances' layer has its own cap.")
@@ -2542,6 +2544,15 @@ if debugMode and barstate.islast
 //    * the per-direction draw guards are restructured: the original writes
 //      `if os == 1 and showChoch ... else if showChoch`, this hoists the
 //      toggle and nests the direction. Same conditions, one less repetition.
+//    * THE ONE DELIBERATE CHANGE OF MEANING, and it is opt-in. The original
+//      fires a BOS only when the inducement has already been taken —
+//      `close > max and sbtm_crossed and os == 1`. `msBosNeedsIdm` makes that
+//      prerequisite a toggle: ON (the default) is the original exactly, OFF
+//      labels every break of the running extreme. It is a toggle rather than
+//      a rewrite because the prerequisite is a real editorial choice by the
+//      original's author and removing it silently would be a port bug, not a
+//      feature. What it costs at the default settings is measured in
+//      research/MS_BOS_GATE.md: 30 BOS drawn against 83 suppressed.
 //
 //  Every one of those is checked mechanically rather than asserted:
 //      python3 deploy/ms-port-check.py <original> riptide-indicator-v2.pine
@@ -2650,7 +2661,7 @@ if low < msSBtmY and not msSBtmCrossed and msOs == 1 and msSBtmY != msBtmY
         msDraw(msSBtmX, bar_index, msSBtmY, msIdmCss, line.style_dotted, "IDM", label.style_label_up)
     msSBtmCrossed := true
 
-if close > msMax and msSBtmCrossed and msOs == 1
+if close > msMax and (not msBosNeedsIdm or msSBtmCrossed) and msOs == 1
     if msShow and msShowBos
         msDraw(msMaxX, bar_index, msMax, msBullCss, line.style_solid, "BOS", label.style_label_down)
     msSBtmCrossed := false
@@ -2661,7 +2672,7 @@ if high > msSTopY and not msSTopCrossed and msOs == 0 and msSTopY != msTopY
         msDraw(msSTopX, bar_index, msSTopY, msIdmCss, line.style_dotted, "IDM", label.style_label_down)
     msSTopCrossed := true
 
-if close < msMin and msSTopCrossed and msOs == 0
+if close < msMin and (not msBosNeedsIdm or msSTopCrossed) and msOs == 0
     if msShow and msShowBos
         msDraw(msMinX, bar_index, msMin, msBearCss, line.style_solid, "BOS", label.style_label_up)
     msSTopCrossed := false

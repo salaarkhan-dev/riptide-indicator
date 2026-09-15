@@ -116,6 +116,23 @@ def main(argv):
          "SET sBtmX = sOs == 1 and was != 1 ? bar_index[msL] : sBtmX",
          "swings() locals renamed; `was` is the bar-0 guard"),
     ]
+    # DECLARED DEVIATIONS. These are NOT equivalences and must never be moved
+    # into PAIRS above, which is for renames and restructurings only. Each one
+    # is a real change of meaning, gated behind a toggle whose DEFAULT
+    # reproduces the original. They print under their own loud heading so a
+    # reader cannot mistake the port for faithful in these places.
+    DEVIATIONS = [
+        ("IF close > msMax and msSBtmCrossed and msOs == 1",
+         "IF close > msMax and (not msBosNeedsIdm or msSBtmCrossed) and msOs == 1",
+         "msBosNeedsIdm. ON (default) = the original exactly. OFF drops the "
+         "inducement prerequisite and labels every break of the running "
+         "extreme. research/MS_BOS_GATE.md measures what the prerequisite "
+         "costs: 30 BOS drawn against 83 suppressed."),
+        ("IF close < msMin and msSTopCrossed and msOs == 0",
+         "IF close < msMin and (not msBosNeedsIdm or msSTopCrossed) and msOs == 0",
+         "the bearish half of the same toggle."),
+    ]
+
     # conditions the port gained by construction, not by changing meaning
     IGNORE_NEW = re.compile(r"^(IF msOn|IF barstate|SET msExt|"
                             r"IF msShowChoch$|IF msShowBos$|IF msShowIdm$|"
@@ -144,6 +161,23 @@ def main(argv):
             print(f"     was  {o}")
             print(f"     now  {p_}")
         print()
+    declared = []
+    for o, p_, why in DEVIATIONS:
+        if o in only_orig and p_ in b:
+            only_orig.remove(o)
+            if p_ in only_port:
+                only_port.remove(p_)
+            declared.append((o, p_, why))
+    if declared:
+        print(f"DECLARED DEVIATIONS — a real CHANGE OF MEANING, not a rename "
+              f"({len(declared)}):")
+        for o, p_, why in declared:
+            print(f"   {why}")
+            print(f"     original {o}")
+            print(f"     port     {p_}")
+        print("   Each must also be named in the PORT CHANGES block of "
+              "section 12.")
+        print()
     if only_orig:
         print(f"IN THE ORIGINAL, NOT IN THE PORT  ({len(only_orig)}):")
         for x in only_orig:
@@ -155,7 +189,11 @@ def main(argv):
             print(f"   {x}")
         print()
     if not only_orig and not only_port:
-        print("EVERY CONDITION AND ASSIGNMENT MATCHES.")
+        if declared:
+            print(f"EVERY CONDITION AND ASSIGNMENT MATCHES, apart from the "
+                  f"{len(declared)} declared deviation(s) above.")
+        else:
+            print("EVERY CONDITION AND ASSIGNMENT MATCHES.")
         return 0
     print("Each line above is either a real port bug or a deliberate change "
           "that needs to be named in the file's PORT CHANGES block.")
