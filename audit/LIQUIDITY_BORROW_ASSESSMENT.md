@@ -125,6 +125,26 @@ If you want it, take it as **context, off by default, no alert** — a faint
 mark that says "this level got tagged and reclaimed". Not as a signal, and
 not wired into `alert()`.
 
+> **Built, on those terms.** Section 13 of `riptide-indicator-v2.pine`, panel
+> groups 18 (Grabs, 3/3, orange) and 19 (Big grabs, 10/10, aqua). Both off by
+> default, no `alert()` anywhere in the section, nothing in Riptide reads
+> them.
+>
+> It is written as **one detector with two instances**, which is what §1 above
+> established the original to be — `drawGrabBand` / `scanGrabs` /
+> `addGrabPivot` take a `GrabSet` holding that instance's settings and its own
+> state, so not one line of the logic is written twice. Four defects of the
+> original are not reproduced: no Timeframe input at all (finding 1's
+> unbounded `while true`), the tautological confirmation written out as the
+> one-bar test it actually encodes (finding 4), per-instance drawing budgets
+> where the original deletes nothing, and the `$` sweep mark left out as a
+> separate decision.
+>
+> `deploy/pine-static-check.py` earned its keep here: the first draft named
+> its drawing function `drawGrab`, which is already Riptide's own raid-X
+> function at line 1141. A silent redefinition of the raid marker, caught
+> before it reached a chart.
+
 ---
 
 ## 3. [READ] The one genuinely new idea: sweep-vs-BOS discrimination
