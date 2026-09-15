@@ -2799,3 +2799,41 @@ against the script that was ported.
 All four checkers pass, the frozen control test passes, and
 `riptide-indicator.pine`, `riptide-lit-v2.pine` and `riptide-lit-v3.pine` are
 untouched.
+
+### Liquidity lines added to v2 — IMPORTED, not ported
+
+From TFlab's `LiquidityFinderLibrary/1`, taken from "Smart Money Concept
+[TradingFinder] Major Minor OB + FVG (SMC)", © TFlab, MPL-2.0.
+
+**It could not be ported, because there is nothing to port.** The script it
+came from contains no liquidity logic at all — eight inputs and one call,
+`Liq.LLF(SPP, DPP, SLLS, DLLS, ...)`. Everything that decides where a line goes
+is inside the library, which is not fetchable from here. So this is an import
+and a call, exactly as the source makes it, with TFlab's own defaults and
+min/max limits copied unchanged.
+
+**Three things it is worth knowing before trusting it:**
+
+1. **It cannot be audited or parity-checked.** Every other indicator brought
+   into this project was read line by line and every one had real defects — a
+   pivot function that never tested its own bar, an unbounded `while true`, a
+   trap state that killed BTC 30m for 317 days. This one is a black box. Not a
+   reason to refuse it; a reason to know it.
+2. **It draws into the same 500-line budget Riptide uses** for entry and stop
+   lines, and there is no way from here to know whether it recycles its own
+   drawings. Section 12 was given an explicit budget precisely to avoid this.
+   If Riptide levels start vanishing on a busy chart, this is the first thing
+   to switch off. The tooltip says so.
+3. **The library is published under Pine v5 and this file is v6.** Libraries
+   are importable across versions, but there is no compiler here and this is
+   the most likely place for a compile error.
+
+Nothing about it is measured. It is context, like the rest of section 12.
+
+Inputs live in group 11 next to the structure controls: a master `Liquidity
+lines` toggle, four show flags, two pivot periods and two sensitivities. The
+show flags are ANDed with the master switches so the library is always called
+and simply draws nothing when off — a library call inside a conditional is how
+a series quietly grows a different history.
+
+All four checkers pass and `riptide-indicator.pine` is untouched.

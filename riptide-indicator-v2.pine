@@ -74,6 +74,20 @@ indicator("Riptide v2 - Liquidity Sweep & Reversal Engine", "Riptide v2",
      max_boxes_count  = 500,
      max_bars_back    = 500)
 
+// ── EXTERNAL DEPENDENCY, and the only one in this file ──────────────────────
+// The liquidity lines come from TFlab's library, IMPORTED not ported. The
+// script they were taken from - "Smart Money Concept [TradingFinder] Major
+// Minor OB + FVG (SMC)", (c) TFlab, MPL-2.0 - contains no liquidity logic of
+// its own either: it declares eight inputs and makes one call. Everything that
+// decides where a liquidity line goes is inside the library.
+//
+// SO IT CANNOT BE AUDITED OR PARITY-CHECKED. Every other indicator brought
+// into this project was read line by line and every one had real defects -
+// a pivot function that never checked its own bar, an infinite loop, a trap
+// state that killed BTC 30m for 317 days. This one is a black box. That is not
+// a reason to refuse it, but it is a reason to know it.
+import TFlab/LiquidityFinderLibrary/1 as Liq
+
 // ═════════════════════════════ 1. INPUTS ════════════════════════════════════
 // Sections 1-4 cover normal use. Section 9 holds calibration thresholds.
 gPreset = "Preset"
@@ -423,6 +437,20 @@ msShowIdm = input.bool(true, "IDM", inline = "ms1", group = gMS)
 msShowSweeps = input.bool(true, "Sweeps", inline = "ms1", group = gMS)
 msShowSwings = input.bool(false, "Swing dots", inline = "ms1", group = gMS,
      tooltip = "Off by default: Riptide already has its own swing markers under Appearance, and two sets of dots on one chart is how you end up reading the wrong one.")
+// ── liquidity, from the TFlab library ──────────────────────────────────────
+msLiq = input.bool(true, "Liquidity lines", group = gMS,
+     tooltip = "Statics and dynamics liquidity lines, drawn by TFlab's LiquidityFinderLibrary.\n\nIMPORTED, NOT PORTED, and it is the only thing in this file that is. The script these came from has no liquidity logic in it - eight inputs and one library call - so nothing here could be read, checked against the source, or compared with a Python transcription the way the rest of section 12 was. It is a black box that draws on your chart.\n\nIt also draws into the SAME 500-line budget Riptide uses for its entry and stop lines, and there is no way from here to know whether it recycles its own drawings. If Riptide levels start disappearing on a busy chart, turn this off first.")
+msLiqSH = input.bool(true, "Statics high", inline = "msl1", group = gMS)
+msLiqSL = input.bool(true, "Statics low", inline = "msl1", group = gMS)
+msLiqDH = input.bool(true, "Dynamics high", inline = "msl2", group = gMS)
+msLiqDL = input.bool(true, "Dynamics low", inline = "msl2", group = gMS)
+msLiqSPP = input.int(8, "Statics period pivot", group = gMS)
+msLiqDPP = input.int(3, "Dynamics period pivot", group = gMS)
+msLiqSLLS = input.float(0.30, "Statics sensitivity", maxval = 0.4,
+     minval = 0.0, step = 0.01, group = gMS)
+msLiqDLLS = input.float(1.00, "Dynamics sensitivity", maxval = 1.95,
+     minval = 0.4, step = 0.01, group = gMS,
+     tooltip = "All four values are TFlab's own defaults and limits, copied exactly. Nothing here has been tuned, and nothing in this project has measured what any of them do.")
 msBullCss = input.color(#089981, "Bullish", inline = "ms2", group = gMS)
 msBearCss = input.color(#ff5252, "Bearish", inline = "ms2", group = gMS)
 msIdmCss = input.color(color.gray, "IDM", inline = "ms2", group = gMS)
@@ -2701,3 +2729,10 @@ if barstate.islast
 
 plot(msShow and msShowSwings ? msTop : na, "MS swing high", color.new(msBearCss, 50), 5, plot.style_circles, offset = -msLen)
 plot(msShow and msShowSwings ? msBtm : na, "MS swing low", color.new(msBullCss, 50), 5, plot.style_circles, offset = -msLen)
+
+// ── liquidity ──────────────────────────────────────────────────────────────
+// One call, exactly as the source makes it. The four show flags are ANDed with
+// the master switches so the function is always called and simply draws
+// nothing when off - a library call inside a conditional is how a series
+// quietly grows a different history.
+Liq.LLF(msLiqSPP, msLiqDPP, msLiqSLLS, msLiqDLLS, msShow and msLiq and msLiqSH, msShow and msLiq and msLiqSL, msShow and msLiq and msLiqDH, msShow and msLiq and msLiqDL)
