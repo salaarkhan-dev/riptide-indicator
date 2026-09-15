@@ -1,6 +1,7 @@
 # The CCP window search manufactures its own matches
 
-    python3 audit/ccp_merge_check.py
+    python3 audit/ccp_merge_check.py      # the ungated version, below
+    python3 audit/ccp_at_grabs_check.py   # after the fix, §"What fixed it"
 
 A diagnostic, not a study. It counts matches and scores nothing. What it says
 is a fact about the *search*, not about the market — which is the point.
@@ -96,6 +97,37 @@ worth finding out.
 the *same* window only **45%** of the time (17,940 / 40,122). Which rule is
 right is an open question, and it is a switch on the panel rather than a
 decision buried in the code.
+
+## What fixed it: a prior, not a threshold
+
+Scanning stopped being "every bar" and became **the two ends of a grab, in the
+direction that grab implies** — the swing that built the level and the candles
+that ran it, accepting only a bearish shape at a buy-side grab and only a
+bullish one at a sell-side grab. Same thresholds, same merge, same four names.
+
+`audit/ccp_at_grabs_check.py`, 2,729 grabs, 23 symbols, Min15:
+
+```
+   back/fwd   grabs   left   right   BOTH   both %   aa / am / ma / mm
+        0/0    2729    192     104      7     0.3%   7 /  0 /  0 /   0
+        1/1    2729    734     623    159     5.8%   7 / 32 / 23 /  97
+        2/2    2729   1157    1080    448    16.4%   7 / 61 / 38 / 342
+        3/3    2729   1441    1365    716    26.2%   7 / 84 / 43 / 582
+```
+
+**88.4% of all bars became 16.4% of grabs** at the shipped 2/2 default, with
+the thresholds untouched. The prior did what no threshold could.
+
+The four combination columns are `alone+alone / alone+merged / merged+alone /
+merged+merged`, and the first one **never moves**. Exactly 7 grabs in 2,729 —
+0.3% — have both ends pinned without merging anything. That number is fixed
+because the `b = 0, f = 0` window exists at every setting, so it is the honest
+floor: everything above it was found by widening.
+
+Which means the same warning survives in a smaller form. At 2/2, **441 of 448
+matches (98%) needed a merge somewhere**, and the rate still climbs roughly
+with the number of windows tried. Whether that is discovery or arithmetic is
+not settled by any count, and this file does not claim it is.
 
 ## What this does not say
 

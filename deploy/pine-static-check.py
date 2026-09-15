@@ -135,8 +135,16 @@ def check(path: str) -> list[str]:
         # sit on a multiple-of-4 indent, or Pine reads it as a new block.
         prev = code_of(lines[i - 1]) if i else ""
         opens = depth > 0
-        cont = opens or prev.rstrip().endswith(
-            ("+", "-", "*", "/", "?", ":", ",", "and", "or", "("))
+        # A line that ENDS in a string literal is complete, whatever the
+        # stripped copy looks like. `x = c ? f(...) : "no shape"` strips down
+        # to something ending in `:` and every following statement was then
+        # reported as a mis-indented continuation. The trailing-operator test
+        # needs strings stripped (a string ending in "+" is not an operator);
+        # this one needs the raw line, so it gets it.
+        prev_raw = (lines[i - 1].split("//")[0].rstrip() if i else "")
+        ends_str = prev_raw.endswith(("\"", "'"))
+        cont = opens or (not ends_str and prev.rstrip().endswith(
+            ("+", "-", "*", "/", "?", ":", ",", "and", "or", "(")))
         # Indentation is a property of the RAW line. Measuring it on the
         # string-stripped copy was wrong: strip_strings blanks a literal's
         # contents, so a continuation beginning with a string of spaces —

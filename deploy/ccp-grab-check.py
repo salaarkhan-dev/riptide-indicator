@@ -47,10 +47,21 @@ SHARED = [
      True),
 ]
 
-# Differences that are deliberate. Empty, and it should stay that way: a copy
-# that needs exceptions is not a copy any more and should become an import or
-# a single source of truth instead.
-DECLARED: list[tuple[str, str, str]] = []
+# Differences that are deliberate. Each entry is a run of lines present ONLY
+# in the bench, lifted out before the line-for-line compare so the rest still
+# lines up. Keep this list to one or two entries: a copy needing many
+# exceptions is not a copy and should become a single source of truth instead.
+DECLARED: list[tuple[list[str], str]] = [
+    ([
+        "// THE ONE LINE THIS FILE ADDS to v2's copy of the detector. Hands the",
+        "// grab's two ends to section 5. Declared in deploy/ccp-grab-check.py.",
+        "ccpOnGrab(fromBar, isHigh, s.col)",
+     ],
+     "the bench hands each grab's swing bar and grab bar to section 5, which "
+     "looks for a candle shape at both ends. v2 has no section 5 and nothing "
+     "to hand them to, so the same line would be dead code there. It reads no "
+     "engine value, changes no condition and draws nothing."),
+]
 
 
 def slab(path: str, start: str, end: str, inclusive_end: bool = False) -> list[str]:
@@ -84,8 +95,22 @@ def compare(name: str, a: list[str], b: list[str]) -> list[str]:
 def main() -> int:
     findings: list[str] = []
 
-    eng_v2 = slab(V2, START, "￿")          # to end of file
+    eng_v2 = slab(V2, START, "\uffff")          # to end of file
     eng_b = slab(BENCH, START, BENCH_END)
+
+    # Lift the declared bench-only lines out before comparing, so the rest is
+    # still a line-for-line match rather than an offset diff that buries the
+    # real differences under a hundred shifted ones.
+    for lines_, why in DECLARED:
+        want = [x.strip() for x in lines_]
+        have = [y.strip() for y in eng_b]
+        missing = [x for x in want if x not in have]
+        if missing:
+            findings.append("DECLARED but absent from the bench: "
+                            + "; ".join(missing))
+        eng_b = [y for y in eng_b if y.strip() not in want]
+        print(f"DECLARED DIVERGENCE, {len(lines_)} line(s) — {why}\n")
+
     findings += compare("engine", eng_v2, eng_b)
 
     for name, start, end_v2, end_b, inc in SHARED:
@@ -95,10 +120,6 @@ def main() -> int:
         findings += compare(name,
                             slab(V2, start, end_v2, inclusive_end=inc),
                             slab(BENCH, start, end_b, inclusive_end=inc))
-
-    for what, why, _ in DECLARED:
-        findings = [f for f in findings if what not in f]
-        print(f"DECLARED DIVERGENCE — {what}: {why}")
 
     print(f"{V2}: {len(eng_v2)} engine lines")
     print(f"{BENCH}: {len(eng_b)} engine lines\n")
