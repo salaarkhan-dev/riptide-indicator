@@ -329,4 +329,6 @@ async def main() -> int:
     return 0
 
 
-sys.exit(asyncio.run(main()))
+if __name__ == "__main__":
+    # research/studies/ccp_entry_models.py imports scan_incremental from here.
+    sys.exit(asyncio.run(main()))

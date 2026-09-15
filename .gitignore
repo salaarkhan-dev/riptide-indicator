@@ -10,3 +10,6 @@ riptide.db
 .venv/
 __pycache__/
 *.pyc
+
+# deep candle cache for research/studies (gigabytes of fetched klines)
+.cache/
