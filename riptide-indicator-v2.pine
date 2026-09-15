@@ -235,9 +235,6 @@ hideDeadPivots = input.bool(true,  "  drop them once the pool dies",  group = gS
 showGrab       = input.bool(true,  "Raid marker (X)",                group = gShowL)
 showGrabTag    = input.bool(false, "Label on the raid marker",       group = gShowL,
      tooltip = "The small dark tag under the X naming what got raided: Pivot, Day, Week or a session name.")
-showMSS        = input.bool(true,  "Structure break label",          group = gShowS)
-showStructLine = input.bool(true,  "Structure break level (dashed)", group = gShowS,
-     tooltip = "The dashed line price had to break for the shift to confirm. Separate from the label above, which used to share this switch — so wanting the MSS marked without the line across the chart was not possible.")
 setupLevelKeep = input.int(3,     "Keep levels for the last N setups", minval = 1,
      maxval = 50, group = gShowS,
      tooltip = "Entry, stop and target lines are drawn per setup and used to stay forever, so a long chart ended up striped with levels from trades that closed days ago. Only the most recent this-many setups keep theirs.")
@@ -310,7 +307,6 @@ bearCol   = input.color(#ef5350, "Bearish", inline = "c1", group = gColor)
 ictBullCol = input.color(#a5d6a7, "ICT-only bullish", inline = "c2", group = gColor,
      tooltip = "Colour of the swing LOWS the reference's looser pivot rule finds and Riptide's does not. Only drawn under the 'Riptide + ICT' preset.")
 ictBearCol = input.color(#ef9a9a, "ICT-only bearish", inline = "c2", group = gColor)
-structCol = input.color(#787b86, "Structure break line", group = gColor)
 liqDirCol = input.bool(true, "Colour liquidity lines by direction", group = gColor)
 liqCol    = input.color(color.gray, "Liquidity colour when not by direction", group = gColor)
 fvgFill   = input.int(85, "Entry zone transparency", minval = 0, maxval = 100, group = gColor)
@@ -552,7 +548,6 @@ type Cluster
     box    poolBox                  // the shaded band from the pool's lowest
                                     // swing to its highest. Held, like liqLine,
                                     // so a pool that dies can take it with it.
-    line   mssLine
     label  grabX                    // the confirmed raid X, drawn at MSS time
     label  grabTagLbl               // and its dark tag
     label  raidDot                  // provisional marker while the raid is
@@ -1084,14 +1079,6 @@ drawLiqLine(Cluster c, int x2) =>
              style = line.style_dotted,
              width = 1)
 
-drawStructLine(Cluster c, int x2) =>
-    if showStructLine and na(c.mssLine)
-        c.mssLine := line.new(c.structBar, c.structLevel, x2, c.structLevel,
-             xloc  = xloc.bar_index,
-             color = structCol,
-             style = line.style_dashed,
-             width = 1)
-
 // X-cross on the sweep extreme, plus the source tag beneath it.
 // The raid X. Idempotent: in Live draw mode this is called on the sweep bar
 // and the labels are then MOVED by moveGrab as the raid deepens, so calling
@@ -1116,19 +1103,6 @@ drawGrab(Cluster c) =>
              color     = #2a2e39,
              textcolor = color.white,
              size      = size.tiny)
-
-drawMssLabel(Cluster c) =>
-    if showMSS
-        label.new(c.mssBar, c.isHigh ? low : high, "MSS",
-             xloc      = xloc.bar_index,
-             yloc      = c.isHigh ? yloc.belowbar : yloc.abovebar,
-             style     = c.isHigh ? label.style_label_up : label.style_label_down,
-             color     = dirCol(c.isHigh),
-             textcolor = color.white,
-             size      = size.tiny,
-             tooltip   = "MSS #" + str.tostring(c.id) + (c.isHigh ? " bearish" : " bullish") +
-                         "\nthreshold " + f2s(c.structLevel) +
-                         "\nfrom oldest pivot @ bar " + str.tostring(c.oldestBar))
 
 // Follow the raid to its new extreme. Only Live mode needs this: in deferred
 // mode nothing is drawn until the extreme is already final.
@@ -1646,9 +1620,7 @@ closePeriod(Tracker t, int src, string tag, bool showStatic, string hiTxt, strin
 renderPattern(Cluster c) =>
     drawLiqLine(c, c.grabBar)          // no-op if Live mode already drew it
     drawAllDiamonds(c)
-    drawStructLine(c, c.mssBar)
     drawGrab(c)
-    drawMssLabel(c)
     // drawSetup runs after scanLeg, which has not produced the FVG yet.
 
 // ═════════════════════════ 7. PIVOT REGISTRATION ═══════════════════════════
@@ -1985,8 +1957,6 @@ if engineOk
                                   " — waiting for " + (c.isHigh ? "bearish" : "bullish") +
                                   " MSS below " + f2s(c.structLevel),
                                   alert.freq_once_per_bar_close)
-                        if not deferred
-                            drawStructLine(c, bar_index)
                         // Provisional mark on the raid itself, in EITHER draw
                         // mode. Drawing the real X here instead was wrong:
                         // most raids never produce a shift, so the chart
@@ -2003,8 +1973,6 @@ if engineOk
                     if timedOut
                         c.expired := true
                     if not timedOut
-                        if not na(c.mssLine)
-                            line.set_x2(c.mssLine, bar_index)
                         // Grab candle follows the deepest bar of the raid.
                         bool trailed = false
                         if trailGrabExtreme and c.isHigh and high > c.grabHigh
@@ -2310,7 +2278,6 @@ if engineOk
     while clusters.size() > maxLiquidityClusters
         Cluster gone = clusters.shift()
         line.delete(gone.liqLine)
-        line.delete(gone.mssLine)
     while fvgs.size() > maxFVGs
         fvgs.shift()
     while trades.size() > maxTrades

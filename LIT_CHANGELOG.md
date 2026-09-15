@@ -2934,3 +2934,36 @@ backlog.
 
 All five checkers pass — static, port, Pine↔Python parity, chart-to-bot parity,
 and the new input diff. `riptide-indicator.pine` untouched.
+
+### v2 — Riptide's MSS drawing removed
+
+Removed at the user's request: *"I think don't need this as we have our own
+market structure."*
+
+Gone: `showMSS`, `showStructLine`, `structCol`, the `drawStructLine` and
+`drawMssLabel` helpers, their three call sites, and the now-orphaned `mssLine`
+field with its extend and delete references. 152 inputs → **149**, and the
+input diff confirms those three and nothing else.
+
+**The MSS DETECTION is untouched, and that distinction matters.** Riptide's
+sequence is *liquidity pool → sweep → **market structure shift** → fair value
+gap*. The MSS is the step that confirms a raid is worth trading; it is not a
+drawing. `structLevel` and `mssBar` are still read throughout the engine, still
+decide whether a raid becomes a signal, and `mssMode` is still parity-locked
+against `riptide.conf`. **Every alert is identical.**
+
+So the market-structure layer in sections 16–17 does not "replace" this. They
+answer different questions:
+
+* **Riptide's MSS** — did *this specific raid* break the level it had to break?
+  Part of the signal path, one level per pool.
+* **Sections 16–17** — what is the chart's CHoCH/BOS structure in general?
+  Context, feeds nothing, and measured as not sorting Riptide's setups
+  (`research/INDUCEMENT_ON_RIPTIDE.md`).
+
+**What is actually lost** is diagnostic, not signal: the dashed line showed the
+price a raid had to break, so when a raid produced no signal it was visible
+why. That is now only in the MSS tooltip's absence — the raid X tooltip still
+names the threshold.
+
+All five checkers pass. `riptide-indicator.pine` untouched.
