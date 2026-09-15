@@ -474,6 +474,9 @@ msBosNeedsIdm = input.bool(true, "BOS requires an inducement first", group = gMS
 msKeepN = input.int(100, "Keep this many structure drawings", minval = 5,
      maxval = 400, group = gMS, active = msShow,
      tooltip = "Section 12 prunes its OWN lines and labels on this budget. Pine allows 500 lines and 500 labels, and without a cap this layer would quietly evict Riptide's entry and stop lines — the same reason the 'All imbalances' layer has one.\n\nREAD THIS IF STRUCTURE SEEMS TO BE MISSING. This is a DRAWING budget, not a detector. Every CHoCH, BOS, IDM and sweep costs one line and one label, and once the cap is reached the OLDEST is deleted to make room. On 2,000 bars of BTC 15m at the default periods the engine finds about 123 events, so the old cap of 40 put barely a third of them on the chart — everything older had fired, been drawn, and then been erased. That is what a 'missed' CHoCH usually is here.\n\nWAS 40, now 100. The cost is 100 lines and 100 labels out of 500 each.\n\nCHEAPER THAN RAISING IT: turn off an event type you are not reading. Sweeps alone were 45 of those 123 events — 37% of the budget spent on the small x marks. Unticking 'Sweeps' frees a third of it for CHoCH, BOS and IDM without taking anything from Riptide's own drawings.")
+msLabelSize = input.string("Small", "Label size",
+     options = ["Tiny", "Small", "Normal"], group = gMS,
+     tooltip = "Text size for CHoCH, BOS, IDM, the sweep x, AND the $$$ / $$ grab marks in groups 18 and 19. One control for all of them, because they share a chart and sizing them apart looks like a mistake.\n\nNOT greyed out when 'Show market structure' is off — it still drives the grab labels, which have their own toggles.\n\nPine offers named sizes, not a point value: Tiny is roughly 7px, Small roughly 10, Normal roughly 14. Small is the default here; Tiny was the original and is what the ported script used.\n\nBigger text collides more, so the crowding rule matters more as you raise this: a label that would land on one already drawn is nudged a few bars right instead of on top of it.")
 msShowChoch = input.bool(true, "CHoCH", inline = "ms1", group = gMS, active = msShow)
 msShowBos = input.bool(true, "BOS", inline = "ms1", group = gMS, active = msShow)
 msShowIdm = input.bool(true, "IDM", inline = "ms1", group = gMS, active = msShow)
@@ -1006,6 +1009,47 @@ seedLowBar  = bar_index + ta.lowestbars(low,   pivotRight + 1)
 seedHighBar = bar_index + ta.highestbars(high, pivotRight + 1)
 
 // ═════════════════════════ 5. HELPERS ══════════════════════════════════════
+
+// ── label size and label crowding ───────────────────────────────────────────
+// Sections 12 and 13 both draw labels, each centred on its own span, and
+// neither knows the other exists — so an IDM and a $$ can land on the same
+// spot and become unreadable. audit/grab_label_clash.py measures it: over
+// 2,721 narrow grabs, 5.5% collide with a section-12 label, and 0% on the
+// wide instance whose bands are longer. Uncommon, but a collision is
+// illegible rather than merely untidy, and a larger size makes each one
+// worse — which is why the size control and this rule arrived together.
+string lblSize = msLabelSize == "Normal" ? size.normal :
+     msLabelSize == "Small" ? size.small : size.tiny
+
+var array<int>   lblBar = array.new<int>()
+var array<float> lblPx  = array.new<float>()
+
+// A bar for a label at (wantBar, y) that nothing already occupies, recorded
+// so the next caller sees it. Shifts RIGHT in whole bars, so a crowded pair
+// reads side by side rather than stacked. Gives up after four tries: past
+// that the area is busy enough that moving further does not help.
+labelSlot(int wantBar, float y, float tol) =>
+    int x = wantBar
+    int tries = 0
+    while tries < 4
+        bool clash = false
+        if lblBar.size() > 0
+            for i = 0 to lblBar.size() - 1
+                if lblBar.get(i) == x and math.abs(lblPx.get(i) - y) <= tol
+                    clash := true
+                    break
+        if not clash
+            break
+        x += 3
+        tries += 1
+    lblBar.push(x)
+    lblPx.push(y)
+    // Bounded, and small on purpose: a slot from hundreds of bars ago is off
+    // the left of the screen and must not still be reserving space.
+    while lblBar.size() > 200
+        lblBar.shift()
+        lblPx.shift()
+    x
 dirCol(bool isHigh) =>
     isHigh ? bearCol : bullCol
 
@@ -2644,7 +2688,7 @@ msPrune() =>
 // Every level this section draws is horizontal, so one y serves both ends.
 msDraw(int x1, int x2, float y, color c, string lineStyle, string txt, string lblStyle) =>
     msLineBuf.push(line.new(x1, y, x2, y, xloc = xloc.bar_index, color = c, style = lineStyle))
-    msLabelBuf.push(label.new(int(math.avg(x2, x1)), y, txt, xloc = xloc.bar_index, color = color(na), style = lblStyle, textcolor = c, size = size.tiny))
+    msLabelBuf.push(label.new(labelSlot(int(math.avg(x2, x1)), y, na(atr) ? 0.0 : atr * 0.3), y, txt, xloc = xloc.bar_index, color = color(na), style = lblStyle, textcolor = c, size = lblSize))
     msPrune()
 
 msSwings(simple int msL) =>
@@ -2752,9 +2796,9 @@ if msMin < msMin[1]
 var line msExtChoch = line.new(na, na, na, na, style = line.style_dashed)
 var line msExtBos = line.new(na, na, na, na)
 var line msExtIdm = line.new(na, na, na, na, style = line.style_dotted)
-var label msExtChochLbl = label.new(na, na, "CHoCH", color = color(na), size = size.tiny)
-var label msExtBosLbl = label.new(na, na, "BOS", color = color(na), size = size.tiny)
-var label msExtIdmLbl = label.new(na, na, "IDM", color = color(na), size = size.tiny)
+var label msExtChochLbl = label.new(na, na, "CHoCH", color = color(na), size = lblSize)
+var label msExtBosLbl = label.new(na, na, "BOS", color = color(na), size = lblSize)
+var label msExtIdmLbl = label.new(na, na, "IDM", color = color(na), size = lblSize)
 
 if barstate.islast
     bool msOn = msShow
@@ -2876,10 +2920,9 @@ Liq.LLF(msLiqSPP, msLiqDPP, msLiqSLLS, msLiqDLLS, msShow and msLiq and msLiqSH, 
 //    * NOT PORTED: the original's `$` sweep mark, the level taken and CLOSED
 //      THROUGH. It is the complement of the grab, not a weaker version of it,
 //      and it is a separate decision from the one that was asked for.
-//    * THE LABEL SITS AT BAR N-1, not at the midpoint of the band as the
-//      original places it. See the note at the label.new call: once the
-//      glyph encodes a property of two specific candles, a mark floating
-//      6 to 15 bars away from them is misinformation, not decoration.
+//    * LABELS ARE NUDGED APART when two would land on the same spot, and
+//      every label in sections 12 and 13 takes its size from one input,
+//      "Label size" in panel group 16. The original has neither.
 //    * THE GLYPH SPLITS. The original writes "$$$" on every grab. Here a grab
 //      whose two candles share a colour keeps "$$$" and one whose candles
 //      oppose is "$$" — same detection, same bands, only the text differs.
@@ -2959,21 +3002,19 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sam
          xloc  = xloc.bar_index,
          color = color(na))
     linefill.new(lvl, edge, color.new(s.col, 80))
-    // ON THE CANDLES IT DESCRIBES, not at the midpoint of the band. mickes
-    // centres its "$$$" because there the glyph describes the LEVEL, and the
-    // middle of the band is a reasonable place to say "this level". Here the
-    // glyph is decided by the two candles at N-1 and N, and the midpoint is
-    // nowhere near them: measured over 3,644 grabs, the midpoint sits a
-    // median of 6 bars left of N on the narrow instance and 15 on the wide
-    // one, up to 101, and it is 3 or more bars away 100% of the time. A
-    // reader checks the candles under the label, finds two that had no part
-    // in choosing it, and concludes the rule is broken. x2 is bar N-1 — the
-    // piercing candle, immediately left of the reclaim candle.
-    label tag = label.new(x2, px, glyph,
+    // CENTRED on the band, as the original places it and as asked for: at
+    // the right-hand edge the text sat on the candles and was hard to read.
+    // KNOW WHAT THAT COSTS. The glyph is chosen by the candles at N-1 and N,
+    // and the midpoint is nowhere near them — audit/grab_label_distance.py
+    // measures a median of 6 bars left of N on the narrow instance and 15 on
+    // the wide one, 3 or more bars away 100% of the time. So the candles
+    // under a $$$ are NOT the ones that chose it, and reading them as such
+    // is what makes the mark look wrong. The tooltip names the real pair.
+    label tag = label.new(labelSlot(int(math.avg(fromBar, x2)), px, na(atr) ? 0.0 : atr * 0.3), px, glyph,
          xloc      = xloc.bar_index,
          color     = color(na),
          textcolor = color.new(s.col, 30),
-         size      = size.tiny,
+         size      = lblSize,
          style     = isHigh ? label.style_label_down : label.style_label_up,
          tooltip   = s.tag + (isHigh ? "Buy-side" : "Sell-side") +
                      " liquidity grabbed @ " + f2s(px) +
