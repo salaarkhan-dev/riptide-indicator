@@ -163,9 +163,13 @@ out of sample.
 | KAS Min30 | bull | 8,452 bars | 0.04145 | 0.02475 |
 | CATE Min30 | bull | 1,847 bars | 0.087 | 0.002765 |
 
-Same shape of flaw one level up: two boundaries, neither reachable, no timeout
-and no invalidation. CATE's CHoCH sits 97% below its BOS — a `phLo` set by a
-crash and then never revisited.
+Same shape of flaw one level up: no timeout and no invalidation. CATE's CHoCH
+sits 97% below its BOS — a `phLo` set by a crash and then never revisited.
+
+**Correction.** This paragraph first read "two boundaries, neither reachable".
+That is true of XMR and false of KAS, whose BOS was wicked twice and refused by
+Body & Sweep. The trigger is not always distance. See
+`research/LIT_LOCK_STALL.md` §3.
 
 Prevalence across all 191 panels: `PH_SEEK` **7.3%** (14), `PH_LOCK` **1.6%**
 (3).

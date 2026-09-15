@@ -2589,3 +2589,51 @@ needing its own pre-registration.
 
 A second trap state remains **open and unfixed**: `PH_LOCK` with both
 boundaries outside the range price goes on to trade, 1.6% of panels.
+
+---
+
+## PH_LOCK STALL — DIAGNOSED, NOT FIXED
+
+`research/LIT_LOCK_STALL.md`, from `research/studies/lit_lock_stall.py`.
+
+**1.1% of panels** (2 of 189) against the `PH_SEEK` latch's 7.3%. Down from 3
+before P9; `leg` incidentally cleared CATE Min30, which is noted rather than
+claimed.
+
+Same shape as `PH_SEEK` one level up: `PH_LOCK` exits only on a BOS break or a
+CHoCH break, step 5 caches corrections as latent without publishing an IDM, and
+there is no timeout or invalidation.
+
+**Two triggers, and the second one corrected an earlier claim.** XMR's
+boundaries were never reached — 5% below the lowest low, 29% above the highest
+high, over 10,384 bars. **KAS's BOS was wicked twice** (reaching 0.0419 against
+0.04145) with no bar closing beyond, so Body & Sweep declined the break. That
+is the same doorway that produced two of the four `PH_SEEK` latches. The
+earlier write-up in `research/LIT_SEEK_ESCAPE.md` said "two boundaries, neither
+reachable"; that is true of XMR and false of KAS, and it has been corrected
+where it was written.
+
+**It cannot be repaired the way P9 was.** `PH_SEEK with ch.on == False` names a
+state; a stalled lock does not — both boundaries exist and are well-formed, and
+the only thing separating a stall from a working lock is that the data ran out.
+Duration does not separate them:
+
+    stalled, stuck at the end     8,452 – 10,385 bars
+    recovered, longest lock       388 – 14,283 bars (median 3,837)
+
+PI Min15 recovered from a **14,283-bar** lock — longer than either stall. Both
+stalls sit below the 95th percentile of lock durations on healthy panels. Any
+rule that catches them is phrased on duration, and a duration rule is a number,
+which `Pol`'s contract forbids.
+
+Three candidates are named and **none is chosen**: `latent_out` (publish the
+correction LOCK already caches — the only one addressing both triggers),
+`re_leg` (P9 without its guard — a different engine, not a repair), and
+`stale_lvl` (needs a definition of "superseded" that does not smuggle in a
+number; I do not have one). An expiry arm was rejected before measuring, as
+P9's was.
+
+**Recommendation: leave it.** 1.1% against 7.3%, and the fix costs more than it
+buys. The cost of leaving it is bounded and now documented — about one chart in
+ninety goes quiet with a named cause, which is a different situation from BTC
+30m going quiet and being read as a quiet market.
