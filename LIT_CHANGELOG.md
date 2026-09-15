@@ -2477,3 +2477,35 @@ No fix is applied here. An escape is a new rule and needs a name, a default and
 its own measurement; two candidates are named in the study and neither is
 picked. The frozen engine stands, `rules_hash` is unchanged, and both frozen
 test scripts still pass.
+
+### Resolution: P9, the bootstrap CHoCH — PROPOSED, default still off
+
+`POL.seekCh = "leg"` gives the first cycle after bootstrap the CHoCH every
+later cycle already has: the leg extreme against the trend, the exact mirror of
+the BOS. Parameter-free, so it respects `Pol`'s contract that no policy may
+introduce a number.
+
+Measured over two pre-registered rounds — see `research/LIT_SEEK_ESCAPE.md`:
+
+* repairs **14 of 14** `PH_SEEK` latches (5 in sample, 9 on 71 untouched
+  symbols); BTC Min30 goes from 1 IDM break in 333 days to 28
+* zero invariant violations, zero panels made unhealthy
+* **99.8%** of existing `idm_break` events preserved on panels that were
+  already healthy, 1.6% inflation
+
+Round 1 rejected it on a gate I had written against the symptom rather than
+the cause; that verdict is kept in the record rather than edited away. Round 2
+re-ran it with the gate naming the mechanism and the held-out universe enlarged
+from 30 to 80 requested symbols to pay for the second look.
+
+Two things are stated in the findings rather than smoothed over: retention did
+not separate `leg` from `raid` — a pre-registered tiebreak did — and the v2
+gates would have let `raid` pass while it converted one panel's `SEEK_LATCH`
+into a `LOCK_STALL`.
+
+A second defect was found and **not** fixed: `PH_LOCK` with both boundaries
+outside the range price goes on to trade, 3 of 191 panels (1.6%).
+
+**The default remains `"none"` and the frozen engine is byte-identical under
+it.** Switching it on is a user decision, and in production it would be
+LIT_FORWARD_V2 — never a patch to V1, and the two records never pooled.
