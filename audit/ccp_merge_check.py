@@ -162,4 +162,7 @@ async def main():
               "formality.")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    # Guarded because audit/ccp_anchor_check.py imports atr14 and name_of from
+    # here. Without it, the import re-ran this whole study.
+    asyncio.run(main())

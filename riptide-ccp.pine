@@ -73,13 +73,15 @@ bgCol = input.color(color.aqua, "Color", group = gBGrab, active = bgOn)
 // ── 3. Combined candles ─────────────────────────────────────────────────────
 // Declared now so the panel shows what is coming; nothing reads them yet.
 ccpOn = input.bool(false, "Merge candles and name the shape", group = gCCP,
-     tooltip = "NOT IMPLEMENTED YET. Section 3 is a stub. This input exists so the panel shows the shape of what is coming and so turning it on tells you plainly that it does nothing, rather than leaving you to wonder why no marks appear.")
+     tooltip = "Looks for a pin shape at the two ends of every grab — the swing that built the level and the candles that ran it — merging the anchor candle with its immediate neighbours to find one.\n\nEVERY window the search tries CONTAINS THE ANCHOR. It never merges a run of neighbours that leaves the anchor out, at any setting. That is proved by enumeration over all 441 windows from 0/0 to 5/5 in audit/ccp_anchor_check.py, which also checks the merge arithmetic against a from-scratch recompute on real candles.")
 ccpBack = input.int(2, "Merge up to — before", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn)
 ccpFwd = input.int(2, "after", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn,
      tooltip = "How many neighbours either side of the anchor candle may be merged into it. A window is any run of candles containing the anchor, so 1 and 1 means every window from the anchor alone up to three candles wide.\n\nBoth sides matter: the shape can need candles from before the anchor, from after it, from both, or from neither.\n\n2 and 2 spans runs of one to five candles.\n\nTHIS IS THE SETTING THAT DECIDES WHETHER THE MARK MEANS ANYTHING, because widening it does not find more pins, it finds more WINDOWS, and more windows find a pin by accident. Measured over 2,729 grabs on 23 symbols of 15m, the share where BOTH ends carry the shape goes 0.3% at 0/0, 5.8% at 1/1, 16.4% at 2/2 and 26.2% at 3/3.\n\nRead that first row carefully: only 7 grabs in 2,729 have both ends as pins WITHOUT any merging. So at the default nearly every match exists because something was merged, and whether that is discovery or arithmetic is the open question this bench was built to answer. research/CCP_SEARCH_INFLATION.md.")
 ccpBodyMax = input.float(0.15, "Pin: body at most (fraction of range)", minval = 0.05, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn)
 ccpWickMin = input.float(0.70, "Pin: longer wick at least", minval = 0.2, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn,
      tooltip = "The two numbers that define a pin, and they are inputs rather than constants so the definition is arguable on the chart instead of buried in the code.\n\nThe defaults were 0.35 and 0.50 — the shape the CCP sheet draws — and when this layer still scanned every bar those marked 88% of them. They are now 0.15 and 0.70. Tightening them helped far less than restricting WHERE the layer looks: gating to a grab's two ends, in the grab's own direction, took the same settings from 88.4% of all bars to 16.4% of grabs.")
+ccpAnchorExtreme = input.bool(false, "The long wick must be the anchor's own", group = gCCP, active = ccpOn,
+     tooltip = "The anchor candle is inside every window the search tries — that is structural and not optional. But being INSIDE a five-candle run does not mean the anchor put anything into the shape: the open comes from the oldest bar of the run, the close from the newest, and the high and the low can both belong to neighbours.\n\nMeasured over the same 2,729 grabs, 36% of matches have the defining extreme — the far end of the long wick — belonging to a neighbour rather than to the anchor. On the right-hand end that means the rejection the arrow is drawn for happened on a bar that is not the one that ran the level.\n\nON requires that extreme to be the anchor's own high or low. It is applied inside the search, so rejecting a wide window still lets a narrower one win.\n\nCOST: both-ends matches fall from 16.4% of grabs to 3.9%. That is a large cut and it is not known to be an improvement — neither rate has been scored against anything. It is OFF by default so the number you have been reading does not move under you. audit/ccp_anchor_check.py section 4.")
 ccpPick = input.string("Smallest run", "When several windows qualify, keep",
      options = ["Smallest run", "Strongest wick", "Most centred"], group = gCCP, active = ccpOn,
      tooltip = "Several windows around one anchor can all classify as a pin, and something has to choose. This is the open question the bench exists to answer, so it is a switch rather than a decision buried in code.\n\nSMALLEST RUN (default) — the fewest candles that qualify, ties broken by the stronger wick. The reasoning: a shape that needs no merging at all is the cleanest reading of it, and every candle you add is an assumption.\n\nSTRONGEST WICK — whichever window has the most extreme wick ratio, however many candles that takes.\n\nMOST CENTRED — the window most evenly balanced around the anchor. Try all three on the same chart before believing any of them.")
@@ -420,6 +422,18 @@ ccpName(bool bull, bool green) =>
 
 // Every window containing the bar `anchorOff` bars back, best one kept, and
 // ONLY windows whose shape points `wantBull`. Returns b = -1 for no match.
+//
+// THE INVARIANT: a window is the run of bars from offset `anchorOff + b` (the
+// OLDEST, whose open the merge takes) to `anchorOff - f` (the NEWEST, whose
+// close it takes), with b >= 0 and f >= 0. The anchor sits between them at
+// every setting, so the anchor is in all (ccpBack+1) x (ccpFwd+1) windows and
+// b = 0, f = 0 is the anchor standing alone. There is no window made of
+// neighbours without it.
+//
+// Offsets run BACKWARDS here — `anchorOff + b` is an OLDER bar — which is why
+// that invariant is proved by enumeration in audit/ccp_anchor_check.py rather
+// than by reading these three lines. A sign flip reads as plausible either way,
+// and the checker fails on one.
 ccpScanAt(int anchorOff, float minRange, bool wantBull) =>
     int   bB = -1
     int   bF = -1
@@ -456,7 +470,8 @@ ccpScanAt(int anchorOff, float minRange, bool wantBull) =>
                         float upW = (hh - math.max(oo, cc)) / rng
                         float dnW = (math.min(oo, cc) - ll) / rng
                         float bigW = math.max(upW, dnW)
-                        if bodyF <= ccpBodyMax and bigW >= ccpWickMin and (dnW > upW) == wantBull
+                        bool ownX = not ccpAnchorExtreme or ((dnW > upW) ? low[anchorOff] == ll : high[anchorOff] == hh)
+                        if bodyF <= ccpBodyMax and bigW >= ccpWickMin and (dnW > upW) == wantBull and ownX
                             float sc = ccpPick == "Strongest wick" ? bigW :
                                  ccpPick == "Most centred" ? bigW - math.abs(b - f) * 100
                                  : bigW - (b + f) * 100

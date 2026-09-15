@@ -148,4 +148,6 @@ async def main():
             print(f"            names at the right end: "
                   f"{dict(names.most_common())}")
 
-asyncio.run(main())
+if __name__ == "__main__":
+    # audit/ccp_anchor_check.py imports grabs() from here.
+    asyncio.run(main())

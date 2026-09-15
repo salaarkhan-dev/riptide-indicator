@@ -129,6 +129,47 @@ matches (98%) needed a merge somewhere**, and the rate still climbs roughly
 with the number of windows tried. Whether that is discovery or arithmetic is
 not settled by any count, and this file does not claim it is.
 
+## The anchor is always in the window — and that is weaker than it sounds
+
+    python3 audit/ccp_anchor_check.py
+
+A merge is the anchor candle plus some of its immediate neighbours. It is never
+a run of neighbours that leaves the anchor out. That holds at every setting —
+all 441 windows from 0/0 to 5/5 — and it is proved by enumeration rather than
+by reading the code, because the Pine writes it in backwards offsets where
+`anchorOff + b` is an *older* bar and a sign flip reads as plausible either way.
+The same run checks the incremental run high/low against a from-scratch
+max/min on 5,454 real anchors, and the four window-bound lines against the Pine
+itself so the transcription cannot silently go stale.
+
+**But positional inclusion is not contribution.** The merged open comes from
+the oldest bar of the run, the close from the newest, and the high and the low
+can both belong to neighbours. So the anchor can be inside a five-candle run
+and have put nothing into the shape:
+
+```
+  2,236 matched anchors at 2/2
+
+    the defining extreme is the anchor's own      1430   64%
+    the defining extreme is a neighbour's          806   36%
+```
+
+On the right-hand end that second row means **the rejection the arrow is drawn
+for happened on a bar that is not the one that ran the level.** Whether that
+should count is a judgement, not an error.
+
+`ccpAnchorExtreme` makes it switchable, applied inside the search so rejecting
+a wide window still lets a narrower one win. It costs a lot:
+
+```
+  gate off    448 both-ends matches   16.4% of grabs
+  gate on     106 both-ends matches    3.9% of grabs
+```
+
+It is **off by default**. Neither rate has been scored against anything, so
+turning it on would trade a number that has been measured for a number that has
+not, and tightening a detector is not the same as improving it.
+
 ## What this does not say
 
 Nothing here measures whether a CCP mark predicts anything. It measures how
