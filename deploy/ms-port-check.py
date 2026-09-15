@@ -58,12 +58,26 @@ def norm(s: str) -> str:
     return s
 
 
-def conditions(path: str, start: str | None, end: str | None) -> set[str]:
+# A top-level section banner, e.g.
+#   // ═════════════ 13. BIG GRABS (CONTEXT ONLY) ═════════════
+# Used as the END of the ported section. This was a hard-coded "13. MARKET
+# STRUCTURE" string, which silently stopped bounding anything the moment a
+# section with a different name was added after the port — every statement in
+# it then came back as a port bug. The bound's PURPOSE was always "stop at the
+# next section", so that is what it now says.
+BANNER = re.compile(r"^// ═+ *\d+\. ", re.M)
+
+
+def conditions(path: str, start: str | None, end: str | None = None) -> set[str]:
     txt = open(path).read()
     if start:
         txt = txt.split(start, 1)[1]
     if end:
         txt = txt.split(end, 1)[0]
+    elif start:
+        m = BANNER.search(txt)
+        if m:
+            txt = txt[:m.start()]
     out = set()
     for ln in txt.splitlines():
         c = norm(ln)
@@ -84,10 +98,11 @@ def main(argv):
         return 2
     orig, port = argv[1], argv[2]
     a = {norm(rename(x)) for x in conditions(orig, "//Swings detection", None)}
-    # Scoped to section 12. There is no section 13 today — the ledger and
-    # stats table were removed — but the bound stays so that anything added
-    # after the port is not compared against the script that was ported.
-    b = conditions(port, "12. MARKET STRUCTURE", "13. MARKET STRUCTURE")
+    # Scoped to section 12 — up to the next top-level banner, whatever it is
+    # called. Section 13 (big grabs) sits after it and is a port of a
+    # different script, so comparing it against this one's original would
+    # report every one of its statements as a bug.
+    b = conditions(port, "12. MARKET STRUCTURE")
 
     # KNOWN EQUIVALENCES. Each pair is a difference that is a rename or a
     # restructuring, not a change of meaning. Listing them explicitly — rather

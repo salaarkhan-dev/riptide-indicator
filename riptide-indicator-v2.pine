@@ -145,6 +145,7 @@ gAdv    = "14. Advanced tuning"
 gEng    = "15. Engine and debug"
 gMS     = "16. Market structure (context only)"
 gMSLiq  = "17. Market structure — liquidity lines"
+gGrab   = "18. Big grabs (context only)"
 
 // ── Preset ──────────────────────────────────────────────────────────────────
 // Declared before everything else so TradingView floats it to the top of the
@@ -497,6 +498,22 @@ msBearCss = input.color(#ff5252, "Bearish", inline = "ms2", group = gMS, active 
 msIdmCss = input.color(color.gray, "IDM", inline = "ms2", group = gMS, active = msShow)
 msSweepCss = input.color(color.gray, "Sweep", inline = "ms2", group = gMS, active = msShow)
 
+// ── 18. Big grabs (context only) ────────────────────────────────────────────
+// Panel group 18; the engine is section 13, at the end of the file.
+// Borrowed from the "Big grab" in mickes' Liquidity & inducements, which is
+// not a different detector from its ordinary grab — it is the same one with
+// the pivot widened. audit/LIQUIDITY_BORROW_ASSESSMENT.md §1.
+bgOn = input.bool(false, "Big grabs", group = gGrab,
+     tooltip = "A wide swing gets wicked through and price closes back on the original side. The band spans from the swing to the bar that ran it; the $$$ sits on the level that was taken.\n\nOFF BY DEFAULT AND CARRYING NO CLAIM. It is CONTEXT — no alert fires from it, nothing reads it, and every Riptide entry, stop and target is identical with it on or off.\n\nWHY NO CLAIM. Measured against Riptide's own raid on the same pivots, this fires at least 1.8x as often and two thirds of its marks are places Riptide says nothing (audit/liquidity_grab_rate.py). It is earlier because it asks for less: a close back over the level, where Riptide wants a break of the structure the raid created. Whether the extra marks are worth anything was then tested directly — research/POOL_PIVOT_LENGTH.md, six pivot widths, preregistered — and the answer came back UNDERPOWERED: the direction was consistent but the largest difference was +0.7 SE and setups collapsed 256 to 26. So this is a thing to look at, not a thing to trade.")
+bgLeft = input.int(10, "Pivot", minval = 1, inline = "bg1", group = gGrab, active = bgOn)
+bgRight = input.int(10, "", minval = 1, inline = "bg1", group = gGrab, active = bgOn,
+     tooltip = "Bars left and right that must be lower (for a swing high) before the swing counts. mickes ships 10/10 for the big grab against 3/3 for the ordinary one, and that width IS the whole difference between them.\n\nThe swing confirms this many bars after it printed, so a grab cannot be marked before then. Honest lag, not repainting.")
+bgLookback = input.int(5, "Lookback", minval = 1, maxval = 20, group = gGrab, active = bgOn,
+     tooltip = "How many untaken swings per side stay eligible. Older ones are dropped, so a level from far back cannot suddenly be marked. mickes' own default.")
+bgKeep = input.int(20, "Keep this many bands", minval = 2, maxval = 100, group = gGrab, active = bgOn,
+     tooltip = "This layer prunes its own drawings on this budget, the same way section 12 and the 'All imbalances' layer do.\n\nThe script this is borrowed from has no such cap — it creates two lines, a fill and a label per grab and deletes none of them, so on a long chart it quietly eats the shared 500-drawing allowance. That defect is not reproduced here.")
+bgCol = input.color(color.aqua, "Color", group = gGrab, active = bgOn)
+
 // ═════════════════════════════ 2. TYPES ═════════════════════════════════════
 type LiqPivot
     int   bar
@@ -648,6 +665,12 @@ type Tracker
     int   minSinceHiBar = na
     float maxSinceLo    = na
     int   maxSinceLoBar = na
+
+// One untaken swing waiting to be run. Section 13.
+type BigGrab
+    float px
+    int   bar
+    bool  isHigh
 
 // Pine functions can mutate object fields but not reassign global scalars, so
 // anything a function updates lives here.
@@ -2777,3 +2800,147 @@ plot(msShow and msShowSwings ? msBtm : na, "MS swing low", color.new(msBullCss, 
 // nothing when off - a library call inside a conditional is how a series
 // quietly grows a different history.
 Liq.LLF(msLiqSPP, msLiqDPP, msLiqSLLS, msLiqDLLS, msShow and msLiq and msLiqSH, msShow and msLiq and msLiqSL, msShow and msLiq and msLiqDH, msShow and msLiq and msLiqDL)
+
+
+// ═════════════════════════ 13. BIG GRABS (CONTEXT ONLY) ═════════════════════
+//  Borrowed from "Liquidity & inducements" (© mickes, MPL-2.0) — specifically
+//  its LiquidationGrabbed / VisualizeLiquidityGrabs pair, which are the only
+//  parts of that script visible in the copy supplied: its trend, BOS, CHoCH
+//  and turtle soups all live inside mickes/PriceAction/4 and could not be
+//  read. This section is not original work of this project.
+//
+//  WHAT IT MARKS. A wide swing is wicked through by one bar and the NEXT bar
+//  closes back on the original side. The dotted line is the level that was
+//  taken, the shaded band reaches down to the wick that took it, and the $$$
+//  sits between the swing and the bar that ran it.
+//
+//  WHAT IT IS NOT. Riptide's own raid, which needs the wick to clear the
+//  level by an ATR buffer and then a break of the structure the raid created.
+//  This asks for less and therefore fires earlier and more often — at least
+//  1.8x as often on the same pivots, with two thirds of its marks in places
+//  Riptide says nothing (audit/liquidity_grab_rate.py). No alert fires from
+//  it and nothing reads it.
+//
+//  PORT CHANGES, all of them:
+//    * NO TIMEFRAME INPUT. The original offers one per feature and reaches it
+//      through a `while true` loop with no termination condition and no
+//      max_bars_back, which hangs or errors on a pivot older than the loaded
+//      history (audit/LIQUIDITY_INDUCEMENTS_AUDIT.md finding 1). Chart
+//      timeframe only, so no bar-index mapping is needed at all: ta.pivothigh
+//      hands back the bar directly.
+//    * the confirmation is written out. The original's reads
+//      `if 1 > 0 ... for i = 1 - 1 to 0 ... if close[i] < pivot.Price` —
+//      a loop of one iteration testing a condition the enclosing `if` has
+//      already excluded, so it is true on every path that reaches it
+//      (finding 4). The one-bar test the outer condition actually encodes is
+//      written here as itself.
+//    * drawings are RECYCLED on their own budget. The original creates two
+//      lines, a linefill and a label per grab and deletes none of them.
+//    * two arrays instead of a typed pair-of-arrays object, because the
+//      Lookback cap is per side and that is all the structure it needs.
+//
+//  NOT PORTED: the original's `$` sweep mark, the level taken and CLOSED
+//  THROUGH. It is the complement of the grab, not a weaker version of it, and
+//  it is a separate decision from the one that was asked for.
+//
+//  A pivot cannot be pierced between printing and confirming — by definition
+//  no bar inside its right window exceeds it — so testing only the previous
+//  bar's wick, as the original does, misses nothing.
+//
+//  The same condition is written in Python in audit/liquidity_grab_rate.py,
+//  which is what measured this layer's fire rate against Riptide's raid. The
+//  two agree, edge cases included: `close == level` counts as a grab on both
+//  sides, and a bar that pierces and then closes through retires the level on
+//  both sides rather than marking it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+var array<BigGrab> bgHi  = array.new<BigGrab>()
+var array<BigGrab> bgLo  = array.new<BigGrab>()
+var array<line>    bgLns = array.new<line>()
+var array<label>   bgLbs = array.new<label>()
+
+// Mutates the global buffers, which a function may do; it may not ASSIGN a
+// global, which is CE10088 and is why nothing here returns through one.
+drawBigGrab(float px, int fromBar, bool isHigh, float wick) =>
+    int x2 = bar_index - 1
+    line lvl = line.new(fromBar, px, x2, px,
+         xloc  = xloc.bar_index,
+         color = bgCol,
+         style = line.style_dotted,
+         width = 1)
+    line edge = line.new(fromBar, wick, x2, wick,
+         xloc  = xloc.bar_index,
+         color = color(na))
+    linefill.new(lvl, edge, color.new(bgCol, 80))
+    label tag = label.new(fromBar + (x2 - fromBar) / 2, px, "$$$",
+         xloc      = xloc.bar_index,
+         color     = color(na),
+         textcolor = color.new(bgCol, 30),
+         size      = size.tiny,
+         style     = isHigh ? label.style_label_down : label.style_label_up,
+         tooltip   = (isHigh ? "Buy-side" : "Sell-side") +
+                     " liquidity grabbed @ " + f2s(px) +
+                     "\nWick reached " + f2s(wick) + ", price closed back " +
+                     (isHigh ? "below" : "above") + " the level." +
+                     "\nContext only — no alert, no setup, no claim.")
+    // A linefill dies with either of its lines, so tracking the lines is
+    // enough to free it.
+    bgLns.push(lvl)
+    bgLns.push(edge)
+    bgLbs.push(tag)
+    while bgLns.size() > bgKeep * 2
+        line.delete(bgLns.shift())
+    while bgLbs.size() > bgKeep
+        label.delete(bgLbs.shift())
+
+// Walks one side's pending swings backwards so a removal cannot skip the next.
+// `pend` is an array<BigGrab> and `isHigh` a bool. Neither is annotated: this
+// file has precedent for scalar and UDT parameter types (msDraw, drawLiqLine,
+// registerPivot) but none for a collection type, and there is no Pine compiler
+// in this environment to settle whether `array<BigGrab>` is accepted here.
+// Untyped parameters always are, and both call sites pass the same type.
+// `wick` is the previous bar's extreme on this side, read at the top level and
+// passed in rather than referenced here. `high[1]` on a global built-in would
+// almost certainly be fine inside a function called under `if bgOn`, but "almost
+// certainly" is not something this file can check without a compiler, and the
+// hoist costs one argument.
+scanBigGrabs(pend, isHigh, wick) =>
+    if pend.size() > 0
+        int i = pend.size() - 1
+        while i >= 0
+            BigGrab g = pend.get(i)
+            bool resolved = false
+            if bar_index - 1 > g.bar
+                bool  pierced = isHigh ? wick  >= g.px : wick   <= g.px
+                bool  back    = isHigh ? close <= g.px : close  >= g.px
+                bool  through = isHigh ? close >  g.px : close  <  g.px
+                if pierced and back
+                    drawBigGrab(g.px, g.bar, isHigh, wick)
+                    resolved := true
+                else if through
+                    // Closed beyond the level: the liquidity was taken and
+                    // kept, which is not a grab and never will be.
+                    resolved := true
+            if resolved
+                pend.remove(i)
+            i -= 1
+
+// ta.* runs unconditionally. Calling it inside `if bgOn` is how a series
+// quietly grows a different history when the toggle is flipped. Same reason
+// the previous bar's extremes are read here rather than inside the scan.
+float bgPH   = ta.pivothigh(high, bgLeft, bgRight)
+float bgPL   = ta.pivotlow(low,  bgLeft, bgRight)
+float bgPrvH = high[1]
+float bgPrvL = low[1]
+
+if bgOn and (not confirmOnBarClose or barstate.isconfirmed)
+    scanBigGrabs(bgHi, true,  bgPrvH)
+    scanBigGrabs(bgLo, false, bgPrvL)
+    if not na(bgPH)
+        bgHi.push(BigGrab.new(px = bgPH, bar = bar_index - bgRight, isHigh = true))
+        while bgHi.size() > bgLookback
+            bgHi.shift()
+    if not na(bgPL)
+        bgLo.push(BigGrab.new(px = bgPL, bar = bar_index - bgRight, isHigh = false))
+        while bgLo.size() > bgLookback
+            bgLo.shift()

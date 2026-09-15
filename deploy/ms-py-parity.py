@@ -71,6 +71,11 @@ EXPECTED = {
 }
 
 
+# A top-level section banner, e.g.
+#   // ═════════════ 13. BIG GRABS (CONTEXT ONLY) ═════════════
+BANNER = re.compile(r"^// ═+ *\d+\. ", re.M)
+
+
 def norm_common(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip().rstrip(":")
     s = s.replace("msShow and ", "").replace("msOn and ", "")
@@ -89,10 +94,15 @@ def statements(path: str, py: bool) -> set[str]:
             txt = re.sub(pat, rep, txt)
     else:
         txt = txt.split("12. MARKET STRUCTURE", 1)[1]
-        # Scoped to section 12. Nothing follows it today, but the bound
-        # stays so Pine-only instrumentation added later is not reported
-        # as a parity break against the Python engine.
-        txt = txt.split("13. MARKET STRUCTURE", 1)[0]
+        # Scoped to section 12 — up to the NEXT top-level banner, whatever it
+        # is called. This was a hard-coded "13. MARKET STRUCTURE", which
+        # stopped bounding anything the moment section 13 was named something
+        # else; every statement of the big-grab layer then came back as a
+        # parity break against an engine it has nothing to do with. The
+        # bound's purpose was always "stop at the next section".
+        m = BANNER.search(txt)
+        if m:
+            txt = txt[:m.start()]
         txt = re.sub(r"//.*", "", txt)
         for pat, rep, _ in PINE_NORM:
             txt = re.sub(pat, rep, txt)
