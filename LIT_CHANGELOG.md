@@ -2419,3 +2419,61 @@ as before.
 
 Pine files remaining: `riptide-indicator.pine` (production, untouched),
 `riptide-lit-v2.pine`, `riptide-reversal.pine`, `liquidity-trendline.pine`.
+
+
+---
+
+## DEFECT: Main structure latches in PH_SEEK
+
+Found while designing the inducement measurement, not looked for.
+`research/studies/lit_main_latch.py` reproduces every number below.
+
+**`PH_SEEK` with no CHoCH is a one-way door.** The CHoCH level is created at
+step 7, *when a BOS breaks*. So the first BOS after bootstrap has no opposing
+boundary: step 8 needs `x.ch.ready(i)`, step 5 will not publish an IDM outside
+DISCOVER/TRACK, and there is no timeout and no invalidation. If that first BOS
+is never broken, Main emits nothing for the rest of the chart.
+
+Every later cycle owns both boundaries and can race between them. The bootstrap
+cycle is the only one that can trap — which is why every latched symbol latches
+between bar 20 and bar 164 and never recovers.
+
+Measured on 28 symbols, 333 days:
+
+| | latched | symbols |
+|---|---|---|
+| Min30 | 4/28 (14%) | BNB, ONDO, TIA, **BTC** |
+| Min15 | 1/28 (4%) | BNB |
+
+Two triggers, one dead end:
+
+| symbol | BOS | max high after | closes beyond | trigger |
+|---|---|---|---|---|
+| BNB Min30 | 1374.64 | 1316.98 (−4.2%) | 0 | never reached |
+| TIA Min30 | 1.2140 | 1.1810 (−2.7%) | 0 | never reached |
+| ONDO Min30 | 0.8354 | 0.8425 (+0.8%) | 3 | poked, no body close |
+| BTC Min30 | 115908.9 | 116398.8 (+0.4%) | 1 | poked, no body close |
+
+`M_BOS` is Body & Sweep, which wants a sweep and then a body close, so a lone
+poke does not count. Internal structure on the same candles stays healthy
+throughout on every latched symbol — this is the engine's silence, not the
+market's.
+
+**This is why Main looked dead on BTC 30m.** The user reported that different
+settings worked per timeframe and moved the signal depth to Internal. On BTC
+Min30 the Main tracker stops at bar 25 of 15,983 and never emits again, so
+there was nothing to see. That observation was correct and this is the cause.
+
+**What it affects.** `riptide-lit-v2.pine` renders Main and a faithful port has
+the same trap. LIT_FORWARD_V1 collects Main setups. Stages A, B and C all
+measured Main.
+
+**What it does not do** is overturn the three INCONCLUSIVE verdicts. A smaller
+sample is less power, and those stages failed to find evidence rather than
+finding a negative. It does mean their effective sample was smaller than
+reported, and selected toward symbols whose first BOS happened to break.
+
+No fix is applied here. An escape is a new rule and needs a name, a default and
+its own measurement; two candidates are named in the study and neither is
+picked. The frozen engine stands, `rules_hash` is unchanged, and both frozen
+test scripts still pass.
