@@ -9,14 +9,20 @@ are kept so either round can be reproduced
 
 ## Verdict
 
-**`leg` PASSES and is PROPOSED. The default stays `none`.**
+**`leg` PASSES.** It was proposed here with the default left at `none`, and
+**subsequently turned on at the user's instruction** — `POL.seekCh` now
+defaults to `"leg"`, which carried the forward record to `LIT_FORWARD_V2`
+(rules hash `ec15663860a09853`). See the changelog entry "P9 TURNED ON".
 
 It repairs **14 of 14** `PH_SEEK` latches across both samples — 5 in sample, 9
 on 71 untouched symbols — with no invariant violations, no panel made
 unhealthy, and 99.8% of existing events preserved where nothing was broken.
 
-A **second, unrelated defect** (`PH_LOCK` stall, 3 of 191 panels) is
-characterised below and deliberately left unfixed.
+A **second, unrelated defect** (`PH_LOCK` stall, 3 of 191 panels here) is
+characterised below and deliberately left unfixed. It has since had its own
+diagnosis — `research/LIT_LOCK_STALL.md` — which measures it at 2 of 189 panels
+under the repaired engine, corrects the "both boundaries unreachable" reading
+below, and recommends leaving it alone.
 
 ---
 
@@ -183,16 +189,21 @@ own prereg.
 
 ## Standing constraints — unchanged
 
-`POL.seekCh` defaults to `"none"`. Under that default the engine is
-byte-identical to the frozen one, verified by diffing the latch study's output
-before and after the change. `rules_hash` is untouched, nothing under
-`riptide/` was modified, and both frozen test scripts pass.
+**As measured, `POL.seekCh` defaulted to `"none"`** and the engine was
+byte-identical to the frozen one under it, verified by diffing the latch
+study's output before and after the change.
 
-A pass earns the right to be **proposed**, not switched on:
+**It has since been turned on.** The default is `"leg"`, `FWD_VERSION` is
+`LIT_FORWARD_V2` and `rules_hash` is `ec15663860a09853`. Setting
+`POL.seekCh = "none"` reproduces everything measured in this document and
+everything recorded under V1.
 
-* Turning it on is the user's call.
-* Doing so in production means **LIT_FORWARD_V2**, never a patch to V1, and
-  the two records must never be pooled.
+What that switch did and did not carry:
+
+* V1 rows are untouched and **never pooled** with V2 — every query filters on
+  `strategy_version` and `setup_id` mixes the version into the key. Any V1
+  setup still PENDING at the switch is a **censored** observation and will
+  never resolve; `DEPLOY.md` carries the SQL to count them.
 * It does not revisit stages A, B or C. Re-running those under a repaired
   engine is a new experiment needing its own pre-registration — and given that
   14 panels were previously contributing nothing, their samples would change.
