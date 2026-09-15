@@ -2877,11 +2877,11 @@ Liq.LLF(msLiqSPP, msLiqDPP, msLiqSLLS, msLiqDLLS, msShow and msLiq and msLiqSH, 
 //      THROUGH. It is the complement of the grab, not a weaker version of it,
 //      and it is a separate decision from the one that was asked for.
 //    * THE GLYPH SPLITS. The original writes "$$$" on every grab. Here a grab
-//      whose two candles share a colour is "$$" and one whose candles oppose
-//      is "$" — same detection, same bands, only the text differs. WORTH
-//      KNOWING IF YOU RUN BOTH SCRIPTS AT ONCE: "$" means a sweep in the
-//      original (level taken and closed THROUGH) and a grab here. Same
-//      character, two meanings, on one chart.
+//      whose two candles share a colour keeps "$$$" and one whose candles
+//      oppose is "$$" — same detection, same bands, only the text differs.
+//      Neither collides with the original's "$", which there means a SWEEP:
+//      the level taken and closed THROUGH. That matters because both scripts
+//      may be on one chart, and it is why the narrower glyph is "$$".
 //
 //  A pivot cannot be pierced between printing and confirming — by definition
 //  no bar inside its right window exceeds it — so testing only the previous
@@ -2927,12 +2927,12 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sam
     int x2 = bar_index - 1
     // The original marks every grab "$$$". This tells the two shapes apart
     // instead, because they are not the same event drawn twice:
-    //   $$  both candles the same colour — the piercing bar already closed
-    //       back over the level and the next one carried on. The rejection
-    //       happened inside one bar.
-    //   $   opposite colours — the piercing bar closed one way and the
-    //       reclaim bar the other. A two-bar reversal.
-    string glyph = sameCol ? "$$" : "$"
+    //   $$$  both candles the same colour — the piercing bar already closed
+    //        back over the level and the next one carried on. The rejection
+    //        happened inside one bar.
+    //   $$   opposite colours — the piercing bar closed one way and the
+    //        reclaim bar the other. A two-bar reversal.
+    string glyph = sameCol ? "$$$" : "$$"
     line lvl = line.new(fromBar, px, x2, px,
          xloc  = xloc.bar_index,
          color = s.col,
@@ -2953,8 +2953,8 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sam
                      "\nWick reached " + f2s(wick) + ", price closed back " +
                      (isHigh ? "below" : "above") + " the level." +
                      (sameCol
-                      ? "\n$$ — both candles the same colour: the piercing bar itself closed back over the level."
-                      : "\n$ — opposite colours: the piercing bar closed one way and the reclaim bar the other.") +
+                      ? "\n$$$ — both candles the same colour: the piercing bar itself closed back over the level."
+                      : "\n$$ — opposite colours: the piercing bar closed one way and the reclaim bar the other.") +
                      "\nContext only — no alert, no setup, no claim.")
     // A linefill dies with either of its lines, so tracking the lines is
     // enough to free it.
