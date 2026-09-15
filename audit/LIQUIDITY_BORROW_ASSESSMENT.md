@@ -277,6 +277,18 @@ input that is greyed out is one you do not have to read.
 **That is the borrow I recommend, and it is the only one I would do
 unprompted.**
 
+> **Done.** 67 of the 149 inputs are now gated — `msShow` alone carries 13,
+> `trackOutcomes` 6, `showFVGs` 5. `deploy/pine-input-audit.py --diff` reports
+> *"EVERY INPUT KEEPS ITS NAME, TYPE AND DEFAULT"*, and all five checkers pass.
+> Four dependencies were deliberately **not** gated because the input is
+> parity-locked (`beLockR`, `earlyMaxBars`, `earlyMaxRiskATR`,
+> `poiMaxAgeDays`): those must track `riptide.conf` whether or not the chart
+> draws the thing they govern, and greying them would say otherwise. Five more
+> were dropped on inspection — `liqCol` looks like it depends on `liqDirCol`
+> and does not, `setupExtendBars`/`setupLevelKeep` are shared with the early
+> zones and the target lines, `showTrendTag` is documented as working with the
+> trend line off, and `sessTz` feeds a master declared later in the file.
+
 ---
 
 ## Summary — what I would and would not do
