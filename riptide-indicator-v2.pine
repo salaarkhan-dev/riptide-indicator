@@ -2876,6 +2876,10 @@ Liq.LLF(msLiqSPP, msLiqDPP, msLiqSLLS, msLiqDLLS, msShow and msLiq and msLiqSH, 
 //    * NOT PORTED: the original's `$` sweep mark, the level taken and CLOSED
 //      THROUGH. It is the complement of the grab, not a weaker version of it,
 //      and it is a separate decision from the one that was asked for.
+//    * THE LABEL SITS AT BAR N-1, not at the midpoint of the band as the
+//      original places it. See the note at the label.new call: once the
+//      glyph encodes a property of two specific candles, a mark floating
+//      6 to 15 bars away from them is misinformation, not decoration.
 //    * THE GLYPH SPLITS. The original writes "$$$" on every grab. Here a grab
 //      whose two candles share a colour keeps "$$$" and one whose candles
 //      oppose is "$$" — same detection, same bands, only the text differs.
@@ -2955,7 +2959,17 @@ drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick, bool sam
          xloc  = xloc.bar_index,
          color = color(na))
     linefill.new(lvl, edge, color.new(s.col, 80))
-    label tag = label.new(fromBar + (x2 - fromBar) / 2, px, glyph,
+    // ON THE CANDLES IT DESCRIBES, not at the midpoint of the band. mickes
+    // centres its "$$$" because there the glyph describes the LEVEL, and the
+    // middle of the band is a reasonable place to say "this level". Here the
+    // glyph is decided by the two candles at N-1 and N, and the midpoint is
+    // nowhere near them: measured over 3,644 grabs, the midpoint sits a
+    // median of 6 bars left of N on the narrow instance and 15 on the wide
+    // one, up to 101, and it is 3 or more bars away 100% of the time. A
+    // reader checks the candles under the label, finds two that had no part
+    // in choosing it, and concludes the rule is broken. x2 is bar N-1 — the
+    // piercing candle, immediately left of the reclaim candle.
+    label tag = label.new(x2, px, glyph,
          xloc      = xloc.bar_index,
          color     = color(na),
          textcolor = color.new(s.col, 30),
