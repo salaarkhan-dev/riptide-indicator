@@ -6,8 +6,12 @@ A diagnostic, not a study. It counts events and scores nothing. **No claim
 that more marks are better marks is made here**, and none should be read into
 it — it answers "why are there fewer", not "which is right".
 
-Two independent causes. Neither is a port bug: `deploy/ms-port-check.py` and
-`deploy/ms-py-parity.py` both still pass.
+**Three** independent causes. None is a port bug: `deploy/ms-port-check.py`
+and `deploy/ms-py-parity.py` both still pass.
+
+Read cause 3 first. It was found last, it is almost certainly the largest, and
+it means most of what looked like missed detection was detection followed by
+deletion.
 
 ---
 
@@ -100,6 +104,84 @@ the honest floor, and this file exists.
 
 ---
 
+## Cause 3 — and it is probably the biggest: the drawings were being evicted
+
+Added after a second comparison against the reference, and it **corrects the
+emphasis of everything above.**
+
+    python3 research/studies/ms_period_grid.py
+
+A CHoCH that the reference labelled and this layer appeared to miss was
+checked directly against the engine, on the same bars:
+
+```
+msLen=15 short=3   whole file {'sweep': 45, 'choch': 26, 'idm': 38, 'bos': 14}
+  15 Sep 04:00-10:00 UTC:  CHOCH 05:00 @ 77441.6     IDM 09:45 @ 76973.1
+msLen=10 short=3   identical in that window
+msLen=8  short=2   identical in that window
+```
+
+**It fired.** At every period setting tried. It was not a detection miss at
+all — so `msLen` was not the reason that one was absent from the chart.
+
+The reason is `msKeepN`. Every event costs one line and one label, and the old
+cap of **40** against **123 events** on that file meant roughly **two thirds
+of everything this layer detected was drawn and then deleted** to make room
+for something newer. An event vanishing after it printed looks exactly like an
+event that never printed.
+
+`msKeepN` default raised **40 → 100**, maxval 200 → 400.
+
+**The cheaper lever is not raising it.** Sweeps were 45 of those 123 events —
+37% of the budget spent on the small `x` marks. Unticking *Sweeps* frees a
+third of the budget for CHoCH, BOS and IDM and costs Riptide's own drawings
+nothing.
+
+---
+
+## The period grid — CHoCH and IDM/BOS are steerable separately
+
+`research/studies/ms_period_grid.py`, same data, cells are
+**CHoCH / IDM / BOS / IDM-blocked**:
+
+```
+ msLen        short=1              short=2              short=3              short=5
+    20   56/122/ 63/  0      56/110/ 51/  0      56/105/ 46/  0      56/ 92/ 38/  5
+    15   70/144/ 72/  0      70/126/ 57/  0      70/116/ 50/  0      70/ 98/ 40/  5
+    12   82/156/ 72/  0      82/134/ 55/  1      82/122/ 46/  3      82/103/ 36/  8
+    10   94/167/ 74/  1      94/135/ 51/  8      94/120/ 41/ 12      94/ 96/ 32/ 19
+     8  122/197/ 76/  1     122/158/ 50/ 12     122/137/ 39/ 21     122/ 93/ 28/ 48
+     6  160/227/ 77/  3     160/164/ 45/ 33     160/121/ 28/ 71     160/ 45/ 11/143
+     5  178/231/ 80/ 10     178/155/ 44/ 46     178/ 99/ 25/107
+```
+
+Two clean facts:
+
+* **CHoCH depends on `msLen` only.** Every column is identical down a row. So
+  if you want the reference's CHoCH density, `msLen` is the single knob, and
+  nothing else moves with it.
+* **The collision is avoidable.** `msShortLen = 1` keeps IDM-blocked at ~0 all
+  the way down to `msLen = 5`, and BOS stays flat at 72–80 instead of
+  collapsing.
+
+The second is a trap, not a recommendation, and it is worth being blunt about.
+At `msShortLen = 1` an "inducement" is *price dipped below the previous bar's
+low*. The count goes up because the test became trivial, not because more
+inducements exist. Satisfying the BOS prerequisite with a meaningless
+inducement is a worse answer than the honest one, which is to turn the
+prerequisite off with `msBosNeedsIdm` and say so.
+
+If the goal is to match the reference's read: **`msLen` 8, `msShortLen` 2**
+gives 122 CHoCH / 158 IDM / 50 BOS with 12 blocked — more CHoCH and more IDM
+than the shipped 15/3, same BOS. The default was left at 15/3 rather than
+moved twice in two commits; those are two numbers to type, and this table is
+here so the choice is yours rather than mine.
+
+Nothing in this file measures whether any of it is *better*. It measures how
+many marks appear and why.
+
+---
+
 ## What changed, exactly
 
 | | |
@@ -107,6 +189,7 @@ the honest floor, and this file exists.
 | `msBosNeedsIdm` | **new input**, default `true` = the original's behaviour. OFF labels every break of the running extreme. |
 | `msLen` default | **50 → 15**. Context-only, not parity-locked. |
 | `msLen` minval | 2 → 5, so the IDM/BOS-dead regime is unreachable. |
+| `msKeepN` default | **40 → 100**, maxval 200 → 400. See cause 3 — this is the one most likely to have been hiding structure. |
 | tooltips | carry the numbers above, including the floor warning. |
 
 `deploy/pine-input-audit.py --diff` reports both behavioural changes by name
