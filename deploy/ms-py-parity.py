@@ -62,12 +62,6 @@ EXPECTED = {
         ("IF msShowIdm and not msSBtmCrossed",
          "drawing gate on the live IDM extension"),
         ("IF msShowIdm and not msSTopCrossed", "same"),
-        ("IF msSBtmY IS_SET and msSBtmY < close",
-         "section 13 ledger signal-capture: Pine-only instrumentation. "
-         "It lives inside the BOS block because the block clears "
-         "msSBtmCrossed on its way out, so section 13 cannot re-derive "
-         "it. The Python study applies the same stop test in stop_for()."),
-        ("IF msSTopY IS_SET and msSTopY > close", "same, bearish side"),
     ],
     "py": [
         ("SET cycle = cycle + 1", "the Python numbers CHoCH cycles so events "
@@ -95,9 +89,9 @@ def statements(path: str, py: bool) -> set[str]:
             txt = re.sub(pat, rep, txt)
     else:
         txt = txt.split("12. MARKET STRUCTURE", 1)[1]
-        # Stop at section 13. The ledger and stats table are Pine-only
-        # instrumentation with no Python counterpart, so including them
-        # would report every one of their conditions as a parity break.
+        # Scoped to section 12. Nothing follows it today, but the bound
+        # stays so Pine-only instrumentation added later is not reported
+        # as a parity break against the Python engine.
         txt = txt.split("13. MARKET STRUCTURE", 1)[0]
         txt = re.sub(r"//.*", "", txt)
         for pat, rep, _ in PINE_NORM:

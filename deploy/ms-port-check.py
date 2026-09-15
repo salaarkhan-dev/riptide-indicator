@@ -84,8 +84,9 @@ def main(argv):
         return 2
     orig, port = argv[1], argv[2]
     a = {norm(rename(x)) for x in conditions(orig, "//Swings detection", None)}
-    # Stop at section 13: the ledger and stats table are instrumentation
-    # added on top of the port, not part of what was ported.
+    # Scoped to section 12. There is no section 13 today — the ledger and
+    # stats table were removed — but the bound stays so that anything added
+    # after the port is not compared against the script that was ported.
     b = conditions(port, "12. MARKET STRUCTURE", "13. MARKET STRUCTURE")
 
     # KNOWN EQUIVALENCES. Each pair is a difference that is a rename or a
@@ -119,25 +120,8 @@ def main(argv):
     IGNORE_NEW = re.compile(r"^(IF msOn|IF barstate|SET msExt|"
                             r"IF msShowChoch$|IF msShowBos$|IF msShowIdm$|"
                             r"IF msShowSweeps$|IF msShow)")
-    # Section 13's ledger has to capture its signal INSIDE the section-12 BOS
-    # block: that block clears msSBtmCrossed on its way out and the trailing
-    # block then moves msMax, so the condition cannot be re-derived later.
-    # These six lines are that capture. They add no structure logic — nothing
-    # they set is read by the engine — and they are listed rather than swept
-    # into the regex above so they stay visible.
-    LEDGER = [
-        "IF not na(msSBtmY) and msSBtmY < close",
-        "IF not na(msSTopY) and msSTopY > close",
-        "SET msSigLong = true",
-        "SET msSigShort = true",
-        "SET msSigStop = msSBtmY",
-        "SET msSigStop = msSTopY",
-    ]
-
     only_orig = sorted(x for x in a - b)
-    ledger_seen = [x for x in b - a if x in LEDGER]
-    only_port = sorted(x for x in b - a
-                       if not IGNORE_NEW.match(x) and x not in LEDGER)
+    only_port = sorted(x for x in b - a if not IGNORE_NEW.match(x))
 
     print(f"original: {len(a)} statements   port: {len(b)}")
     print(f"shared:   {len(a & b)}\n")
@@ -159,12 +143,6 @@ def main(argv):
             print(f"   {why}")
             print(f"     was  {o}")
             print(f"     now  {p_}")
-        print()
-    if ledger_seen:
-        print(f"LEDGER CAPTURE — section 13 instrumentation inside section 12,")
-        print(f"sets nothing the engine reads ({len(ledger_seen)}):")
-        for x in sorted(ledger_seen):
-            print(f"   {x}")
         print()
     if only_orig:
         print(f"IN THE ORIGINAL, NOT IN THE PORT  ({len(only_orig)}):")

@@ -423,18 +423,6 @@ msShowIdm = input.bool(true, "IDM", inline = "ms1", group = gMS)
 msShowSweeps = input.bool(true, "Sweeps", inline = "ms1", group = gMS)
 msShowSwings = input.bool(false, "Swing dots", inline = "ms1", group = gMS,
      tooltip = "Off by default: Riptide already has its own swing markers under Appearance, and two sets of dots on one chart is how you end up reading the wrong one.")
-msShowEntries = input.bool(false, "Mark BOS entries", group = gMS,
-     tooltip = "A triangle on every bar the structure BOS fires, with the entry, stop, target and risk in its tooltip.\n\nOFF BY DEFAULT AND IT SHOULD STAY OFF UNLESS YOU ARE TESTING. This trigger was measured against a control that trades continuously in the same structure with the same stop and target, over 28 symbols and 333 days, and it came back INCONCLUSIVE: the paired difference flips sign across the four test panels and pools to z = -0.17. It is not a signal. research/MS_ENTRY_MODELS.md.\n\nTwo other triggers — entering on the inducement, and entering on the sweep — are deliberately NOT offered. Their stop sits adjacent to the entry by construction, giving a median risk of 0.16% and 0.20% of price against 2.4% here, so any R they displayed would be gap noise. The LIT work already died of a 0.42% stop.")
-msShowStats = input.bool(true, "Statistics table", group = gMS,
-     tooltip = "Books a virtual trade on every BOS signal AND on a continuous control, and reports both side by side.\n\nTHE CONTROL IS THE POINT. A win rate on its own tells you nothing about whether the trigger did the work, because the same stop and target traded continuously in the same structure earns something too. Read the two columns against each other, never the BOS column alone.")
-msStatsPos = input.string("Bottom right", "Table position", group = gMS,
-     options = ["Top right", "Middle right", "Bottom right", "Bottom left"])
-msFeePct = input.float(0.08, "Round-trip fee %", minval = 0.0, step = 0.01,
-     group = gMS,
-     tooltip = "Charged in R as fee% / risk%, the same way the Python research harness does it. 0.08 is Riptide's maker 0.02 + taker 0.06.")
-msHorizonH = input.int(48, "Give up after (hours)", minval = 1, group = gMS,
-     tooltip = "A trade that has neither stopped nor hit target by here is closed at the market and booked at whatever it is worth. Matches the 48-hour horizon the study used, so the table and research/MS_ENTRY_MODELS.md are measuring the same thing.")
-
 msBullCss = input.color(#089981, "Bullish", inline = "ms2", group = gMS)
 msBearCss = input.color(#ff5252, "Bearish", inline = "ms2", group = gMS)
 msIdmCss = input.color(color.gray, "IDM", inline = "ms2", group = gMS)
@@ -2556,12 +2544,6 @@ msSwings(simple int msL) =>
 [msTop, msTopX, msBtm, msBtmX] = msSwings(msLen)
 [msSTop, msSTopX, msSBtm, msSBtmX] = msSwings(msShortLen)
 
-// Captured HERE, not re-derived in section 13: the BOS blocks below clear
-// msSBtmCrossed on their way out and the trailing block then moves msMax,
-// so the condition is already false by the time the ledger runs.
-bool msSigLong = false
-bool msSigShort = false
-float msSigStop = na
 var int msOs = 0
 var bool msTopCrossed = false
 var bool msBtmCrossed = false
@@ -2613,9 +2595,6 @@ if low < msSBtmY and not msSBtmCrossed and msOs == 1 and msSBtmY != msBtmY
 if close > msMax and msSBtmCrossed and msOs == 1
     if msShow and msShowBos
         msDraw(msMaxX, bar_index, msMax, msBullCss, line.style_solid, "BOS", label.style_label_down)
-    if not na(msSBtmY) and msSBtmY < close
-        msSigLong := true
-        msSigStop := msSBtmY
     msSBtmCrossed := false
 
 // ── bearish ────────────────────────────────────────────────────────────────
@@ -2627,9 +2606,6 @@ if high > msSTopY and not msSTopCrossed and msOs == 0 and msSTopY != msTopY
 if close < msMin and msSTopCrossed and msOs == 0
     if msShow and msShowBos
         msDraw(msMinX, bar_index, msMin, msBearCss, line.style_solid, "BOS", label.style_label_up)
-    if not na(msSTopY) and msSTopY > close
-        msSigShort := true
-        msSigStop := msSTopY
     msSTopCrossed := false
 
 // ── sweeps ─────────────────────────────────────────────────────────────────
@@ -2725,265 +2701,3 @@ if barstate.islast
 
 plot(msShow and msShowSwings ? msTop : na, "MS swing high", color.new(msBearCss, 50), 5, plot.style_circles, offset = -msLen)
 plot(msShow and msShowSwings ? msBtm : na, "MS swing low", color.new(msBullCss, 50), 5, plot.style_circles, offset = -msLen)
-
-
-// ═══════════════ 13. MARKET STRUCTURE — LEDGER AND STATS TABLE ══════════════
-//  A measurement instrument, not a scoreboard.
-//
-//  It books a virtual trade on every structure BOS, and a CONTROL trade that
-//  runs continuously in the same structure with the same stop and target, and
-//  puts the two side by side. The control is the whole point: a win rate on
-//  its own cannot tell you whether the trigger did any work, because the same
-//  stop and target traded continuously earn something too.
-//
-//  WHAT THE RESEARCH SAYS ABOUT THE TRIGGER THIS TABLE SCORES. Measured over
-//  28 symbols and 333 days against a uniformly random entry inside the same
-//  structure cycle, the BOS trigger's paired difference was +0.151, -0.080,
-//  +0.054 and +0.042 R across the four panels — it flips sign — pooling to
-//  z = -0.17. INCONCLUSIVE. Every model tested, and the random control, was
-//  NEGATIVE in standalone R. research/MS_ENTRY_MODELS.md has the table.
-//
-//  HOW THIS CONTROL DIFFERS FROM THE STUDY'S, because it is not the same and
-//  saying otherwise would be a lie. The study drew a uniformly random bar
-//  inside each cycle. A uniform draw needs the cycle's length, which is not
-//  known until the cycle ends, so it cannot be computed bar-by-bar on a live
-//  chart. This control instead opens a trade on the first bar after the
-//  previous one closed, continuously, in the current structure direction.
-//  Parameter-free, online, and it answers a closely related question: what
-//  does this stop and target earn if you simply trade them, rather than
-//  waiting for a BOS? Expect the two to differ in level. Read the GAP.
-//
-//  SCORING RULES, the same ones the Python harness uses:
-//    * confirmed bars only — nothing in this section moves intrabar
-//    * the entry bar resolves NOTHING. Price reached the entry from one side,
-//      so a target printed on that bar may have printed before the fill.
-//    * the STOP is tested BEFORE the target. Where one bar spans both, OHLC
-//      cannot order them, so the loss is taken.
-//    * fees are charged in R as fee% / risk%.
-//
-//  WHY THE HEADLINE IS NOT ALONE. R per trade without a standard error is the
-//  number that misleads, and a total that collapses when one trade is removed
-//  was one trade. Both sit next to the headline so it cannot be read the
-//  flattering way. So does the longest LOSING run, which is what actually
-//  decides whether a rule is followable.
-// ─────────────────────────────────────────────────────────────────────────────
-
-type MsTrd
-    bool live = false
-    bool isLong = false
-    float entry = 0.0
-    float stop = 0.0
-    float tgt = 0.0
-    int bar = 0
-
-type MsLed
-    int n = 0
-    int win = 0
-    float totR = 0.0
-    float sumSq = 0.0
-    float gross = 0.0
-    float lossSum = 0.0
-    float best = 0.0
-    float eq = 0.0
-    float peak = 0.0
-    float maxDD = 0.0
-    int runW = 0
-    int runL = 0
-    int bestW = 0
-    int bestL = 0
-    int nStop = 0
-    int nTgt = 0
-    int nOut = 0
-
-// A function may MUTATE an object but may not ASSIGN a global (CE10088), which
-// is why every counter lives inside MsLed rather than at file scope.
-msBook(MsLed L, float r, string why) =>
-    L.n := L.n + 1
-    L.totR := L.totR + r
-    L.sumSq := L.sumSq + r * r
-    if r > 0
-        L.win := L.win + 1
-        L.gross := L.gross + r
-        L.runW := L.runW + 1
-        L.runL := 0
-        if L.runW > L.bestW
-            L.bestW := L.runW
-    else
-        L.lossSum := L.lossSum - r
-        L.runL := L.runL + 1
-        L.runW := 0
-        if L.runL > L.bestL
-            L.bestL := L.runL
-    if r > L.best
-        L.best := r
-    L.eq := L.eq + r
-    if L.eq > L.peak
-        L.peak := L.eq
-    if L.peak - L.eq > L.maxDD
-        L.maxDD := L.peak - L.eq
-    if why == "stop"
-        L.nStop := L.nStop + 1
-    if why == "tgt"
-        L.nTgt := L.nTgt + 1
-    if why == "out"
-        L.nOut := L.nOut + 1
-
-msFeeR(float entry, float risk) =>
-    risk > 0 and entry > 0 ? msFeePct / (risk / entry * 100.0) : 0.0
-
-// One bar of one trade. Stop before target, and never on the entry bar.
-msStep(MsTrd t, MsLed L, int horizon) =>
-    if t.live and bar_index > t.bar
-        float risk = math.abs(t.entry - t.stop)
-        float fee = msFeeR(t.entry, risk)
-        bool hitStop = t.isLong ? low <= t.stop : high >= t.stop
-        bool hitTgt = t.isLong ? high >= t.tgt : low <= t.tgt
-        if hitStop
-            float fill = t.isLong ? math.min(t.stop, open) : math.max(t.stop, open)
-            float rs = (t.isLong ? fill - t.entry : t.entry - fill) / risk
-            msBook(L, rs - fee, "stop")
-            t.live := false
-        else if hitTgt
-            msBook(L, 2.0 - fee, "tgt")
-            t.live := false
-        else if bar_index - t.bar >= horizon
-            float raw = (t.isLong ? close - t.entry : t.entry - close) / risk
-            msBook(L, raw - fee, "out")
-            t.live := false
-
-msOpen(MsTrd t, bool isLong, float entry, float stop) =>
-    float risk = math.abs(entry - stop)
-    if risk > 0 and entry > 0
-        t.live := true
-        t.isLong := isLong
-        t.entry := entry
-        t.stop := stop
-        t.tgt := isLong ? entry + 2.0 * risk : entry - 2.0 * risk
-        t.bar := bar_index
-
-var array<MsTrd> msBosOpen = array.new<MsTrd>()
-var MsLed msBosLed = MsLed.new()
-var MsTrd msCtl = MsTrd.new()
-var MsLed msCtlLed = MsLed.new()
-
-int msHorizonBars = math.max(1, int(msHorizonH * 3600 / timeframe.in_seconds()))
-
-// The signal this table scores: the BOS, with the stop rule the study fixed —
-// the live short-period opposing swing, SKIPPED when it is on the wrong side
-// rather than substituted.
-if barstate.isconfirmed and msShowStats
-    for t in msBosOpen
-        msStep(t, msBosLed, msHorizonBars)
-    msStep(msCtl, msCtlLed, msHorizonBars)
-    if msSigLong or msSigShort
-        MsTrd nt = MsTrd.new()
-        msOpen(nt, msSigLong, close, msSigStop)
-        if nt.live
-            msBosOpen.push(nt)
-    // Purge wherever a dead trade sits, not just at the front: a later trade
-    // can stop out before an earlier one reaches its horizon.
-    if msBosOpen.size() > 0
-        for i = msBosOpen.size() - 1 to 0
-            if not msBosOpen.get(i).live
-                msBosOpen.remove(i)
-
-    // THE CONTROL. Opens on the first bar after the previous one closed, in
-    // whatever direction the structure currently is, with the same stop rule.
-    if not msCtl.live
-        bool cLong = msOs == 1
-        float cStop = cLong ? msSBtmY : msSTopY
-        bool ok = not na(cStop) and (cLong ? cStop < close : cStop > close)
-        if ok
-            msOpen(msCtl, cLong, close, cStop)
-
-if msShow and msShowEntries and (msSigLong or msSigShort)
-    float rk = math.abs(close - msSigStop)
-    label.new(bar_index, msSigLong ? low : high,
-         msSigLong ? "▲" : "▼", xloc = xloc.bar_index, yloc = yloc.price,
-         color = color(na), textcolor = msSigLong ? msBullCss : msBearCss,
-         style = msSigLong ? label.style_label_up : label.style_label_down,
-         size = size.tiny,
-         tooltip = "STRUCTURE BOS — measured INCONCLUSIVE, not a signal\n\n"
-             + "Entry  " + str.tostring(close, format.mintick) + "\n"
-             + "Stop   " + str.tostring(msSigStop, format.mintick)
-             + "   (" + str.tostring(rk / close * 100.0, "0.00") + "% = 1R)\n"
-             + "Target " + str.tostring(msSigLong ? close + 2 * rk : close - 2 * rk, format.mintick)
-             + "\n\nAgainst a control trading the same stop and target "
-             + "continuously, this trigger's edge flips sign across four test "
-             + "panels and pools to z = -0.17. research/MS_ENTRY_MODELS.md")
-
-msPct(float a, float b) =>
-    b > 0 ? a / b * 100.0 : 0.0
-
-msSE(MsLed L) =>
-    float m = L.n > 0 ? L.totR / L.n : 0.0
-    float v = L.n > 1 ? (L.sumSq - L.n * m * m) / (L.n - 1) : 0.0
-    v > 0 and L.n > 1 ? math.sqrt(v / L.n) : 0.0
-
-msCell(table tb, int col, int row, string s, color c) =>
-    table.cell(tb, col, row, s, text_color = c, text_size = size.tiny,
-         text_halign = col == 0 ? text.align_left : text.align_right)
-
-var table msTbl = table.new(position.bottom_right, 3, 17,
-     border_width = 1, frame_width = 1)
-
-if barstate.islast and msShowStats
-    table.set_position(msTbl, msStatsPos == "Top right" ? position.top_right : msStatsPos == "Middle right" ? position.middle_right : msStatsPos == "Bottom left" ? position.bottom_left : position.bottom_right)
-    table.clear(msTbl, 0, 0, 2, 16)
-    color hd = color.new(color.gray, 0)
-    color fg = chart.fg_color
-    float mB = msBosLed.n > 0 ? msBosLed.totR / msBosLed.n : 0.0
-    float mC = msCtlLed.n > 0 ? msCtlLed.totR / msCtlLed.n : 0.0
-    float sB = msSE(msBosLed)
-    float sC = msSE(msCtlLed)
-    msCell(msTbl, 0, 0, "Structure BOS", hd)
-    msCell(msTbl, 1, 0, "BOS", hd)
-    msCell(msTbl, 2, 0, "CONTROL", hd)
-    msCell(msTbl, 0, 1, "trades", fg)
-    msCell(msTbl, 1, 1, str.tostring(msBosLed.n), fg)
-    msCell(msTbl, 2, 1, str.tostring(msCtlLed.n), fg)
-    msCell(msTbl, 0, 2, "win rate", fg)
-    msCell(msTbl, 1, 2, str.tostring(msPct(msBosLed.win, msBosLed.n), "0.0") + "%", fg)
-    msCell(msTbl, 2, 2, str.tostring(msPct(msCtlLed.win, msCtlLed.n), "0.0") + "%", fg)
-    msCell(msTbl, 0, 3, "TOTAL R", fg)
-    msCell(msTbl, 1, 3, str.tostring(msBosLed.totR, "0.0"), msBosLed.totR >= 0 ? msBullCss : msBearCss)
-    msCell(msTbl, 2, 3, str.tostring(msCtlLed.totR, "0.0"), msCtlLed.totR >= 0 ? msBullCss : msBearCss)
-    msCell(msTbl, 0, 4, "R / trade", fg)
-    msCell(msTbl, 1, 4, str.tostring(mB, "0.000"), fg)
-    msCell(msTbl, 2, 4, str.tostring(mC, "0.000"), fg)
-    msCell(msTbl, 0, 5, "± SE", fg)
-    msCell(msTbl, 1, 5, str.tostring(sB, "0.000"), fg)
-    msCell(msTbl, 2, 5, str.tostring(sC, "0.000"), fg)
-    msCell(msTbl, 0, 6, "t", fg)
-    msCell(msTbl, 1, 6, sB > 0 ? str.tostring(mB / sB, "0.00") : "—", fg)
-    msCell(msTbl, 2, 6, sC > 0 ? str.tostring(mC / sC, "0.00") : "—", fg)
-    msCell(msTbl, 0, 7, "GAP  BOS − control", hd)
-    msCell(msTbl, 1, 7, str.tostring(mB - mC, "0.000"), (mB - mC) >= 0 ? msBullCss : msBearCss)
-    msCell(msTbl, 2, 7, "R/trade", hd)
-    msCell(msTbl, 0, 8, "profit factor", fg)
-    msCell(msTbl, 1, 8, msBosLed.lossSum > 0 ? str.tostring(msBosLed.gross / msBosLed.lossSum, "0.00") : "—", fg)
-    msCell(msTbl, 2, 8, msCtlLed.lossSum > 0 ? str.tostring(msCtlLed.gross / msCtlLed.lossSum, "0.00") : "—", fg)
-    msCell(msTbl, 0, 9, "max drawdown R", fg)
-    msCell(msTbl, 1, 9, str.tostring(msBosLed.maxDD, "0.0"), fg)
-    msCell(msTbl, 2, 9, str.tostring(msCtlLed.maxDD, "0.0"), fg)
-    msCell(msTbl, 0, 10, "longest win run", fg)
-    msCell(msTbl, 1, 10, str.tostring(msBosLed.bestW), fg)
-    msCell(msTbl, 2, 10, str.tostring(msCtlLed.bestW), fg)
-    msCell(msTbl, 0, 11, "longest LOSS run", fg)
-    msCell(msTbl, 1, 11, str.tostring(msBosLed.bestL), fg)
-    msCell(msTbl, 2, 11, str.tostring(msCtlLed.bestL), fg)
-    msCell(msTbl, 0, 12, "best trade % of gross", fg)
-    msCell(msTbl, 1, 12, str.tostring(msPct(msBosLed.best, msBosLed.gross), "0.0") + "%", fg)
-    msCell(msTbl, 2, 12, str.tostring(msPct(msCtlLed.best, msCtlLed.gross), "0.0") + "%", fg)
-    msCell(msTbl, 0, 13, "TOTAL R without it", fg)
-    msCell(msTbl, 1, 13, str.tostring(msBosLed.totR - msBosLed.best, "0.0"), fg)
-    msCell(msTbl, 2, 13, str.tostring(msCtlLed.totR - msCtlLed.best, "0.0"), fg)
-    msCell(msTbl, 0, 14, "stop / target / gave up", fg)
-    msCell(msTbl, 1, 14, str.tostring(msBosLed.nStop) + " / " + str.tostring(msBosLed.nTgt) + " / " + str.tostring(msBosLed.nOut), fg)
-    msCell(msTbl, 2, 14, str.tostring(msCtlLed.nStop) + " / " + str.tostring(msCtlLed.nTgt) + " / " + str.tostring(msCtlLed.nOut), fg)
-    msCell(msTbl, 0, 15, "still open", fg)
-    msCell(msTbl, 1, 15, str.tostring(msBosOpen.size()), fg)
-    msCell(msTbl, 2, 15, msCtl.live ? "1" : "0", fg)
-    msCell(msTbl, 0, 16, "read the GAP", hd)
-    msCell(msTbl, 1, 16, "measured", hd)
-    msCell(msTbl, 2, 16, "INCONCLUSIVE", hd)

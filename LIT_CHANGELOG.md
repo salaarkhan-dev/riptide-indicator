@@ -2768,3 +2768,34 @@ instrumentation added on top of the port rather than part of it.
 
 **Still not a compile.** `riptide-indicator.pine` and `riptide-lit-v2.pine` are
 untouched.
+
+### Section 13 REMOVED — the ledger and stats table
+
+Removed at the user's request after testing it on BTC and ETH across 15m, 30m
+and 1h. `riptide-indicator-v2.pine` is back to the market-structure layer and
+nothing else.
+
+The table was working. It reported poor total R and win rate, which is what
+`research/MS_ENTRY_MODELS.md` predicted before it was built: every entry model
+tested, **and the random control**, came back negative in standalone R. A
+measurement instrument that keeps telling you the same negative thing has
+already told you what it had to say.
+
+Gone with it: the `MsTrd` / `MsLed` types, the ledger, the table, the BOS entry
+markers, the five inputs (`Mark BOS entries`, `Statistics table`, table
+position, fee, horizon) and the three signal-capture lines that existed only to
+feed it. `table.new` is back to 3 occurrences, the same as
+`riptide-indicator.pine` — Riptide's own stats and debug tables, none of mine.
+
+**Recovery**, if it is ever wanted:
+
+    git show f497921:riptide-indicator-v2.pine > riptide-indicator-v2.pine
+
+The two port checkers dropped the allowlist entries that described the
+ledger's capture lines, since those lines no longer exist. Both keep their
+section-13 bound so that anything added after the port is still not compared
+against the script that was ported.
+
+All four checkers pass, the frozen control test passes, and
+`riptide-indicator.pine`, `riptide-lit-v2.pine` and `riptide-lit-v3.pine` are
+untouched.
