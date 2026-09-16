@@ -518,8 +518,10 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
     int nBody = 0
     int nWick = 0
     int nDir = 0
+    int nAnchor = 0
     float bS = -1.0
     string bDesc = ""
+    string bFails = ""
     if anchorOff >= 0 and anchorOff + ccpBack < 450 and anchorOff + ccpBack < bar_index
         for f = 0 to ccpFwd
             if f <= anchorOff
@@ -547,13 +549,29 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
                         float upW = (hh - math.max(oo, cc)) / rng
                         float dnW = (math.min(oo, cc) - ll) / rng
                         float bigW = math.max(upW, dnW)
+                        // The anchor-extreme gate was MISSING from this
+                        // function when it shipped, and ccpScanAt applies it.
+                        // So with that input on, this tooltip could print a
+                        // closest window that passes body, wick and direction
+                        // while the scan had rejected it — an explanation that
+                        // contradicted the verdict it was explaining, which is
+                        // worse than no explanation at all.
+                        bool ownX = not ccpAnchorExtreme or ((dnW > upW) ? low[anchorOff] == ll : high[anchorOff] == hh)
+                        string fails = ""
                         if bodyF > ccpBodyMax
                             nBody := nBody + 1
+                            fails := fails + " BODY"
                         if bigW < ccpWickMin
                             nWick := nWick + 1
+                            fails := fails + " WICK"
                         if (dnW > upW) != wantBull
                             nDir := nDir + 1
+                            fails := fails + " DIRECTION"
+                        if not ownX
+                            nAnchor := nAnchor + 1
+                            fails := fails + " ANCHOR-EXTREME"
                         if bigW > bS
+                            bFails := fails
                             bS := bigW
                             bDesc := str.tostring(b + f + 1) + " candles (" + str.tostring(b) + " before + " + str.tostring(f) + " after), body " + str.tostring(bodyF, "#.00") + "  upper " + str.tostring(upW, "#.00") + "  lower " + str.tostring(dnW, "#.00")
     string s = "\n    " + str.tostring(nTried) + " windows tried, all rejected:"
@@ -565,7 +583,14 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
         s := s + "\n      " + str.tostring(nWick) + " longer wick too short (floor " + str.tostring(ccpWickMin, "#.00") + ")"
     if nDir > 0
         s := s + "\n      " + str.tostring(nDir) + " WRONG DIRECTION — a real pin pointing the way this grab does not imply"
-    bDesc == "" ? s : s + "\n    closest window: " + bDesc
+    if nAnchor > 0
+        s := s + "\n      " + str.tostring(nAnchor) + " the long wick was a NEIGHBOUR'S, not the anchor's — that is the 'long wick must be the anchor's own' switch. It costs about four fifths of all matches; turn it off to see them."
+    // A window that fails NOTHING cannot exist here, because this function is
+    // only called when the scan found no match. If one is ever printed, this
+    // function and ccpScanAt have drifted apart and the tooltip says so rather
+    // than quietly showing a passing window next to the words "no shape".
+    string tail = bFails == "" ? "  → failed NOTHING, which is impossible: ccpWhy and ccpScanAt have drifted. Please report." : "  → failed:" + bFails
+    bDesc == "" ? s : s + "\n    closest window: " + bDesc + tail
 
 // ── state ───────────────────────────────────────────────────────────────────
 var array<label> ccpLbs = array.new<label>()
