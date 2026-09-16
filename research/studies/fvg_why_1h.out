@@ -1,0 +1,26 @@
+Why only 1h? A scaling diagnostic.
+
+EXPLORATORY mechanism hunt. Gross R throughout. No verdict.
+
+arm tf      pivot  win  horiz   n FVG   gross R     SE        Δ      z  risk%   isolates
+--------------------------------------------------------------------------------------------------------
+A   Min60       3    2     48    6835     0.044  0.016    0.052   2.83   1.72   baseline — the cell with the edge
+B   Min15      12    8    192   14246     0.008  0.012   -0.011  -0.75   1.21   same physical size as A
+C   Min15       3    2    192   29713     0.003  0.009   -0.018  -1.80   0.77   the original Min15 run
+D   Min15       3    2     48   29713    -0.007  0.008   -0.026  -2.97   0.77   native structure, A's horizon in bars
+E   Min30       6    4     96   10099     0.023  0.014    0.017   1.00   1.40   same physical size as A
+
+═══ WHICH MECHANISM ═══
+  A (Min60 native) gross R +0.044 ± 0.016
+
+  B: gross R +0.008 ± 0.012   vs A -0.036 ± 0.020   matches A
+  E: gross R +0.023 ± 0.014   vs A -0.021 ± 0.022   matches A
+  C: gross R +0.003 ± 0.009   vs A -0.041 ± 0.019   DIFFERS from A
+  D: gross R -0.007 ± 0.008   vs A -0.051 ± 0.018   DIFFERS from A
+
+  B and E matching A  → physical size, not the timeframe.
+  D matching A alone  → the forward horizon in bars.
+  neither             → something about the 1-hour bar itself.
+
+  Whatever this suggests needs its own prereg. A mechanism found
+  by comparing five arms is a hypothesis, not a finding.

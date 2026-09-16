@@ -155,9 +155,14 @@ async def main() -> None:
         m, se, n, d, z = res[aid]
         gap = m - a_m
         gse = math.sqrt(se * se + a_se * a_se)
+        # "Cannot distinguish" is NOT "matches", and the first version of
+        # this printout said the wrong one. With SE on the gap near 0.02, a
+        # point estimate five times smaller than A's still fails to reach two
+        # standard errors — that is the test being underpowered, not the arms
+        # agreeing. The point estimates are what to read.
         near = abs(gap) <= 2 * gse
         print(f"  {aid}: gross R {m:+.3f} ± {se:.3f}   vs A {gap:+.3f} ± {gse:.3f}"
-              f"   {'matches A' if near else 'DIFFERS from A'}")
+              f"   {'cannot distinguish (MDE ' + format(2 * gse, '.3f') + ')' if near else 'DIFFERS from A'}")
     print("\n  B and E matching A  → physical size, not the timeframe.")
     print("  D matching A alone  → the forward horizon in bars.")
     print("  neither             → something about the 1-hour bar itself.")
