@@ -124,6 +124,9 @@ emFeePct = input.float(0.04, "Round-trip fee (% of notional)", minval = 0.0, max
 emStats = input.bool(true, "Show the results table", group = gEM, active = emOn,
      tooltip = "Simulates every drawn setup forward and tallies the outcome. Same rules as research/studies/ccp_exit_models.py — stop wins a bar that spans both levels, the entry bar resolves nothing, 48-hour horizon — so the table on your chart and the study on 23 symbols are measuring the same thing. If they disagree badly, one of them is wrong and that is worth knowing.")
 
+emOutcome = input.bool(true, "Mark how each setup ended", group = gEM, active = emOn,
+     tooltip = "Draws a tick or a cross at the bar where each setup resolved, with the R it made or lost. This is the chart version of the results table, and it is there to make the failures as visible as the marks.\n\nEXPECT MOST OF THEM TO BE CROSSES. research/CCP_ENTRY_MODELS.md found the CCP filter does not sort winners from losers at all, and at a 2R target roughly two setups in three end at the stop. A chart that only ever showed the triangle was hiding that.")
+
 // ── 4. Engine ───────────────────────────────────────────────────────────────
 confirmOnBarClose = input.bool(true, "Only update on closed bars", group = gEng,
      tooltip = "Keep this on. Off lets the marks move while a bar is forming.")
@@ -720,6 +723,15 @@ emLevel(int b1, int b2, float y, color c, string sty, string txt) =>
          style = label.style_label_left, color = color.new(c, 90),
          textcolor = c, size = size.tiny))
 
+// Where a setup ended, and for how much. The point is that a mark which did
+// not work should look different from one that did — a chart showing only the
+// triangle shows only the hypothesis.
+emEnd(float px, bool win, float r) =>
+    emLbs.push(label.new(bar_index, px,
+         (win ? "✓ +" : "✕ ") + str.tostring(r, "#.##") + "R",
+         xloc = xloc.bar_index, yloc = yloc.price, style = label.style_none,
+         textcolor = win ? color.teal : color.red, size = size.small))
+
 emDraw(int rOff, bool bull) =>
     float gHi = high[rOff]
     float gLo = low[rOff]
@@ -777,9 +789,11 @@ if emOn and emStats and ccpBarOk and emOpen.size() > 0
             bool hitTgt = t.isLong ? high >= tl : low <= tl
             bool fin = false
             float r = 0.0
+            float exPx = close
             if hitStop
                 r := t.banked + t.size * (sgn * (t.stop - t.entry) / t.risk)
                 fin := true
+                exPx := t.stop
                 emStp += 1
             else
                 if hitPart
@@ -792,6 +806,7 @@ if emOn and emStats and ccpBarOk and emOpen.size() > 0
                 if hitTgt
                     r := t.banked + t.size * emTargetR
                     fin := true
+                    exPx := tl
                     emTgt += 1
                 else if bar_index - t.bar >= emHold
                     r := t.banked + t.size * (sgn * (close - t.entry) / t.risk)
@@ -803,6 +818,8 @@ if emOn and emStats and ccpBarOk and emOpen.size() > 0
                 emSumR := emSumR + r
                 if r > 0
                     emWin += 1
+                if emOutcome
+                    emEnd(exPx, r > 0, r)
                 emOpen.remove(ti)
         ti -= 1
 
