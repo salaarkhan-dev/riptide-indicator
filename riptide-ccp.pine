@@ -106,6 +106,8 @@ ccpBullCol = input.color(#089981, "Bullish", inline = "ccpc", group = gCCP, acti
 ccpBearCol = input.color(#ff5252, "Bearish", inline = "ccpc", group = gCCP, active = ccpOn)
 ccpNeedBoth = input.bool(true, "Require BOTH ends to match", group = gCCP, active = ccpOn,
      tooltip = "ON — a mark only appears when the swing that built the level AND the candles that ran it both carry the shape. That pairing is the whole idea: one end alone is an ordinary pin, and ordinary pins are everywhere.\n\nOFF marks either end on its own. Useful for seeing how much of the pairing is coincidence, and for nothing else.")
+ccp2cp = input.bool(false, "Also detect 2CP (pin + engulfing)", group = gCCP, active = ccpOn,
+     tooltip = "The sheet's two-candle confirmation: any of the four pins, then a candle whose BODY covers the pin's body.\n\nTHE SECOND CANDLE SETS THE DIRECTION, not the pin — which is why a shooting star can open a long. In a 2CP the pin's job is to mark that price was rejected AT ALL, not which way, so the pin is searched WITHOUT the direction gate and the gate is applied to the engulfing candle instead. That is the difference between four 2CPs and eight.\n\nEntry sits at the engulfing candle's body edge on the trade side; the stop sits beyond the furthest wick of the PAIR. Both differ from the 1CP rule.\n\nMEASURED, AND IT ADDS NOTHING. research/CCP_PATTERN_EXPLORE.md compared all four 2CPs of a colour against the same engulfing candle with no pin required: five of six comparisons sat inside noise and the sixth was significantly negative. Requiring the pin first does not help. This is here to look at, not because it earned a place.")
 ccpDebug = input.bool(false, "Debug: show the merge", group = gCCP, active = ccpOn,
      tooltip = "Draws what the classifier actually saw, which is the only way to tell a wrong answer from a wrong input:\n\n• a faint box over the exact candles that were merged\n• the SYNTHETIC CANDLE itself, outlined on top of them — body and wick — so you can compare the thing being classified against the candles it came from\n• the three ratios as text\n\nAlso turns on a counts table in the top right: anchors scanned, windows tested, matches, and a breakdown by name. If the table says 0 matches, the thresholds are wrong; if it says thousands, so are they.")
 
@@ -546,6 +548,19 @@ ccpScanAt(int anchorOff, float minRange, bool wantBull) =>
                                 bC := cc
     [bB, bF, bO, bH, bL, bC]
 
+// The same search with NO direction gate, for 2CPs.
+//
+// A 1CP's direction comes from its own wick, so the gate belongs inside the
+// search. A 2CP's direction comes from the ENGULFING candle, so gating the pin
+// would throw away exactly the cases the sheet is built around — a shooting
+// star opening a long. This finds a pin either way up and lets the caller gate
+// on what follows it. Ties go to the smaller run, matching "Smallest run".
+ccpScanAny(int anchorOff, float minRange) =>
+    [uB, uF, uO, uH, uL, uC] = ccpScanAt(anchorOff, minRange, true)
+    [dB, dF, dO, dH, dL, dC] = ccpScanAt(anchorOff, minRange, false)
+    bool useDn = uB < 0 or (dB >= 0 and dB + dF < uB + uF)
+    [useDn ? dB : uB, useDn ? dF : uF, useDn ? dO : uO, useDn ? dH : uH, useDn ? dL : uL, useDn ? dC : uC]
+
 // EVERY WINDOW, and what happened to it. Walks the same windows as ccpScanAt
 // and reports each one's ratios and verdict.
 //
@@ -948,6 +963,29 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
             // so the tag can report what a grab passed even when nothing is
             // being filtered — a gate that silently rejects everything is the
             // failure mode worth making visible.
+            // 2CP: an UNGATED pin at the right end, then a candle whose
+            // body covers it, with the gate applied to that candle instead.
+            // Drawn separately from the 1CP because the sheet gives it a
+            // different entry and a different stop.
+            string twoName = ""
+            float twoEntry = na
+            float twoStop = na
+            if ccp2cp
+                [pB, pF, pO, pH, pL, pC] = ccpScanAny(rightOff, qMinRange)
+                if pB >= 0
+                    int eOff = rightOff - pF - 1
+                    if eOff >= 0
+                        float lo1 = math.min(pO, pC)
+                        float hi1 = math.max(pO, pC)
+                        float lo2 = math.min(open[eOff], close[eOff])
+                        float hi2 = math.max(open[eOff], close[eOff])
+                        bool green2 = close[eOff] >= open[eOff]
+                        if hi2 > lo2 and lo2 <= lo1 and hi2 >= hi1 and green2 == wantBull
+                            float pRng = pH - pL
+                            float pBody = pRng > 0 ? math.abs(pC - pO) / pRng : 1.0
+                            twoName := "2CP " + ccpName(pL < pO and (pH - math.max(pO, pC)) < (math.min(pO, pC) - pL), pC >= pO, pBody) + " + " + (green2 ? "green" : "red") + " engulfing"
+                            twoEntry := green2 ? hi2 : lo2
+                            twoStop := green2 ? math.min(pL, low[eOff]) : math.max(pH, high[eOff])
             bool hasFvg = fltHasFvg(rightOff, 0, wantBull)
             bool hasEng = fltHasEngulf(rightOff, 0, wantBull)
             bool fltOk = (not fltFvg or hasFvg) and (not fltEngulf or hasEng)
@@ -992,10 +1030,11 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                     where := where + " · L shape " + str.tostring(bar_index - q.pivotBar) + "b back"
                 if rOk
                     where := where + " · R shape ends " + str.tostring(rightOff - rF) + "b back"
+                string twoTxt = twoName == "" ? "" : "\n" + twoName + " · entry " + f2s(twoEntry) + " stop " + f2s(twoStop)
                 string tip = dir + " @ " + side + " grab · " + lTag + " + " + rTag +
                      "\n" + lTxt +
                      "\n" + rTxt +
-                     where + " · context only"
+                     twoTxt + where + " · context only"
                 ccpMark(q.grabBar, wantBull, q.col, tip)
                 if emOn
                     emDraw(rightOff, wantBull)
