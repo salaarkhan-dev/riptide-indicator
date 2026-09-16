@@ -74,10 +74,12 @@ def build(cs, a, sym: str):
             continue
         o = simulate_market(cs, sig, entry, stop, is_long, target_r=2.0,
                             horizon_bars=HORIZON, fee_pct=0.0)
-        if o is None:
+        net = simulate_market(cs, sig, entry, stop, is_long, target_r=2.0,
+                              horizon_bars=HORIZON)
+        if o is None or net is None:
             continue
-        row = {"sym": sym, "t": cs[sig].t, "r": o.r,
-               "f": fvg(cs, gb, sig, is_long), "cr": None, "cf": None,
+        row = {"sym": sym, "t": cs[sig].t, "r": o.r, "net": net.r,
+               "f": fvg(cs, gb, sig, is_long), "cr": None, "cnet": None, "cf": None,
                "risk_pct": 100.0 * abs(entry - stop) / entry}
         rnd = random.Random(f"h|{sym}|{gb}")
         frac = abs(entry - stop) / entry
@@ -89,9 +91,12 @@ def build(cs, a, sym: str):
             s2 = e2 - e2 * frac if is_long else e2 + e2 * frac
             co = simulate_market(cs, j, e2, s2, is_long, target_r=2.0,
                                  horizon_bars=HORIZON, fee_pct=0.0)
-            if co is None:
+            cn = simulate_market(cs, j, e2, s2, is_long, target_r=2.0,
+                                 horizon_bars=HORIZON)
+            if co is None or cn is None:
                 continue
             row["cr"] = co.r
+            row["cnet"] = cn.r
             row["cf"] = fvg(cs, j, j, is_long)
             break
         out.append(row)
