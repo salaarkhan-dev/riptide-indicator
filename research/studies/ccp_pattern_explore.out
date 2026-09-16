@@ -1,0 +1,85 @@
+Which of the twelve CCP patterns pay at the right end of a grab?
+
+EXPLORATORY — discovery set only, 23 symbols. No verdict.
+Twelve patterns plus two controls; expect several to look good by chance.
+
+═══ Min15 — 48973 pattern instances at grab ends ═══
+  pattern                                     n  fill%  R/signal     SE   R/fill  risk%
+  -------------------------------------------------------------------------------------
+  1CP Inverted hammer                      3812   94.2    -0.004  0.028   -0.005   0.44
+  1CP Hanging man                          3149   92.0    -0.007  0.030   -0.008   0.52
+  2CP Hammer + green engulfing              361  100.0    -0.018  0.085   -0.018   0.61
+  2CP Hammer + red engulfing                871  100.0    -0.025  0.058   -0.025   0.38
+  CTL red engulfing, no pin               14905  100.0    -0.032  0.015   -0.032   0.55
+  2CP Inverted hammer + red engulfing      1745  100.0    -0.033  0.040   -0.033   0.69
+  2CP Shooting star + green engulfing       659  100.0    -0.046  0.064   -0.046   0.43
+  1CP Shooting star                        2513  100.0    -0.046  0.035   -0.046   0.49
+  1CP Hammer                               3549  100.0    -0.068  0.029   -0.068   0.47
+  2CP Hanging man + green engulfing        1384  100.0    -0.081  0.044   -0.081   0.73
+  CTL green engulfing, no pin             15753  100.0    -0.103  0.014   -0.103   0.59
+  2CP Inverted hammer + green engulfing     272  100.0    -0.160  0.103   -0.160   0.37
+
+  DOES THE PIN ADD ANYTHING, green engulfing?
+    all 2CPs   n   2676  R -0.072 ± 0.032
+    no pin     n  15753  R -0.103 ± 0.014
+    Δ +0.032 ± 0.035   z +0.90
+  DOES THE PIN ADD ANYTHING, red engulfing?
+    all 2CPs   n   2616  R -0.030 ± 0.033
+    no pin     n  14905  R -0.032 ± 0.015
+    Δ +0.002 ± 0.036   z +0.05
+
+═══ Min30 — 25430 pattern instances at grab ends ═══
+  pattern                                     n  fill%  R/signal     SE   R/fill  risk%
+  -------------------------------------------------------------------------------------
+  2CP Shooting star + green engulfing       409  100.0     0.115  0.084    0.115   0.65
+  1CP Shooting star                        1440  100.0     0.053  0.046    0.053   0.70
+  CTL red engulfing, no pin                7424  100.0    -0.010  0.020   -0.010   0.85
+  1CP Hanging man                          1863   92.4    -0.018  0.039   -0.019   0.71
+  2CP Hanging man + green engulfing         806  100.0    -0.025  0.060   -0.025   1.00
+  2CP Hammer + red engulfing                374  100.0    -0.054  0.082   -0.054   0.56
+  CTL green engulfing, no pin              8228  100.0    -0.055  0.020   -0.055   0.87
+  1CP Inverted hammer                      1953   94.5    -0.061  0.037   -0.064   0.67
+  1CP Hammer                               1788  100.0    -0.070  0.040   -0.070   0.66
+  2CP Inverted hammer + red engulfing       880  100.0    -0.117  0.054   -0.117   1.01
+  2CP Inverted hammer + green engulfing     126  100.0    -0.154  0.148   -0.154   0.53
+  2CP Hammer + green engulfing              139  100.0    -0.200  0.132   -0.200   0.83
+
+  DOES THE PIN ADD ANYTHING, green engulfing?
+    all 2CPs   n   1480  R -0.014 ± 0.044
+    no pin     n   8228  R -0.055 ± 0.020
+    Δ +0.041 ± 0.049   z +0.85
+  DOES THE PIN ADD ANYTHING, red engulfing?
+    all 2CPs   n   1254  R -0.098 ± 0.045
+    no pin     n   7424  R -0.010 ± 0.020
+    Δ -0.088 ± 0.049   z -1.78
+
+═══ Min60 — 11592 pattern instances at grab ends ═══
+  pattern                                     n  fill%  R/signal     SE   R/fill  risk%
+  -------------------------------------------------------------------------------------
+  2CP Hammer + green engulfing               36  100.0     0.192  0.257    0.192   1.18  thin
+  2CP Hammer + red engulfing                168  100.0     0.144  0.126    0.144   0.91
+  2CP Inverted hammer + red engulfing       406  100.0     0.059  0.079    0.059   1.61
+  1CP Inverted hammer                       896   93.9     0.046  0.056    0.049   1.08
+  CTL red engulfing, no pin                3424  100.0     0.044  0.029    0.044   1.28
+  1CP Shooting star                         643  100.0    -0.004  0.067   -0.004   1.08
+  CTL green engulfing, no pin              3786  100.0    -0.042  0.027   -0.042   1.25
+  1CP Hammer                                763  100.0    -0.073  0.061   -0.073   0.92
+  2CP Shooting star + green engulfing       144  100.0    -0.084  0.139   -0.084   0.96
+  2CP Inverted hammer + green engulfing      25  100.0    -0.130  0.325   -0.130   0.46  thin
+  1CP Hanging man                           913   92.0    -0.143  0.053   -0.156   1.11
+  2CP Hanging man + green engulfing         388  100.0    -0.291  0.077   -0.291   1.64
+
+  DOES THE PIN ADD ANYTHING, green engulfing?
+    all 2CPs   n    593  R -0.205 ± 0.064
+    no pin     n   3786  R -0.042 ± 0.027
+    Δ -0.162 ± 0.070   z -2.33
+  DOES THE PIN ADD ANYTHING, red engulfing?
+    all 2CPs   n    574  R +0.084 ± 0.067
+    no pin     n   3424  R +0.044 ± 0.029
+    Δ +0.040 ± 0.073   z +0.54
+
+READ THIS AS A SHORTLIST, NOT A RESULT. Anything here that looks
+worth having goes to a pre-registered confirmation on the 84 unseen
+symbols and the 862-day older window, family size one. That is the
+path that turned the FVG hunch into three passes; the alternative
+is the path CCP_FILTER_OVERFIT measured at +0.089 becoming -0.082.
