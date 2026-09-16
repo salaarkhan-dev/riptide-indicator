@@ -119,6 +119,10 @@ emPartialPct = input.int(50, "Partial size (%)", minval = 5, maxval = 95, step =
 emBE = input.bool(true, "Stop to breakeven after the partial", group = gEM, active = emOn)
 emLen = input.int(20, "Draw this many bars forward", minval = 5, maxval = 100, group = gEM, active = emOn)
 emKeep = input.int(10, "Keep this many setups", minval = 2, maxval = 40, group = gEM, active = emOn)
+emFeePct = input.float(0.04, "Round-trip fee (% of notional)", minval = 0.0, maxval = 0.5, step = 0.01, group = gEM, active = emOn,
+     tooltip = "Charged in R as fee% / risk%, the way research/harness.py does it. The default approximates taker in and taker out at Riptide's rates.\n\nThis is not a detail. Fees ARE the loss on this model: gross of them the entry returns about zero, and cost per bet goes as 1/risk, so the tightest stops bleed the most. Set it to 0 and the table shows the gross picture — which is roughly break-even, not profit.")
+emStats = input.bool(true, "Show the results table", group = gEM, active = emOn,
+     tooltip = "Simulates every drawn setup forward and tallies the outcome. Same rules as research/studies/ccp_exit_models.py — stop wins a bar that spans both levels, the entry bar resolves nothing, 48-hour horizon — so the table on your chart and the study on 23 symbols are measuring the same thing. If they disagree badly, one of them is wrong and that is worth knowing.")
 
 // ── 4. Engine ───────────────────────────────────────────────────────────────
 confirmOnBarClose = input.bool(true, "Only update on closed bars", group = gEng,
@@ -668,6 +672,29 @@ ccpWindowBox(int firstBar, int lastBar, float hi, float lo, color col) =>
          border_width = 1,
          bgcolor      = color.new(col, 90)))
 
+// One simulated setup, tracked forward to its exit. Drawing only: this
+// resolves nothing on the entry bar and places no order anywhere.
+type EMTrade
+    bool  isLong
+    float entry
+    float stop
+    float risk
+    int   bar
+    bool  part
+    float banked
+    float size
+
+var array<EMTrade> emOpen = array.new<EMTrade>()
+var int   emN    = 0
+var int   emWin  = 0
+var float emSumR = 0.0
+var int   emTgt  = 0
+var int   emStp  = 0
+var int   emTmo  = 0
+
+// 48 hours, the horizon the studies use, expressed in this chart's bars.
+int emHold = math.max(int(48 * 3600 / timeframe.in_seconds()), 5)
+
 // ── entry model, drawing only ───────────────────────────────────────────────
 // Geometry, not a signal. Entry at the close of the bar that confirms the
 // mark — the bar you could actually have acted on — stop past the extreme of
@@ -712,10 +739,87 @@ emDraw(int rOff, bool bull) =>
         emLevel(bar_index, b2, stop, color.red, line.style_solid, "stop " + f2s(stop))
         emLevel(bar_index, b2, entry, color.gray, line.style_dotted, "entry " + f2s(entry))
         emLevel(bar_index, b2, tgt, color.teal, line.style_solid, str.tostring(emTargetR, "#.#") + "R " + f2s(tgt))
+        if emStats
+            emOpen.push(EMTrade.new(isLong = bull, entry = entry, stop = stop,
+                 risk = risk, bar = bar_index, part = false, banked = 0.0,
+                 size = 1.0))
         if emPartialR > 0 and emPartialR < emTargetR
             float pr = bull ? entry + emPartialR * risk : entry - emPartialR * risk
             emLevel(bar_index, b2, pr, color.orange, line.style_dashed, str.tostring(emPartialR, "#.#") + "R close " + str.tostring(emPartialPct) + "%" + (emBE ? " → stop BE" : ""))
         emPrune()
+
+// ── entry model: walk the open setups forward ───────────────────────────────
+// Same rules as research/studies/ccp_exit_models.py, so the table on this
+// chart and the study over 23 symbols measure the same thing:
+//
+//   * THE ENTRY BAR RESOLVES NOTHING. Every tick of it printed before the
+//     setup existed, so checking starts on the bar after.
+//   * A bar spanning both levels is a STOP. The pessimistic convention; being
+//     generous here is how a losing model is made to look flat.
+//   * Partial first, then target, then the horizon.
+//   * Fees in R as fee% / risk%, which is why a tight stop costs more.
+//
+// This runs BEFORE the pass below, so a setup created this bar waits a bar.
+if emOn and emStats and ccpBarOk and emOpen.size() > 0
+    int ti = emOpen.size() - 1
+    while ti >= 0
+        EMTrade t = emOpen.get(ti)
+        if bar_index > t.bar
+            float sgn = t.isLong ? 1.0 : -1.0
+            float pl = t.entry + sgn * t.risk * emPartialR
+            float tl = t.entry + sgn * t.risk * emTargetR
+            bool hitStop = t.isLong ? low <= t.stop : high >= t.stop
+            bool hitPart = emPartialR > 0 and emPartialR < emTargetR and not t.part and (t.isLong ? high >= pl : low <= pl)
+            bool hitTgt = t.isLong ? high >= tl : low <= tl
+            bool fin = false
+            float r = 0.0
+            if hitStop
+                r := t.banked + t.size * (sgn * (t.stop - t.entry) / t.risk)
+                fin := true
+                emStp += 1
+            else
+                if hitPart
+                    float pf = emPartialPct / 100.0
+                    t.banked := t.banked + pf * emPartialR
+                    t.size := t.size - pf
+                    t.part := true
+                    if emBE
+                        t.stop := t.entry
+                if hitTgt
+                    r := t.banked + t.size * emTargetR
+                    fin := true
+                    emTgt += 1
+                else if bar_index - t.bar >= emHold
+                    r := t.banked + t.size * (sgn * (close - t.entry) / t.risk)
+                    fin := true
+                    emTmo += 1
+            if fin
+                r := r - emFeePct / (100.0 * t.risk / t.entry)
+                emN += 1
+                emSumR := emSumR + r
+                if r > 0
+                    emWin += 1
+                emOpen.remove(ti)
+        ti -= 1
+
+var table emTbl = table.new(position.bottom_right, 2, 9,
+     border_width = 1, frame_width = 1)
+
+emCell(int row, string k, string v) =>
+    emTbl.cell(0, row, k, text_size = size.tiny, text_color = chart.fg_color)
+    emTbl.cell(1, row, v, text_size = size.tiny, text_color = chart.fg_color)
+
+if emOn and emStats and barstate.islast
+    emTbl.cell(0, 0, "Entry model", text_size = size.small, text_color = chart.fg_color)
+    emTbl.cell(1, 0, str.tostring(emTargetR, "#.#") + "R" + (emPartialR > 0 and emPartialR < emTargetR ? " / part " + str.tostring(emPartialR, "#.#") + "R" : ""), text_size = size.small, text_color = chart.fg_color)
+    emCell(1, "closed", str.tostring(emN))
+    emCell(2, "still open", str.tostring(emOpen.size()))
+    emCell(3, "win %", emN > 0 ? str.tostring(100.0 * emWin / emN, "#.0") : "—")
+    emCell(4, "R / trade", emN > 0 ? str.tostring(emSumR / emN, "#.000") : "—")
+    emCell(5, "total R", str.tostring(emSumR, "#.0"))
+    emCell(6, "hit target", emN > 0 ? str.tostring(100.0 * emTgt / emN, "#.0") + "%" : "—")
+    emCell(7, "hit stop", emN > 0 ? str.tostring(100.0 * emStp / emN, "#.0") + "%" : "—")
+    emCell(8, "timed out", emN > 0 ? str.tostring(100.0 * emTmo / emN, "#.0") + "%" : "—")
 
 // ── the pass ────────────────────────────────────────────────────────────────
 bool ccpBarOk = not confirmOnBarClose or barstate.isconfirmed
