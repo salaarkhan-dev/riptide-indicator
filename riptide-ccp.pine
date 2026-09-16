@@ -55,7 +55,8 @@ indicator("Riptide CCP", overlay = true,
 gGrab   = "1. Grabs"
 gBGrab  = "2. Big grabs"
 gCCP    = "3. Combined candles"
-gEng    = "4. Engine"
+gEM     = "4. Entry model (drawing only)"
+gEng    = "5. Engine"
 sgOn = input.bool(false, "Grabs", group = gGrab,
      tooltip = "A swing gets wicked through and price closes back on the original side. The band spans from the swing to the bar that ran it; the $$$ sits on the level that was taken.\n\nThis is the NARROW instance — 3/3, the reference's own default. It watches minor swings, so it fires often. The wide instance is group 19; they share one detector and differ only in pivot width and colour.\n\nOFF BY DEFAULT AND CARRYING NO CLAIM. Context only — no alert fires from it, nothing reads it, and every Riptide entry, stop and target is identical with it on or off.\n\nWHY NO CLAIM. Measured against Riptide's own raid on the same pivots, this fires at least 1.8x as often and two thirds of its marks are places Riptide says nothing (audit/liquidity_grab_rate.py). It is earlier because it asks for less: a close back over the level, where Riptide wants a break of the structure the raid created. research/POOL_PIVOT_LENGTH.md then tested whether the extra marks are worth anything and came back UNDERPOWERED. A thing to look at, not to trade.")
 sgLeft = input.int(3, "Pivot", minval = 1, inline = "sg1", group = gGrab, active = sgOn)
@@ -106,6 +107,18 @@ ccpNeedBoth = input.bool(true, "Require BOTH ends to match", group = gCCP, activ
      tooltip = "ON — a mark only appears when the swing that built the level AND the candles that ran it both carry the shape. That pairing is the whole idea: one end alone is an ordinary pin, and ordinary pins are everywhere.\n\nOFF marks either end on its own. Useful for seeing how much of the pairing is coincidence, and for nothing else.")
 ccpDebug = input.bool(false, "Debug: show the merge", group = gCCP, active = ccpOn,
      tooltip = "Draws what the classifier actually saw, which is the only way to tell a wrong answer from a wrong input:\n\n• a faint box over the exact candles that were merged\n• the SYNTHETIC CANDLE itself, outlined on top of them — body and wick — so you can compare the thing being classified against the candles it came from\n• the three ratios as text\n\nAlso turns on a counts table in the top right: anchors scanned, windows tested, matches, and a breakdown by name. If the table says 0 matches, the thresholds are wrong; if it says thousands, so are they.")
+
+emOn = input.bool(false, "Draw entry, stop and targets", group = gEM,
+     tooltip = "DRAWING ONLY. No alert, no order, no position, nothing tracked. This file has no exchange connection and will not get one.\n\nAND THIS MODEL IS MEASURED, NEGATIVE. research/CCP_ENTRY_MODELS.md scored 76,297 grabs on Min15/Min30/Min60 with this entry, this stop and a 2R target: gross of fees expectancy at a grab is about ZERO, and net of fees it is -0.07 to -0.12 R per bet. The CCP filter did not sort the winners from the losers. Every one of five pre-registered bars failed.\n\nThe partial-and-breakeven variant below is NOT measured. Note before you reach for it that a partial close is an extra fee event, and fees are already the whole loss: the measured drag is 0.05 to 0.14 R per bet against a gross edge of zero.\n\nDraw it to see the geometry. Do not read it as a signal.")
+emAtrBuf = input.float(0.25, "Stop beyond the grab wick (x ATR)", minval = 0.0, step = 0.05, group = gEM, active = emOn,
+     tooltip = "The stop sits past the extreme of the grab window by this much ATR. A WIDER stop is not a worse one here: fees are charged as fee% / risk%, so cost per bet goes as 1/risk, and the tightest stops were where the measured drag was worst.")
+emTargetR = input.float(2.0, "Target (R)", minval = 0.5, maxval = 10.0, step = 0.5, group = gEM, active = emOn)
+emPartialR = input.float(1.5, "Partial at (R), 0 = off", minval = 0.0, maxval = 10.0, step = 0.5, group = gEM, active = emOn,
+     tooltip = "Draws the level where part of the position would come off. UNMEASURED. On a path with no drift, taking a partial and moving to breakeven reshapes the outcome distribution — less variance, more small wins, a few big ones given up — but it cannot manufacture expectancy out of an entry that has none, and it adds a fee.")
+emPartialPct = input.int(50, "Partial size (%)", minval = 5, maxval = 95, step = 5, group = gEM, active = emOn)
+emBE = input.bool(true, "Stop to breakeven after the partial", group = gEM, active = emOn)
+emLen = input.int(20, "Draw this many bars forward", minval = 5, maxval = 100, group = gEM, active = emOn)
+emKeep = input.int(10, "Keep this many setups", minval = 2, maxval = 40, group = gEM, active = emOn)
 
 // ── 4. Engine ───────────────────────────────────────────────────────────────
 confirmOnBarClose = input.bool(true, "Only update on closed bars", group = gEng,
@@ -655,6 +668,55 @@ ccpWindowBox(int firstBar, int lastBar, float hi, float lo, color col) =>
          border_width = 1,
          bgcolor      = color.new(col, 90)))
 
+// ── entry model, drawing only ───────────────────────────────────────────────
+// Geometry, not a signal. Entry at the close of the bar that confirms the
+// mark — the bar you could actually have acted on — stop past the extreme of
+// the grab window by emAtrBuf ATR, target at emTargetR, and an optional
+// partial level with a breakeven marker.
+//
+// This is the model research/CCP_ENTRY_MODELS.md scored and rejected. It is
+// drawn because seeing the geometry on real grabs is a legitimate thing to
+// want; it fires nothing and tracks nothing.
+var array<line>  emLns = array.new<line>()
+var array<label> emLbs = array.new<label>()
+
+emPrune() =>
+    while emLns.size() > emKeep * 4
+        line.delete(emLns.shift())
+    while emLbs.size() > emKeep * 4
+        label.delete(emLbs.shift())
+
+emLevel(int b1, int b2, float y, color c, string sty, string txt) =>
+    emLns.push(line.new(b1, y, b2, y, xloc = xloc.bar_index, color = c,
+         width = 1, style = sty))
+    emLbs.push(label.new(b2, y, txt, xloc = xloc.bar_index,
+         style = label.style_label_left, color = color.new(c, 90),
+         textcolor = c, size = size.tiny))
+
+emDraw(int rOff, bool bull) =>
+    float gHi = high[rOff]
+    float gLo = low[rOff]
+    // Not math.max(): its int overload is not something to bet a for-bound on,
+    // and a float bound is a compile error that costs a round trip to find.
+    int kFrom = rOff - ccpFwd < 0 ? 0 : rOff - ccpFwd
+    for k = kFrom to rOff + ccpBack
+        gHi := math.max(gHi, high[k])
+        gLo := math.min(gLo, low[k])
+    float buf = na(atr) ? 0.0 : atr * emAtrBuf
+    float entry = close
+    float stop = bull ? gLo - buf : gHi + buf
+    float risk = math.abs(entry - stop)
+    if risk > 0
+        int b2 = bar_index + emLen
+        float tgt = bull ? entry + emTargetR * risk : entry - emTargetR * risk
+        emLevel(bar_index, b2, stop, color.red, line.style_solid, "stop " + f2s(stop))
+        emLevel(bar_index, b2, entry, color.gray, line.style_dotted, "entry " + f2s(entry))
+        emLevel(bar_index, b2, tgt, color.teal, line.style_solid, str.tostring(emTargetR, "#.#") + "R " + f2s(tgt))
+        if emPartialR > 0 and emPartialR < emTargetR
+            float pr = bull ? entry + emPartialR * risk : entry - emPartialR * risk
+            emLevel(bar_index, b2, pr, color.orange, line.style_dashed, str.tostring(emPartialR, "#.#") + "R close " + str.tostring(emPartialPct) + "%" + (emBE ? " → stop BE" : ""))
+        emPrune()
+
 // ── the pass ────────────────────────────────────────────────────────────────
 bool ccpBarOk = not confirmOnBarClose or barstate.isconfirmed
 
@@ -735,6 +797,8 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                      "\n" + rTxt +
                      where + " · context only"
                 ccpMark(q.grabBar, wantBull, q.col, tip)
+                if emOn
+                    emDraw(rightOff, wantBull)
                 if ccpDebug
                     if lOk
                         ccpWindowBox(q.pivotBar - lB, q.pivotBar + lF, lH, lL,
