@@ -338,4 +338,9 @@ async def main():
         print(f"      → {'PASSES' if all((b1,b2,b3,b4,b6)) else 'FAILS'}\n")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    # Guarded because research/studies/fvg_h1_holdout.py imports the FVG
+    # definition and the constants from here. The holdout must use the EXACT
+    # filter the discovery used, and importing it is the only way to guarantee
+    # that; a copy would be free to drift.
+    asyncio.run(main())
