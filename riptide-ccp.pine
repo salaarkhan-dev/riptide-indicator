@@ -541,6 +541,10 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
     int nDir = 0
     int nAnchor = 0
     int nOk = 0
+    int nOnlyBody = 0
+    int nOnlyWick = 0
+    float minBody = 1.0
+    float maxWick = 0.0
     string rows = ""
     if anchorOff >= 0 and anchorOff + ccpBack < 450 and anchorOff + ccpBack < bar_index
         for f = 0 to ccpFwd
@@ -587,11 +591,24 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
                             fails := fails + " ANCHOR-EXTREME"
                         if fails == ""
                             nOk := nOk + 1
+                        // A window that failed exactly ONE test is one input
+                        // away from qualifying, and which input that is, is
+                        // the only actionable thing on this panel.
+                        if fails == " BODY"
+                            nOnlyBody := nOnlyBody + 1
+                            minBody := math.min(minBody, bodyF)
+                        if fails == " WICK"
+                            nOnlyWick := nOnlyWick + 1
+                            maxWick := math.max(maxWick, bigW)
                         string nums = "  body " + str.tostring(bodyF, "#.00") + " up " + str.tostring(upW, "#.00") + " dn " + str.tostring(dnW, "#.00")
                         rows := rows + head + nums + (fails == "" ? "  ✓ QUALIFIES" : "  ✗" + fails)
     string s = "\n    " + str.tostring(nTried) + " windows tried, " + str.tostring(nOk) + " qualified:" + rows
     if nOk > 1
         s := s + "\n    Several qualified. '" + ccpPick + "' chose between them — smallest run prefers fewer candles, ties to the stronger wick."
+    if nOk == 0 and nOnlyBody > 0
+        s := s + "\n    " + str.tostring(nOnlyBody) + " failed ONLY on the body cap, the loosest at " + str.tostring(minBody, "#.00") + ". Setting 'body at most' to " + str.tostring(math.ceil(minBody / 0.05) * 0.05, "#.00") + " admits it. The cap is dead at or above " + str.tostring(1 - ccpWickMin, "#.00") + ", which the wick floor already guarantees on its own."
+    if nOk == 0 and nOnlyWick > 0
+        s := s + "\n    " + str.tostring(nOnlyWick) + " failed ONLY on the wick floor, the longest at " + str.tostring(maxWick, "#.00") + ". Setting 'longer wick at least' to " + str.tostring(math.floor(maxWick / 0.05) * 0.05, "#.00") + " admits it."
     if nOk == 0 and nAnchor > 0
         s := s + "\n    " + str.tostring(nAnchor) + " were rejected ONLY by 'the long wick must be the anchor's own'. That switch costs about four fifths of all matches; turn it off to see them."
     s
