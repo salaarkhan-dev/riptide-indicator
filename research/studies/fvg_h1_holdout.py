@@ -43,8 +43,13 @@ MIN_BETS = 300          # bar 1
 MDE_CEILING = 0.15      # bar: above this the run is a bound, not a verdict
 
 
-def build(cs, a, sym: str):
-    """Every grab, the plain 2R exit, and whether F2 held. Nothing else."""
+def build(cs, a, sym: str, horizon: int = HORIZON):
+    """Every grab, the plain 2R exit, and whether F2 held. Nothing else.
+
+    `horizon` is a parameter only so fvg_timeframe_coherence.py can reuse
+    this exact function at Min15 and Min30. The default is Min60's, so
+    every existing caller is unchanged.
+    """
     out = []
     for pv, gb, is_high in grabs(cs, PIVOT, PIVOT):
         sig = gb + CCP_FWD
@@ -61,7 +66,7 @@ def build(cs, a, sym: str):
         if (stop >= entry) if is_long else (stop <= entry):
             continue
         o = simulate_market(cs, sig, entry, stop, is_long,
-                            target_r=2.0, horizon_bars=HORIZON)
+                            target_r=2.0, horizon_bars=horizon)
         if o is None:
             continue
         row = {"sym": sym, "t": cs[sig].t, "r": o.r,
@@ -71,13 +76,13 @@ def build(cs, a, sym: str):
         rnd = random.Random(f"h|{sym}|{gb}")
         frac = abs(entry - stop) / entry
         for _ in range(4):
-            j = rnd.randrange(70, len(cs) - HORIZON - 1)
+            j = rnd.randrange(70, len(cs) - horizon - 1)
             if a[j] is None:
                 continue
             e2 = cs[j].c
             s2 = e2 - e2 * frac if is_long else e2 + e2 * frac
             co = simulate_market(cs, j, e2, s2, is_long,
-                                 target_r=2.0, horizon_bars=HORIZON)
+                                 target_r=2.0, horizon_bars=horizon)
             if co is None:
                 continue
             row["cr"] = co.r
