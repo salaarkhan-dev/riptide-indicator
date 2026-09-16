@@ -691,6 +691,11 @@ var array<EMTrade> emOpen = array.new<EMTrade>()
 var int   emN    = 0
 var int   emWin  = 0
 var float emSumR = 0.0
+// Sum of squares, so the table can print an error bar. A mean with no error
+// bar on 251 trades is how a chart tells you it found something when it did
+// not: R has a spread near 1.1 here, so SE is about 1.1/sqrt(n) and a couple
+// of hundred trades cannot resolve anything smaller than roughly 0.14 R.
+var float emSumR2 = 0.0
 var int   emTgt  = 0
 var int   emStp  = 0
 var int   emTmo  = 0
@@ -816,6 +821,7 @@ if emOn and emStats and ccpBarOk and emOpen.size() > 0
                 r := r - emFeePct / (100.0 * t.risk / t.entry)
                 emN += 1
                 emSumR := emSumR + r
+                emSumR2 := emSumR2 + r * r
                 if r > 0
                     emWin += 1
                 if emOutcome
@@ -823,7 +829,7 @@ if emOn and emStats and ccpBarOk and emOpen.size() > 0
                 emOpen.remove(ti)
         ti -= 1
 
-var table emTbl = table.new(position.bottom_right, 2, 9,
+var table emTbl = table.new(position.bottom_right, 2, 10,
      border_width = 1, frame_width = 1)
 
 emCell(int row, string k, string v) =>
@@ -839,11 +845,18 @@ if emOn and emStats and barstate.islast
     emCell(1, "closed", str.tostring(emN))
     emCell(2, "still open", str.tostring(emOpen.size()))
     emCell(3, "win %", emN > 0 ? str.tostring(100.0 * emWin / emN, "#.0") : "—")
-    emCell(4, "R / trade", emN > 0 ? str.tostring(emSumR / emN, "#.000") : "—")
-    emCell(5, "total R", str.tostring(emSumR, "#.0"))
-    emCell(6, "hit target", emN > 0 ? str.tostring(100.0 * emTgt / emN, "#.0") + "%" : "—")
-    emCell(7, "hit stop", emN > 0 ? str.tostring(100.0 * emStp / emN, "#.0") + "%" : "—")
-    emCell(8, "timed out", emN > 0 ? str.tostring(100.0 * emTmo / emN, "#.0") + "%" : "—")
+    float emMean = emN > 0 ? emSumR / emN : 0.0
+    float emVar = emN > 1 ? (emSumR2 - emN * emMean * emMean) / (emN - 1) : 0.0
+    float emSE = emN > 1 and emVar > 0 ? math.sqrt(emVar / emN) : na
+    emCell(4, "R / trade", emN > 0 ? str.tostring(emMean, "#.000") + (na(emSE) ? "" : " ± " + str.tostring(emSE, "#.000")) : "—")
+    // The row that stops a positive mean being read as an edge. One symbol on
+    // one window is a few hundred bets; the studies are tens of thousands
+    // across 23 symbols, and they came back negative.
+    emCell(5, "vs zero", na(emSE) or emSE <= 0 ? "—" : math.abs(emMean) < 2 * emSE ? "NOISE (|t| " + str.tostring(math.abs(emMean) / emSE, "#.0") + ")" : "t " + str.tostring(emMean / emSE, "#.0"))
+    emCell(6, "total R", str.tostring(emSumR, "#.0"))
+    emCell(7, "hit target", emN > 0 ? str.tostring(100.0 * emTgt / emN, "#.0") + "%" : "—")
+    emCell(8, "hit stop", emN > 0 ? str.tostring(100.0 * emStp / emN, "#.0") + "%" : "—")
+    emCell(9, "timed out", emN > 0 ? str.tostring(100.0 * emTmo / emN, "#.0") + "%" : "—")
 
 // ── the pass ────────────────────────────────────────────────────────────────
 
