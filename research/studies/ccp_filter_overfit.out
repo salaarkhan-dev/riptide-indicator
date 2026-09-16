@@ -1,0 +1,14 @@
+If we "just add filters until the losers go away", what do we get?
+
+A METHOD DIAGNOSTIC. No prereg, no verdict, no claim about the market.
+
+═══ Min15 — 43382 grabs, 105 candidate filters that keep 150+ bets a side ═══
+  no filter at all:   older -0.080   newer -0.089
+  BEST ON THE OLDER HALF: high ATR + signal bar with
+     older (chosen here) -0.003  n 5094
+     newer (never seen)  -0.038  n 4774    kept -0.035 of it
+  0/105 candidates beat zero on the older half; 4/105 do on the newer half
+  RANK CORRELATION in-sample vs out-of-sample: +0.573
+     near zero means picking the best filter on past data
+     tells you nothing about the next half.
+
