@@ -24,7 +24,7 @@ import aiohttp                                          # noqa: E402
 from research.deep import load_deep                     # noqa: E402
 from research.harness import simulate_market            # noqa: E402
 import research.ms_struct as MS                         # noqa: E402
-import research.lit_repl as RP                          # noqa: E402
+import research.discovery_symbols as RP              # noqa: E402
 from riptide.config import BAR_SECONDS                  # noqa: E402
 
 DAYS = 333

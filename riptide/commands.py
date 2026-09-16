@@ -881,16 +881,6 @@ async def handle_command(sess, db, state, text: str) -> None:
 
     elif cmd == "stats":
         await tg.tg_send(sess, stats_text(db))
-        # Appended as its OWN message, clearly separated, and only when the
-        # experiment is actually collecting. It scores nothing in production.
-        from .config import LIT_FORWARD
-        if LIT_FORWARD:
-            try:
-                from .strategies.lit import forward as _fwd, render as _rnd
-                _fwd.init(db)
-                await tg.tg_send(sess, _rnd.stats_block(_fwd.summary(db)))
-            except Exception as e:                            # noqa: BLE001
-                log.warning("LIT forward /stats failed: %s", e)
 
     elif cmd == "open":
         await send_open(sess, db)
