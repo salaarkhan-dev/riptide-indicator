@@ -45,7 +45,15 @@ whether the FVG filter sorts grabs, this is as coherent as it gets. What varies
 across timeframes is not the sorting, it is whether what is sorted survives
 fees — and I wrote a rule that could not tell those apart.
 
-## A post-hoc observation, labelled as one
+## A post-hoc observation, labelled as one — AND SINCE TESTED, AND WRONG
+
+> **The explanation below was pre-registered and FAILED.** See
+> `research/FVG_GROSS_EDGE.md`. The fee drags it borrows are from a study with
+> a different stop rule, and measured properly they are a quarter the size. The
+> gross edge is NOT flat: +0.006, −0.000, +0.045. The timeframe-specificity is
+> real rather than a cost artefact. The table below is kept as written because
+> the reasoning that produced it is the point.
+
 
 This was noticed after seeing the numbers and is therefore **not evidence**. It
 is written down because it is checkable and because it predicts something.
