@@ -56,9 +56,9 @@ GRID = [
     (1.00, 0.65, "WICK ONLY — no body cap at all"),
     (0.35, 0.65, "must equal the row above: 0.35 = 1 - 0.65, non-binding"),
     (0.30, 0.65, "body cap binds again, barely"),
-    (0.25, 0.70, ""),
+    (0.25, 0.70, "SHIPPED"),
     (0.20, 0.65, ""),
-    (0.15, 0.70, "SHIPPED"),
+    (0.15, 0.70, "was shipped until the body cap moved"),
     (0.10, 0.75, ""),
 ]
 
@@ -96,11 +96,15 @@ async def main():
             print()
 
     print("READ IT AS A TRADE, NOT AN IMPROVEMENT. A looser shape marks more")
-    print("grabs; it does not make the marks mean more. research/")
-    print("CCP_ENTRY_MODELS.md measured the shipped setting and found gross")
-    print("expectancy at a grab is about zero, so nothing on this table is")
-    print("known to be better than anything else on it — only busier or")
-    print("quieter. Pick the one that matches what your eye calls a pin.")
+    print("grabs; it does not make the marks mean more.")
+    print()
+    print("research/CCP_ENTRY_MODELS.md measured 0.15/0.70, which was the")
+    print("default when it ran and is NOT the default any more. It found gross")
+    print("expectancy at a grab is about zero with or without the CCP filter.")
+    print("That null carries over to a looser setting rather than being voided")
+    print("by it: loosening accepts more grabs, which moves the filter toward")
+    print("taking every grab, and every grab is the most solidly measured zero")
+    print("in the study. A TIGHTER setting would be the one needing its own run.")
 
 
 if __name__ == "__main__":

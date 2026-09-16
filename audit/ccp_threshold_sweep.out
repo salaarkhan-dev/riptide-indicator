@@ -7,9 +7,9 @@
      1.00    0.65    28936    25337    17213    39.6%   WICK ONLY — no body cap at all
      0.35    0.65    28936    25337    17213    39.6%   must equal the row above: 0.35 = 1 - 0.65, non-binding
      0.30    0.65    28225    24764    16424    37.8%   body cap binds again, barely
-     0.25    0.70    22911    19818    10815    24.9%   
+     0.25    0.70    22911    19818    10815    24.9%   SHIPPED
      0.20    0.65    24924    21981    12853    29.6%   
-     0.15    0.70    18815    16336     7307    16.8%   SHIPPED
+     0.15    0.70    18815    16336     7307    16.8%   was shipped until the body cap moved
      0.10    0.75    11886    10316     3012     6.9%   
 
 ═══ Min30 — 22214 grabs ═══
@@ -21,9 +21,9 @@
      1.00    0.65    14748    12856     8666    39.0%   WICK ONLY — no body cap at all
      0.35    0.65    14748    12856     8666    39.0%   must equal the row above: 0.35 = 1 - 0.65, non-binding
      0.30    0.65    14458    12579     8324    37.5%   body cap binds again, barely
-     0.25    0.70    11711     9959     5388    24.3%   
+     0.25    0.70    11711     9959     5388    24.3%   SHIPPED
      0.20    0.65    12835    11181     6564    29.5%   
-     0.15    0.70     9661     8308     3751    16.9%   SHIPPED
+     0.15    0.70     9661     8308     3751    16.9%   was shipped until the body cap moved
      0.10    0.75     6033     5302     1489     6.7%   
 
 ═══ Min60 — 10657 grabs ═══
@@ -35,14 +35,18 @@
      1.00    0.65     6773     6000     3859    36.2%   WICK ONLY — no body cap at all
      0.35    0.65     6773     6000     3859    36.2%   must equal the row above: 0.35 = 1 - 0.65, non-binding
      0.30    0.65     6656     5898     3718    34.9%   body cap binds again, barely
-     0.25    0.70     5257     4596     2315    21.7%   
+     0.25    0.70     5257     4596     2315    21.7%   SHIPPED
      0.20    0.65     5914     5248     2939    27.6%   
-     0.15    0.70     4381     3859     1606    15.1%   SHIPPED
+     0.15    0.70     4381     3859     1606    15.1%   was shipped until the body cap moved
      0.10    0.75     2748     2458      644     6.0%   
 
 READ IT AS A TRADE, NOT AN IMPROVEMENT. A looser shape marks more
-grabs; it does not make the marks mean more. research/
-CCP_ENTRY_MODELS.md measured the shipped setting and found gross
-expectancy at a grab is about zero, so nothing on this table is
-known to be better than anything else on it — only busier or
-quieter. Pick the one that matches what your eye calls a pin.
+grabs; it does not make the marks mean more.
+
+research/CCP_ENTRY_MODELS.md measured 0.15/0.70, which was the
+default when it ran and is NOT the default any more. It found gross
+expectancy at a grab is about zero with or without the CCP filter.
+That null carries over to a looser setting rather than being voided
+by it: loosening accepts more grabs, which moves the filter toward
+taking every grab, and every grab is the most solidly measured zero
+in the study. A TIGHTER setting would be the one needing its own run.

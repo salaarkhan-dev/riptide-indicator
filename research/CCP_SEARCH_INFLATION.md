@@ -62,11 +62,23 @@ fires.
 
 ## What changed
 
-| | was | now |
-|---|---|---|
-| `ccpBack` / `ccpFwd` | 3 / 3 | **1 / 1** |
-| `ccpBodyMax` | 0.35 | **0.15** |
-| `ccpWickMin` | 0.50 | **0.70** |
+| | originally | after this file | **shipped today** |
+|---|---|---|---|
+| `ccpBack` / `ccpFwd` | 3 / 3 | 1 / 1 | **2 / 2** |
+| `ccpBodyMax` | 0.35 | 0.15 | **0.25** |
+| `ccpWickMin` | 0.50 | 0.70 | **0.70** |
+
+> **The body cap moved back to 0.25 after this file was written**, because
+> 0.15 was rejecting shapes that the CCP sheet, and any reasonable eye, call
+> pins: a hanging man at a sell-side grab with upper wick .00, lower wick .79
+> and the right direction was thrown out on its body alone at .21.
+>
+> **Every rate quoted in this file and in `research/CCP_ENTRY_MODELS.md` was
+> measured at 0.15.** At 0.25 the comparable both-ends figure is about **24.9%**
+> rather than 16.8%. The entry study's null carries over rather than being
+> voided: loosening accepts more grabs, which moves the filter toward taking
+> every grab, and every grab is the most solidly measured zero in that study.
+> A *tighter* setting would be the one needing its own run.
 
 That lands near 20% — still high, and deliberately not hidden. The debug table
 now prints the **no-merge baseline** beside the live count: the `b = 0, f = 0`

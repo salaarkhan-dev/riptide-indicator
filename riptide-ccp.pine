@@ -87,10 +87,10 @@ ccpOn = input.bool(false, "Merge candles and name the shape", group = gCCP,
 ccpBack = input.int(2, "Merge up to — before", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn)
 ccpFwd = input.int(2, "after", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn,
      tooltip = "How many neighbours either side of the anchor candle may be merged into it. A window is any run of candles containing the anchor, so 1 and 1 means every window from the anchor alone up to three candles wide.\n\nBoth sides matter: the shape can need candles from before the anchor, from after it, from both, or from neither.\n\n2 and 2 spans runs of one to five candles.\n\nTHIS IS THE SETTING THAT DECIDES WHETHER THE MARK MEANS ANYTHING, because widening it does not find more pins, it finds more WINDOWS, and more windows find a pin by accident. Measured over 2,729 grabs on 23 symbols of 15m, the share where BOTH ends carry the shape goes 0.3% at 0/0, 5.8% at 1/1, 16.4% at 2/2 and 26.2% at 3/3.\n\nRead that first row carefully: only 7 grabs in 2,729 have both ends as pins WITHOUT any merging. So at the default nearly every match exists because something was merged, and whether that is discovery or arithmetic is the open question this bench was built to answer. research/CCP_SEARCH_INFLATION.md.")
-ccpBodyMax = input.float(0.15, "Pin: body at most (fraction of range)", minval = 0.05, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn,
-     tooltip = "THIS CAP IS NOT INDEPENDENT OF THE WICK FLOOR BELOW, and it is easy to set it to a value that does nothing.\n\nThe three fractions sum to exactly one:\n\n    upper wick  +  body  +  lower wick  =  1\n\nbecause the range IS those three pieces stacked. So requiring the longer wick to be at least w already forces the body to be at most 1 - w, on its own, with no help from this input.\n\nTHE RULE: this cap only rejects anything when it is set BELOW 1 minus the wick floor. At or above that it is a dead input and the wick floor is doing all the work.\n\nExamples at wick ≥ 0.65, where the implied cap is 0.35:\n    body ≤ 0.35 — does nothing, identical to having no cap\n    body ≤ 0.30 — binds, barely\n    body ≤ 0.20 — binds\n\nAt the shipped 0.70 wick floor the implied cap is 0.30, so the shipped 0.15 is doing real work — it is half of what the wick floor already guarantees.\n\nIf you want the wick alone to define the pin, that is a legitimate choice: set this to 1 minus your wick floor and it switches itself off. Just do it knowingly rather than by accident.")
+ccpBodyMax = input.float(0.25, "Pin: body at most (fraction of range)", minval = 0.05, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn,
+     tooltip = "THIS CAP IS NOT INDEPENDENT OF THE WICK FLOOR BELOW, and it is easy to set it to a value that does nothing.\n\nThe three fractions sum to exactly one:\n\n    upper wick  +  body  +  lower wick  =  1\n\nbecause the range IS those three pieces stacked. So requiring the longer wick to be at least w already forces the body to be at most 1 - w, on its own, with no help from this input.\n\nTHE RULE: this cap only rejects anything when it is set BELOW 1 minus the wick floor. At or above that it is a dead input and the wick floor is doing all the work.\n\nExamples at wick ≥ 0.65, where the implied cap is 0.35:\n    body ≤ 0.35 — does nothing, identical to having no cap\n    body ≤ 0.30 — binds, barely\n    body ≤ 0.20 — binds\n\nAt the shipped 0.70 wick floor the implied cap is 0.30, so the shipped 0.25 still binds — but only just, and 0.30 would switch it off.\n\nIT WAS 0.15 UNTIL A CHART SAID OTHERWISE. A textbook hanging man at a sell-side grab — upper wick .00, lower wick .79, right direction — was rejected on its body alone at .21. Every published rate in this repo was measured at 0.15; at 0.25 the comparable both-ends rate is about 24.9% rather than 16.8%.\n\nIf you want the wick alone to define the pin, that is a legitimate choice: set this to 1 minus your wick floor and it switches itself off. Just do it knowingly rather than by accident.")
 ccpWickMin = input.float(0.70, "Pin: longer wick at least", minval = 0.2, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn,
-     tooltip = "The two numbers that define a pin, and they are inputs rather than constants so the definition is arguable on the chart instead of buried in the code.\n\nThe defaults were 0.35 and 0.50 — the shape the CCP sheet draws — and when this layer still scanned every bar those marked 88% of them. They are now 0.15 and 0.70. Tightening them helped far less than restricting WHERE the layer looks: gating to a grab's two ends, in the grab's own direction, took the same settings from 88.4% of all bars to 16.4% of grabs.")
+     tooltip = "The two numbers that define a pin, and they are inputs rather than constants so the definition is arguable on the chart instead of buried in the code.\n\nThe defaults were 0.35 and 0.50 — the shape the CCP sheet draws — and when this layer still scanned every bar those marked 88% of them. They are now 0.25 and 0.70 — 0.15 until a chart showed it rejecting shapes the sheet itself calls pins. Tightening them helped far less than restricting WHERE the layer looks: gating to a grab's two ends, in the grab's own direction, took the same settings from 88.4% of all bars to 16.4% of grabs. That 16.4% was measured at 0.15; the default is now 0.25, where it is about 24.9%.")
 ccpAnchorExtreme = input.bool(false, "The long wick must be the anchor's own", group = gCCP, active = ccpOn,
      tooltip = "The anchor candle is inside every window the search tries — that is structural and not optional. But being INSIDE a five-candle run does not mean the anchor put anything into the shape: the open comes from the oldest bar of the run, the close from the newest, and the high and the low can both belong to neighbours.\n\nMeasured over the same 2,729 grabs, 36% of matches have the defining extreme — the far end of the long wick — belonging to a neighbour rather than to the anchor. On the right-hand end that means the rejection the arrow is drawn for happened on a bar that is not the one that ran the level.\n\nON requires that extreme to be the anchor's own high or low. It is applied inside the search, so rejecting a wide window still lets a narrower one win.\n\nCOST: both-ends matches fall from 16.4% of grabs to 3.9%. That is a large cut and it is not known to be an improvement — neither rate has been scored against anything. It is OFF by default so the number you have been reading does not move under you. audit/ccp_anchor_check.py section 4.")
 ccpPick = input.string("Smallest run", "When several windows qualify, keep",
@@ -448,7 +448,7 @@ if bgOn and grabBarOk
 DOJI_BODY = 0.02
 
 ccpName(bool bull, bool green, float bodyF) =>
-    bodyF <= DOJI_BODY ? (bull ? "Bullish pin (doji body — no colour, so neither name applies)" : "Bearish pin (doji body — no colour, so neither name applies)")
+    bodyF <= DOJI_BODY ? (bull ? "Bullish pin (doji)" : "Bearish pin (doji)")
          : bull ? (green ? "Hammer" : "Hanging man")
               : (green ? "Inverted hammer" : "Shooting star")
 
@@ -566,10 +566,10 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
                     float oo = open[firstOff]
                     float rng = hh - ll
                     nTried := nTried + 1
-                    string head = "\n      " + str.tostring(b) + " before + " + str.tostring(f) + " after (" + str.tostring(b + f + 1) + "c)"
+                    string head = "\n  " + str.tostring(b) + "+" + str.tostring(f) + " (" + str.tostring(b + f + 1) + "c)"
                     if rng <= 0 or rng < minRange
                         nRange := nRange + 1
-                        rows := rows + head + "  ✗ too small"
+                        rows := rows + head + " ✗small"
                     else
                         float bodyF = math.abs(cc - oo) / rng
                         float upW = (hh - math.max(oo, cc)) / rng
@@ -600,17 +600,17 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
                         if fails == " WICK"
                             nOnlyWick := nOnlyWick + 1
                             maxWick := math.max(maxWick, bigW)
-                        string nums = "  body " + str.tostring(bodyF, "#.00") + " up " + str.tostring(upW, "#.00") + " dn " + str.tostring(dnW, "#.00")
-                        rows := rows + head + nums + (fails == "" ? "  ✓ QUALIFIES" : "  ✗" + fails)
-    string s = "\n    " + str.tostring(nTried) + " windows tried, " + str.tostring(nOk) + " qualified:" + rows
+                        string nums = " body " + str.tostring(bodyF, "#.00") + " up " + str.tostring(upW, "#.00") + " dn " + str.tostring(dnW, "#.00")
+                        rows := rows + head + nums + (fails == "" ? " ✓" : " ✗" + fails)
+    string s = "\n  " + str.tostring(nTried) + " windows, " + str.tostring(nOk) + " ok:" + rows
     if nOk > 1
-        s := s + "\n    Several qualified. '" + ccpPick + "' chose between them — smallest run prefers fewer candles, ties to the stronger wick."
+        s := s + "\n  '" + ccpPick + "' chose among " + str.tostring(nOk)
     if nOk == 0 and nOnlyBody > 0
-        s := s + "\n    " + str.tostring(nOnlyBody) + " failed ONLY on the body cap, the loosest at " + str.tostring(minBody, "#.00") + ". Setting 'body at most' to " + str.tostring(math.ceil(minBody / 0.05) * 0.05, "#.00") + " admits it. The cap is dead at or above " + str.tostring(1 - ccpWickMin, "#.00") + ", which the wick floor already guarantees on its own."
+        s := s + "\n  " + str.tostring(nOnlyBody) + " failed BODY only, loosest " + str.tostring(minBody, "#.00") + " → set cap " + str.tostring(math.ceil(minBody / 0.05) * 0.05, "#.00") + " (dead at " + str.tostring(1 - ccpWickMin, "#.00") + ")"
     if nOk == 0 and nOnlyWick > 0
-        s := s + "\n    " + str.tostring(nOnlyWick) + " failed ONLY on the wick floor, the longest at " + str.tostring(maxWick, "#.00") + ". Setting 'longer wick at least' to " + str.tostring(math.floor(maxWick / 0.05) * 0.05, "#.00") + " admits it."
+        s := s + "\n  " + str.tostring(nOnlyWick) + " failed WICK only, longest " + str.tostring(maxWick, "#.00") + " → set floor " + str.tostring(math.floor(maxWick / 0.05) * 0.05, "#.00")
     if nOk == 0 and nAnchor > 0
-        s := s + "\n    " + str.tostring(nAnchor) + " were rejected ONLY by 'the long wick must be the anchor's own'. That switch costs about four fifths of all matches; turn it off to see them."
+        s := s + "\n  " + str.tostring(nAnchor) + " rejected by ANCHOR-EXTREME only → turn that switch off"
     s
 
 // ── state ───────────────────────────────────────────────────────────────────
@@ -637,13 +637,7 @@ ccpLeg(string which, int b, int f, float o, float h, float l, float c,
      bool bull) =>
     int n = b + f + 1
     float rng = h - l
-    string s = which + ": " + ccpName(bull, c >= o, math.abs(c - o) / rng) + "  ·  " +
-         (n == 1 ? "1 candle, no merge"
-                 : str.tostring(n) + " candles (" + str.tostring(b) +
-                   " before + " + str.tostring(f) + " after)")
-    s + "\n    body " + str.tostring(math.abs(c - o) / rng, "#.00") +
-         "   upper " + str.tostring((h - math.max(o, c)) / rng, "#.00") +
-         "   lower " + str.tostring((math.min(o, c) - l) / rng, "#.00")
+    which + ": " + ccpName(bull, c >= o, math.abs(c - o) / rng) + " · " + str.tostring(n) + "c (" + str.tostring(b) + "+" + str.tostring(f) + ")  body " + str.tostring(math.abs(c - o) / rng, "#.00") + " up " + str.tostring((h - math.max(o, c)) / rng, "#.00") + " dn " + str.tostring((math.min(o, c) - l) / rng, "#.00")
 
 ccpMark(int atBar, bool bull, color col, string tip) =>
     ccpLbs.push(label.new(atBar, na, "",
@@ -707,61 +701,40 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                 // the aligned continuations landed on multiples of four, which
                 // Pine reads as new statements. deploy/pine-static-check.py
                 // caught it.
-                string lTag = lOk ? (lB + lF == 0 ? "left alone" : "left merged") : "left none"
-                string rTag = rOk ? (rB + rF == 0 ? "right alone" : "right merged") : "right none"
-                // The breakdown now runs for MATCHED ends too, not only for
-                // ends that found nothing. Seeing which windows qualified and
-                // which the tie-break passed over is the only way to tell a
-                // window that lost from one that never qualified, and the two
-                // look identical on a chart.
+                string lTag = lOk ? (lB + lF == 0 ? "L alone" : "L merged") : "L none"
+                string rTag = rOk ? (rB + rF == 0 ? "R alone" : "R merged") : "R none"
+                // The breakdown runs for MATCHED ends too, not only for ends
+                // that found nothing: a window that lost the tie-break and one
+                // that never qualified look identical otherwise.
                 //
-                // The parentheses matter: `?:` binds looser than `+` in Pine,
+                // The parentheses matter — `?:` binds looser than `+` in Pine,
                 // so the old form appended the breakdown to the no-shape
                 // branch alone.
                 string lWhy = ccpDebug ? ccpWhy(leftOff, qMinRange, wantBull) : ""
                 string rWhy = ccpDebug ? ccpWhy(rightOff, qMinRange, wantBull) : ""
-                string lTxt = (lOk ? ccpLeg("LEFT  (the swing that built the level)", lB, lF, lO, lH, lL, lC, wantBull) : "LEFT: no shape") + lWhy
-                string rTxt = (rOk ? ccpLeg("RIGHT (the candles that ran it)", rB, rF, rO, rH, rL, rC, wantBull) : "RIGHT: no shape") + rWhy
+                string lTxt = (lOk ? ccpLeg("L swing", lB, lF, lO, lH, lL, lC, wantBull) : "L no shape") + lWhy
+                string rTxt = (rOk ? ccpLeg("R grab ", rB, rF, rO, rH, rL, rC, wantBull) : "R no shape") + rWhy
                 string side = q.isHigh ? "buy-side" : "sell-side"
                 string dir = wantBull ? "BULLISH" : "BEARISH"
-                string tip = dir + " after-effect at a " + side + " grab" +
-                     "\n" + lTag + "  +  " + rTag +
-                     "\n\n" + lTxt +
-                     "\n\n" + rTxt +
-                     "\n\nTHIS MARK WAS ACCEPTED. A " + (wantBull ? "bullish" : "bearish") + " shape is the one this grab" +
-                     "\nimplies. Had the shape pointed the other way it would have been" +
-                     "\ndiscarded — not drawn in another colour, and not shown at all." +
-                     "\n\nContext only. No alert, no entry, nothing measured."
-                // Both arrows are created HERE, on this bar, however far back
-                // they are placed. The left one lands on the swing that built
-                // the level, which can be a long way before the grab that
-                // created it, and a chart cannot show that on its own: the
-                // arrow simply appears at an old bar with the move already
-                // visible after it. Saying the lag out loud is the only thing
-                // stopping that from reading as foresight.
-                // NEITHER TRIANGLE IS DRAWN AT THE SWING ANY MORE. Both sit at
-                // the grab end of the band: the left-end one on the grab bar,
-                // the right-end one on the bar that confirmed it.
+                // ONE TRIANGLE PER GRAB, on the grab bar. Two would stack when
+                // both ends match, and they would carry the same tooltip
+                // anyway — it already describes both ends.
                 //
-                // The left end's SHAPE is still at the swing, often a hundred
-                // bars back, and a triangle there was the single most
-                // misleading thing on this chart — it appeared at an old bar
-                // with the move that followed already visible, which reads as
-                // foresight however clearly the tooltip denies it. Drawing it
-                // at the grab keeps the finding and drops the illusion. The
-                // band and the $$$ line already say which swing it came from,
-                // and debug mode boxes the exact candles.
-                // ONE TRIANGLE PER GRAB, on the grab bar. Two would land on the
-                // same bar when both ends match and sit exactly on top of each
-                // other, and they would carry the same tooltip anyway — it
-                // already describes both ends.
-                string where = "\n\nDRAWN AT THE GRAB, NOT AT THE SHAPES IT DESCRIBES."
+                // The left end's SHAPE is at the swing, often a hundred bars
+                // back. A triangle there was the most misleading thing on this
+                // chart: it appeared at an old bar with the move that followed
+                // already visible. The distances below say where each shape is
+                // without putting a mark on it.
+                string where = "\nmark at grab"
                 if lOk
-                    where := where + "\n  LEFT shape: at the swing that built the level, " + str.tostring(bar_index - q.pivotBar) + " bars back — the left edge of the band."
+                    where := where + " · L shape " + str.tostring(bar_index - q.pivotBar) + "b back"
                 if rOk
-                    where := where + "\n  RIGHT shape: ends " + str.tostring(rightOff - rF) + " bars back."
-                where := where + "\nPlaced here so nothing on the chart sits far in the past looking like it was called at the time. It appears " + str.tostring(ccpFwd) + " bars after this candle closes, which is when the shape first becomes knowable. Turn on debug to box the candles each end used."
-                ccpMark(q.grabBar, wantBull, q.col, tip + where)
+                    where := where + " · R shape ends " + str.tostring(rightOff - rF) + "b back"
+                string tip = dir + " @ " + side + " grab · " + lTag + " + " + rTag +
+                     "\n" + lTxt +
+                     "\n" + rTxt +
+                     where + " · context only"
+                ccpMark(q.grabBar, wantBull, q.col, tip)
                 if ccpDebug
                     if lOk
                         ccpWindowBox(q.pivotBar - lB, q.pivotBar + lF, lH, lL,
