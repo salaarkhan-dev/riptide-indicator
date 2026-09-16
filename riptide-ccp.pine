@@ -16,9 +16,17 @@
 //  deploy/ccp-grab-check.py compares the two files statement by statement and
 //  fails if they drift apart.
 //
-//  WHAT IS NOT IN IT. The CCP merge logic. That is section 3 below, which is
-//  a stub carrying the design and no code. It goes in next, on this bench,
-//  where a wrong answer costs a chart redraw and nothing else.
+//  THE CCP MERGE LOGIC IS SECTION 5, and it is built. It merges the anchor
+//  candle with its neighbours, names the shape, and does it only at the two
+//  ends of a grab in the direction that grab implies.
+//
+//  EVERYTHING SHIPS OFF. All three master switches — Grabs, Big grabs, and
+//  Merge candles — default to false, and every setting under them is greyed
+//  out until its own switch is on. So a fresh load shows an almost entirely
+//  disabled panel, which is deliberate rather than broken: nothing in this
+//  file carries a claim, and research/CCP_ENTRY_MODELS.md measured the
+//  merge layer and found gross expectancy at a grab is about zero. Turn on
+//  the switch for the group you want and its settings become editable.
 //
 //  NO ALERTS ANYWHERE, ON PURPOSE. Nothing about the grab has been measured:
 //  research/POOL_PIVOT_LENGTH.md came back UNDERPOWERED, and
@@ -46,7 +54,7 @@ indicator("Riptide CCP", overlay = true,
 // ═════════════════════════════ 1. INPUTS ════════════════════════════════════
 gGrab   = "1. Grabs"
 gBGrab  = "2. Big grabs"
-gCCP    = "3. Combined candles (not built yet)"
+gCCP    = "3. Combined candles"
 gEng    = "4. Engine"
 sgOn = input.bool(false, "Grabs", group = gGrab,
      tooltip = "A swing gets wicked through and price closes back on the original side. The band spans from the swing to the bar that ran it; the $$$ sits on the level that was taken.\n\nThis is the NARROW instance — 3/3, the reference's own default. It watches minor swings, so it fires often. The wide instance is group 19; they share one detector and differ only in pivot width and colour.\n\nOFF BY DEFAULT AND CARRYING NO CLAIM. Context only — no alert fires from it, nothing reads it, and every Riptide entry, stop and target is identical with it on or off.\n\nWHY NO CLAIM. Measured against Riptide's own raid on the same pivots, this fires at least 1.8x as often and two thirds of its marks are places Riptide says nothing (audit/liquidity_grab_rate.py). It is earlier because it asks for less: a close back over the level, where Riptide wants a break of the structure the raid created. research/POOL_PIVOT_LENGTH.md then tested whether the extra marks are worth anything and came back UNDERPOWERED. A thing to look at, not to trade.")
@@ -71,7 +79,9 @@ bgKeep = input.int(20, "Keep this many bands", minval = 2, maxval = 100, group =
 bgCol = input.color(color.aqua, "Color", group = gBGrab, active = bgOn)
 
 // ── 3. Combined candles ─────────────────────────────────────────────────────
-// Declared now so the panel shows what is coming; nothing reads them yet.
+// Every setting here is greyed out until 'Merge candles and name the shape'
+// is on. That is what `active =` does, and it is why a fresh load looks
+// like a dead panel: all three master switches ship off.
 ccpOn = input.bool(false, "Merge candles and name the shape", group = gCCP,
      tooltip = "Looks for a pin shape at the two ends of every grab — the swing that built the level and the candles that ran it — merging the anchor candle with its immediate neighbours to find one.\n\nEVERY window the search tries CONTAINS THE ANCHOR. It never merges a run of neighbours that leaves the anchor out, at any setting. That is proved by enumeration over all 441 windows from 0/0 to 5/5 in audit/ccp_anchor_check.py, which also checks the merge arithmetic against a from-scratch recompute on real candles.")
 ccpBack = input.int(2, "Merge up to — before", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn)
