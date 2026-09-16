@@ -56,7 +56,8 @@ gGrab   = "1. Grabs"
 gBGrab  = "2. Big grabs"
 gCCP    = "3. Combined candles"
 gEM     = "4. Entry model (drawing only)"
-gEng    = "5. Engine"
+gFlt    = "5. Context filters"
+gEng    = "6. Engine"
 sgOn = input.bool(false, "Grabs", group = gGrab,
      tooltip = "A swing gets wicked through and price closes back on the original side. The band spans from the swing to the bar that ran it; the $$$ sits on the level that was taken.\n\nThis is the NARROW instance — 3/3, the reference's own default. It watches minor swings, so it fires often. The wide instance is group 19; they share one detector and differ only in pivot width and colour.\n\nOFF BY DEFAULT AND CARRYING NO CLAIM. Context only — no alert fires from it, nothing reads it, and every Riptide entry, stop and target is identical with it on or off.\n\nWHY NO CLAIM. Measured against Riptide's own raid on the same pivots, this fires at least 1.8x as often and two thirds of its marks are places Riptide says nothing (audit/liquidity_grab_rate.py). It is earlier because it asks for less: a close back over the level, where Riptide wants a break of the structure the raid created. research/POOL_PIVOT_LENGTH.md then tested whether the extra marks are worth anything and came back UNDERPOWERED. A thing to look at, not to trade.")
 sgLeft = input.int(3, "Pivot", minval = 1, inline = "sg1", group = gGrab, active = sgOn)
@@ -123,6 +124,14 @@ emFeePct = input.float(0.04, "Round-trip fee (% of notional)", minval = 0.0, max
      tooltip = "Charged in R as fee% / risk%, the way research/harness.py does it. The default approximates taker in and taker out at Riptide's rates.\n\nThis is not a detail. Fees ARE the loss on this model: gross of them the entry returns about zero, and cost per bet goes as 1/risk, so the tightest stops bleed the most. Set it to 0 and the table shows the gross picture — which is roughly break-even, not profit.")
 emStats = input.bool(true, "Show the results table", group = gEM, active = emOn,
      tooltip = "Simulates every drawn setup forward and tallies the outcome. Same rules as research/studies/ccp_exit_models.py — stop wins a bar that spans both levels, the entry bar resolves nothing, 48-hour horizon — so the table on your chart and the study on 23 symbols are measuring the same thing. If they disagree badly, one of them is wrong and that is worth knowing.")
+
+// ── 5. Context filters ──────────────────────────────────────────────────────
+fltFvg = input.bool(false, "Require an unfilled FVG in the grab window", group = gFlt,
+     tooltip = "A three-bar imbalance in the trade's direction, formed inside the grab window and still unfilled at the signal bar. For a long: low[i+1] > high[i-1], and price has not traded back below high[i-1] since.\n\nMEASURED, AND THE RECORD IS MIXED. On Min60 it separated grabs that pay from grabs that do not on three pre-registered runs — 84 unseen symbols at z +4.12 and 862 days of older data at z +9.19. Then the timeframe coherence test came back OUTCOME C and the line stopped: research/FVG_TIMEFRAME_COHERENCE.md.\n\nWhat survives is that the SORTING is real on all three timeframes — delta +0.108, +0.087, +0.117 — and that whether the sorted subset clears its fees is a different question with a different answer per timeframe. Nothing here is a signal.")
+fltEngulf = input.bool(false, "Require an engulfing candle in the grab window", group = gFlt,
+     tooltip = "The second candle's BODY must cover the first candle's body. Wicks are not part of the test — a real engulfing candle may have long wicks, short ones or none.\n\nTHE PIN IS NOT REQUIRED, and that is a finding rather than a shortcut. research/CCP_PATTERN_EXPLORE.md compared all four 2CPs of a colour against the same engulfing candle with no pin: five of six comparisons sat inside noise and the sixth was significantly NEGATIVE. Requiring a pin first does not help and on 1h it hurts, so eight of the sheet's twelve patterns collapse into two.\n\nOn the discovery set a RED engulfing beat a green one at every timeframe and improved with timeframe: -0.032, -0.010, +0.044. That last is t = 1.5 and has never been confirmed on a holdout.")
+fltMark = input.bool(true, "Tag each grab with the filters it passed", group = gFlt, active = fltFvg or fltEngulf,
+     tooltip = "Writes a small tag at the grab showing which of the filters that grab satisfied, so a gate that is quietly rejecting everything is visible rather than silent.")
 
 emOutcome = input.bool(true, "Mark how each setup ended", group = gEM, active = emOn,
      tooltip = "Draws a tick or a cross at the bar where each setup resolved, with the R it made or lost. This is the chart version of the results table, and it is there to make the failures as visible as the marks.\n\nEXPECT MOST OF THEM TO BE CROSSES. research/CCP_ENTRY_MODELS.md found the CCP filter does not sort winners from losers at all, and at a 2R target roughly two setups in three end at the stop. A chart that only ever showed the triangle was hiding that.")
@@ -765,6 +774,43 @@ emDraw(int rOff, bool bull) =>
             emLevel(bar_index, b2, pr, color.orange, line.style_dashed, str.tostring(emPartialR, "#.#") + "R close " + str.tostring(emPartialPct) + "%" + (emBE ? " → stop BE" : ""))
         emPrune()
 
+// ── context filters ─────────────────────────────────────────────────────────
+// Offsets, not bar indices: gOff is the grab bar's offset and sOff the signal
+// bar's, so gOff > sOff because a larger offset is an older bar.
+
+// An unfilled three-bar imbalance in the trade's direction, formed inside the
+// grab window. Bar i sits at offset io, so i-1 is io+1 and i+1 is io-1.
+fltHasFvg(int gOff, int sOff, bool bull) =>
+    bool got = false
+    for io = gOff + 1 to sOff + 1
+        if not got and io >= 1 and io + 1 < 450
+            float lvl = bull ? high[io + 1] : low[io + 1]
+            bool gap = bull ? low[io - 1] > lvl : high[io - 1] < lvl
+            if gap
+                bool filled = false
+                if io - 2 >= sOff
+                    for k = io - 2 to sOff
+                        if bull ? low[k] <= lvl : high[k] >= lvl
+                            filled := true
+                if not filled
+                    got := true
+    got
+
+// A candle whose BODY covers the previous candle's body, pointing the trade's
+// way. Wicks are deliberately not part of this — see research/ccp_patterns.py.
+fltHasEngulf(int gOff, int sOff, bool bull) =>
+    bool got = false
+    for io = gOff to sOff + 1
+        if not got and io >= 1
+            float lo1 = math.min(open[io], close[io])
+            float hi1 = math.max(open[io], close[io])
+            float lo2 = math.min(open[io - 1], close[io - 1])
+            float hi2 = math.max(open[io - 1], close[io - 1])
+            bool green2 = close[io - 1] >= open[io - 1]
+            if hi2 > lo2 and lo2 <= lo1 and hi2 >= hi1 and green2 == bull
+                got := true
+    got
+
 // Declared here rather than in the pass below because the entry model's
 // bookkeeping runs FIRST and reads it. Pine needs it before either use.
 bool ccpBarOk = not confirmOnBarClose or barstate.isconfirmed
@@ -898,7 +944,21 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                 if lB + lF > 0 and rB + rF > 0
                     ccpMM += 1
 
-            if (lOk and rOk) or (not ccpNeedBoth and (lOk or rOk))
+            // Context gates. Evaluated whether or not they are switched on,
+            // so the tag can report what a grab passed even when nothing is
+            // being filtered — a gate that silently rejects everything is the
+            // failure mode worth making visible.
+            bool hasFvg = fltHasFvg(rightOff, 0, wantBull)
+            bool hasEng = fltHasEngulf(rightOff, 0, wantBull)
+            bool fltOk = (not fltFvg or hasFvg) and (not fltEngulf or hasEng)
+            if fltMark and (fltFvg or fltEngulf)
+                ccpLbs.push(label.new(q.grabBar, na,
+                     (hasFvg ? "F" : "·") + (hasEng ? "E" : "·"),
+                     xloc = xloc.bar_index,
+                     yloc = wantBull ? yloc.abovebar : yloc.belowbar,
+                     style = label.style_none, size = size.tiny,
+                     textcolor = fltOk ? q.col : color.new(chart.fg_color, 60)))
+            if fltOk and ((lOk and rOk) or (not ccpNeedBoth and (lOk or rOk)))
                 // Hoisted into locals rather than nested in one expression:
                 // the aligned continuations landed on multiples of four, which
                 // Pine reads as new statements. deploy/pine-static-check.py
