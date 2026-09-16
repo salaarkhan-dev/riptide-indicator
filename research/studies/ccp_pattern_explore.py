@@ -21,11 +21,16 @@ needs its engulfing candle inside that window too.
 DIRECTION-GATED, per the sheet: only a bearish pattern at a buy-side grab and
 only a bullish one at a sell-side grab.
 
-ENTRY AND STOP COME FROM THE SHEET, not from the grab. That means a LIMIT
-entry at the body edge, which may never fill — research.harness.simulate models
-exactly that and scores an unfilled setup as 0.0 rather than as a loss. Both
-numbers are reported, because "R per fill" flatters a pattern that rarely
-fills and "R per signal" is what the account would see.
+ENTRY AND STOP COME FROM THE SHEET, not from the grab, and the ORDER TYPE
+follows from where the level sits. The body edge on the trade side is at the
+close for a same-colour pin — a market fill — but on the far side of the close
+for the two wrong-colour pins, where it is a STOP that should fill only if
+price trades THROUGH it. See fill_bar(); the first version of this study used a
+limit fill for both and took every unconfirmed setup.
+
+An order that never fills is scored 0.0, not as a loss. Both numbers are
+reported, because "R per fill" flatters a pattern that rarely fills and
+"R per signal" is what the account would see.
 """
 from __future__ import annotations
 
@@ -43,7 +48,7 @@ os.makedirs(os.environ["RIPTIDE_DEEP_CACHE"], exist_ok=True)
 
 from research.data import SYMBOLS                        # noqa: E402
 from research.deep import load_universe                  # noqa: E402
-from research.harness import simulate                    # noqa: E402
+from research.harness import simulate_market             # noqa: E402
 from audit.ccp_merge_check import atr14                  # noqa: E402
 from audit.ccp_at_grabs_check import grabs               # noqa: E402
 from research.studies.ccp_context_filters import clustered  # noqa: E402
@@ -54,6 +59,38 @@ CCP_BACK = CCP_FWD = 2
 DAYS = 333
 TFS = (("Min15", 192), ("Min30", 96), ("Min60", 48))
 MIN_N = 100            # below this a row is printed but marked thin
+
+
+FILL_BARS = 4
+
+
+def fill_bar(cs, sig: int, entry: float, is_long: bool):
+    """First bar that actually fills this order, or None.
+
+    THE ORDER TYPE DEPENDS ON WHERE THE LEVEL SITS, and the first version of
+    this study got that wrong. The sheet puts entry at the body edge on the
+    trade side. For a GREEN bullish pin that edge is the close, so it is a
+    market or limit fill. For a RED bullish pin — a hanging man — the body top
+    is the OPEN, which is ABOVE the close, so it is a STOP order: it should
+    fill only if price rises THROUGH it. The mirror holds for an inverted
+    hammer on the short side.
+
+    research.harness.simulate fills a long when price comes DOWN to the level,
+    which is right for a limit and exactly wrong for a stop. Used on the two
+    wrong-colour pins it filled 100% of them, including every setup that never
+    confirmed — taking trades the sheet would not take.
+
+    Two of the twelve were affected: 1CP Hanging man and 1CP Inverted hammer.
+    """
+    for k in range(sig + 1, min(sig + 1 + FILL_BARS, len(cs) - 1)):
+        c = cs[k]
+        if is_long:
+            hit = c.h >= entry if entry > cs[sig].c else c.l <= entry
+        else:
+            hit = c.l <= entry if entry < cs[sig].c else c.h >= entry
+        if hit:
+            return k
+    return None
 
 
 def found(cs, gb: int, is_long: bool):
@@ -84,12 +121,18 @@ def build(cs, a, sym: str, horizon: int):
                 continue
             if (s["stop"] >= s["entry"]) if is_long else (s["stop"] <= s["entry"]):
                 continue
-            o = simulate(cs, bar, s["entry"], s["stop"], is_long,
-                         target_r=2.0, horizon_bars=horizon)
+            k = fill_bar(cs, bar, s["entry"], is_long)
+            if k is None:
+                rows.append({"sym": sym, "t": cs[bar].t, "name": s["name"],
+                             "r": 0.0, "filled": False,
+                             "risk_pct": 100.0 * risk / s["entry"]})
+                continue
+            o = simulate_market(cs, k, s["entry"], s["stop"], is_long,
+                                target_r=2.0, horizon_bars=horizon)
             if o is None:
                 continue
             rows.append({"sym": sym, "t": cs[bar].t, "name": s["name"],
-                         "r": o.r, "filled": o.filled,
+                         "r": o.r, "filled": True,
                          "risk_pct": 100.0 * risk / s["entry"]})
     return rows
 
