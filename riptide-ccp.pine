@@ -485,6 +485,77 @@ ccpScanAt(int anchorOff, float minRange, bool wantBull) =>
                                 bC := cc
     [bB, bF, bO, bH, bL, bC]
 
+// WHY an end found nothing. Walks the same windows as ccpScanAt and reports
+// which test did the rejecting, plus the closest window it saw.
+//
+// This exists because "no shape" is an unfalsifiable answer on a chart. Four
+// different things produce it — the range filter, the body cap, the wick
+// floor, and the direction gate — and they mean completely different things.
+// A window thrown out by the DIRECTION gate was a perfectly good pin pointing
+// the wrong way; one thrown out by ccpMinRangeATR was a good pin that was
+// simply small, and that filter is a volume control rather than part of the
+// shape test. Without this you cannot tell those apart by looking, and the
+// natural conclusion from a candle that obviously IS a hammer is that the
+// classifier is broken.
+//
+// Debug-only, so the shipped path is untouched. Counts can exceed the window
+// count: one window can fail several tests at once, which is itself worth
+// seeing.
+ccpWhy(int anchorOff, float minRange, bool wantBull) =>
+    int nTried = 0
+    int nRange = 0
+    int nBody = 0
+    int nWick = 0
+    int nDir = 0
+    float bS = -1.0
+    string bDesc = ""
+    if anchorOff >= 0 and anchorOff + ccpBack < 450 and anchorOff + ccpBack < bar_index
+        for f = 0 to ccpFwd
+            if f <= anchorOff
+                int lastOff = anchorOff - f
+                float hF = high[anchorOff]
+                float lF = low[anchorOff]
+                for k = lastOff to anchorOff
+                    hF := math.max(hF, high[k])
+                    lF := math.min(lF, low[k])
+                float cc = close[lastOff]
+                float hh = hF
+                float ll = lF
+                for b = 0 to ccpBack
+                    int firstOff = anchorOff + b
+                    if b > 0
+                        hh := math.max(hh, high[firstOff])
+                        ll := math.min(ll, low[firstOff])
+                    float oo = open[firstOff]
+                    float rng = hh - ll
+                    nTried := nTried + 1
+                    if rng <= 0 or rng < minRange
+                        nRange := nRange + 1
+                    else
+                        float bodyF = math.abs(cc - oo) / rng
+                        float upW = (hh - math.max(oo, cc)) / rng
+                        float dnW = (math.min(oo, cc) - ll) / rng
+                        float bigW = math.max(upW, dnW)
+                        if bodyF > ccpBodyMax
+                            nBody := nBody + 1
+                        if bigW < ccpWickMin
+                            nWick := nWick + 1
+                        if (dnW > upW) != wantBull
+                            nDir := nDir + 1
+                        if bigW > bS
+                            bS := bigW
+                            bDesc := str.tostring(b + f + 1) + " candles (" + str.tostring(b) + " before + " + str.tostring(f) + " after), body " + str.tostring(bodyF, "#.00") + "  upper " + str.tostring(upW, "#.00") + "  lower " + str.tostring(dnW, "#.00")
+    string s = "\n    " + str.tostring(nTried) + " windows tried, all rejected:"
+    if nRange > 0
+        s := s + "\n      " + str.tostring(nRange) + " too small — the volume control, not the shape test. Set 'Ignore merges smaller than' to 0 to drop it."
+    if nBody > 0
+        s := s + "\n      " + str.tostring(nBody) + " body too big (cap " + str.tostring(ccpBodyMax, "#.00") + ")"
+    if nWick > 0
+        s := s + "\n      " + str.tostring(nWick) + " longer wick too short (floor " + str.tostring(ccpWickMin, "#.00") + ")"
+    if nDir > 0
+        s := s + "\n      " + str.tostring(nDir) + " WRONG DIRECTION — a real pin pointing the way this grab does not imply"
+    bDesc == "" ? s : s + "\n    closest window: " + bDesc
+
 // ── state ───────────────────────────────────────────────────────────────────
 var array<label> ccpLbs = array.new<label>()
 var array<box>   ccpBxs = array.new<box>()
@@ -574,8 +645,10 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                 // caught it.
                 string lTag = lOk ? (lB + lF == 0 ? "left alone" : "left merged") : "left none"
                 string rTag = rOk ? (rB + rF == 0 ? "right alone" : "right merged") : "right none"
-                string lTxt = lOk ? ccpLeg("LEFT  (the swing that built the level)", lB, lF, lO, lH, lL, lC, wantBull) : "LEFT: no shape"
-                string rTxt = rOk ? ccpLeg("RIGHT (the candles that ran it)", rB, rF, rO, rH, rL, rC, wantBull) : "RIGHT: no shape"
+                string lWhy = ccpDebug and not lOk ? ccpWhy(leftOff, ccpMinRange, wantBull) : ""
+                string rWhy = ccpDebug and not rOk ? ccpWhy(rightOff, ccpMinRange, wantBull) : ""
+                string lTxt = lOk ? ccpLeg("LEFT  (the swing that built the level)", lB, lF, lO, lH, lL, lC, wantBull) : "LEFT: no shape" + lWhy
+                string rTxt = rOk ? ccpLeg("RIGHT (the candles that ran it)", rB, rF, rO, rH, rL, rC, wantBull) : "RIGHT: no shape" + rWhy
                 string side = q.isHigh ? "buy-side" : "sell-side"
                 string dir = wantBull ? "BULLISH" : "BEARISH"
                 string tip = dir + " after-effect at a " + side + " grab" +
