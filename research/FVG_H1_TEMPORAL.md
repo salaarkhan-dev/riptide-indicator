@@ -3,6 +3,11 @@
 Pre-registered in `PREREG_fvg_h1_temporal.md`, committed before the run.
 Study: `research/studies/fvg_h1_temporal.py`, output alongside it.
 
+> **SUPERSEDED IN PART.** The timeframe coherence test that this file asked
+> for came back **OUTCOME C — not established**; see
+> `research/FVG_TIMEFRAME_COHERENCE.md`. The three passes below stand as
+> recorded, and the line does **not** proceed to a forward run on them.
+
 ## Verdict: SURVIVES THE REGIME CHANGE
 
 ```
