@@ -47,7 +47,7 @@ is judged alone — three tests, not one test with three chances.
 
     PYTHONPATH=. python3 research/studies/three_ideas.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 
 import random                                           # noqa: E402
 import statistics                                       # noqa: E402

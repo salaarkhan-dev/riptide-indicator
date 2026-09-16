@@ -63,7 +63,7 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
     PYTHONPATH=. RIPTIDE_DEEP_CACHE=/tmp/deep \
         python3 research/studies/phase2_rule.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 
 import asyncio                                          # noqa: E402
 

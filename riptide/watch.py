@@ -45,7 +45,7 @@ and `exhaust.py` was a copy of it with the nouns changed — ~300 duplicated
 lines, fixed twice, including the digest character budget which was found and
 fixed a month apart in each copy. What varies between indicators is the
 detector, the digest row and the grouping; everything below is what they all
-need. See `riptide/indicators/__init__.py` for what an indicator declares.
+need. See `riptide/watchers/__init__.py` for what an indicator declares.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ from . import storage
 from . import telegram as tg
 from .config import BAR_SECONDS, CONCURRENCY, log
 from .exchange import fetch_candles
-from .indicators import Hit, Indicator
+from .watchers import Hit, Indicator
 
 # `from . import storage` rather than `from .storage import meta_get`, and the
 # reason is a circular import: storage.db_init() creates this module's table,

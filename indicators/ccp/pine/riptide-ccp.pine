@@ -1,0 +1,1097 @@
+//@version=6
+// =============================================================================
+//  RIPTIDE CCP  —  a test bench, not a trading indicator
+// =============================================================================
+//  WHY THIS FILE EXISTS. Combining adjacent candles into one synthetic candle
+//  and naming the shape it makes is an experiment. Experiments do not belong
+//  in indicators/riptide_ms/pine/riptide-indicator-v2.pine, which draws the marks that match live alerts,
+//  and they certainly do not belong in indicators/riptide/pine/riptide-indicator.pine, which is the
+//  production file. So this is its own script: nothing here can disturb
+//  either of those, and either of those can be switched off while this runs.
+//
+//  WHAT IS IN IT TODAY. The grab detector, and nothing else. It is copied
+//  VERBATIM from section 13 of indicators/riptide_ms/pine/riptide-indicator-v2.pine — same types, same
+//  functions, same conditions, same drawing — so that anything this bench
+//  learns about grabs transfers back without a translation step.
+//  deploy/ccp-grab-check.py compares the two files statement by statement and
+//  fails if they drift apart.
+//
+//  THE CCP MERGE LOGIC IS SECTION 5, and it is built. It merges the anchor
+//  candle with its neighbours, names the shape, and does it only at the two
+//  ends of a grab in the direction that grab implies.
+//
+//  EVERYTHING SHIPS OFF. All three master switches — Grabs, Big grabs, and
+//  Merge candles — default to false, and every setting under them is greyed
+//  out until its own switch is on. So a fresh load shows an almost entirely
+//  disabled panel, which is deliberate rather than broken: nothing in this
+//  file carries a claim, and research/CCP_ENTRY_MODELS.md measured the
+//  merge layer and found gross expectancy at a grab is about zero. Turn on
+//  the switch for the group you want and its settings become editable.
+//
+//  NO ALERTS ANYWHERE, ON PURPOSE. Nothing about the grab has been measured:
+//  research/POOL_PIVOT_LENGTH.md came back UNDERPOWERED, and
+//  indicators/ccp/tools/liquidity_grab_rate.py found it fires at least 1.8x as often as
+//  Riptide's own raid with two thirds of its marks where Riptide says
+//  nothing. An alert on an unmeasured mark trains you to act on it. When
+//  alerts come, they come from the bot as a heads-up digest on the terms
+//  riptide/watch.py already set — see GRAB_ALERTS_SKELETON.md.
+//
+//  ATTRIBUTION. The grab detector is borrowed from "Liquidity & inducements"
+//  (© mickes, MPL-2.0). Four defects of that script are not reproduced here;
+//  they are listed in section 2's header, the same list as in v2.
+// =============================================================================
+indicator("Riptide CCP", overlay = true,
+     max_lines_count  = 500,
+     max_labels_count = 500,
+     max_boxes_count  = 500,
+     // The CCP search indexes history by a RUNTIME value (ccpFwd + b, up to
+     // 10). Pine infers a buffer from the largest CONSTANT offset it can see,
+     // and a variable one can outrun it. Declaring the buffer is exactly the
+     // fix audit/LIQUIDITY_INDUCEMENTS_AUDIT.md finding 1 recommends for the
+     // script this file borrows from, which hangs for want of it.
+     max_bars_back    = 500)
+
+// ═════════════════════════════ 1. INPUTS ════════════════════════════════════
+gGrab   = "1. Grabs"
+gBGrab  = "2. Big grabs"
+gCCP    = "3. Combined candles"
+gEM     = "4. Entry model (drawing only)"
+gFlt    = "5. Context filters"
+gEng    = "6. Engine"
+sgOn = input.bool(false, "Grabs", group = gGrab,
+     tooltip = "A swing gets wicked through and price closes back on the original side. The band spans from the swing to the bar that ran it; the $$$ sits on the level that was taken.\n\nThis is the NARROW instance — 3/3, the reference's own default. It watches minor swings, so it fires often. The wide instance is group 19; they share one detector and differ only in pivot width and colour.\n\nOFF BY DEFAULT AND CARRYING NO CLAIM. Context only — no alert fires from it, nothing reads it, and every Riptide entry, stop and target is identical with it on or off.\n\nWHY NO CLAIM. Measured against Riptide's own raid on the same pivots, this fires at least 1.8x as often and two thirds of its marks are places Riptide says nothing (indicators/ccp/tools/liquidity_grab_rate.py). It is earlier because it asks for less: a close back over the level, where Riptide wants a break of the structure the raid created. research/POOL_PIVOT_LENGTH.md then tested whether the extra marks are worth anything and came back UNDERPOWERED. A thing to look at, not to trade.")
+sgLeft = input.int(3, "Pivot", minval = 1, inline = "sg1", group = gGrab, active = sgOn)
+sgRight = input.int(3, "", minval = 1, inline = "sg1", group = gGrab, active = sgOn,
+     tooltip = "Bars left and right that must be lower (for a swing high) before the swing counts. 3/3 is the reference's default for the ordinary grab.\n\nThe swing confirms this many bars after it printed, so a grab cannot be marked before then. Honest lag, not repainting.")
+sgLookback = input.int(5, "Lookback", minval = 1, maxval = 20, group = gGrab, active = sgOn,
+     tooltip = "How many untaken swings per side stay eligible. Older ones are dropped, so a level from far back cannot suddenly be marked. The reference's own default.")
+sgKeep = input.int(20, "Keep this many bands", minval = 2, maxval = 100, group = gGrab, active = sgOn,
+     tooltip = "This instance prunes its own drawings on this budget, the same way section 12 and the 'All imbalances' layer do.\n\nBUDGET ARITHMETIC. Each band costs two lines and one label, so 20 here is 40 lines and 20 labels out of Pine's 500 of each. Both grab instances and section 12's structure drawings come out of the same allowance, and so do Riptide's own entry, stop and liquidity lines — which is why both instances ship off.\n\nThe script this is borrowed from has no such cap at all: it creates the drawings and deletes none of them.")
+sgCol = input.color(color.orange, "Color", group = gGrab, active = sgOn)
+
+bgOn = input.bool(false, "Big grabs", group = gBGrab,
+     tooltip = "A wide swing gets wicked through and price closes back on the original side. The band spans from the swing to the bar that ran it; the $$$ sits on the level that was taken.\n\nOFF BY DEFAULT AND CARRYING NO CLAIM. It is CONTEXT — no alert fires from it, nothing reads it, and every Riptide entry, stop and target is identical with it on or off.\n\nWHY NO CLAIM. Measured against Riptide's own raid on the same pivots, this fires at least 1.8x as often and two thirds of its marks are places Riptide says nothing (indicators/ccp/tools/liquidity_grab_rate.py). It is earlier because it asks for less: a close back over the level, where Riptide wants a break of the structure the raid created. Whether the extra marks are worth anything was then tested directly — research/POOL_PIVOT_LENGTH.md, six pivot widths, preregistered — and the answer came back UNDERPOWERED: the direction was consistent but the largest difference was +0.7 SE and setups collapsed 256 to 26. So this is a thing to look at, not a thing to trade.")
+bgLeft = input.int(10, "Pivot", minval = 1, inline = "bg1", group = gBGrab, active = bgOn)
+bgRight = input.int(10, "", minval = 1, inline = "bg1", group = gBGrab, active = bgOn,
+     tooltip = "Bars left and right that must be lower (for a swing high) before the swing counts. mickes ships 10/10 for the big grab against 3/3 for the ordinary one, and that width IS the whole difference between them.\n\nThe swing confirms this many bars after it printed, so a grab cannot be marked before then. Honest lag, not repainting.")
+bgLookback = input.int(5, "Lookback", minval = 1, maxval = 20, group = gBGrab, active = bgOn,
+     tooltip = "How many untaken swings per side stay eligible. Older ones are dropped, so a level from far back cannot suddenly be marked. mickes' own default.")
+bgKeep = input.int(20, "Keep this many bands", minval = 2, maxval = 100, group = gBGrab, active = bgOn,
+     tooltip = "This layer prunes its own drawings on this budget, the same way section 12 and the 'All imbalances' layer do.\n\nThe script this is borrowed from has no such cap — it creates two lines, a fill and a label per grab and deletes none of them, so on a long chart it quietly eats the shared 500-drawing allowance. That defect is not reproduced here.")
+bgCol = input.color(color.aqua, "Color", group = gBGrab, active = bgOn)
+
+// ── 3. Combined candles ─────────────────────────────────────────────────────
+// Every setting here is greyed out until 'Merge candles and name the shape'
+// is on. That is what `active =` does, and it is why a fresh load looks
+// like a dead panel: all three master switches ship off.
+ccpOn = input.bool(false, "Merge candles and name the shape", group = gCCP,
+     tooltip = "Looks for a pin shape at the two ends of every grab — the swing that built the level and the candles that ran it — merging the anchor candle with its immediate neighbours to find one.\n\nEVERY window the search tries CONTAINS THE ANCHOR. It never merges a run of neighbours that leaves the anchor out, at any setting. That is proved by enumeration over all 441 windows from 0/0 to 5/5 in indicators/ccp/tools/ccp_anchor_check.py, which also checks the merge arithmetic against a from-scratch recompute on real candles.")
+ccpBack = input.int(2, "Merge up to — before", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn)
+ccpFwd = input.int(2, "after", minval = 0, maxval = 5, inline = "ccp1", group = gCCP, active = ccpOn,
+     tooltip = "How many neighbours either side of the anchor candle may be merged into it. A window is any run of candles containing the anchor, so 1 and 1 means every window from the anchor alone up to three candles wide.\n\nBoth sides matter: the shape can need candles from before the anchor, from after it, from both, or from neither.\n\n2 and 2 spans runs of one to five candles.\n\nTHIS IS THE SETTING THAT DECIDES WHETHER THE MARK MEANS ANYTHING, because widening it does not find more pins, it finds more WINDOWS, and more windows find a pin by accident. Measured over 2,729 grabs on 23 symbols of 15m, the share where BOTH ends carry the shape goes 0.3% at 0/0, 5.8% at 1/1, 16.4% at 2/2 and 26.2% at 3/3.\n\nRead that first row carefully: only 7 grabs in 2,729 have both ends as pins WITHOUT any merging. So at the default nearly every match exists because something was merged, and whether that is discovery or arithmetic is the open question this bench was built to answer. research/CCP_SEARCH_INFLATION.md.")
+ccpBodyMax = input.float(0.25, "Pin: body at most (fraction of range)", minval = 0.05, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn,
+     tooltip = "THIS CAP IS NOT INDEPENDENT OF THE WICK FLOOR BELOW, and it is easy to set it to a value that does nothing.\n\nThe three fractions sum to exactly one:\n\n    upper wick  +  body  +  lower wick  =  1\n\nbecause the range IS those three pieces stacked. So requiring the longer wick to be at least w already forces the body to be at most 1 - w, on its own, with no help from this input.\n\nTHE RULE: this cap only rejects anything when it is set BELOW 1 minus the wick floor. At or above that it is a dead input and the wick floor is doing all the work.\n\nExamples at wick ≥ 0.65, where the implied cap is 0.35:\n    body ≤ 0.35 — does nothing, identical to having no cap\n    body ≤ 0.30 — binds, barely\n    body ≤ 0.20 — binds\n\nAt the shipped 0.70 wick floor the implied cap is 0.30, so the shipped 0.25 still binds — but only just, and 0.30 would switch it off.\n\nIT WAS 0.15 UNTIL A CHART SAID OTHERWISE. A textbook hanging man at a sell-side grab — upper wick .00, lower wick .79, right direction — was rejected on its body alone at .21. Every published rate in this repo was measured at 0.15; at 0.25 the comparable both-ends rate is about 24.9% rather than 16.8%.\n\nIf you want the wick alone to define the pin, that is a legitimate choice: set this to 1 minus your wick floor and it switches itself off. Just do it knowingly rather than by accident.")
+ccpWickMin = input.float(0.70, "Pin: longer wick at least", minval = 0.2, maxval = 0.9, step = 0.05, group = gCCP, active = ccpOn,
+     tooltip = "The two numbers that define a pin, and they are inputs rather than constants so the definition is arguable on the chart instead of buried in the code.\n\nThe defaults were 0.35 and 0.50 — the shape the CCP sheet draws — and when this layer still scanned every bar those marked 88% of them. They are now 0.25 and 0.70 — 0.15 until a chart showed it rejecting shapes the sheet itself calls pins. Tightening them helped far less than restricting WHERE the layer looks: gating to a grab's two ends, in the grab's own direction, took the same settings from 88.4% of all bars to 16.4% of grabs. That 16.4% was measured at 0.15; the default is now 0.25, where it is about 24.9%.")
+ccpAnchorExtreme = input.bool(false, "The long wick must be the anchor's own", group = gCCP, active = ccpOn,
+     tooltip = "The anchor candle is inside every window the search tries — that is structural and not optional. But being INSIDE a five-candle run does not mean the anchor put anything into the shape: the open comes from the oldest bar of the run, the close from the newest, and the high and the low can both belong to neighbours.\n\nMeasured over the same 2,729 grabs, 36% of matches have the defining extreme — the far end of the long wick — belonging to a neighbour rather than to the anchor. On the right-hand end that means the rejection the arrow is drawn for happened on a bar that is not the one that ran the level.\n\nON requires that extreme to be the anchor's own high or low. It is applied inside the search, so rejecting a wide window still lets a narrower one win.\n\nCOST: both-ends matches fall from 16.4% of grabs to 3.9%. That is a large cut and it is not known to be an improvement — neither rate has been scored against anything. It is OFF by default so the number you have been reading does not move under you. indicators/ccp/tools/ccp_anchor_check.py section 4.")
+ccpPick = input.string("Smallest run", "When several windows qualify, keep",
+     options = ["Smallest run", "Strongest wick", "Most centred"], group = gCCP, active = ccpOn,
+     tooltip = "Several windows around one anchor can all classify as a pin, and something has to choose. This is the open question the bench exists to answer, so it is a switch rather than a decision buried in code.\n\nSMALLEST RUN (default) — the fewest candles that qualify, ties broken by the stronger wick. The reasoning: a shape that needs no merging at all is the cleanest reading of it, and every candle you add is an assumption.\n\nSTRONGEST WICK — whichever window has the most extreme wick ratio, however many candles that takes.\n\nMOST CENTRED — the window most evenly balanced around the anchor. Try all three on the same chart before believing any of them.")
+ccpMinRangeATR = input.float(0.50, "Ignore merges smaller than (x ATR)", minval = 0.0, step = 0.1, group = gCCP, active = ccpOn,
+     tooltip = "A VOLUME CONTROL, not part of the shape test, and labelled as one. Size genuinely does not matter to the classification — the ratios are scale-free, so a three-tick doji with a long wick is as much a pin as a whole day's range. That is correct and also unreadable, because the chart fills with marks on noise. This drops the smallest ones. Set it to 0 to see every match the classifier finds.")
+ccpKeep = input.int(60, "Keep this many marks", minval = 5, maxval = 300, group = gCCP, active = ccpOn,
+     tooltip = "Drawing budget for this layer, pruned oldest-first like every other layer here. Debug mode costs three more objects per mark, so it prunes about four times faster.")
+ccpBullCol = input.color(#089981, "Bullish", inline = "ccpc", group = gCCP, active = ccpOn)
+ccpBearCol = input.color(#ff5252, "Bearish", inline = "ccpc", group = gCCP, active = ccpOn)
+ccpNeedBoth = input.bool(true, "Require BOTH ends to match", group = gCCP, active = ccpOn,
+     tooltip = "ON — a mark only appears when the swing that built the level AND the candles that ran it both carry the shape. That pairing is the whole idea: one end alone is an ordinary pin, and ordinary pins are everywhere.\n\nOFF marks either end on its own. Useful for seeing how much of the pairing is coincidence, and for nothing else.")
+ccp2cp = input.bool(false, "Also detect 2CP (pin + engulfing)", group = gCCP, active = ccpOn,
+     tooltip = "The sheet's two-candle confirmation: any of the four pins, then a candle whose BODY covers the pin's body.\n\nTHE SECOND CANDLE SETS THE DIRECTION, not the pin — which is why a shooting star can open a long. In a 2CP the pin's job is to mark that price was rejected AT ALL, not which way, so the pin is searched WITHOUT the direction gate and the gate is applied to the engulfing candle instead. That is the difference between four 2CPs and eight.\n\nEntry sits at the engulfing candle's body edge on the trade side; the stop sits beyond the furthest wick of the PAIR. Both differ from the 1CP rule.\n\nMEASURED, AND IT ADDS NOTHING. research/CCP_PATTERN_EXPLORE.md compared all four 2CPs of a colour against the same engulfing candle with no pin required: five of six comparisons sat inside noise and the sixth was significantly negative. Requiring the pin first does not help. This is here to look at, not because it earned a place.")
+ccpDebug = input.bool(false, "Debug: show the merge", group = gCCP, active = ccpOn,
+     tooltip = "Draws what the classifier actually saw, which is the only way to tell a wrong answer from a wrong input:\n\n• a faint box over the exact candles that were merged\n• the SYNTHETIC CANDLE itself, outlined on top of them — body and wick — so you can compare the thing being classified against the candles it came from\n• the three ratios as text\n\nAlso turns on a counts table in the top right: anchors scanned, windows tested, matches, and a breakdown by name. If the table says 0 matches, the thresholds are wrong; if it says thousands, so are they.")
+
+emOn = input.bool(false, "Draw entry, stop and targets", group = gEM,
+     tooltip = "DRAWING ONLY. No alert, no order, no position, nothing tracked. This file has no exchange connection and will not get one.\n\nAND THIS MODEL IS MEASURED, NEGATIVE. research/CCP_ENTRY_MODELS.md scored 76,297 grabs on Min15/Min30/Min60 with this entry, this stop and a 2R target: gross of fees expectancy at a grab is about ZERO, and net of fees it is -0.07 to -0.12 R per bet. The CCP filter did not sort the winners from the losers. Every one of five pre-registered bars failed.\n\nThe partial-and-breakeven variant below is NOT measured. Note before you reach for it that a partial close is an extra fee event, and fees are already the whole loss: the measured drag is 0.05 to 0.14 R per bet against a gross edge of zero.\n\nDraw it to see the geometry. Do not read it as a signal.")
+emAtrBuf = input.float(0.25, "Stop beyond the grab wick (x ATR)", minval = 0.0, step = 0.05, group = gEM, active = emOn,
+     tooltip = "The stop sits past the extreme of the grab window by this much ATR. A WIDER stop is not a worse one here: fees are charged as fee% / risk%, so cost per bet goes as 1/risk, and the tightest stops were where the measured drag was worst.")
+emTargetR = input.float(2.0, "Target (R)", minval = 0.5, maxval = 10.0, step = 0.5, group = gEM, active = emOn)
+emPartialR = input.float(1.5, "Partial at (R), 0 = off", minval = 0.0, maxval = 10.0, step = 0.5, group = gEM, active = emOn,
+     tooltip = "Draws the level where part of the position would come off. UNMEASURED. On a path with no drift, taking a partial and moving to breakeven reshapes the outcome distribution — less variance, more small wins, a few big ones given up — but it cannot manufacture expectancy out of an entry that has none, and it adds a fee.")
+emPartialPct = input.int(50, "Partial size (%)", minval = 5, maxval = 95, step = 5, group = gEM, active = emOn)
+emBE = input.bool(true, "Stop to breakeven after the partial", group = gEM, active = emOn)
+emLen = input.int(20, "Draw this many bars forward", minval = 5, maxval = 100, group = gEM, active = emOn)
+emKeep = input.int(10, "Keep this many setups", minval = 2, maxval = 40, group = gEM, active = emOn)
+emFeePct = input.float(0.04, "Round-trip fee (% of notional)", minval = 0.0, maxval = 0.5, step = 0.01, group = gEM, active = emOn,
+     tooltip = "Charged in R as fee% / risk%, the way research/harness.py does it. The default approximates taker in and taker out at Riptide's rates.\n\nThis is not a detail. Fees ARE the loss on this model: gross of them the entry returns about zero, and cost per bet goes as 1/risk, so the tightest stops bleed the most. Set it to 0 and the table shows the gross picture — which is roughly break-even, not profit.")
+emStats = input.bool(true, "Show the results table", group = gEM, active = emOn,
+     tooltip = "Simulates every drawn setup forward and tallies the outcome. Same rules as indicators/ccp/studies/ccp_exit_models.py — stop wins a bar that spans both levels, the entry bar resolves nothing, 48-hour horizon — so the table on your chart and the study on 23 symbols are measuring the same thing. If they disagree badly, one of them is wrong and that is worth knowing.")
+
+// ── 5. Context filters ──────────────────────────────────────────────────────
+fltFvg = input.bool(false, "Require an unfilled FVG in the grab window", group = gFlt,
+     tooltip = "A three-bar imbalance in the trade's direction, formed inside the grab window and still unfilled at the signal bar. For a long: low[i+1] > high[i-1], and price has not traded back below high[i-1] since.\n\nMEASURED, AND THE RECORD IS MIXED. On Min60 it separated grabs that pay from grabs that do not on three pre-registered runs — 84 unseen symbols at z +4.12 and 862 days of older data at z +9.19. Then the timeframe coherence test came back OUTCOME C and the line stopped: research/FVG_TIMEFRAME_COHERENCE.md.\n\nWhat survives is that the SORTING is real on all three timeframes — delta +0.108, +0.087, +0.117 — and that whether the sorted subset clears its fees is a different question with a different answer per timeframe. Nothing here is a signal.")
+fltEngulf = input.bool(false, "Require an engulfing candle in the grab window", group = gFlt,
+     tooltip = "The second candle's BODY must cover the first candle's body. Wicks are not part of the test — a real engulfing candle may have long wicks, short ones or none.\n\nTHE PIN IS NOT REQUIRED, and that is a finding rather than a shortcut. research/CCP_PATTERN_EXPLORE.md compared all four 2CPs of a colour against the same engulfing candle with no pin: five of six comparisons sat inside noise and the sixth was significantly NEGATIVE. Requiring a pin first does not help and on 1h it hurts, so eight of the sheet's twelve patterns collapse into two.\n\nOn the discovery set a RED engulfing beat a green one at every timeframe and improved with timeframe: -0.032, -0.010, +0.044. That last is t = 1.5 and has never been confirmed on a holdout.")
+fltMark = input.bool(true, "Tag each grab with the filters it passed", group = gFlt, active = fltFvg or fltEngulf,
+     tooltip = "Writes a small tag at the grab showing which of the filters that grab satisfied, so a gate that is quietly rejecting everything is visible rather than silent.")
+
+emOutcome = input.bool(true, "Mark how each setup ended", group = gEM, active = emOn,
+     tooltip = "Draws a tick or a cross at the bar where each setup resolved, with the R it made or lost. This is the chart version of the results table, and it is there to make the failures as visible as the marks.\n\nEXPECT MOST OF THEM TO BE CROSSES. research/CCP_ENTRY_MODELS.md found the CCP filter does not sort winners from losers at all, and at a 2R target roughly two setups in three end at the stop. A chart that only ever showed the triangle was hiding that.")
+
+// ── 4. Engine ───────────────────────────────────────────────────────────────
+confirmOnBarClose = input.bool(true, "Only update on closed bars", group = gEng,
+     tooltip = "Keep this on. Off lets the marks move while a bar is forming.")
+msLabelSize = input.string("Small", "Label size",
+     options = ["Tiny", "Small", "Normal"], group = gEng,
+     tooltip = "Pine offers named sizes, not a point value: Tiny is roughly 7px, Small roughly 10, Normal roughly 14.")
+
+// ═════════════════════════════ 2. TYPES ═════════════════════════════════════
+// One untaken swing waiting to be run. Section 13.
+type BigGrab
+    float px
+    int   bar
+    bool  isHigh
+
+// One INSTANCE of the grab detector — its settings and its own state. Two of
+// these exist, narrow and wide, which is how the script this came from does it
+// (LiquidityGrabsSettings + LiquidityGrabs, constructed twice). Holding the
+// state here rather than in globals is what lets one set of functions serve
+// both without a single line of the logic being written twice.
+type GrabSet
+    int    right
+    int    lookback
+    int    keep
+    color  col
+    string tag
+    array<BigGrab> hi
+    array<BigGrab> lo
+    array<line>    lns
+    array<label>   lbs
+
+// ═════════════════════════ 3. HELPERS ══════════════════════════════════════
+
+// ── the grab -> CCP hand-off ────────────────────────────────────────────────
+// A grab has TWO ends worth reading: the swing that built the level, and the
+// candles that ran it. Both are known the moment the grab fires, but the right
+// end may still want forward neighbours merged into it, so the pair is queued
+// here and judged once those bars have closed.
+//
+// This queue and the one-line call inside drawGrabBand are the ONLY places
+// this file differs from section 13 of indicators/riptide_ms/pine/riptide-indicator-v2.pine, and
+// deploy/ccp-grab-check.py carries that difference as a declared divergence
+// rather than letting it pass unnoticed.
+type PendCCP
+    int   pivotBar
+    int   grabBar
+    bool  isHigh
+    color col
+
+var array<PendCCP> ccpQueue = array.new<PendCCP>()
+
+ccpOnGrab(int fromBar, bool isHigh, color col) =>
+    if ccpOn
+        ccpQueue.push(PendCCP.new(pivotBar = fromBar, grabBar = bar_index,
+             isHigh = isHigh, col = col))
+        while ccpQueue.size() > 40
+            ccpQueue.shift()
+// ATR is used for one thing only here — the price tolerance that decides
+// whether two labels are sitting on top of each other. Fixed at 14 rather
+// than given an input, because nothing in this file trades off it.
+atr = ta.atr(14)
+f2s(float v) =>
+    str.tostring(v, format.mintick)
+
+// ── label size and label crowding ───────────────────────────────────────────
+// Sections 12 and 13 both draw labels, each centred on its own span, and
+// neither knows the other exists — so an IDM and a $$ can land on the same
+// spot and become unreadable. indicators/ccp/tools/grab_label_clash.py measures it: over
+// 2,721 narrow grabs, 5.5% collide with a section-12 label, and 0% on the
+// wide instance whose bands are longer. Uncommon, but a collision is
+// illegible rather than merely untidy, and a larger size makes each one
+// worse — which is why the size control and this rule arrived together.
+string lblSize = msLabelSize == "Normal" ? size.normal :
+     msLabelSize == "Small" ? size.small : size.tiny
+
+var array<int>    lblBar = array.new<int>()
+var array<float>  lblPx  = array.new<float>()
+var array<string> lblTxt = array.new<string>()
+
+// The bar to put a label at, or `na` when an identical one is already there.
+//
+// Two cases, and they want opposite treatment:
+//   DIFFERENT text on the same spot — an IDM and a $$$ — is two facts about
+//     one place, so the second is nudged right and the pair reads side by
+//     side. Both are worth seeing.
+//   THE SAME text on the same spot is not two facts, it is one fact found
+//     twice: the narrow and the wide grab instance landing on a level that
+//     is both a 3/3 and a 10/10 swing. Nudging those apart draws "$$$ $$$"
+//     across one band and invents a second event. The duplicate is dropped.
+//
+// The price tolerance makes that last call fuzzy on purpose — two grabs a
+// fraction of an ATR apart collapse to one mark. That is the intended
+// trade: at that distance the two bands overlap anyway and two marks read
+// as clutter, not as information.
+labelSlot(int wantBar, float y, float tol, string txt) =>
+    int x = wantBar
+    int tries = 0
+    bool dupe = false
+    while tries < 4
+        bool clash = false
+        if lblBar.size() > 0
+            for i = 0 to lblBar.size() - 1
+                if lblBar.get(i) == x and math.abs(lblPx.get(i) - y) <= tol
+                    if lblTxt.get(i) == txt
+                        dupe := true
+                    clash := true
+                    break
+        if dupe or not clash
+            break
+        x += 3
+        tries += 1
+    if not dupe
+        lblBar.push(x)
+        lblPx.push(y)
+        lblTxt.push(txt)
+        // Bounded, and small on purpose: a slot from hundreds of bars ago is
+        // off the left of the screen and must not still reserve space.
+        while lblBar.size() > 200
+            lblBar.shift()
+            lblPx.shift()
+            lblTxt.shift()
+    dupe ? na : x
+
+
+// ═════════════════════ 4. GRABS AND BIG GRABS ═══════════════════════════════
+//  COPIED VERBATIM from section 13 of indicators/riptide_ms/pine/riptide-indicator-v2.pine. Do not edit
+//  one without the other: deploy/ccp-grab-check.py compares them and fails on
+//  drift. The full header, port changes and measurements live in v2; this is
+//  the same code, not a variant of it.
+// ─────────────────────────────────────────────────────────────────────────────
+var GrabSet gsNarrow = GrabSet.new(
+     right    = sgRight,
+     lookback = sgLookback,
+     keep     = sgKeep,
+     col      = sgCol,
+     tag      = "",
+     hi       = array.new<BigGrab>(),
+     lo       = array.new<BigGrab>(),
+     lns      = array.new<line>(),
+     lbs      = array.new<label>())
+var GrabSet gsWide = GrabSet.new(
+     right    = bgRight,
+     lookback = bgLookback,
+     keep     = bgKeep,
+     col      = bgCol,
+     tag      = "Big ",
+     hi       = array.new<BigGrab>(),
+     lo       = array.new<BigGrab>(),
+     lns      = array.new<line>(),
+     lbs      = array.new<label>())
+
+// A function may MUTATE an object but may not ASSIGN a global — CE10088 — so
+// the buffers it prunes arrive as fields of `s` rather than as globals.
+//
+// NOT `drawGrab`: that name is already taken, at line 1141, by the function
+// that draws Riptide's raid X. deploy/pine-static-check.py caught the
+// collision, which is the whole reason it checks declaration order.
+drawGrabBand(GrabSet s, float px, int fromBar, bool isHigh, float wick) =>
+    int x2 = bar_index - 1
+    line lvl = line.new(fromBar, px, x2, px,
+         xloc  = xloc.bar_index,
+         color = s.col,
+         style = line.style_dotted,
+         width = 1)
+    line edge = line.new(fromBar, wick, x2, wick,
+         xloc  = xloc.bar_index,
+         color = color(na))
+    linefill.new(lvl, edge, color.new(s.col, 80))
+    // CENTRED on the band, where the original puts it — and now correct to
+    // put there. "$$$" describes the LEVEL that was taken, and the middle of
+    // the band is the right place to say "this level". A previous version
+    // split the mark on whether the two candles shared a colour, which made
+    // the centre wrong: indicators/ccp/tools/grab_label_distance.py measures the midpoint
+    // sitting a median of 6 bars from those candles on the narrow instance
+    // and 15 on the wide one, 3+ bars away 100% of the time, so the pair
+    // under the mark was never the pair that chose it. Dropping the split
+    // removes the contradiction rather than papering over it.
+    int lx = labelSlot(int(math.avg(fromBar, x2)), px, na(atr) ? 0.0 : atr * 0.3, "$$$")
+    if not na(lx)
+        label tag = label.new(lx, px, "$$$",
+             xloc      = xloc.bar_index,
+             color     = color(na),
+             textcolor = color.new(s.col, 30),
+             size      = lblSize,
+             style     = isHigh ? label.style_label_down : label.style_label_up,
+             tooltip   = s.tag + (isHigh ? "Buy-side" : "Sell-side") +
+                         " liquidity grabbed @ " + f2s(px) +
+                         "\nWick reached " + f2s(wick) + ", price closed back " +
+                         (isHigh ? "below" : "above") + " the level." +
+                         "\nContext only — no alert, no setup, no claim.")
+        s.lbs.push(tag)
+    // THE ONE LINE THIS FILE ADDS to v2's copy of the detector. Hands the
+    // grab's two ends to section 5. Declared in deploy/ccp-grab-check.py.
+    ccpOnGrab(fromBar, isHigh, s.col)
+    // A linefill dies with either of its lines, so tracking the lines is
+    // enough to free it. The label is pushed in the branch above, because a
+    // duplicate is never created and so has nothing to track.
+    s.lns.push(lvl)
+    s.lns.push(edge)
+    while s.lns.size() > s.keep * 2
+        line.delete(s.lns.shift())
+    while s.lbs.size() > s.keep
+        label.delete(s.lbs.shift())
+
+// Walks one side's pending swings backwards so a removal cannot skip the next.
+// `wick` is the previous bar's extreme on this side, read at the top level and
+// passed in rather than referenced here. `high[1]` on a global built-in would
+// almost certainly be fine inside a function called under a toggle, but
+// "almost certainly" is not something this file can check without a compiler,
+// and the hoist costs one argument.
+// `pend` is s.hi or s.lo, chosen by the caller. It is a parameter rather than
+// `isHigh ? s.hi : s.lo` because this file has no precedent for a ternary that
+// returns a collection, nor for a locally declared array<> type, and there is
+// no Pine compiler here to settle either. An argument costs nothing.
+scanGrabs(GrabSet s, pend, bool isHigh, float wick) =>
+    if pend.size() > 0
+        int i = pend.size() - 1
+        while i >= 0
+            BigGrab g = pend.get(i)
+            bool resolved = false
+            if bar_index - 1 > g.bar
+                bool pierced = isHigh ? wick  >= g.px : wick   <= g.px
+                bool back    = isHigh ? close <= g.px : close  >= g.px
+                bool through = isHigh ? close >  g.px : close  <  g.px
+                if pierced and back
+                    drawGrabBand(s, g.px, g.bar, isHigh, wick)
+                    resolved := true
+                else if through
+                    // Closed beyond the level: the liquidity was taken and
+                    // kept, which is not a grab and never will be.
+                    resolved := true
+            if resolved
+                pend.remove(i)
+            i -= 1
+
+addGrabPivot(GrabSet s, pend, float px, bool isHigh) =>
+    pend.push(BigGrab.new(px = px, bar = bar_index - s.right, isHigh = isHigh))
+    while pend.size() > s.lookback
+        pend.shift()
+
+// ta.* runs unconditionally. Calling it inside the toggle is how a series
+// quietly grows a different history when the toggle is flipped. Same reason
+// the previous bar's extremes are read here rather than inside the scan.
+float sgPH = ta.pivothigh(high, sgLeft, sgRight)
+float sgPL = ta.pivotlow(low,  sgLeft, sgRight)
+float bgPH = ta.pivothigh(high, bgLeft, bgRight)
+float bgPL = ta.pivotlow(low,  bgLeft, bgRight)
+float grabPrvH = high[1]
+float grabPrvL = low[1]
+bool grabBarOk = not confirmOnBarClose or barstate.isconfirmed
+
+if sgOn and grabBarOk
+    scanGrabs(gsNarrow, gsNarrow.hi, true,  grabPrvH)
+    scanGrabs(gsNarrow, gsNarrow.lo, false, grabPrvL)
+    if not na(sgPH)
+        addGrabPivot(gsNarrow, gsNarrow.hi, sgPH, true)
+    if not na(sgPL)
+        addGrabPivot(gsNarrow, gsNarrow.lo, sgPL, false)
+
+if bgOn and grabBarOk
+    scanGrabs(gsWide, gsWide.hi, true,  grabPrvH)
+    scanGrabs(gsWide, gsWide.lo, false, grabPrvL)
+    if not na(bgPH)
+        addGrabPivot(gsWide, gsWide.hi, bgPH, true)
+    if not na(bgPL)
+        addGrabPivot(gsWide, gsWide.lo, bgPL, false)
+
+
+// ═══════════════════ 5. COMBINED CANDLE PATTERNS (CCP) ══════════════════════
+//  ONLY AT A GRAB'S TWO ENDS, AND ONLY IN THE DIRECTION THE GRAB IMPLIES.
+//  An earlier version scanned every bar on the chart and marked 88.4% of them
+//  (research/CCP_SEARCH_INFLATION.md). The fix is not a tighter threshold, it
+//  is a prior: look in two places instead of everywhere, and accept only the
+//  half of the answers the setup could have predicted. Measured over 2,729
+//  grabs by indicators/ccp/tools/ccp_at_grabs_check.py, the same thresholds that marked
+//  88.4% of bars now mark 16.4% of grabs at the 2/2 default:
+//
+//      back/fwd   grabs   left   right   BOTH   both %   aa / am / ma / mm
+//           0/0    2729    192     104      7     0.3%   7 /  0 /  0 /   0
+//           1/1    2729    734     623    159     5.8%   7 / 32 / 23 /  97
+//           2/2    2729   1157    1080    448    16.4%   7 / 61 / 38 / 342
+//           3/3    2729   1441    1365    716    26.2%   7 / 84 / 43 / 582
+//
+//  The first column of the combination counts never moves: exactly 7 grabs in
+//  2,729 have both ends pinned WITHOUT merging anything. Every other match
+//  exists because a window was widened, and whether that is discovery or
+//  arithmetic is the open question this bench was built to answer. Nothing
+//  here claims it is the former.
+//
+//      LEFT END   the swing candle that built the level
+//      RIGHT END  the candle that ran it
+//
+//  DIRECTION IS GATED, NOT REPORTED. A grab of a swing HIGH pushed up through
+//  buy-side liquidity and came back down, so the after-effect is DOWN and only
+//  a BEARISH shape counts — long upper wick. A grab of a swing LOW is the
+//  mirror: only a BULLISH shape, long lower wick. A bullish pin at the top of
+//  an upward grab is not a weaker signal, it is the wrong signal, and it is
+//  discarded rather than drawn in another colour.
+//
+//  THE FOUR COMBINATIONS, which is what the ends being independent means:
+//      left alone    + right alone      neither needed merging
+//      left alone    + right merged
+//      left merged   + right alone
+//      left merged   + right merged
+//  Each end runs its own search — every window containing that end, `ccpBack`
+//  before by `ccpFwd` after, one candle at a time — so the two can land on
+//  completely different run lengths. The tooltip names which of the four it
+//  was and how many candles each end took.
+//
+//  THE MERGE IS STILL FOUR LINES AND NO JUDGEMENT: open of the first, close of
+//  the last, max high, min low. The name still comes from
+//  MMC_CP_Confirmations.pdf, whose rule is that SHAPE decides direction and
+//  the body colour only picks which of the two names that shape gets.
+//
+//  IT STILL DOES NOT REPAINT. A grab is queued when it fires and judged only
+//  once `ccpFwd` further bars have closed, so every bar either search reads is
+//  already closed. The left end is usually far older and needs no wait at all;
+//  the queue exists for the right one. Once judged, an entry is removed and
+//  never revisited.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The four names, and the doji case the CCP sheet does not cover.
+//
+// The sheet's rule is that SHAPE decides direction and the body COLOUR only
+// picks which of the two names that shape gets. A hammer and a hanging man are
+// one candle in two colours, both bullish; an inverted hammer and a shooting
+// star likewise, both bearish.
+//
+// That rule breaks down at a body of zero. `close >= open` still returns
+// something, so a merged candle with open and close one tick apart — or equal,
+// where the comparison resolves to "green" on the tie — gets confidently named
+// "Inverted hammer" when a single tick the other way would have made it a
+// "Shooting star". The two names mean the same thing, so nothing about the
+// classification is wrong, but printing one of them implies a colour that is
+// not there.
+//
+// Below 2% of the range the body is invisible at any zoom and one tick flips
+// it, so the colour carries no information and the name says so instead of
+// pretending.
+DOJI_BODY = 0.02
+
+ccpName(bool bull, bool green, float bodyF) =>
+    bodyF <= DOJI_BODY ? (bull ? "Bullish pin (doji)" : "Bearish pin (doji)")
+         : bull ? (green ? "Hammer" : "Hanging man")
+              : (green ? "Inverted hammer" : "Shooting star")
+
+// Every window containing the bar `anchorOff` bars back, best one kept, and
+// ONLY windows whose shape points `wantBull`. Returns b = -1 for no match.
+//
+// THE INVARIANT: a window is the run of bars from offset `anchorOff + b` (the
+// OLDEST, whose open the merge takes) to `anchorOff - f` (the NEWEST, whose
+// close it takes), with b >= 0 and f >= 0. The anchor sits between them at
+// every setting, so the anchor is in all (ccpBack+1) x (ccpFwd+1) windows and
+// b = 0, f = 0 is the anchor standing alone. There is no window made of
+// neighbours without it.
+//
+// Offsets run BACKWARDS here — `anchorOff + b` is an OLDER bar — which is why
+// that invariant is proved by enumeration in indicators/ccp/tools/ccp_anchor_check.py rather
+// than by reading these three lines. A sign flip reads as plausible either way,
+// and the checker fails on one.
+ccpScanAt(int anchorOff, float minRange, bool wantBull) =>
+    int   bB = -1
+    int   bF = -1
+    float bS = -1.0e18
+    float bO = na
+    float bH = na
+    float bL = na
+    float bC = na
+    // The left end can be hundreds of bars back. max_bars_back is declared at
+    // 500, so refuse rather than index past it — an unbounded history read is
+    // exactly the defect audit finding 1 records in the script this borrows
+    // its detector from.
+    if anchorOff >= 0 and anchorOff + ccpBack < 450 and anchorOff + ccpBack < bar_index
+        for f = 0 to ccpFwd
+            if f <= anchorOff
+                int lastOff = anchorOff - f
+                float hF = high[anchorOff]
+                float lF = low[anchorOff]
+                for k = lastOff to anchorOff
+                    hF := math.max(hF, high[k])
+                    lF := math.min(lF, low[k])
+                float cc = close[lastOff]
+                float hh = hF
+                float ll = lF
+                for b = 0 to ccpBack
+                    int firstOff = anchorOff + b
+                    if b > 0
+                        hh := math.max(hh, high[firstOff])
+                        ll := math.min(ll, low[firstOff])
+                    float oo = open[firstOff]
+                    float rng = hh - ll
+                    if rng > 0 and rng >= minRange
+                        float bodyF = math.abs(cc - oo) / rng
+                        float upW = (hh - math.max(oo, cc)) / rng
+                        float dnW = (math.min(oo, cc) - ll) / rng
+                        float bigW = math.max(upW, dnW)
+                        bool ownX = not ccpAnchorExtreme or ((dnW > upW) ? low[anchorOff] == ll : high[anchorOff] == hh)
+                        if bodyF <= ccpBodyMax and bigW >= ccpWickMin and (dnW > upW) == wantBull and ownX
+                            float sc = ccpPick == "Strongest wick" ? bigW :
+                                 ccpPick == "Most centred" ? bigW - math.abs(b - f) * 100
+                                 : bigW - (b + f) * 100
+                            if sc > bS
+                                bS := sc
+                                bB := b
+                                bF := f
+                                bO := oo
+                                bH := hh
+                                bL := ll
+                                bC := cc
+    [bB, bF, bO, bH, bL, bC]
+
+// The same search with NO direction gate, for 2CPs.
+//
+// A 1CP's direction comes from its own wick, so the gate belongs inside the
+// search. A 2CP's direction comes from the ENGULFING candle, so gating the pin
+// would throw away exactly the cases the sheet is built around — a shooting
+// star opening a long. This finds a pin either way up and lets the caller gate
+// on what follows it. Ties go to the smaller run, matching "Smallest run".
+ccpScanAny(int anchorOff, float minRange) =>
+    [uB, uF, uO, uH, uL, uC] = ccpScanAt(anchorOff, minRange, true)
+    [dB, dF, dO, dH, dL, dC] = ccpScanAt(anchorOff, minRange, false)
+    bool useDn = uB < 0 or (dB >= 0 and dB + dF < uB + uF)
+    [useDn ? dB : uB, useDn ? dF : uF, useDn ? dO : uO, useDn ? dH : uH, useDn ? dL : uL, useDn ? dC : uC]
+
+// EVERY WINDOW, and what happened to it. Walks the same windows as ccpScanAt
+// and reports each one's ratios and verdict.
+//
+// This exists because both halves of the question are otherwise invisible.
+// "No shape" is unfalsifiable on a chart — five different tests produce it and
+// they mean completely different things. And when an end DOES match, there is
+// no way to see why the winning window beat the others, so a smaller window
+// that looks right to the eye but failed a threshold is indistinguishable from
+// one the tie-break simply passed over.
+//
+// It is one function rather than two because ccpScanAt and a second copy of
+// this loop have already drifted once: ccpWhy shipped without the
+// anchor-extreme gate and printed a passing window under the words "no shape".
+// A third copy would be a third chance at that.
+//
+// Debug-only, so the shipped path is untouched.
+ccpWhy(int anchorOff, float minRange, bool wantBull) =>
+    int nTried = 0
+    int nRange = 0
+    int nBody = 0
+    int nWick = 0
+    int nDir = 0
+    int nAnchor = 0
+    int nOk = 0
+    int nOnlyBody = 0
+    int nOnlyWick = 0
+    float minBody = 1.0
+    float maxWick = 0.0
+    string rows = ""
+    if anchorOff >= 0 and anchorOff + ccpBack < 450 and anchorOff + ccpBack < bar_index
+        for f = 0 to ccpFwd
+            if f <= anchorOff
+                int lastOff = anchorOff - f
+                float hF = high[anchorOff]
+                float lF = low[anchorOff]
+                for k = lastOff to anchorOff
+                    hF := math.max(hF, high[k])
+                    lF := math.min(lF, low[k])
+                float cc = close[lastOff]
+                float hh = hF
+                float ll = lF
+                for b = 0 to ccpBack
+                    int firstOff = anchorOff + b
+                    if b > 0
+                        hh := math.max(hh, high[firstOff])
+                        ll := math.min(ll, low[firstOff])
+                    float oo = open[firstOff]
+                    float rng = hh - ll
+                    nTried := nTried + 1
+                    string head = "\n  " + str.tostring(b) + "+" + str.tostring(f) + " (" + str.tostring(b + f + 1) + "c)"
+                    if rng <= 0 or rng < minRange
+                        nRange := nRange + 1
+                        rows := rows + head + " ✗small"
+                    else
+                        float bodyF = math.abs(cc - oo) / rng
+                        float upW = (hh - math.max(oo, cc)) / rng
+                        float dnW = (math.min(oo, cc) - ll) / rng
+                        float bigW = math.max(upW, dnW)
+                        bool ownX = not ccpAnchorExtreme or ((dnW > upW) ? low[anchorOff] == ll : high[anchorOff] == hh)
+                        string fails = ""
+                        if bodyF > ccpBodyMax
+                            nBody := nBody + 1
+                            fails := fails + " BODY"
+                        if bigW < ccpWickMin
+                            nWick := nWick + 1
+                            fails := fails + " WICK"
+                        if (dnW > upW) != wantBull
+                            nDir := nDir + 1
+                            fails := fails + " DIRECTION"
+                        if not ownX
+                            nAnchor := nAnchor + 1
+                            fails := fails + " ANCHOR-EXTREME"
+                        if fails == ""
+                            nOk := nOk + 1
+                        // A window that failed exactly ONE test is one input
+                        // away from qualifying, and which input that is, is
+                        // the only actionable thing on this panel.
+                        if fails == " BODY"
+                            nOnlyBody := nOnlyBody + 1
+                            minBody := math.min(minBody, bodyF)
+                        if fails == " WICK"
+                            nOnlyWick := nOnlyWick + 1
+                            maxWick := math.max(maxWick, bigW)
+                        string nums = " body " + str.tostring(bodyF, "#.00") + " up " + str.tostring(upW, "#.00") + " dn " + str.tostring(dnW, "#.00")
+                        rows := rows + head + nums + (fails == "" ? " ✓" : " ✗" + fails)
+    string s = "\n  " + str.tostring(nTried) + " windows, " + str.tostring(nOk) + " ok:" + rows
+    if nOk > 1
+        s := s + "\n  '" + ccpPick + "' chose among " + str.tostring(nOk)
+    if nOk == 0 and nOnlyBody > 0
+        s := s + "\n  " + str.tostring(nOnlyBody) + " failed BODY only, loosest " + str.tostring(minBody, "#.00") + " → set cap " + str.tostring(math.ceil(minBody / 0.05) * 0.05, "#.00") + " (dead at " + str.tostring(1 - ccpWickMin, "#.00") + ")"
+    if nOk == 0 and nOnlyWick > 0
+        s := s + "\n  " + str.tostring(nOnlyWick) + " failed WICK only, longest " + str.tostring(maxWick, "#.00") + " → set floor " + str.tostring(math.floor(maxWick / 0.05) * 0.05, "#.00")
+    if nOk == 0 and nAnchor > 0
+        s := s + "\n  " + str.tostring(nAnchor) + " rejected by ANCHOR-EXTREME only → turn that switch off"
+    s
+
+// ── state ───────────────────────────────────────────────────────────────────
+var array<label> ccpLbs = array.new<label>()
+var array<box>   ccpBxs = array.new<box>()
+
+var int ccpSeen   = 0
+var int ccpLeftOk = 0
+var int ccpRightOk = 0
+var int ccpBothOk = 0
+var int ccpAA = 0
+var int ccpAM = 0
+var int ccpMA = 0
+var int ccpMM = 0
+
+ccpPrune() =>
+    while ccpLbs.size() > ccpKeep
+        label.delete(ccpLbs.shift())
+    while ccpBxs.size() > ccpKeep * 2
+        box.delete(ccpBxs.shift())
+
+// One end's contribution to the tooltip.
+ccpLeg(string which, int b, int f, float o, float h, float l, float c,
+     bool bull) =>
+    int n = b + f + 1
+    float rng = h - l
+    which + ": " + ccpName(bull, c >= o, math.abs(c - o) / rng) + " · " + str.tostring(n) + "c (" + str.tostring(b) + "+" + str.tostring(f) + ")  body " + str.tostring(math.abs(c - o) / rng, "#.00") + " up " + str.tostring((h - math.max(o, c)) / rng, "#.00") + " dn " + str.tostring((math.min(o, c) - l) / rng, "#.00")
+
+ccpMark(int atBar, bool bull, color col, string tip) =>
+    ccpLbs.push(label.new(atBar, na, "",
+         xloc    = xloc.bar_index,
+         yloc    = bull ? yloc.belowbar : yloc.abovebar,
+         style   = bull ? label.style_triangleup : label.style_triangledown,
+         color   = col,
+         size    = lblSize,
+         tooltip = tip))
+
+ccpWindowBox(int firstBar, int lastBar, float hi, float lo, color col) =>
+    ccpBxs.push(box.new(firstBar, hi, lastBar, lo,
+         xloc         = xloc.bar_index,
+         border_color = color.new(col, 40),
+         border_width = 1,
+         bgcolor      = color.new(col, 90)))
+
+// One simulated setup, tracked forward to its exit. Drawing only: this
+// resolves nothing on the entry bar and places no order anywhere.
+type EMTrade
+    bool  isLong
+    float entry
+    float stop
+    float risk
+    int   bar
+    bool  part
+    float banked
+    float size
+
+var array<EMTrade> emOpen = array.new<EMTrade>()
+var int   emN    = 0
+var int   emWin  = 0
+var float emSumR = 0.0
+// Sum of squares, so the table can print an error bar. A mean with no error
+// bar on 251 trades is how a chart tells you it found something when it did
+// not: R has a spread near 1.1 here, so SE is about 1.1/sqrt(n) and a couple
+// of hundred trades cannot resolve anything smaller than roughly 0.14 R.
+var float emSumR2 = 0.0
+var int   emTgt  = 0
+var int   emStp  = 0
+var int   emTmo  = 0
+
+// 48 hours, the horizon the studies use, expressed in this chart's bars.
+int emHold = math.max(int(48 * 3600 / timeframe.in_seconds()), 5)
+
+// ── entry model, drawing only ───────────────────────────────────────────────
+// Geometry, not a signal. Entry at the close of the bar that confirms the
+// mark — the bar you could actually have acted on — stop past the extreme of
+// the grab window by emAtrBuf ATR, target at emTargetR, and an optional
+// partial level with a breakeven marker.
+//
+// This is the model research/CCP_ENTRY_MODELS.md scored and rejected. It is
+// drawn because seeing the geometry on real grabs is a legitimate thing to
+// want; it fires nothing and tracks nothing.
+var array<line>  emLns = array.new<line>()
+var array<label> emLbs = array.new<label>()
+
+emPrune() =>
+    while emLns.size() > emKeep * 4
+        line.delete(emLns.shift())
+    while emLbs.size() > emKeep * 4
+        label.delete(emLbs.shift())
+
+emLevel(int b1, int b2, float y, color c, string sty, string txt) =>
+    emLns.push(line.new(b1, y, b2, y, xloc = xloc.bar_index, color = c,
+         width = 1, style = sty))
+    emLbs.push(label.new(b2, y, txt, xloc = xloc.bar_index,
+         style = label.style_label_left, color = color.new(c, 90),
+         textcolor = c, size = size.tiny))
+
+// Where a setup ended, and for how much. The point is that a mark which did
+// not work should look different from one that did — a chart showing only the
+// triangle shows only the hypothesis.
+emEnd(float px, bool win, float r) =>
+    emLbs.push(label.new(bar_index, px,
+         (win ? "✓ +" : "✕ ") + str.tostring(r, "#.##") + "R",
+         xloc = xloc.bar_index, yloc = yloc.price, style = label.style_none,
+         textcolor = win ? color.teal : color.red, size = size.small))
+
+emDraw(int rOff, bool bull) =>
+    float gHi = high[rOff]
+    float gLo = low[rOff]
+    // Not math.max(): its int overload is not something to bet a for-bound on,
+    // and a float bound is a compile error that costs a round trip to find.
+    int kFrom = rOff - ccpFwd < 0 ? 0 : rOff - ccpFwd
+    for k = kFrom to rOff + ccpBack
+        gHi := math.max(gHi, high[k])
+        gLo := math.min(gLo, low[k])
+    float buf = na(atr) ? 0.0 : atr * emAtrBuf
+    float entry = close
+    float stop = bull ? gLo - buf : gHi + buf
+    float risk = math.abs(entry - stop)
+    if risk > 0
+        int b2 = bar_index + emLen
+        float tgt = bull ? entry + emTargetR * risk : entry - emTargetR * risk
+        emLevel(bar_index, b2, stop, color.red, line.style_solid, "stop " + f2s(stop))
+        emLevel(bar_index, b2, entry, color.gray, line.style_dotted, "entry " + f2s(entry))
+        emLevel(bar_index, b2, tgt, color.teal, line.style_solid, str.tostring(emTargetR, "#.#") + "R " + f2s(tgt))
+        if emStats
+            emOpen.push(EMTrade.new(isLong = bull, entry = entry, stop = stop,
+                 risk = risk, bar = bar_index, part = false, banked = 0.0,
+                 size = 1.0))
+        if emPartialR > 0 and emPartialR < emTargetR
+            float pr = bull ? entry + emPartialR * risk : entry - emPartialR * risk
+            emLevel(bar_index, b2, pr, color.orange, line.style_dashed, str.tostring(emPartialR, "#.#") + "R close " + str.tostring(emPartialPct) + "%" + (emBE ? " → stop BE" : ""))
+        emPrune()
+
+// ── context filters ─────────────────────────────────────────────────────────
+// Offsets, not bar indices: gOff is the grab bar's offset and sOff the signal
+// bar's, so gOff > sOff because a larger offset is an older bar.
+
+// An unfilled three-bar imbalance in the trade's direction, formed inside the
+// grab window. Bar i sits at offset io, so i-1 is io+1 and i+1 is io-1.
+fltHasFvg(int gOff, int sOff, bool bull) =>
+    bool got = false
+    for io = gOff + 1 to sOff + 1
+        if not got and io >= 1 and io + 1 < 450
+            float lvl = bull ? high[io + 1] : low[io + 1]
+            bool gap = bull ? low[io - 1] > lvl : high[io - 1] < lvl
+            if gap
+                bool filled = false
+                if io - 2 >= sOff
+                    for k = io - 2 to sOff
+                        if bull ? low[k] <= lvl : high[k] >= lvl
+                            filled := true
+                if not filled
+                    got := true
+    got
+
+// A candle whose BODY covers the previous candle's body, pointing the trade's
+// way. Wicks are deliberately not part of this — see indicators/ccp/detector.py.
+fltHasEngulf(int gOff, int sOff, bool bull) =>
+    bool got = false
+    for io = gOff to sOff + 1
+        if not got and io >= 1
+            float lo1 = math.min(open[io], close[io])
+            float hi1 = math.max(open[io], close[io])
+            float lo2 = math.min(open[io - 1], close[io - 1])
+            float hi2 = math.max(open[io - 1], close[io - 1])
+            bool green2 = close[io - 1] >= open[io - 1]
+            if hi2 > lo2 and lo2 <= lo1 and hi2 >= hi1 and green2 == bull
+                got := true
+    got
+
+// Declared here rather than in the pass below because the entry model's
+// bookkeeping runs FIRST and reads it. Pine needs it before either use.
+bool ccpBarOk = not confirmOnBarClose or barstate.isconfirmed
+
+// ── entry model: walk the open setups forward ───────────────────────────────
+// Same rules as indicators/ccp/studies/ccp_exit_models.py, so the table on this
+// chart and the study over 23 symbols measure the same thing:
+//
+//   * THE ENTRY BAR RESOLVES NOTHING. Every tick of it printed before the
+//     setup existed, so checking starts on the bar after.
+//   * A bar spanning both levels is a STOP. The pessimistic convention; being
+//     generous here is how a losing model is made to look flat.
+//   * Partial first, then target, then the horizon.
+//   * Fees in R as fee% / risk%, which is why a tight stop costs more.
+//
+// This runs BEFORE the pass below, so a setup created this bar waits a bar.
+if emOn and emStats and ccpBarOk and emOpen.size() > 0
+    int ti = emOpen.size() - 1
+    while ti >= 0
+        EMTrade t = emOpen.get(ti)
+        if bar_index > t.bar
+            float sgn = t.isLong ? 1.0 : -1.0
+            float pl = t.entry + sgn * t.risk * emPartialR
+            float tl = t.entry + sgn * t.risk * emTargetR
+            bool hitStop = t.isLong ? low <= t.stop : high >= t.stop
+            bool hitPart = emPartialR > 0 and emPartialR < emTargetR and not t.part and (t.isLong ? high >= pl : low <= pl)
+            bool hitTgt = t.isLong ? high >= tl : low <= tl
+            bool fin = false
+            float r = 0.0
+            float exPx = close
+            if hitStop
+                r := t.banked + t.size * (sgn * (t.stop - t.entry) / t.risk)
+                fin := true
+                exPx := t.stop
+                emStp += 1
+            else
+                if hitPart
+                    float pf = emPartialPct / 100.0
+                    t.banked := t.banked + pf * emPartialR
+                    t.size := t.size - pf
+                    t.part := true
+                    if emBE
+                        t.stop := t.entry
+                if hitTgt
+                    r := t.banked + t.size * emTargetR
+                    fin := true
+                    exPx := tl
+                    emTgt += 1
+                else if bar_index - t.bar >= emHold
+                    r := t.banked + t.size * (sgn * (close - t.entry) / t.risk)
+                    fin := true
+                    emTmo += 1
+            if fin
+                r := r - emFeePct / (100.0 * t.risk / t.entry)
+                emN += 1
+                emSumR := emSumR + r
+                emSumR2 := emSumR2 + r * r
+                if r > 0
+                    emWin += 1
+                if emOutcome
+                    emEnd(exPx, r > 0, r)
+                emOpen.remove(ti)
+        ti -= 1
+
+var table emTbl = table.new(position.bottom_right, 2, 10,
+     border_width = 1, frame_width = 1)
+
+emCell(int row, string k, string v) =>
+    emTbl.cell(0, row, k, text_size = size.tiny, text_color = chart.fg_color)
+    emTbl.cell(1, row, v, text_size = size.tiny, text_color = chart.fg_color)
+
+if emOn and emStats and barstate.islast
+    emTbl.cell(0, 0, "Entry model", text_size = size.small, text_color = chart.fg_color)
+    // A setup is only ever created inside the CCP pass, so with 'Merge
+    // candles' off this table is real, correct and entirely zeroes — which
+    // looks exactly like a broken table. Say which switch is missing instead.
+    emTbl.cell(1, 0, not ccpOn ? "needs 'Merge candles' ON" : str.tostring(emTargetR, "#.#") + "R" + (emPartialR > 0 and emPartialR < emTargetR ? " / part " + str.tostring(emPartialR, "#.#") + "R" : ""), text_size = size.small, text_color = not ccpOn ? color.orange : chart.fg_color)
+    emCell(1, "closed", str.tostring(emN))
+    emCell(2, "still open", str.tostring(emOpen.size()))
+    emCell(3, "win %", emN > 0 ? str.tostring(100.0 * emWin / emN, "#.0") : "—")
+    float emMean = emN > 0 ? emSumR / emN : 0.0
+    float emVar = emN > 1 ? (emSumR2 - emN * emMean * emMean) / (emN - 1) : 0.0
+    float emSE = emN > 1 and emVar > 0 ? math.sqrt(emVar / emN) : na
+    emCell(4, "R / trade", emN > 0 ? str.tostring(emMean, "#.000") + (na(emSE) ? "" : " ± " + str.tostring(emSE, "#.000")) : "—")
+    // The row that stops a positive mean being read as an edge. One symbol on
+    // one window is a few hundred bets; the studies are tens of thousands
+    // across 23 symbols, and they came back negative.
+    emCell(5, "vs zero", na(emSE) or emSE <= 0 ? "—" : math.abs(emMean) < 2 * emSE ? "NOISE (|t| " + str.tostring(math.abs(emMean) / emSE, "#.0") + ")" : "t " + str.tostring(emMean / emSE, "#.0"))
+    emCell(6, "total R", str.tostring(emSumR, "#.0"))
+    emCell(7, "hit target", emN > 0 ? str.tostring(100.0 * emTgt / emN, "#.0") + "%" : "—")
+    emCell(8, "hit stop", emN > 0 ? str.tostring(100.0 * emStp / emN, "#.0") + "%" : "—")
+    emCell(9, "timed out", emN > 0 ? str.tostring(100.0 * emTmo / emN, "#.0") + "%" : "—")
+
+// ── the pass ────────────────────────────────────────────────────────────────
+
+if ccpOn and ccpBarOk and ccpQueue.size() > 0
+    int qi = ccpQueue.size() - 1
+    while qi >= 0
+        PendCCP q = ccpQueue.get(qi)
+        if bar_index >= q.grabBar + ccpFwd
+            // A grab of a HIGH wants a bearish shape; a grab of a LOW, bullish.
+            bool wantBull = not q.isHigh
+            int rightOff = bar_index - q.grabBar
+            int leftOff  = bar_index - q.pivotBar
+            // ATR AT THE GRAB BAR, not at the bar that happens to judge it.
+            // This used to read the live `atr`, which is two bars later, so
+            // the size filter moved with whatever volatility arrived after the
+            // grab and the verdict depended on WHEN it was judged rather than
+            // on the grab. Every Python audit in this repo uses the ATR at the
+            // grab, so the chart and the studies were also measuring slightly
+            // different things. atr[rightOff] is the ATR at q.grabBar.
+            float qMinRange = na(atr[rightOff]) ? 0.0 : atr[rightOff] * ccpMinRangeATR
+            [rB, rF, rO, rH, rL, rC] = ccpScanAt(rightOff, qMinRange, wantBull)
+            [lB, lF, lO, lH, lL, lC] = ccpScanAt(leftOff, qMinRange, wantBull)
+            bool rOk = rB >= 0
+            bool lOk = lB >= 0
+
+            ccpSeen += 1
+            if lOk
+                ccpLeftOk += 1
+            if rOk
+                ccpRightOk += 1
+            if lOk and rOk
+                ccpBothOk += 1
+                if lB + lF == 0 and rB + rF == 0
+                    ccpAA += 1
+                if lB + lF == 0 and rB + rF > 0
+                    ccpAM += 1
+                if lB + lF > 0 and rB + rF == 0
+                    ccpMA += 1
+                if lB + lF > 0 and rB + rF > 0
+                    ccpMM += 1
+
+            // Context gates. Evaluated whether or not they are switched on,
+            // so the tag can report what a grab passed even when nothing is
+            // being filtered — a gate that silently rejects everything is the
+            // failure mode worth making visible.
+            // 2CP: an UNGATED pin at the right end, then a candle whose
+            // body covers it, with the gate applied to that candle instead.
+            // Drawn separately from the 1CP because the sheet gives it a
+            // different entry and a different stop.
+            string twoName = ""
+            float twoEntry = na
+            float twoStop = na
+            if ccp2cp
+                [pB, pF, pO, pH, pL, pC] = ccpScanAny(rightOff, qMinRange)
+                if pB >= 0
+                    int eOff = rightOff - pF - 1
+                    if eOff >= 0
+                        float lo1 = math.min(pO, pC)
+                        float hi1 = math.max(pO, pC)
+                        float lo2 = math.min(open[eOff], close[eOff])
+                        float hi2 = math.max(open[eOff], close[eOff])
+                        bool green2 = close[eOff] >= open[eOff]
+                        if hi2 > lo2 and lo2 <= lo1 and hi2 >= hi1 and green2 == wantBull
+                            float pRng = pH - pL
+                            float pBody = pRng > 0 ? math.abs(pC - pO) / pRng : 1.0
+                            twoName := "2CP " + ccpName(pL < pO and (pH - math.max(pO, pC)) < (math.min(pO, pC) - pL), pC >= pO, pBody) + " + " + (green2 ? "green" : "red") + " engulfing"
+                            twoEntry := green2 ? hi2 : lo2
+                            twoStop := green2 ? math.min(pL, low[eOff]) : math.max(pH, high[eOff])
+            bool hasFvg = fltHasFvg(rightOff, 0, wantBull)
+            bool hasEng = fltHasEngulf(rightOff, 0, wantBull)
+            bool fltOk = (not fltFvg or hasFvg) and (not fltEngulf or hasEng)
+            if fltMark and (fltFvg or fltEngulf)
+                ccpLbs.push(label.new(q.grabBar, na,
+                     (hasFvg ? "F" : "·") + (hasEng ? "E" : "·"),
+                     xloc = xloc.bar_index,
+                     yloc = wantBull ? yloc.abovebar : yloc.belowbar,
+                     style = label.style_none, size = size.tiny,
+                     textcolor = fltOk ? q.col : color.new(chart.fg_color, 60)))
+            if fltOk and ((lOk and rOk) or (not ccpNeedBoth and (lOk or rOk)))
+                // Hoisted into locals rather than nested in one expression:
+                // the aligned continuations landed on multiples of four, which
+                // Pine reads as new statements. deploy/pine-static-check.py
+                // caught it.
+                string lTag = lOk ? (lB + lF == 0 ? "L alone" : "L merged") : "L none"
+                string rTag = rOk ? (rB + rF == 0 ? "R alone" : "R merged") : "R none"
+                // The breakdown runs for MATCHED ends too, not only for ends
+                // that found nothing: a window that lost the tie-break and one
+                // that never qualified look identical otherwise.
+                //
+                // The parentheses matter — `?:` binds looser than `+` in Pine,
+                // so the old form appended the breakdown to the no-shape
+                // branch alone.
+                string lWhy = ccpDebug ? ccpWhy(leftOff, qMinRange, wantBull) : ""
+                string rWhy = ccpDebug ? ccpWhy(rightOff, qMinRange, wantBull) : ""
+                string lTxt = (lOk ? ccpLeg("L swing", lB, lF, lO, lH, lL, lC, wantBull) : "L no shape") + lWhy
+                string rTxt = (rOk ? ccpLeg("R grab ", rB, rF, rO, rH, rL, rC, wantBull) : "R no shape") + rWhy
+                string side = q.isHigh ? "buy-side" : "sell-side"
+                string dir = wantBull ? "BULLISH" : "BEARISH"
+                // ONE TRIANGLE PER GRAB, on the grab bar. Two would stack when
+                // both ends match, and they would carry the same tooltip
+                // anyway — it already describes both ends.
+                //
+                // The left end's SHAPE is at the swing, often a hundred bars
+                // back. A triangle there was the most misleading thing on this
+                // chart: it appeared at an old bar with the move that followed
+                // already visible. The distances below say where each shape is
+                // without putting a mark on it.
+                string where = "\nmark at grab"
+                if lOk
+                    where := where + " · L shape " + str.tostring(bar_index - q.pivotBar) + "b back"
+                if rOk
+                    where := where + " · R shape ends " + str.tostring(rightOff - rF) + "b back"
+                string twoTxt = twoName == "" ? "" : "\n" + twoName + " · entry " + f2s(twoEntry) + " stop " + f2s(twoStop)
+                string tip = dir + " @ " + side + " grab · " + lTag + " + " + rTag +
+                     "\n" + lTxt +
+                     "\n" + rTxt +
+                     twoTxt + where + " · context only"
+                ccpMark(q.grabBar, wantBull, q.col, tip)
+                if emOn
+                    emDraw(rightOff, wantBull)
+                if ccpDebug
+                    if lOk
+                        ccpWindowBox(q.pivotBar - lB, q.pivotBar + lF, lH, lL,
+                             q.col)
+                    if rOk
+                        ccpWindowBox(q.grabBar - rB, q.grabBar + rF, rH, rL,
+                             q.col)
+                ccpPrune()
+            ccpQueue.remove(qi)
+        qi -= 1
+
+// ── debug table ─────────────────────────────────────────────────────────────
+// Counts, not opinions. The four combination rows are the whole question: if
+// they are all "alone", the merge is not earning its cost on this chart.
+var table ccpTbl = table.new(position.top_right, 2, 9,
+     border_width = 1, frame_width = 1)
+
+if ccpOn and ccpDebug and barstate.islast
+    ccpTbl.cell(0, 0, "CCP at grabs", text_size = size.small,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 0, ccpPick, text_size = size.small,
+         text_color = chart.fg_color)
+    ccpTbl.cell(0, 1, "grabs judged", text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 1, str.tostring(ccpSeen), text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(0, 2, "left end matched", text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 2, str.tostring(ccpLeftOk) + "  (" +
+         str.tostring(ccpSeen > 0 ? 100.0 * ccpLeftOk / ccpSeen : 0, "#.0") +
+         "%)", text_size = size.tiny, text_color = chart.fg_color)
+    ccpTbl.cell(0, 3, "right end matched", text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 3, str.tostring(ccpRightOk) + "  (" +
+         str.tostring(ccpSeen > 0 ? 100.0 * ccpRightOk / ccpSeen : 0, "#.0") +
+         "%)", text_size = size.tiny, text_color = chart.fg_color)
+    ccpTbl.cell(0, 4, "BOTH ends", text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 4, str.tostring(ccpBothOk) + "  (" +
+         str.tostring(ccpSeen > 0 ? 100.0 * ccpBothOk / ccpSeen : 0, "#.0") +
+         "%)", text_size = size.tiny, text_color = chart.fg_color)
+    ccpTbl.cell(0, 5, "  alone + alone", text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 5, str.tostring(ccpAA), text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(0, 6, "  alone + merged", text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 6, str.tostring(ccpAM), text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(0, 7, "  merged + alone", text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 7, str.tostring(ccpMA), text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(0, 8, "  merged + merged", text_size = size.tiny,
+         text_color = chart.fg_color)
+    ccpTbl.cell(1, 8, str.tostring(ccpMM), text_size = size.tiny,
+         text_color = chart.fg_color)

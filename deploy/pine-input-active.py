@@ -11,7 +11,7 @@ import pathlib
 import re
 import sys
 
-P = pathlib.Path("riptide-indicator-v2.pine")
+P = pathlib.Path("indicators/riptide_ms/pine/riptide-indicator-v2.pine")
 src = P.read_text()
 
 # dependent input -> the "input bool" expression that keeps it enabled.

@@ -42,7 +42,7 @@ if [[ $mexc_code != 200 ]] || ! grep -q '"success":true' "$mexc_body" 2>/dev/nul
      mainland China.
 
      The Oracle home region is permanent, so if that is the cause you need a
-     new tenancy in a permitted region. See ORACLE_SETUP.md for which ones.
+     new tenancy in a permitted region. See docs/ORACLE_SETUP.md for which ones.
      Do not work around this with a VPN — it breaches MEXC's terms."
 fi
 

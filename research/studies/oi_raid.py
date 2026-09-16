@@ -40,7 +40,7 @@ another OHLC rearrangement wearing a disguise. It does not.
 
     PYTHONPATH=. python3 research/studies/oi_raid.py riptideoi.csv
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 
 import csv                                              # noqa: E402
 import sys                                              # noqa: E402

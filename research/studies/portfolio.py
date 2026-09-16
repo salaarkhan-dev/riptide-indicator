@@ -13,7 +13,7 @@ first one is untradeable by a human and unfundable by anyone else.
 
     PYTHONPATH=. python3 research/studies/portfolio.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio, time                                    # noqa: E402
 from bisect import bisect_right                         # noqa: E402
 from dataclasses import dataclass                       # noqa: E402

@@ -19,7 +19,6 @@ card cannot be. The evidence lives where it can be as long as it needs to be:
 | wide loses money | `research/studies/poi_risk.py` — 141.9 of the 1h stream's 150 R drawdown sits in the wide bucket |
 | about 5 positions | `research/studies/report.py::compound` — ten open returned −39% over the same year |
 | the edge decays fast | `research/studies/pick_hybrid.py` — 0.06 R per trade per 15 minutes of waiting |
-| the trendline list is not a trade | `research/studies/trendline_measure.py` |
 
 `/legend` in the bot carries the same claims with their confidence intervals,
 and `/stats` carries the live forward score. If the card and `/legend` ever

@@ -11,7 +11,7 @@ import aiohttp
 
 from . import telegram as tg
 from . import watch
-from .indicators import all_indicators
+from .watchers import all_indicators
 from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
                      INTERVALS, POI_REQUIRED, SCAN_ON_START, TG_COMMANDS,
                      build_id, log)
@@ -106,7 +106,7 @@ async def main() -> None:
         # sleep per bar close.
         #
         # There is nothing to add here when an indicator is added: the set is
-        # the import list in riptide/indicators/__init__.py, and this walks it.
+        # the import list in riptide/watchers/__init__.py, and this walks it.
         # That is the point of the registry — the previous arrangement needed a
         # new branch here, in storage.py and in commands.py, and the second
         # watch shipped by copying all three.

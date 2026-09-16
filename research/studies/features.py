@@ -2,7 +2,7 @@
 
     PYTHONPATH=. python3 research/studies/features.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio, statistics                              # noqa: E402
 
 from riptide.config import CFG                          # noqa: E402

@@ -51,7 +51,7 @@ PRE-REGISTERED
 
     PYTHONPATH=. python3 research/studies/breadth.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 
 import random                                           # noqa: E402
 import statistics                                       # noqa: E402

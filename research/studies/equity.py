@@ -6,7 +6,7 @@ replays recorded candles and arithmetic.
 
     PYTHONPATH=. python3 research/studies/equity.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio                                          # noqa: E402
 from bisect import bisect_right                         # noqa: E402
 

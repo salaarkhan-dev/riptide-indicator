@@ -29,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from riptide.config import Cfg, TREND_INTERVAL             # noqa: E402
 from riptide.engine import POI_MAX_AGE_BARS                # noqa: E402
 
-PINE = Path(__file__).resolve().parent.parent / "riptide-indicator.pine"
+PINE = (Path(__file__).resolve().parent.parent
+        / "indicators/riptide/pine/riptide-indicator.pine")
 
 # Pine input name -> Cfg field name.
 NUMERIC = {

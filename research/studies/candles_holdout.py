@@ -7,7 +7,7 @@ until it survives data that was never looked at.
 Stated in advance: the pattern PRESENT predicts a HIGHER R per signal.
 Bar: >= 3 SE on the held-out window alone, same sign on all four splits.
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio, time                                    # noqa: E402
 
 import aiohttp                                          # noqa: E402

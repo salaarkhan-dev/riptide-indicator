@@ -50,7 +50,7 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. python3 research/studies/exit_grid.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 
 import statistics                                       # noqa: E402
 

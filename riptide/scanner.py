@@ -173,7 +173,7 @@ async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
 
         # Trendline confluence, MEASURED AND SHOWN, GATING NOTHING.
         #
-        # research/studies/early_breakout.py asked whether an early signal with
+        # (removed with the trendline) asked whether an early signal with
         # a same-direction Liquidity Trendline breakout behind it scores better
         # than one without. Offline it came out +0.206 R over 3773 signals,
         # positive in all five panels, above a 25-seed placebo floor in every

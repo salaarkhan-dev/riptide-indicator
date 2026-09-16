@@ -522,7 +522,7 @@ SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
              if _sweep_src else None)
 
 
-# ── EXHAUSTION COUNTS (riptide/indicators/exhaust.py) ──────────────────────────────────
+# ── EXHAUSTION COUNTS (riptide/watchers/exhaust.py) ─────────────────────────
 #
 # IT SHIPS OFF. The counts are a chart aid whose only measurement came back
 # pointing the wrong way, so the stream is built, tested and dormant: turn it on
@@ -531,7 +531,8 @@ SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
 #
 # THE REST OF THE DEFAULTS ARE A VOLUME DECISION AND NOTHING ELSE. Rows a day
 # across the real universe, 59 symbols over 333 days, from
-# research/studies/exhaust_rate.py (rerun it; do not trust this comment):
+# indicators/exhaustion/studies/exhaust_rate.py (rerun it; do not trust this
+# comment):
 #
 #     tf     M9/day   M9*/day   T13/day    both   both*
 #     15m      128        96        40      167     136
@@ -550,7 +551,8 @@ SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
 #
 # AND THE MEASUREMENT WAS NOT MERELY ABSENT, IT CAME BACK NEGATIVE. A 🎯
 # landing near a completed count scored no better, and the OPPOSITE direction
-# benefited more (+0.273 against +0.093). See research/studies/exhaustion.py.
+# benefited more (+0.273 against +0.093). See
+# indicators/exhaustion/studies/exhaustion.py.
 EXHAUST_ALERTS = os.getenv("RIPTIDE_EXHAUST_ALERTS", "0") == "1"
 EXHAUST_INTERVALS = tuple(dict.fromkeys(
     i.strip() for i in

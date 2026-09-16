@@ -56,7 +56,7 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. python3 research/studies/win_rate_price.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 
 import statistics                                       # noqa: E402
 

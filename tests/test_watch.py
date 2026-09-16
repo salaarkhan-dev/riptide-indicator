@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from riptide import storage, watch                          # noqa: E402
 from riptide import telegram as tg                          # noqa: E402
 from riptide.engine import Candle                           # noqa: E402
-from riptide.indicators import Hit, Indicator, Option, register  # noqa: E402
+from riptide.watchers import Hit, Indicator, Option, register  # noqa: E402
 
 STEP = 14400            # Hour4
 NBARS = 400

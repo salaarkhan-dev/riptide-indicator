@@ -34,7 +34,7 @@ event's direction more than zero?**
 ## Events, arms and data — fixed now
 
 Events: `choch`, `bos`, `idm`, each tested separately, from
-`research/ms_struct.py`, which is the statement-for-statement transcription of
+`indicators/riptide_ms/port/ms_struct.py`, which is the statement-for-statement transcription of
 section 12 that `deploy/ms-py-parity.py` checks against the Pine.
 
 Arms: `msLen` ∈ **{20, 15, 12, 10, 8, 6, 5}**, `msShortLen` fixed at **3**.

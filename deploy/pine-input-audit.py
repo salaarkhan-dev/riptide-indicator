@@ -10,7 +10,8 @@ counted. This counts:
     matched to riptide.conf by VARIABLE NAME and renaming one silently breaks
     the bot-to-chart guarantee
 
-    python3 deploy/pine-input-audit.py riptide-indicator-v2.pine
+    python3 deploy/pine-input-audit.py \
+        indicators/riptide_ms/pine/riptide-indicator-v2.pine
     python3 deploy/pine-input-audit.py --diff BEFORE.pine AFTER.pine
 """
 from __future__ import annotations

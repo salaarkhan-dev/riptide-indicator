@@ -44,7 +44,7 @@ PRE-REGISTERED, BEFORE THE FIRST NUMBER
 
     PYTHONPATH=. python3 research/studies/sweep_vol_gate.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 
 import asyncio                                          # noqa: E402
 import statistics                                       # noqa: E402

@@ -38,7 +38,7 @@ PRE-REGISTERED
 
     PYTHONPATH=. python3 research/studies/feature_batch2.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 
 import asyncio                                          # noqa: E402
 import random                                           # noqa: E402

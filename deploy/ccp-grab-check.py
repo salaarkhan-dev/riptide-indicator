@@ -20,8 +20,8 @@ from __future__ import annotations
 import re
 import sys
 
-V2 = "riptide-indicator-v2.pine"
-BENCH = "riptide-ccp.pine"
+V2 = "indicators/riptide_ms/pine/riptide-indicator-v2.pine"
+BENCH = "indicators/ccp/pine/riptide-ccp.pine"
 
 # The engine starts at the first instance construction and runs to the end of
 # its section. Anchored on code, not on a line number or a banner's wording.

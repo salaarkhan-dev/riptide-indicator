@@ -1,7 +1,8 @@
 """Pine <-> Python parity for the market-structure engine.
 
-This is the check LIT never had and still does not have. `research/ms_struct.py`
-is a transcription of section 12 of `riptide-indicator-v2.pine`, deliberately
+This is the check LIT never had and still does not have.
+`indicators/riptide_ms/port/ms_struct.py` is a transcription of section 12 of
+`riptide-indicator-v2.pine`, deliberately
 keeping the Pine's identifiers, so the two can be compared by machine instead
 of by eye.
 
@@ -16,7 +17,9 @@ disagree about, say, na propagation — which is exactly why the `lt`/`gt`
 helpers exist on the Python side and why they are listed as a normalisation
 rather than hidden.
 
-    python3 deploy/ms-py-parity.py riptide-indicator-v2.pine research/ms_struct.py
+    python3 deploy/ms-py-parity.py \
+        indicators/riptide_ms/pine/riptide-indicator-v2.pine \
+        indicators/riptide_ms/port/ms_struct.py
 """
 from __future__ import annotations
 

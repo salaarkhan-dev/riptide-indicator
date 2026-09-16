@@ -26,7 +26,7 @@ os.environ.setdefault("RIPTIDE_LOOKBACK", "2000")
 
 from riptide.exchange import fetch_candles        # noqa: E402
 from research.data import SYMBOLS                 # noqa: E402
-from research.ms_struct import engine             # noqa: E402
+from indicators.riptide_ms.port.ms_struct import engine  # noqa: E402
 
 ARMS = (20, 15, 12, 10, 8, 6, 5)
 SHORT = 3

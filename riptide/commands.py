@@ -18,7 +18,7 @@ from . import telegram as tg
 from . import market
 from . import tracker
 from . import watch
-from .indicators import all_indicators, get as get_indicator
+from .watchers import all_indicators, get as get_indicator
 from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
                      MAX_SWEEP_RVOL, MIN_REQUEST_GAP,
                      INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE, POI_INTERVAL,

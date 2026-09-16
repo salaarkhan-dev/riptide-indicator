@@ -6,7 +6,7 @@ turns from CANDIDATE to rejected and says so.
 
     python3 research/studies/di_direction.py
 """
-import research.env                                         # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 from bisect import bisect_right                             # noqa: E402
 
 import asyncio                                              # noqa: E402

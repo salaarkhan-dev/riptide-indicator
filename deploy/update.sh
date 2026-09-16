@@ -92,6 +92,23 @@ main() {
             return 1 ;;
     esac
 
+    # Preflight's two cheap stages, on the NEW tree, before anything is
+    # installed. Syntax is already covered by compileall above; what this adds
+    # is the IMPORT stage, which resolves every first-party import without
+    # executing anything. compileall cannot catch a module that moved — the
+    # file still compiles, and the import only fails when that line is reached,
+    # which for a rarely-taken branch can be days after the deploy.
+    #
+    # --quick, so it touches no network and runs no test. BLOCKING, because an
+    # unresolvable import in the package is not an advisory condition.
+    local pre_out
+    if ! pre_out=$(cd "$SRC" && PYTHONPATH="$SRC" timeout 120 \
+                   "$APP/.venv/bin/python" deploy/preflight.py --quick 2>&1); then
+        log "preflight FAILED, not installing"
+        notify "Riptide update $short BLOCKED by preflight. Nothing installed, still running the previous build."$'\n\n'"$(printf '%s' "$pre_out" | tail -c 700)"
+        return 1
+    fi
+
     # Pine/Python parity is ADVISORY, never blocking. A drift here means the
     # chart and the bot disagree; it is not a reason to refuse a Python fix,
     # and making it blocking would let an indicator edit wedge the service.

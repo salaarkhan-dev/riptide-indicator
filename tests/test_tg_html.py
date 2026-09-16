@@ -38,7 +38,7 @@ os.environ["RIPTIDE_MAX_SWEEP_RVOL"] = "1.55"
 from riptide import commands as cm            # noqa: E402
 from riptide import storage as st             # noqa: E402
 from riptide import telegram as tg            # noqa: E402
-from riptide.indicators import all_indicators  # noqa: E402
+from riptide.watchers import all_indicators  # noqa: E402
 
 fails = []
 

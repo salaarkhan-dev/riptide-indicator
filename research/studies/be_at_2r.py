@@ -4,7 +4,7 @@ It was measured against a 1.5R target, where arming at 1.5R or 2R could never
 trigger — a no-op. At 2R the 1.5R arm CAN trigger, so the shipped advice
 becomes live for the first time and has to be re-asked.
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio                                          # noqa: E402
 from research.data import load                          # noqa: E402
 from research.harness import mean_se                    # noqa: E402

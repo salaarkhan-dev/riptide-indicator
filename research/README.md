@@ -1,7 +1,15 @@
 # research/
 
-One scorer, one data loader, one reporting format. Studies live in
-`studies/` and are re-runnable at any time.
+**The shared harness.** One scorer, one data loader, one reporting format,
+and the studies that belong to no single indicator. Studies live in `studies/`
+and are re-runnable at any time.
+
+A study about ONE indicator does not live here — it lives beside that
+indicator, in `indicators/<name>/studies/`, with its prereg and its result in
+the same folder. See [`../indicators/README.md`](../indicators/README.md).
+What stays here is what every indicator uses: `harness.py` (the scorer),
+`data.py` and `deep.py` (the loaders), `env.py`, `patterns.py`,
+`discovery_symbols.py`, and studies of the bot's own behaviour.
 
 ## Why it exists
 
@@ -21,6 +29,7 @@ Copy-paste was the root cause, so the fix is structural, not a patch.
 
     python3 research/test_harness.py            # always, before trusting a study
     PYTHONPATH=. python3 research/studies/di_direction.py
+    PYTHONPATH=. python3 indicators/ccp/studies/fvg_h1_holdout.py
 
 ## Writing a study
 

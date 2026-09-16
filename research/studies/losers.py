@@ -7,7 +7,7 @@ market simply against it?
 
     PYTHONPATH=. python3 research/studies/losers.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio, statistics, time                        # noqa: E402
 from collections import Counter                         # noqa: E402
 

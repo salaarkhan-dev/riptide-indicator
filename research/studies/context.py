@@ -5,7 +5,7 @@ until Candle gained a volume field.
 
     PYTHONPATH=. python3 research/studies/context.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio, statistics                              # noqa: E402
 from bisect import bisect_right                         # noqa: E402
 

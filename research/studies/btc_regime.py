@@ -1,5 +1,5 @@
 """BTC regime on EARLY signals — held-out test. See PREREG_btc.md."""
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio, time                                    # noqa: E402
 from bisect import bisect_right                         # noqa: E402
 

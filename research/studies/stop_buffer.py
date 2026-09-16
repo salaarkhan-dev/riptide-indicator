@@ -13,7 +13,7 @@ up, and only a sweep answers that.
 
     PYTHONPATH=. python3 research/studies/stop_buffer.py
 """
-import research.env                                     # noqa: F401  MUST be first
+import research.env  # noqa: F401  MUST be first
 import asyncio                                          # noqa: E402
 
 from riptide.config import Cfg, TRACK_TARGET_R          # noqa: E402
