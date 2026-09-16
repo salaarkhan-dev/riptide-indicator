@@ -709,20 +709,20 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                 // arrow simply appears at an old bar with the move already
                 // visible after it. Saying the lag out loud is the only thing
                 // stopping that from reading as foresight.
-                // THE RIGHT-END TRIANGLE GOES ON THE CONFIRMING BAR, not on
-                // the grab candle. It is the only placement that cannot read
-                // as foresight: the triangle appears on the bar where the
-                // verdict became knowable, so what you see on the chart is
-                // what existed at the time. The cost is that it no longer sits
-                // on the pin it describes — turn on debug and the box does
-                // that job, at the candles the merge actually used.
+                // NEITHER TRIANGLE IS DRAWN AT THE SWING ANY MORE. Both sit at
+                // the grab end of the band: the left-end one on the grab bar,
+                // the right-end one on the bar that confirmed it.
                 //
-                // The left-end triangle stays on the swing that built the
-                // level, because that is the thing it identifies and the band
-                // already links the two. Its tooltip says how far back it is.
-                string late = "\n\nDRAWN LATE. This whole mark was created when the grab confirmed, not when the candle under the triangle closed."
+                // The left end's SHAPE is still at the swing, often a hundred
+                // bars back, and a triangle there was the single most
+                // misleading thing on this chart — it appeared at an old bar
+                // with the move that followed already visible, which reads as
+                // foresight however clearly the tooltip denies it. Drawing it
+                // at the grab keeps the finding and drops the illusion. The
+                // band and the $$$ line already say which swing it came from,
+                // and debug mode boxes the exact candles.
                 if lOk
-                    ccpMark(q.pivotBar, wantBull, q.col, tip + late + " This triangle sits " + str.tostring(bar_index - q.pivotBar) + " bars in the past — nothing was on the chart here at the time.")
+                    ccpMark(q.grabBar, wantBull, q.col, tip + "\n\nDRAWN AT THE GRAB, NOT AT THE SHAPE. The shape this describes is at the swing that built the level, " + str.tostring(bar_index - q.pivotBar) + " bars back — the left edge of the band. The triangle is placed here instead so that nothing on the chart sits far in the past looking like it was called at the time. Turn on debug to box the candles it actually used.")
                 if rOk
                     ccpMark(bar_index, wantBull, q.col, tip + "\n\nON THE CONFIRMING BAR. This triangle is on the bar where the verdict became knowable, so nothing about it is retrospective — it appeared the moment it could. The candles it describes end " + str.tostring(rightOff - rF) + " bars back; turn on debug to box them.")
                 if ccpDebug
