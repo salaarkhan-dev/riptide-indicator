@@ -12,3 +12,23 @@ A METHOD DIAGNOSTIC. No prereg, no verdict, no claim about the market.
      near zero means picking the best filter on past data
      tells you nothing about the next half.
 
+═══ Min30 — 22154 grabs, 105 candidate filters that keep 150+ bets a side ═══
+  no filter at all:   older -0.059   newer -0.071
+  BEST ON THE OLDER HALF: EMA50 rising + level held long
+     older (chosen here) +0.089  n 1880
+     newer (never seen)  -0.082  n 2231    kept -0.171 of it
+  26/105 candidates beat zero on the older half; 1/105 do on the newer half
+  RANK CORRELATION in-sample vs out-of-sample: +0.031
+     near zero means picking the best filter on past data
+     tells you nothing about the next half.
+
+═══ Min60 — 10575 grabs, 105 candidate filters that keep 150+ bets a side ═══
+  no filter at all:   older -0.003   newer -0.068
+  BEST ON THE OLDER HALF: grab wick big + grab closed back hard
+     older (chosen here) +0.078  n 760
+     newer (never seen)  -0.032  n 841    kept -0.110 of it
+  50/105 candidates beat zero on the older half; 5/105 do on the newer half
+  RANK CORRELATION in-sample vs out-of-sample: +0.067
+     near zero means picking the best filter on past data
+     tells you nothing about the next half.
+

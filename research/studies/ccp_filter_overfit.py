@@ -179,8 +179,19 @@ async def main():
                   f"{pos_n}/{len(oos)} do on the newer half")
             rho = spearman(ins, oos)
             print(f"  RANK CORRELATION in-sample vs out-of-sample: {rho:+.3f}")
-            print("     near zero means picking the best filter on past data")
-            print("     tells you nothing about the next half.\n")
+            # A high correlation is only good news if something was WORTH
+            # selecting. With nothing above zero in-sample, all it says is
+            # that the conditions rank consistently by how bad they are.
+            if pos == 0:
+                print("     but 0 candidates beat zero in-sample, so this is")
+                print("     consistency in HOW BAD they are, not a usable rank.")
+            elif abs(rho) < 0.2:
+                print("     near zero, and there WERE winners to pick from:")
+                print("     picking the best on past data says nothing here.")
+            else:
+                print("     positive with winners to pick from — the one case")
+                print("     where selection would carry. Check the decay row.")
+            print()
 
 
 if __name__ == "__main__":
