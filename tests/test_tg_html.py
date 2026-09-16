@@ -37,6 +37,8 @@ os.environ["RIPTIDE_MAX_SWEEP_RVOL"] = "1.55"
 
 from riptide import commands as cm            # noqa: E402
 from riptide import storage as st             # noqa: E402
+from riptide import telegram as tg            # noqa: E402
+from riptide.indicators import all_indicators  # noqa: E402
 
 fails = []
 
@@ -128,19 +130,37 @@ messages = {
     "/status": lambda: cm.status_text(db, state),
     "/help": lambda: cm.HELP,
     "/legend": lambda: cm.LEGEND,
-    "/trendline": lambda: cm.trendline_cmd(db, "/trendline"),
-    "/trendline slope": lambda: cm.trendline_cmd(db, "/trendline slope"),
-    "/trendline on": lambda: cm.trendline_cmd(db, "/trendline on"),
-    "/trendline 15m,30m": lambda: cm.trendline_cmd(db, "/trendline 15m,30m"),
-    "/trendline 5m (rejected)": lambda: cm.trendline_cmd(db, "/trendline 5m"),
-    "/exhaust": lambda: cm.exhaust_cmd(db, "/exhaust"),
-    "/exhaust on": lambda: cm.exhaust_cmd(db, "/exhaust on"),
-    "/exhaust 15m,30m,1h": lambda: cm.exhaust_cmd(db, "/exhaust 15m,30m,1h"),
-    "/exhaust terminal": lambda: cm.exhaust_cmd(db, "/exhaust terminal"),
-    "/exhaust perfect off": lambda: cm.exhaust_cmd(db, "/exhaust perfect off"),
-    "/exhaust 5m (rejected)": lambda: cm.exhaust_cmd(db, "/exhaust 5m"),
-    "/exhaust off": lambda: cm.exhaust_cmd(db, "/exhaust off"),
 }
+
+# EVERY REGISTERED WATCH, not a hand-written list of the ones that happen to
+# exist today. The whole point of the registry is that an indicator ported
+# next month gets the same command surface — and therefore the same chance of
+# rendering a bare "<" into a message Telegram refuses. A hand-maintained list
+# here would silently stop covering the newest one, which is exactly the class
+# of gap this file exists to close.
+for _ind in all_indicators():
+    n = _ind.name
+    messages[f"/{n}"] = (lambda i=_ind: cm.watch_cmd(db, i, f"/{i.name}"))
+    messages[f"/{n} on"] = (lambda i=_ind: cm.watch_cmd(db, i, f"/{i.name} on"))
+    messages[f"/{n} off"] = (lambda i=_ind: cm.watch_cmd(db, i,
+                                                         f"/{i.name} off"))
+    messages[f"/{n} 5m (rejected)"] = (
+        lambda i=_ind: cm.watch_cmd(db, i, f"/{i.name} 5m"))
+    if _ind.tf_counted:
+        tfs = ",".join(tg.tf_label(t) for t in _ind.tf_counted)
+        messages[f"/{n} {tfs}"] = (
+            lambda i=_ind, v=tfs: cm.watch_cmd(db, i, f"/{i.name} {v}"))
+    for _o in _ind.options:
+        val = (_o.choices[-1] if _o.kind == "choice"
+               else "off" if _o.kind == "bool" else "0.2")
+        messages[f"/{n} {_o.key} {val}"] = (
+            lambda i=_ind, k=_o.key, v=val: cm.watch_cmd(
+                db, i, f"/{i.name} {k} {v}"))
+        # The refusal path too: a reply that lists the allowed values is still
+        # a reply, and it is the one nobody renders by hand.
+        messages[f"/{n} {_o.key} (bad)"] = (
+            lambda i=_ind, k=_o.key: cm.watch_cmd(db, i,
+                                                  f"/{i.name} {k} banana"))
 for name, build in messages.items():
     try:
         text = build()

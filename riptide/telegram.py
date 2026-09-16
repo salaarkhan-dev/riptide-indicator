@@ -18,7 +18,7 @@ import aiohttp
 from .config import (BAR_SECONDS, CFG, DISPLAY_TZ, ENTRY_INTERVAL, INTERVAL,
                      TG_CHAT, TG_RETRIES, TG_TOKEN, TRACK_TARGET_R,
                      POI_INTERVAL, TREND_INTERVAL,
-                     TRENDLINE_CONFLUENCE_BARS, log)
+                     log)
 from .engine import (Early, Setup, Sweep, grade_of, shift_odds,
                      sweep_worth, tf_word)
 
@@ -703,10 +703,6 @@ def context_row(x, early: bool, pool: str) -> str:
     already open, and the row to read when deciding whether to open it.
     """
     bits = [_why(x, early), pool]
-    if tl_agrees(x):
-        b = x.tl_break
-        bits.append(f"📐 {'up' if _tl_up(x) else 'down'} "
-                    f"{'this bar' if b == 0 else f'{b}b ago'}")
     return " · ".join(b for b in bits if b)
 
 
@@ -720,24 +716,6 @@ def _card(head: str, lead: str | None, numbers: list, move: str,
         row("context", context),
         row("when", when)]
     return "\n".join(parts)
-
-
-def tl_agrees(x) -> bool:
-    """Whether the stored distance counts as confluence at all.
-
-    THE WINDOW IS THE WHOLE THING. The raw bars-since-break is stored, and on
-    the first live scan 40% of signals had SOME earlier break behind them — 38
-    bars, 69, 108. The measured effect is gone by 20. A mark on 40% of alerts
-    would mean nothing while still looking like it meant something.
-    """
-    b = getattr(x, "tl_break", -1)
-    return isinstance(b, int) and 0 <= b <= TRENDLINE_CONFLUENCE_BARS
-
-
-def _tl_up(x) -> bool:
-    """Which way the agreeing break went. A swept HIGH implies a short, so the
-    sweep's mapping is inverted exactly as it is everywhere else."""
-    return (not x.is_high) if isinstance(x, Sweep) else x.is_long
 
 
 def setup_message(s: Setup) -> str:

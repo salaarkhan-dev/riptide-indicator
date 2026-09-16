@@ -28,9 +28,11 @@ import sys
 
 sys.path.insert(0, ".")
 
+from riptide import watch                                # noqa: E402
 from riptide.engine import Candle                        # noqa: E402
-from riptide.exhaust import _counts, digest, scan_symbol  # noqa: E402
-from riptide.exhaust import Hit, _label, sig_of          # noqa: E402
+from riptide.indicators.exhaust import (                 # noqa: E402
+    RATE, SPEC, _counts, _label, rate, sig_of)
+from riptide.indicators import Hit                       # noqa: E402
 from research.td import counts as td_counts              # noqa: E402
 
 fails = []
@@ -106,15 +108,19 @@ class FakeSem:
 
 
 def hits(want, perfect, data=None):
+    """Through the FRAMEWORK, not straight into detect(): the min-bars floor
+    and the fetch both live in watch.scan_symbol now, and the short-series
+    assertion below is testing exactly that boundary."""
     async def fake_fetch(sess, symbol, tf):
         return data if data is not None else cs
-    import riptide.exhaust as ex
-    real, ex.fetch_candles = ex.fetch_candles, fake_fetch
+    real, watch.fetch_candles = watch.fetch_candles, fake_fetch
     try:
-        return asyncio.run(scan_symbol(None, FakeSem(), "AAA_USDT", "Min60",
-                                       want, perfect))
+        got, _dropped = asyncio.run(watch.scan_symbol(
+            None, FakeSem(), SPEC, "AAA_USDT", "Min60",
+            {"kinds": want, "perfect": perfect}))
+        return got
     finally:
-        ex.fetch_candles = real
+        watch.fetch_candles = real
 
 
 # THE SERIES IS CUT SO A COMPLETION LANDS INSIDE THE WINDOW. scan_symbol only
@@ -148,14 +154,15 @@ check(len(term_only) > 0 and len(mom_only) > 0,
       f"{len(mom_only)} momentum")
 check(len(both_perf) <= len(both_all),
       f"requiring a perfected 9 never adds hits: {len(both_perf)} <= {len(both_all)}")
-check(all(h.kind == "terminal" for h in term_only),
+check(all(h.extra["kind"] == "terminal" for h in term_only),
       "kinds='terminal' yields only 13-counts")
-check(all(h.kind == "momentum" for h in mom_only),
+check(all(h.extra["kind"] == "momentum" for h in mom_only),
       "kinds='momentum' yields only 9-counts")
 check(len(term_only) + len(mom_only) == len(both_all),
       f"and the two partition 'both': {len(term_only)} + {len(mom_only)} "
       f"== {len(both_all)}")
-check(all(h.perfect or h.kind == "terminal" for h in both_perf),
+check(all(h.extra["perfect"] or h.extra["kind"] == "terminal"
+           for h in both_perf),
       "under perfect-only every 9-count reported is a perfected one")
 
 print("\na short series is a symbol with no answer, not a quiet one")
@@ -166,18 +173,16 @@ print("\nthe digest")
 
 
 def mk(kind, is_long, perfect=False, sym="AAA_USDT", tf="Min60"):
-    h = Hit()
-    h.symbol, h.tf, h.is_long, h.kind, h.perfect = sym, tf, is_long, kind, perfect
-    h.bar_time, h.price, h.level = 1789000000, 1.2345, 1.3
-    h.sig = sig_of(sym, tf, 1789000000, kind, is_long)
-    return h
+    return Hit(key=sig_of(sym, tf, 1789000000, kind, is_long),
+               symbol=sym, tf=tf, is_long=is_long, bar_time=1789000000,
+               price=1.2345, kind=kind, perfect=perfect, level=1.3)
 
 
-msg = digest([mk("momentum", True, True, "AAA_USDT"),
-              mk("terminal", True, sym="BBB_USDT"),
-              mk("momentum", False, True, "CCC_USDT"),
-              mk("terminal", False, sym="DDD_USDT")],
-             ("Min60",), 1789000000)
+msg = watch.digest(SPEC, [mk("momentum", True, True, "AAA_USDT"),
+                          mk("terminal", True, sym="BBB_USDT"),
+                          mk("momentum", False, True, "CCC_USDT"),
+                          mk("terminal", False, sym="DDD_USDT")],
+                   ("Min60",), 1789000000)
 plain = msg
 check(plain.index("STRONG LONG") < plain.index("STRONG SHORT")
       < plain.index("possible long") < plain.index("possible short"),
@@ -199,7 +204,7 @@ check(_label(mk("momentum", True, True)) == "M9★"
 
 print("\nthe line cap holds")
 many = [mk("momentum", True, True, f"S{i:02d}_USDT") for i in range(60)]
-big = digest(many, ("Min60",), 1789000000)
+big = watch.digest(SPEC, many, ("Min60",), 1789000000)
 check(big.count("tradingview.com") <= 20, f"capped: {big.count('tradingview.com')} rows")
 check("more this close" in big, "and it says how many it left out")
 check(len(big) < 4096, f"under Telegram's limit: {len(big)} chars")
@@ -217,57 +222,65 @@ check(len(keys) == 6,
 print("\nTHE COMMAND QUOTES THE MEASURED RATE, NOT A GUESS")
 # /exhaust prints a per-day number next to every change it offers, and that
 # number is the only thing telling the reader what they are turning on. If the
-# table behind it drifts from research/studies/exhaustion.py, the command keeps
+# table behind it drifts from the exhaustion study, the command keeps
 # answering confidently and wrongly — so the arithmetic is pinned here.
 import sqlite3                                            # noqa: E402
 
-import riptide.exhaust as _ex                              # noqa: E402
-from riptide.commands import EXHAUST_RATE, _ex_rate, exhaust_cmd  # noqa: E402
+from riptide.commands import watch_cmd                     # noqa: E402
 from riptide.config import EXHAUST_ALERTS                  # noqa: E402
 
 _db = sqlite3.connect(":memory:")
 _db.execute("CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT)")
-_ex.init(_db)
+watch.init(_db)
 
-check(EXHAUST_RATE == {"Min15": (128, 96, 40), "Min30": (66, 49, 19),
-                       "Min60": (34, 24, 9)},
-      "the rate table still matches research/studies/exhaust_rate.out")
+
+def exhaust_cmd(db, text):
+    return watch_cmd(db, SPEC, text)
+
+
+check(RATE == {"Min15": (128, 96, 40), "Min30": (66, 49, 19),
+               "Min60": (34, 24, 9)},
+      "the rate table still matches the exhaust_rate study output")
 # WITHIN ONE, not exactly: EXHAUST_RATE stores each cell already rounded, so
 # summing it and rounding the study's float sum can differ in the last digit
 # (296 here against the study's 295). Demanding equality would make this fail
 # on arithmetic rather than on drift, which is the only thing it is for.
-_all = _ex_rate(_db, tfs=("Min15", "Min30", "Min60"), want="both",
-                perfect=False)
+_all = rate(_db, tfs=("Min15", "Min30", "Min60"), kinds="both",
+            perfect=False)
 check(abs(_all - 295) <= 1,
       f"everything on, unfiltered, is the ~295 rows a day the gates exist "
       f"for: {_all}")
-_quiet = _ex_rate(_db, tfs=("Min60",), want="both", perfect=True)
+_quiet = rate(_db, tfs=("Min60",), kinds="both", perfect=True)
 check(abs(_quiet - 34) <= 1,
       f"and the quiet corner it starts in is ~34 a day: {_quiet}")
-check(_ex_rate(_db, tfs=("Min60",), want="terminal") == 9
-      and _ex_rate(_db, tfs=("Min60",), want="momentum", perfect=True) == 24,
+check(rate(_db, tfs=("Min60",), kinds="terminal") == 9
+      and rate(_db, tfs=("Min60",), kinds="momentum", perfect=True) == 24,
       "the two kinds partition that rate")
-check(_ex_rate(_db, perfect=True) <= _ex_rate(_db, perfect=False),
+check(rate(_db, perfect=True) <= rate(_db, perfect=False),
       "perfected-only can never raise the rate")
 
 _ = exhaust_cmd(_db, "/exhaust 30m,1h")
-check(_ex.intervals(_db) == ("Min30", "Min60"), "/exhaust sets the timeframes")
+check(watch.intervals(_db, SPEC) == ("Min30", "Min60"),
+      "/exhaust sets the timeframes")
 _ = exhaust_cmd(_db, "/exhaust terminal")
-check(_ex.kinds(_db) == "terminal", "/exhaust sets the kind")
+check(watch.setting(_db, SPEC, "kinds") == "terminal",
+      "/exhaust sets the kind")
 _ = exhaust_cmd(_db, "/exhaust perfect off")
-check(_ex.perfect_only(_db) is False, "/exhaust perfect off clears the gate")
+check(watch.setting(_db, SPEC, "perfect") is False,
+      "/exhaust perfect off clears the gate")
 # IT SHIPS OFF: the counts measured negative, so the stream is built and
 # dormant until someone asks for it. A default flipped back to on by an edit
 # would be silent, so it is asserted rather than trusted.
 check(EXHAUST_ALERTS is False,
       "the stream is OFF by default — it is opt-in, not opt-out")
-check(_ex.enabled(_db) is False, "and a fresh database agrees")
+check(watch.enabled(_db, SPEC) is False, "and a fresh database agrees")
 _ = exhaust_cmd(_db, "/exhaust on")
-check(_ex.enabled(_db) is True, "/exhaust on starts it")
+check(watch.enabled(_db, SPEC) is True, "/exhaust on starts it")
 _ = exhaust_cmd(_db, "/exhaust off")
-check(_ex.enabled(_db) is False, "/exhaust off stops it again")
+check(watch.enabled(_db, SPEC) is False, "/exhaust off stops it again")
 bad = exhaust_cmd(_db, "/exhaust 5m")
-check("must come from" in bad and _ex.intervals(_db) == ("Min30", "Min60"),
+check("must come from" in bad
+      and watch.intervals(_db, SPEC) == ("Min30", "Min60"),
       "an unmeasured timeframe is refused and changes nothing")
 body = exhaust_cmd(_db, "/exhaust")
 check("+0.273" in body and "not a trade" in body.lower(),

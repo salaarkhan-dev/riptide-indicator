@@ -37,8 +37,7 @@ import statistics
 import time
 
 from .config import (BAR_SECONDS, INTERVAL, INTERVALS, TRACK, TRACK_FILL_BARS,
-                     TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_INTERVAL,
-                     TRENDLINE_CONFLUENCE_BARS, log)
+                     TRACK_HORIZON_BARS, TRACK_TARGET_R, TREND_INTERVAL, log)
 from .engine import Candle, Setup, grade_of
 
 PENDING, OPEN = "pending", "open"          # still live
@@ -126,14 +125,17 @@ def init(db) -> None:
         # stored. The grade breakdown skips them, exactly as `regraded` already
         # does for rows predating the POI column.
         ("trend_tf", "TEXT DEFAULT ''", "old rows are excluded from the grades"),
-        # Bars since a same-direction Liquidity Trendline breakout, or -1 for
-        # none. MEASUREMENT ONLY — it gates nothing and must not. The offline
-        # study (research/studies/early_breakout.py) put it at +0.7 SE on the
-        # held-out half, which is an encouraging shape and not evidence, so
-        # this exists to accumulate the forward sample that could settle it.
-        # -1 rather than NULL so old rows and "no break" stay distinguishable:
-        # old rows carry the default and are excluded from the breakdown.
-        ("tl_break", "INT DEFAULT -2", "trendline confluence, measured forward"),
+        # RETIRED. This held bars since a same-direction Liquidity Trendline
+        # breakout while that indicator was being measured forward. The
+        # trendline line was dropped — it never beat its control — and the
+        # detector is gone, so nothing computes this any more and every new row
+        # carries -2, the "not a measurement" sentinel.
+        #
+        # THE COLUMN STAYS. Dropping it would rewrite the positional layout of
+        # the INSERT and of summary()'s SELECT, where breadth and event_pick sit
+        # after it, and would break every riptide.db already on disk. A dead
+        # column costs one integer a row; a silent index shift costs a stat.
+        ("tl_break", "INT DEFAULT -2", "retired, always -2 on new rows"),
         # How many same-direction signals shared this one's bar close. 0 marks
         # rows armed before the column existed; a real value is always >= 1
         # because a signal counts itself. Measured forward, gates nothing.
@@ -255,7 +257,7 @@ def arm(db, sid: str, s, from_bar: int | None = None,
                 getattr(s, "di_dir", 0), getattr(s, "rsi_ext", 0.0),
                 int(getattr(s, "poi", False)), 1,
                 getattr(s, "tf", "") or INTERVAL, TREND_INTERVAL,
-                int(getattr(s, "tl_break", -1)),
+                -2,                            # tl_break, retired: see init()
                 int(getattr(s, "breadth", 0)),
                 _event_state(s)))
     db.commit()
@@ -475,26 +477,11 @@ def summary(db, kind: str | None = None) -> dict:
         "against": _bucket(against),
         "mfe": statistics.fmean([m for m, _ in filled]) if filled else 0.0,
         "mae": statistics.fmean([m for _, m in filled]) if filled else 0.0,
-        # TRENDLINE CONFLUENCE, ACCUMULATING. r[14] is tl_break: bars since a
-        # same-direction breakout, -1 for none, -2 on rows armed before the
-        # column existed. Those are excluded rather than folded into "no
-        # break", because they are not a measurement of anything — the same
-        # reasoning that keeps pre-POI rows out of the grade bands.
+        # r[14] is tl_break, RETIRED and no longer read. The trendline line was
+        # dropped, so every new row carries -2 and the old rows are a closed
+        # sample nothing will add to. It stays in the SELECT because breadth and
+        # event_pick are read positionally after it.
         #
-        # This gates NOTHING. Offline it is +0.7 SE on the held-out half
-        # against a bar of 2, and this exists to find out whether the forward
-        # sample agrees. See research/studies/early_breakout.py.
-        # The WINDOW decides membership, not merely "a break exists". The raw
-        # distance is stored so a different window can be measured later from
-        # rows already on disk, but 40% of signals have SOME break behind them
-        # and the effect is gone by 20 bars. tl_break == -2 marks rows armed
-        # before the column existed; those are excluded from both sides rather
-        # than counted as "no break", which they are not a measurement of.
-        "tl_yes": _bucket([(r[0], r[1]) for r in rows if r[14] is not None
-                           and 0 <= r[14] <= TRENDLINE_CONFLUENCE_BARS]),
-        "tl_no": _bucket([(r[0], r[1]) for r in rows if r[14] is not None
-                          and (r[14] == -1
-                               or r[14] > TRENDLINE_CONFLUENCE_BARS)]),
         # Breadth, on the threshold the study found rather than as a gradient:
         # the effect is a step at 8, not a slope, and it failed its
         # pre-registration for exactly that reason. r[15] == 0 means the row

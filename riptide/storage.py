@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
-from . import exhaust, journal, market, tracker, watch
+from . import journal, market, tracker, watch
 from .config import DB_PATH, INTERVAL
 from .engine import Early, Setup, Sweep
 
@@ -35,12 +35,11 @@ def db_init():
     tracker.init(db)
     market.init(db)
     journal.init(db)
-    # The trendline watch. Its own table, and deliberately not part of any of
-    # the above: it is a heads-up list, nothing in it is a trade, and none of
-    # it may reach the tables /stats scores.
+    # Every heads-up watch shares one table, and it is deliberately not part of
+    # any of the above: nothing in it is a trade, and none of it may reach the
+    # tables /stats scores. One call covers every registered indicator, so
+    # adding one does not mean remembering to add a line here.
     watch.init(db)
-    # The exhaustion watch, for the same reason and on the same terms.
-    exhaust.init(db)
     return db
 
 

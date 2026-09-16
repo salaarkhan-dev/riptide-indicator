@@ -522,106 +522,7 @@ SWEEP_SRC = ({s.strip() for s in _sweep_src.split(",") if s.strip()}
              if _sweep_src else None)
 
 
-# ---------------------------------------------------------------- trendline
-# The Liquidity Trendline watch: a heads-up when price closes clear of a
-# descending resistance or an ascending support built from confirmed pivots.
-# riptide/trendline.py is an exact port of the published indicator.
-#
-# THIS IS NOT A TRADE AND MUST NOT BE READ AS ONE. The same breakout went
-# through the same scorer as everything else in this project
-# (research/studies/trendline_measure.py): net R per signal is NEGATIVE on both
-# halves of the window and indistinguishable from a random entry of the same
-# shape. It carries no entry, no stop and no grade, and it never arms outcome
-# tracking — there is no trade to track. What it is for is the thing
-# TradingView cannot do: watch sixty charts at once and say which one just
-# did something.
-#
-# THE TIMEFRAME IS THE WHOLE DESIGN, because a heads-up fails by arriving too
-# often to read rather than by losing money. Measured over 60 symbols
-# (research/studies/trendline_rate.py):
-#
-#     timeframe   per symbol/day   ACROSS THE UNIVERSE   worst single close
-#     15m               1.82              109 a day            29 at once
-#     30m               0.87               52                  21
-#     1h                0.42               25                  16
-#     4h                0.11                7  <- the default  20
-#
-# 109 a day is not an alert service, it is a feed, and the 15m chart is the
-# one it is most tempting to set this to. 4h is roughly seven a day.
-#
-# Those bursts are why the watch sends ONE DIGEST per bar close rather than one
-# message per break: twenty separate messages arriving in the same second is
-# both unreadable and past Telegram's per-chat rate limit, and a market-wide
-# move is exactly when it would happen.
-TRENDLINE_ALERTS = os.getenv("RIPTIDE_TRENDLINE_ALERTS", "1") == "1"
-# More than one is allowed and 15m+30m+1h is the default, because a 1h close is
-# also a 30m and a 15m close: all three land in the SAME digest rather than in
-# three messages, and a symbol that breaks on several at once is shown once, on
-# the slowest. Min60 was added 11 Sep so the watch covers every timeframe the
-# bot scans; it is the cheapest of the three at 25 breaks a day across the
-# universe against 52 and 109. The raw rate for the set is 186 a day, which is
-# not readable — the slope gate below is what makes it viable, and it is not
-# optional at these speeds.
-TRENDLINE_INTERVALS = tuple(dict.fromkeys(
-    i.strip() for i in
-    os.getenv("RIPTIDE_TRENDLINE_INTERVALS",
-              "Min15,Min30,Min60").split(",")
-    if i.strip())) or ("Hour4",)
-# Pivot length and channel padding, matching the indicator's own defaults. Left
-# configurable because they are the indicator's inputs and someone comparing
-# against a chart set differently needs to be able to match it — not because
-# any value here has been measured as better. None has.
-TRENDLINE_PIVOT = int(os.getenv("RIPTIDE_TRENDLINE_PIVOT", "5"))
-TRENDLINE_SPACE = float(os.getenv("RIPTIDE_TRENDLINE_SPACE", "2.0"))
-# THE STEEPNESS GATE, in |slope| / ATR(200) at the break. A flat line is a
-# horizontal level, and price crossing a horizontal level is the most ordinary
-# thing a chart does; a steeply descending resistance broken upward is at least
-# a picture worth looking at. This drops the flat ones.
-#
-# IT IS A VOLUME CONTROL AND NOT A QUALITY FILTER, and that distinction was
-# measured rather than assumed — research/studies/trendline_slope.py, 9082
-# breaks at Min15 and 4327 at Min30, asking whether steep breaks follow through
-# more often than flat ones over the next 8 bars:
-#
-#     Min15 discovery   flat 43.4%   steep 52.4%   +9.0pp   +4.4 SE
-#     Min15 HELD OUT    flat 46.0%   steep 43.0%   -3.1pp   -1.4 SE
-#     Min30 HELD OUT    flat 43.8%   steep 44.0%   +0.2pp   +0.1 SE
-#
-# The discovery half said steep breaks continue nine points more often at 4.4
-# SE. The held-out half REVERSED it. That is what a fitted result looks like,
-# and the only reason it was caught is that the threshold was chosen on one
-# half and read on the other. If anything the lean is the other way: steep
-# breaks' adverse excursion grows faster than their favourable one, on both
-# timeframes held out. So this filter buys READABILITY, nothing more, and
-# nothing in the alert claims otherwise.
-#
-# What it does buy, on the same measurement:
-#
-#     >= 0.00   100% kept   161 a day at 15m+30m   unreadable
-#     >= 0.05    68%        110
-#     >= 0.10    39%         63
-#     >= 0.15    20%         32   <- the default
-#     >= 0.20    10%         16
-#
-# Continuation sits at 44-48% at every threshold on both halves, against a 50%
-# coin flip. These breaks very slightly MEAN REVERT. That is the fourth
-# independent measurement in this project pointing the same way and it is the
-# reason the digest says "not a trade" in the message itself.
-TRENDLINE_MIN_SLOPE = float(os.getenv("RIPTIDE_TRENDLINE_MIN_SLOPE", "0.15"))
-
-
-# Same rule as every other freshness window here: minimum 2, because a bar
-# that has just closed is already one full step old. See _min_fresh.
-TRENDLINE_FRESH_BARS = int(os.getenv("RIPTIDE_TRENDLINE_FRESH_BARS", "2"))
-# Lines in one digest before it says "+N more". 20 is the worst single 4h
-# close in the measured window, so in practice this trims nothing — it is there
-# so a market-wide move on a faster timeframe cannot turn the digest into a
-# wall. Telegram's own 4096-character cap is enforced separately and is the
-# guarantee that the message sends at all; see watch.MAX_CHARS.
-TRENDLINE_MAX_LINES = int(os.getenv("RIPTIDE_TRENDLINE_MAX_LINES", "20"))
-
-
-# ── EXHAUSTION COUNTS (riptide/exhaust.py) ──────────────────────────────────
+# ── EXHAUSTION COUNTS (riptide/indicators/exhaust.py) ──────────────────────────────────
 #
 # IT SHIPS OFF. The counts are a chart aid whose only measurement came back
 # pointing the wrong way, so the stream is built, tested and dormant: turn it on
@@ -645,8 +546,7 @@ TRENDLINE_MAX_LINES = int(os.getenv("RIPTIDE_TRENDLINE_MAX_LINES", "20"))
 #
 # So when it is switched on it starts in the quiet corner of that table: 1h
 # only, and a plain 9 must be PERFECTED to count. ~34 a day over at most 24
-# hourly closes, which sits beside the trendline digest's ~37. Widen it
-# deliberately, using the table above.
+# hourly closes. Widen it deliberately, using the table above.
 #
 # AND THE MEASUREMENT WAS NOT MERELY ABSENT, IT CAME BACK NEGATIVE. A 🎯
 # landing near a completed count scored no better, and the OPPOSITE direction
@@ -667,8 +567,9 @@ if EXHAUST_KINDS not in ("both", "momentum", "terminal"):
 # is the weakest thing the indicator prints and the most likely to be misread.
 EXHAUST_PERFECT_ONLY = os.getenv("RIPTIDE_EXHAUST_PERFECT_ONLY", "1") == "1"
 EXHAUST_FRESH_BARS = int(os.getenv("RIPTIDE_EXHAUST_FRESH_BARS", "2"))
-# Same cap and same reason as TRENDLINE_MAX_LINES above: the 4096-character
-# limit is what guarantees the message sends, this is what keeps it readable.
+# Lines in one digest before it says "+N more". Telegram's own 4096-character
+# cap is enforced separately and is the guarantee that the message sends at
+# all (watch.MAX_CHARS); this is what keeps it readable.
 EXHAUST_MAX_LINES = int(os.getenv("RIPTIDE_EXHAUST_MAX_LINES", "20"))
 
 
@@ -696,8 +597,6 @@ def _min_fresh(name: str, value: int) -> int:
 
 FRESH_BARS = _min_fresh("RIPTIDE_FRESH_BARS", FRESH_BARS)
 SWEEP_FRESH_BARS = _min_fresh("RIPTIDE_SWEEP_FRESH_BARS", SWEEP_FRESH_BARS)
-TRENDLINE_FRESH_BARS = _min_fresh("RIPTIDE_TRENDLINE_FRESH_BARS",
-                                  TRENDLINE_FRESH_BARS)
 EXHAUST_FRESH_BARS = _min_fresh("RIPTIDE_EXHAUST_FRESH_BARS",
                                 EXHAUST_FRESH_BARS)
 
@@ -865,28 +764,3 @@ def build_id() -> str:
         if value:
             return value
     return "unknown"
-
-# How recent a same-direction trendline breakout has to be to count as
-# CONFLUENCE on a trade alert, in bars of that signal's own timeframe.
-#
-# NOT COSMETIC, AND THE FIRST LIVE CHECK PROVED IT. The tag stores the raw
-# bars-since-break, and without this window 667 of 1662 signals — 40% — carried
-# a "confluence" whose most recent break was 38, 69 or 108 bars old. The
-# measured effect does not survive anywhere near that far:
-#
-#     window   kept   difference vs no break
-#        3      1%          +0.126
-#        5      2%          +0.178
-#       10      3%          +0.206   <- this
-#       20     10%          +0.052
-#       40     26%          -0.002
-#
-# 10 is CFG.early_max_bars, which is the engine's own notion of "recent enough
-# to be the same event", and it was fixed in advance rather than read off that
-# table. A marker on 40% of alerts would mean nothing and would still look like
-# it meant something, which is worse than not having one.
-#
-# The raw distance is stored regardless, so a different window can be measured
-# later from rows already on disk without re-recording anything.
-TRENDLINE_CONFLUENCE_BARS = int(
-    os.getenv("RIPTIDE_TRENDLINE_CONFLUENCE_BARS", "0")) or CFG.early_max_bars

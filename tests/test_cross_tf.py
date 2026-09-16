@@ -111,7 +111,6 @@ def test_it_reaches_the_alert():
     a = Sig("BTC_USDT", True, "Min15", 10_000)
     b = Sig("BTC_USDT", True, "Min60", 10_000)
     tag_cross_tf(wrap([a, b]))
-    a.tl_break = -1
     out = move_row(a)
     assert "also 1h" in out, out
 

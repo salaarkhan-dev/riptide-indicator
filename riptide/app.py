@@ -10,8 +10,8 @@ import time
 import aiohttp
 
 from . import telegram as tg
-from . import exhaust
 from . import watch
+from .indicators import all_indicators
 from .config import (BAR_SECONDS, CFG_OVERRIDES, ENTRY_INTERVAL, INTERVAL,
                      INTERVALS, POI_REQUIRED, SCAN_ON_START, TG_COMMANDS,
                      build_id, log)
@@ -100,22 +100,24 @@ async def main() -> None:
                               "will retry", e)
 
         tasks = [asyncio.create_task(scan_loop(sess, db, state), name="scan")]
-        # The trendline watch, on its own timer. Always started, because it
-        # reads its on/off switch every wake — so /trendline on works without a
-        # restart, and an idle loop costs one sleep per bar close.
-        tasks.append(asyncio.create_task(
-            watch.watch_loop(sess, db, state), name="trendline"))
-        if watch.enabled(db):
-            log.info("trendline watch on, %s bars, slope >= %.2f",
-                     "+".join(watch.intervals(db)), watch.min_slope(db))
-        # The exhaustion watch, on the same terms: always started so /exhaust
-        # works without a restart, and an idle loop costs one sleep per close.
-        tasks.append(asyncio.create_task(
-            exhaust.exhaust_loop(sess, db, state), name="exhaust"))
-        if exhaust.enabled(db):
-            log.info("exhaustion watch on, %s bars, %s%s",
-                     "+".join(exhaust.intervals(db)), exhaust.kinds(db),
-                     ", perfected only" if exhaust.perfect_only(db) else "")
+        # One loop per REGISTERED indicator, each on its own timer. Always
+        # started, because each reads its own on/off switch every wake — so
+        # `/exhaust on` works without a restart, and an idle loop costs one
+        # sleep per bar close.
+        #
+        # There is nothing to add here when an indicator is added: the set is
+        # the import list in riptide/indicators/__init__.py, and this walks it.
+        # That is the point of the registry — the previous arrangement needed a
+        # new branch here, in storage.py and in commands.py, and the second
+        # watch shipped by copying all three.
+        for ind in all_indicators():
+            tasks.append(asyncio.create_task(
+                watch.watch_loop(sess, db, ind, state), name=ind.name))
+            if watch.enabled(db, ind):
+                log.info("%s watch on, %s bars%s", ind.name,
+                         "+".join(watch.intervals(db, ind)),
+                         "".join(f", {k} {v}" for k, v
+                                 in watch.settings(db, ind).items()))
         if TG_COMMANDS:
             tasks.append(asyncio.create_task(
                 command_loop(sess, db, state), name="commands"))

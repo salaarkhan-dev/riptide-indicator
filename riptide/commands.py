@@ -13,12 +13,12 @@ import time
 import aiohttp
 
 from . import exchange
-from . import exhaust
 from . import journal
 from . import telegram as tg
 from . import market
 from . import tracker
 from . import watch
+from .indicators import all_indicators, get as get_indicator
 from .config import (BAR_SECONDS, CFG_OVERRIDES, DI_INTERVAL, ENTRY_INTERVAL,
                      MAX_SWEEP_RVOL, MIN_REQUEST_GAP,
                      INTERVAL, INTERVALS, LOG_MARKET, MIN_GRADE, POI_INTERVAL,
@@ -51,8 +51,8 @@ HELP = (
     "/oi — export the open-interest table as a file\n"
     "/scan — run a scan now\n"
     "/trend on|off — filter setups by the higher-timeframe trend\n"
-    "/trendline on|off|4h — trendline-break heads-ups (not trades)\n"
-    "/exhaust on|off|30m — 9 and 13 count heads-ups (not trades)\n"
+    + "".join(f"/{i.name} on|off|30m — {i.title.lower()} heads-ups "
+              f"(not trades)\n" for i in all_indicators()) +
     "/pause — record setups but stop sending\n"
     "/resume — start sending again\n"
     "/update — check GitHub for a new build now\n"
@@ -116,13 +116,6 @@ LEGEND = (
     "Its live rate per band is in /book and /stats. With a POI required, "
     "every confirmed alert that clears the floor is already an A.\n\n"
 
-    "<b>context · 📐 up/down Nb ago</b> — a trendline break agreeing with "
-    "the trade.\n"
-    "<b>UNPROVEN.</b> Offline it came out +0.206 R over 3773 early signals "
-    "and cleared a placebo floor in all five panels, but only +0.7 SE on "
-    "the held-out half. It gates nothing and is being measured forward in "
-    "/stats.\n\n"
-
     "<b>move · N symbols</b> — how many charts fired the same direction in "
     "this window.\n"
     "<b>This is about size, not quality.</b> The worst "
@@ -150,7 +143,6 @@ LEGEND = (
     "positions at once. Yours cannot: at 1% risk, capped at five open, 1441 "
     "signals were already skipped for margin, and at ten open the same year "
     "returned -39%. The choice is not 'six trades or one', it is 'which three "
-    "of the six' — this names the first.\n"
     "of the six' — this names the first.\n\n"
 
     "<b>Stop · 2.34% · tight / normal / wide</b> — how far the stop sits "
@@ -378,49 +370,10 @@ def status_text(db, state) -> str:
                           f"{d['stale']} stale · {d['poi']} no POI · "
                           f"{d.get('grade', 0)} low grade · "
                           f"{d['sent']} sent\n")
-    # The watch is a separate product on a separate timer, so it gets its own
-    # line rather than being folded into the alert line — "alerts on" saying
-    # nothing about whether the heads-ups are running would be the same kind of
-    # silence the gate counters exist to remove.
-    if watch.enabled(db):
-        tl_n = db.execute("SELECT COUNT(*) FROM seen_trendline").fetchone()[0]
-        tl_line = (f"{'+'.join(tg.tf_label(t) for t in watch.intervals(db))}"
-                   f" · slope ≥ {watch.min_slope(db):.2f} · ~{_tl_rate(db)}"
-                   f"/day · {tl_n} recorded · not in /stats")
-        # WHY THE LAST CLOSE WAS QUIET, if it was. A lifetime row count cannot
-        # tell "18 breaks, all too flat" from "the loop never woke", and those
-        # are the two things worth telling apart when nothing has arrived.
-        c = watch.last_cycle
-        if c:
-            tl_line += (f"\n           last close {_fmt_ago(time.time() - c['at'])}"
-                        f" ago · {c['seen'] + c['flat']} break(s) · "
-                        f"{c['flat']} too flat · {c['dupe']} already sent · "
-                        f"{c['stale']} not fresh · {c['sent']} SENT")
-            if c["failed"]:
-                tl_line += f" · {c['failed']} FETCH FAILED"
-        else:
-            tl_line += "\n           no close scanned yet since restart"
-    else:
-        tl_line = "off · /trendline on"
-    # Same treatment for the exhaustion watch, and for the same reason: it runs
-    # on its own timer, so "alerts on" says nothing about whether it woke.
-    if exhaust.enabled(db):
-        ex_n = db.execute("SELECT COUNT(*) FROM seen_exhaust").fetchone()[0]
-        ex_line = (f"{'+'.join(tg.tf_label(t) for t in exhaust.intervals(db))}"
-                   f" · {exhaust.kinds(db)}"
-                   f"{' · perfected only' if exhaust.perfect_only(db) else ''}"
-                   f" · ~{_ex_rate(db)}/day · {ex_n} recorded · not in /stats")
-        c = exhaust.last_cycle
-        if c:
-            ex_line += (f"\n           last close {_fmt_ago(time.time() - c['at'])}"
-                        f" ago · {c['seen']} found · {c['dupe']} already sent "
-                        f"· {c['stale']} not fresh · {c['sent']} SENT")
-            if c["failed"]:
-                ex_line += f" · {c['failed']} FETCH FAILED"
-        else:
-            ex_line += "\n           no close scanned yet since restart"
-    else:
-        ex_line = "off · /exhaust on"
+    # One line per registered watch. See watch_line() for why each gets its
+    # own row rather than being folded into the alert line.
+    watch_lines = "".join(f"{i.name:<11}{watch_line(db, i)}\n"
+                          for i in all_indicators())
     poi_line = ("POI required" if POI_REQUIRED else "POI not required")
     poi_line += (f" · grade {MIN_GRADE} and better"
                  if MIN_GRADE != "C" else " · all grades")
@@ -445,8 +398,7 @@ def status_text(db, state) -> str:
         f"filter     {poi_line}\n"
         f"trend      {trend_line}\n"
         f"outcomes   {track_line}\n"
-        f"trendline  {tl_line}\n"
-        f"exhaust    {ex_line}\n"
+        + watch_lines +
         f"oi log     {oi_line}\n"
         f"uptime     {_fmt_ago(time.time() - state.get('started', time.time()))}\n"
         f"last scan  {scan_line}\n"
@@ -466,32 +418,21 @@ def _bucket_line(name: str, b: dict) -> str:
             f"{b['setups']:>3} setups · {b['win_pct']:.0f}% win")
 
 
-def _tl_block(s) -> str:
-    """The trendline-confluence rows in /stats, or a note saying why not yet.
+def _trial_block(s) -> str:
+    """The /stats rows that are ON TRIAL — measured forward, gating nothing.
 
-    Shown even when thin, because the whole reason the column exists is that
+    Shown even when thin, because the whole reason these columns exist is that
     the offline result was not strong enough to act on and only forward data
-    can settle it. Hiding the sample until it is big would mean never watching
-    it grow.
+    can settle it. Hiding a sample until it is big would mean never watching it
+    grow.
 
-    The SE is on every line deliberately. The offline difference was +0.206 R
-    with 128 signals behind it and it still failed at +0.7 SE on the held-out
+    The SE is on every line deliberately. One of these differences was +0.206 R
+    with 128 signals behind it and still failed at +0.7 SE on the held-out
     half; a mean printed without its error bar is how that becomes a decision.
+    (That one was the trendline confluence, and it is gone — the indicator it
+    read was removed after its own measurements kept coming back flat.)
     """
-    yes, no = s.get("tl_yes") or {}, s.get("tl_no") or {}
-    ny, nn = yes.get("setups", 0), no.get("setups", 0)
-    if not (ny or nn):
-        return ""
-    out = ["", "<b>📐 trendline confluence</b>  <i>measured, not filtered</i>"]
-    out.append(_bucket_line("with 📐", yes) if ny >= 1 else "with 📐     —")
-    out.append(_bucket_line("without", no) if nn >= 1 else "without     —")
-    if ny >= 10 and nn >= 10:
-        d = yes["r_setup"] - no["r_setup"]
-        dse = (yes["se_setup"] ** 2 + no["se_setup"] ** 2) ** 0.5
-        out.append(f"{'difference':<12}{d:+.3f} ± {dse:.3f}"
-                   f"   {d / dse if dse else 0:+.1f} SE")
-    out.append("<i>offline: +0.206 R over 3773 signals but only +0.7 SE held "
-               "out, so it is on trial. It changes nothing that is sent.</i>")
+    out: list = []
     wide, narrow = s.get("wide") or {}, s.get("narrow") or {}
     if wide.get("setups") or narrow.get("setups"):
         out += ["", "<b>🔗 cycle breadth</b>  <i>measured, not filtered</i>"]
@@ -617,253 +558,144 @@ def stats_text(db) -> str:
     # Last, and separate, because it is the one block on trial rather than
     # reporting. Folding it in with the grades would put a candidate beside
     # measurements that have already replicated.
-    body += _tl_block(s)
+    body += _trial_block(s)
     return body
 
 
-# The measured alert rate per timeframe, across 60 symbols, at slope >= 0
-# (research/studies/trendline_rate.py). Printed by /trendline because the
-# timeframe IS the product decision here: a heads-up fails by arriving too
-# often to read, and this is the only number that says whether it will.
-TRENDLINE_RATE = {"Min15": 109, "Min30": 52, "Min60": 25, "Hour4": 7}
-# What fraction of breaks each steepness gate keeps, measured over 9082 breaks
-# at Min15 and 4327 at Min30 — the two curves agreed to within a point, so one
-# table covers both. See research/studies/trendline_slope.py.
-TRENDLINE_KEEP = ((0.0, 1.00), (0.05, 0.68), (0.10, 0.39), (0.15, 0.20),
-                  (0.20, 0.10), (0.30, 0.02))
-# What a human types, and what the exchange calls it.
+# What a human types for a timeframe, and what the exchange calls it.
 _TF_WORD = {v: k for k, v in tg.TF_LABEL.items()}
 
 
-def _tl_rate(db) -> int:
-    """Alerts a day at the current timeframes and steepness gate."""
-    floor = watch.min_slope(db)
-    keep = 1.0
-    for cut, frac in TRENDLINE_KEEP:
-        if floor >= cut:
-            keep = frac
-    return round(sum(TRENDLINE_RATE.get(t, 0) for t in watch.intervals(db))
-                 * keep)
+def watch_line(db, ind) -> str:
+    """One watch's row in /status.
+
+    A watch is a separate product on a separate timer, so it gets its own line
+    rather than being folded into the alert line — "alerts on" saying nothing
+    about whether the heads-ups are running would be the same kind of silence
+    the gate counters exist to remove.
+    """
+    if not watch.enabled(db, ind):
+        return f"off · /{ind.name} on"
+    opts = "".join(f" · {v}" if o.kind == "choice"
+                   else (f" · {o.key}" if v is True else "")
+                   for o in ind.options for v in (watch.setting(db, ind, o.key),))
+    rate = f" · ~{ind.rate(db)}/day" if ind.rate else ""
+    line = (f"{'+'.join(tg.tf_label(t) for t in watch.intervals(db, ind))}"
+            f"{opts}{rate} · {watch.recorded(db, ind)} recorded · not in /stats")
+    # WHY THE LAST CLOSE WAS QUIET, if it was. A lifetime row count cannot tell
+    # "18 found, all below the gate" from "the loop never woke", and those are
+    # the two things worth telling apart when nothing has arrived.
+    c = watch.last_cycle.get(ind.name)
+    if not c:
+        return line + "\n           no close scanned yet since restart"
+    line += (f"\n           last close {_fmt_ago(time.time() - c['at'])}"
+             f" ago · {c['seen'] + c['dropped']} found · "
+             f"{c['dropped']} below its gates · {c['dupe']} already sent · "
+             f"{c['stale']} not fresh · {c['sent']} SENT")
+    if c["failed"]:
+        line += f" · {c['failed']} FETCH FAILED"
+    return line
 
 
-def trendline_cmd(db, text: str) -> str:
-    """/trendline — read the state, or set the switch, timeframes or slope."""
+def watch_cmd(db, ind, text: str) -> str:
+    """`/<name>` for any registered indicator — read the state, or set the
+    switch, the timeframes, or any Option the indicator declared.
+
+    ONE implementation for every watch. The previous arrangement had one of
+    these per indicator, ~90 lines each, and the second was written by copying
+    the first; what actually differs between them is the prose and the rate
+    model, and both of those now live on the Indicator.
+    """
     parts = text.strip().split()
     arg = parts[1].lower() if len(parts) > 1 else ""
+    rate_of = ind.rate or (lambda db, **kw: 0)
 
     if arg in ("on", "off"):
-        watch.set_enabled(db, arg == "on")
-        return (f"Trendline heads-ups <b>{arg.upper()}</b> · "
-                f"{'+'.join(tg.tf_label(t) for t in watch.intervals(db))}"
-                + (f"\n<i>about {_tl_rate(db)} a day across the universe, in "
+        watch.set_enabled(db, ind, arg == "on")
+        return (f"{ind.title.capitalize()} heads-ups <b>{arg.upper()}</b> · "
+                f"{'+'.join(tg.tf_label(t) for t in watch.intervals(db, ind))}"
+                + (f"\n<i>about {rate_of(db)} a day across the universe, in "
                    f"one digest per bar close.</i>" if arg == "on" else "")
-                + "\n\n<i>This overrides RIPTIDE_TRENDLINE_ALERTS in "
-                  "riptide.conf and survives updates, so a change on GitHub "
-                  "will not take effect until you set it back the other "
-                  "way.</i>")
+                + f"\n\n<i>This overrides RIPTIDE_{ind.name.upper()}_ALERTS in "
+                  f"riptide.conf and survives updates, so a change on GitHub "
+                  f"will not take effect until you set it back the other "
+                  f"way.</i>")
 
-    if arg == "slope":
-        try:
-            v = float(parts[2])
-        except (IndexError, ValueError):
-            return ("<code>/trendline slope 0.15</code> — the minimum "
-                    "steepness of the broken line, in ATR per bar.\n\n"
-                    + "\n".join(f"  <code>{c:.2f}</code>  keeps {f:.0%} of "
-                                f"breaks" for c, f in TRENDLINE_KEEP)
-                    + "\n\n<i>0 sends every break, including flat lines.</i>")
-        watch.set_min_slope(db, v)
-        return (f"Steepness gate <b>{max(0.0, v):.2f}</b> ATR per bar · about "
-                f"<b>{_tl_rate(db)} a day</b> now.\n"
+    # A choice Option accepts its value bare — `/exhaust terminal` rather than
+    # `/exhaust kinds terminal`. Those words are unambiguous and they are what
+    # the help text has always shown.
+    for o in ind.options:
+        if o.kind == "choice" and arg in o.choices:
+            parts = [parts[0], o.key, arg]
+            arg = o.key
+            break
+
+    o = ind.option(arg)
+    if o is not None:
+        raw = parts[2].lower() if len(parts) > 2 else ("on" if o.kind == "bool"
+                                                       else "")
+        v = o.parse(raw)
+        if v is None:
+            allowed = ("on / off" if o.kind == "bool"
+                       else " / ".join(o.choices) if o.kind == "choice"
+                       else f"a number from {o.lo:g} to {o.hi:g}")
+            return (f"<code>/{ind.name} {o.key} …</code> takes {allowed}.\n\n"
+                    f"<i>{o.blurb}</i>")
+        watch.set_setting(db, ind, o.key, v)
+        shown = ("ON" if v is True else "off" if v is False else v)
+        return (f"<b>{o.key}: {shown}</b> · about "
+                f"<b>{rate_of(db)} a day</b>.\n"
                 f"Takes effect at the next close — no restart.\n\n"
-                f"<i>This is a VOLUME dial, not a quality one, and that was "
-                f"measured rather than assumed: steep breaks looked 9 points "
-                f"better on the discovery half at 4.4 SE and the held-out half "
-                f"reversed it. Steeper means fewer and better-looking, not "
-                f"more likely to work.</i>")
+                f"<i>{o.blurb}</i>")
 
     if arg:
         want = []
         for w in arg.replace("+", ",").split(","):
             w = w.strip()
             tf = _TF_WORD.get(w, w if w in BAR_SECONDS else "")
-            if tf not in TRENDLINE_RATE:
+            if ind.tf_counted and tf not in ind.tf_counted:
                 return ("Timeframes must come from "
                         + ", ".join(f"<code>{tg.tf_label(t)}</code>"
-                                    for t in TRENDLINE_RATE)
-                        + " — e.g. <code>/trendline 15m,30m</code>.\n\n"
+                                    for t in ind.tf_counted)
+                        + f" — e.g. <code>/{ind.name} "
+                        + ",".join(tg.tf_label(t)
+                                   for t in ind.tf_counted[:2]) + "</code>.\n\n"
                           "<i>Not because the others would break anything — "
-                          "because those are the four whose alert rate has "
+                          "because those are the ones whose alert rate has "
                           "been counted, and the rate is the only thing that "
                           "decides whether this stays readable.</i>")
+            if not tf:
+                return f"<code>{w}</code> is not a timeframe I know."
             want.append(tf)
-        watch.set_intervals(db, want)
-        rate = _tl_rate(db)
+        watch.set_intervals(db, ind, want)
+        n = rate_of(db)
         warn = ("\n\n⚠️ <i>That is a feed, not an alert. Anything you scroll "
-                "past also buries the ones you would have opened. "
-                "<code>/trendline slope 0.2</code> thins it.</i>"
-                if rate > 40 else "")
-        return (f"Trendline heads-ups now on <b>"
+                "past also buries the ones you would have opened.</i>"
+                if n > 80 else "")
+        return (f"{ind.title.capitalize()} heads-ups now on <b>"
                 f"{'+'.join(tg.tf_label(t) for t in want)}</b> · about "
-                f"<b>{rate} a day</b> at slope "
-                f"{watch.min_slope(db):.2f}.\nTakes effect at the next close "
+                f"<b>{n} a day</b>.\nTakes effect at the next close "
                 f"— no restart." + warn)
 
-    on = watch.enabled(db)
-    tfs = watch.intervals(db)
-    floor = watch.min_slope(db)
+    tfs = watch.intervals(db, ind)
+    opts = "".join(f" · {v}" if o.kind == "choice" else f" · {o.key}"
+                   for o in ind.options
+                   for v in (watch.setting(db, ind, o.key),)
+                   if o.kind != "bool" or v is True)
     rows = "\n".join(
-        f"  <code>/trendline {tg.tf_label(t):<4}</code> ~{n:>3} a day on its "
-        f"own" + ("   <b>← watched</b>" if t in tfs else "")
-        for t, n in TRENDLINE_RATE.items())
-    return (f"<b>Trendline breakout heads-ups</b> — "
-            f"{'ON' if on else 'off'} · "
-            f"{'+'.join(tg.tf_label(t) for t in tfs)} · slope ≥ {floor:.2f} · "
-            f"<b>~{_tl_rate(db)} a day</b>\n\n"
-            f"<i>A break of a trendline drawn from confirmed pivots, on every "
-            f"symbol at once, in one digest per bar close. The whole candle "
-            f"has to clear the line — wick included — which is stricter than "
-            f"closing beyond it, and it is exactly the blue and red arrows on "
-            f"the chart.</i>\n\n"
-            f"<b>It is not a trade.</b> <i>The same break was scored through "
-            f"the same harness as everything else here and came out NEGATIVE "
-            f"per signal and indistinguishable from a random entry. Over the "
-            f"next 8 bars it continues 44-48% of the time against a 50% coin "
-            f"flip. There is no entry, no stop and no grade on it, and it is "
-            f"not in /stats — there is no outcome to score.</i>\n\n"
-            f"<b>Rate per timeframe</b>, 60 symbols, before the slope "
-            f"gate:\n{rows}\n\n"
-            f"<code>/trendline 15m,30m</code> — watch both\n"
-            f"<code>/trendline slope 0.2</code> — steeper lines only, fewer\n"
-            f"<code>/trendline off</code> — stop them")
-
-
-# Completed counts a day per timeframe, as (M9, M9 perfected, T13), measured
-# over 59 symbols and 333 days in research/studies/exhaust_rate.py. It is the
-# number that set every default: all three timeframes unfiltered is 295 rows a
-# day, three and a half times the bot's entire alert volume. Printed by
-# /exhaust for the same reason /trendline prints its own — the rate is the
-# product decision, not a footnote to it.
-EXHAUST_RATE = {"Min15": (128, 96, 40),
-                "Min30": (66, 49, 19),
-                "Min60": (34, 24, 9)}
-
-
-def _ex_rate(db, tfs=None, want=None, perfect=None) -> int:
-    """Alerts a day at a given setting. Defaults to the live one, and takes
-    overrides so a message can quote the rate a change WOULD produce."""
-    tfs = tuple(tfs) if tfs is not None else exhaust.intervals(db)
-    want = want if want is not None else exhaust.kinds(db)
-    perfect = perfect if perfect is not None else exhaust.perfect_only(db)
-    total = 0
-    for t in tfs:
-        nine, nine_perf, thirteen = EXHAUST_RATE.get(t, (0, 0, 0))
-        if want in ("both", "momentum"):
-            total += nine_perf if perfect else nine
-        if want in ("both", "terminal"):
-            total += thirteen
-    return total
-
-
-def exhaust_cmd(db, text: str) -> str:
-    """/exhaust — read the state, or set the switch, timeframes, kind or
-    the perfected-only gate."""
-    parts = text.strip().split()
-    arg = parts[1].lower() if len(parts) > 1 else ""
-
-    if arg in ("on", "off"):
-        exhaust.set_enabled(db, arg == "on")
-        return (f"Exhaustion heads-ups <b>{arg.upper()}</b> · "
-                f"{'+'.join(tg.tf_label(t) for t in exhaust.intervals(db))}"
-                + (f"\n<i>about {_ex_rate(db)} a day across the universe, in "
-                   f"one digest per bar close.</i>" if arg == "on" else "")
-                + "\n\n<i>This overrides RIPTIDE_EXHAUST_ALERTS in "
-                  "riptide.conf and survives updates, so a change on GitHub "
-                  "will not take effect until you set it back the other "
-                  "way.</i>")
-
-    if arg in ("both", "momentum", "terminal"):
-        exhaust.set_kinds(db, arg)
-        which = {"both": "both counts",
-                 "momentum": "the 9-count only (M9)",
-                 "terminal": "the 13-count only (T13)"}[arg]
-        return (f"Now sending <b>{which}</b> · about <b>{_ex_rate(db, want=arg)}"
-                f" a day</b>.\nTakes effect at the next close — no restart.\n\n"
-                f"<i>The 13-count is the rarer and stronger of the two and is "
-                f"about a quarter of the traffic. Neither has a measured edge; "
-                f"this picks how much of nothing you would like to read.</i>")
-
-    if arg in ("perfect", "perfected"):
-        on = not (len(parts) > 2 and parts[2].lower() in ("off", "0", "no"))
-        exhaust.set_perfect(db, on)
-        return (f"Perfected 9s only: <b>{'ON' if on else 'off'}</b> · about "
-                f"<b>{_ex_rate(db, perfect=on)} a day</b>.\n"
-                f"Takes effect at the next close — no restart.\n\n"
-                f"<i>A perfected 9 is the M9★ on the chart: bar 8 or 9 "
-                f"undercut bars 6 and 7. 74% of 9s perfect, so this is not the "
-                f"volume lever the timeframe is — but an unperfected 9 is the "
-                f"weakest thing the indicator prints.</i>")
-
-    if arg:
-        want = []
-        for w in arg.replace("+", ",").split(","):
-            w = w.strip()
-            tf = _TF_WORD.get(w, w if w in BAR_SECONDS else "")
-            if tf not in EXHAUST_RATE:
-                return ("Timeframes must come from "
-                        + ", ".join(f"<code>{tg.tf_label(t)}</code>"
-                                    for t in EXHAUST_RATE)
-                        + " — e.g. <code>/exhaust 30m,1h</code>.\n\n"
-                          "<i>Not because the others would break anything — "
-                          "because those are the three whose alert rate has "
-                          "been counted, and the rate is the only thing that "
-                          "decides whether this stays readable.</i>")
-            want.append(tf)
-        exhaust.set_intervals(db, want)
-        rate = _ex_rate(db, tfs=want)
-        warn = ("\n\n⚠️ <i>That is a feed, not an alert. Anything you scroll "
-                "past also buries the ones you would have opened. "
-                "<code>/exhaust terminal</code> thins it hardest.</i>"
-                if rate > 80 else "")
-        return (f"Exhaustion heads-ups now on <b>"
-                f"{'+'.join(tg.tf_label(t) for t in want)}</b> · about "
-                f"<b>{rate} a day</b>.\nTakes effect at the next close "
-                f"— no restart." + warn)
-
-    on = exhaust.enabled(db)
-    tfs = exhaust.intervals(db)
-    want, perfect = exhaust.kinds(db), exhaust.perfect_only(db)
-    rows = "\n".join(
-        f"  <code>/exhaust {tg.tf_label(t):<4}</code> ~{_ex_rate(db, tfs=(t,)):>3}"
-        f" a day on its own" + ("   <b>← watched</b>" if t in tfs else "")
-        for t in EXHAUST_RATE)
-    return (f"<b>Exhaustion count heads-ups</b> — "
-            f"{'ON' if on else 'off'} · "
-            f"{'+'.join(tg.tf_label(t) for t in tfs)} · {want}"
-            f"{' · perfected only' if perfect else ''} · "
-            f"<b>~{_ex_rate(db)} a day</b>\n\n"
-            f"<i>The 9-count and 13-count off the Riptide reversal indicator, "
-            f"on every symbol at once, in one digest per bar close. A count "
-            f"measures how long a move has been going against itself — a "
-            f"completed one says the move is old, not that it is over.</i>\n\n"
-            f"<b>STRONG LONG</b> / <b>STRONG SHORT</b> <i>are completed "
-            f"13-counts (T13). </i><b>possible long</b> / <b>possible short</b>"
-            f"<i> are completed 9-counts (M9★).</i>\n\n"
-            f"<b>It is not a trade, and this one is worse than that.</b> "
-            f"<i>Scored through the same harness as everything else here, a 🎯 "
-            f"landing near a completed count did no better than one landing "
-            f"anywhere else — and the OPPOSITE direction scored three times as "
-            f"well (+0.273 against +0.093, and +0.296 against +0.057 on the "
-            f"sent stream at 2.3 SE). A signal whose control beats it is a "
-            f"shared regime read backwards. There is no entry, no stop and no "
-            f"grade on it, and it is not in /stats.</i>\n\n"
-            f"<b>Rate per timeframe</b>, at the current kind and gate:\n{rows}\n"
-            f"<i>All three, unfiltered, is 295 rows a day — three and a half "
-            f"times every alert this bot sends, and sixteen times the "
-            f"picks.</i>\n\n"
-            f"<code>/exhaust 30m,1h</code> — watch both\n"
-            f"<code>/exhaust terminal</code> — 13-counts only, far fewer\n"
-            f"<code>/exhaust perfect off</code> — plain 9s too, many more\n"
-            f"<code>/exhaust off</code> — stop them")
+        f"  <code>/{ind.name} {tg.tf_label(t):<4}</code> "
+        f"~{rate_of(db, tfs=(t,)):>3} a day on its own"
+        + ("   <b>← watched</b>" if t in tfs else "")
+        for t in ind.tf_counted)
+    return (f"<b>{ind.title.capitalize()} heads-ups</b> — "
+            f"{'ON' if watch.enabled(db, ind) else 'off'} · "
+            f"{'+'.join(tg.tf_label(t) for t in tfs)}{opts} · "
+            f"<b>~{rate_of(db)} a day</b>\n\n"
+            f"{ind.blurb}\n\n"
+            f"<b>It is not a trade.</b> <i>{ind.evidence}</i>\n\n"
+            + (f"<b>Rate per timeframe</b>, at the current settings:\n{rows}\n\n"
+               if rows else "")
+            + ind.examples)
 
 
 async def handle_command(sess, db, state, text: str) -> None:
@@ -924,11 +756,8 @@ async def handle_command(sess, db, state, text: str) -> None:
                          "survives updates, so a change on GitHub will not take "
                          "effect until you /trend the other way.</i>")
 
-    elif cmd == "trendline":
-        await tg.tg_send(sess, trendline_cmd(db, text))
-
-    elif cmd == "exhaust":
-        await tg.tg_send(sess, exhaust_cmd(db, text))
+    elif get_indicator(cmd) is not None:
+        await tg.tg_send(sess, watch_cmd(db, get_indicator(cmd), text))
 
     elif cmd == "pause":
         meta_set(db, "alerts_paused", "1")
