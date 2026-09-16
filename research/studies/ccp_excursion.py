@@ -7,24 +7,34 @@ cannot rescue one. It exists because `research/CCP_ENTRY_MODELS.md` found a
 null against ONE exit — 2R target, 48-hour horizon — and that leaves a fair
 objection open: maybe the entry is fine and the exit is wrong.
 
-THE STATISTIC THAT SETTLES IT is exit-free. For each entry, walk forward and
-record which happens first: price touches +1R, or −1R, where R is the same
-stop distance the entry study used. Under zero drift that race is 50/50 for
-every entry, at every timeframe, and NO stop/target scheme can beat it —
-optional stopping says a fair game stays fair however you choose to leave it.
-So:
+THE STATISTIC is exit-free. For each entry, walk forward and record which
+happens first: price touches +1R, or −1R, where R is the same stop distance
+the entry study used. On a driftless path that race is fair however you choose
+to leave it — optional stopping — so a fair race means no stop-and-target
+scheme can extract anything, and the 2R/48h null is about the ENTRY.
 
-    P(+1R first) ≈ 50%   →   the path is symmetric. No exit rule helps.
-                             The entry is the problem, not the exit.
-    P(+1R first) >> 50%  →   there IS drift to harvest and the 2R/48h exit
-                             was simply the wrong instrument.
+**50% IS NOT THE REFERENCE, AND READING IT AS ONE IS A MISTAKE THIS FILE MADE
+ONCE.** Bars are discrete: a bar that spans both levels is scored adverse, the
+pessimistic convention, so the statistic sits below 50% even on a perfectly
+driftless path. The first run of this diagnostic read 48% against 50% and
+called it symmetric, which was wrong twice over — wrong reference, and the
+control it was compared against was mis-sized.
 
-Reported alongside it, for the same reason:
+**THE RANDOM CONTROL IS THE REFERENCE.** It carries the same discreteness, the
+same tie-break and — since the fix below — the same risk size. Read the GAP
+between the two rows. Never read a row against 50%.
 
-  * the same race at RANDOM bars, so "grabs are symmetric" can be told apart
-    from "this whole market is symmetric and grabs are no different"
+    grabs ≈ control   →   the path after a grab is like the path anywhere.
+                          No exit rule helps; the entry is the problem.
+    grabs >> control  →   there is an asymmetry, and whether any exit can
+                          harvest it is then an OPEN question needing a prereg.
+
+Reported alongside it:
+
   * MFE and MAE over the horizon, uncapped by any exit, which is what a
-    trailing or partial scheme would be trying to capture
+    trailing or partial scheme would be trying to capture. These are in units
+    of R, so they are only comparable between groups that share a risk size —
+    which the accepted/rejected split does and nothing else here does.
   * the same split by whether the CCP filter accepted the grab
 
 None of this is scored in R and none of it pays fees. It is about the shape of
@@ -127,19 +137,24 @@ def collect(cs, a, sym: str, horizon: int):
         rows.append({"first": first, "mfe": mfe, "mae": mae,
                      "A1": bool(left and right), "A2": bool(right)})
 
-        # One random bar per grab, same direction, same stop SHAPE (the
-        # extreme of the 5 bars around it). Seeded on the grab so the control
-        # is fixed across re-runs.
+        # One random bar per grab, same direction, and — this is the part the
+        # first version got wrong — the SAME RISK as a fraction of price.
+        #
+        # Matching the stop SHAPE instead of the stop SIZE was a confound, not
+        # a control. A grab's stop sits behind the grab wick, so its R is large;
+        # a random bar's 5-bar extreme is small. The +1R/-1R race is far more
+        # sensitive to the pessimistic both-touched rule when R is small, because
+        # more single bars span both levels. The control was therefore penalised
+        # by its own sizing and the grabs looked better for a reason that had
+        # nothing to do with grabs.
+        risk_frac = abs(entry - stop) / entry
         rnd = random.Random(f"x|{sym}|{gb}")
         for _ in range(4):                       # a few tries, then give up
             j = rnd.randrange(CCP_BACK + 20, len(cs) - horizon - 1)
             if a[j] is None:
                 continue
             e2 = cs[j].c
-            s2 = stop_of(cs, j - CCP_BACK, j + CCP_FWD, e2, a[j], is_long)
-            if s2 is None:
-                continue
-            f2, mf2, ma2 = race(cs, j, e2, abs(e2 - s2), is_long, horizon)
+            f2, mf2, ma2 = race(cs, j, e2, e2 * risk_frac, is_long, horizon)
             ctrl.append({"first": f2, "mfe": mf2, "mae": ma2})
             break
     return rows, ctrl
@@ -171,7 +186,8 @@ def line(label: str, rows) -> None:
 async def main() -> None:
     print(__doc__.split("\n\n")[0])
     print("\nPOST-HOC DIAGNOSTIC. No verdict, no prereg, no fees.")
-    print("Under zero drift, +1R first is 50% and no exit rule can beat it.\n")
+    print("Read the GAP between 'every grab' and 'random bars'. A row read")
+    print("against 50% means nothing — see the module docstring.\n")
 
     async with aiohttp.ClientSession() as sess:
         for tf, horizon in TFS:
@@ -183,16 +199,17 @@ async def main() -> None:
                 ctrl += c
             print(f"═══ {tf}  ({horizon} bars = 48h) ═══")
             line("every grab", rows)
-            line("random bars, same shape", ctrl)
+            line("random bars, RISK-MATCHED", ctrl)
             line("CCP accepted (A1)", [r for r in rows if r["A1"]])
             line("CCP rejected", [r for r in rows if not r["A1"]])
             line("right end only (A2)", [r for r in rows if r["A2"]])
             print()
 
-    print("READING IT: if 'every grab' sits at 50% and matches the random")
-    print("control, the path after a grab is symmetric, no exit rule can")
-    print("extract anything from it, and the 2R/48h null in")
-    print("research/CCP_ENTRY_MODELS.md is about the ENTRY, not the exit.")
+    print("READING IT: 50% is NOT the reference. Bars are discrete and a bar")
+    print("spanning both levels is scored adverse, so the statistic is biased")
+    print("below 50% even on a driftless path. THE RANDOM CONTROL IS THE")
+    print("REFERENCE — it carries the same bias at the same risk size. Read")
+    print("only the gap between the two rows, never a row against 50%.")
 
 
 asyncio.run(main())
