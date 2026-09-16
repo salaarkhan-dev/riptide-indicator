@@ -73,7 +73,11 @@ def build(cs, a, horizon: int, sym: str):
     for pv, gb, is_high in grabs(cs, PIVOT, PIVOT):
         sig = gb + CCP_FWD
         lo_i, hi_i = gb - CCP_BACK, gb + CCP_FWD
-        if lo_i < 0 or sig >= len(cs) - 1 or a[sig] is None or a[gb] is None:
+        # sig >= 60 so the EMA slope and the ATR-regime lookbacks exist,
+        # and a[] is None for the first bars however far back the index is.
+        if lo_i < 0 or sig >= len(cs) - 1 or sig < 60:
+            continue
+        if a[sig] is None or a[gb] is None or a[sig - 50] is None:
             continue
         is_long = not is_high
         entry = cs[sig].c
@@ -97,7 +101,7 @@ def build(cs, a, horizon: int, sym: str):
             "with EMA50": (entry > e50[sig]) == is_long,
             "EMA50 rising": e50[sig] > e50[sig - 10],
             "wide stop": abs(entry - stop) / entry > 0.008,
-            "high ATR": a[sig] > a[sig - 50] if sig >= 50 else False,
+            "high ATR": a[sig] > a[sig - 50],
             "level held long": (gb - pv) > 12,
             "grab wick big": (g.h - max(g.o, g.c) if is_high
                              else min(g.o, g.c) - g.l) / rng > 0.4,
