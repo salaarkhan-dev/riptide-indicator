@@ -1,0 +1,29 @@
+Is the FVG edge NET-positive at 4h and 8h?
+
+═══ THE TEST — 23 discovery symbols, fresh above 1h ═══
+  tf     role     syms   days       n    NET R     SE    net Δ      z    gross    drag  risk%     ctlΔ
+  --------------------------------------------------------------------------------------------------
+  Min60  anchor     23   1197    5977    0.039  0.018    0.110   5.43    0.055   0.016   1.63    0.016
+  Hour4  TEST       23   1190    1460    0.043  0.037    0.103   2.50    0.051   0.008   3.46    0.089
+  Hour8  TEST       20   1179     706    0.032  0.052    0.103   1.75    0.038   0.005   4.99    0.030
+
+═══ ARITHMETIC, NOT EVIDENCE — 90 non-discovery symbols, already used for gross ═══
+  tf     role     syms   days       n    NET R     SE    net Δ      z    gross    drag  risk%     ctlΔ
+  --------------------------------------------------------------------------------------------------
+  Min60  —          85   1197   18630    0.038  0.010    0.098   8.65    0.053   0.015   1.78    0.036
+  Hour4  —          81   1190    4508    0.030  0.021    0.051   2.19    0.037   0.007   3.78   -0.007
+  Hour8  —          67   1179    2092    0.062  0.031    0.112   3.20    0.067   0.005   5.45    0.051
+
+═══ VERDICT — the 23-symbol test population only ═══
+  Min60 anchor net +0.039   Hour4 +0.043   Hour8 +0.032
+
+  bar 1  PASS  300+ bets and 300+ days, both
+  bar 2  PASS  net R positive at both
+  bar 3  FAIL  net R beats Min60 net on the same symbols
+  bar 4  PASS  net Δ beats the random-bar control, both
+  bar 5  FAIL  clustered |z| >= 2.0 on net Δ, both
+  power   worst MDE 0.118 R  (adequate)
+
+  → NOT ESTABLISHED
+  Outcome C stands either way, and why 1h is a floor is still
+  unexplained by anything in this sequence.
