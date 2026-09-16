@@ -129,6 +129,43 @@ matches (98%) needed a merge somewhere**, and the rate still climbs roughly
 with the number of windows tried. Whether that is discovery or arithmetic is
 not settled by any count, and this file does not claim it is.
 
+## Was the tightening still needed once the grab gate existed? Yes.
+
+    python3 audit/ccp_threshold_sweep.py
+
+The thresholds went from the CCP sheet's own 0.35 body / 0.50 wick to
+0.15 / 0.70 while the classifier still scanned every bar. The grab gate came
+later and did far more. That raised a fair question — **is the tightening now
+redundant?** — and I assumed for a while that it might be. It is not.
+
+Both ends matching, with the grab gate in place, sweeping the shape:
+
+```
+   body<=  wick>=   Min15   Min30   Min60
+     0.35    0.50   68.4%   69.4%   67.2%    the CCP sheet's own shape
+     0.35    0.60   50.9%   51.3%   48.9%
+     0.25    0.60   43.4%   44.0%   41.7%
+     0.20    0.65   29.6%   29.5%   27.6%
+     0.25    0.70   24.9%   24.3%   21.7%
+     0.15    0.70   16.8%   16.9%   15.1%    SHIPPED
+     0.10    0.75    6.9%    6.7%    6.0%
+```
+
+**At the sheet's own shape, two grabs in three carry the mark at both ends.**
+The gate took the ungated 88% of all bars down to 68% of grabs at those
+thresholds — a real improvement, and still not a detector. The prior and the
+shape test are doing separate jobs and neither replaces the other.
+
+So the shipped 0.15 / 0.70 is not an arbitrary tightening left over from an
+earlier problem. It is what keeps the mark rare, and dropping it to match what
+the eye calls a pin costs a factor of four in rate.
+
+**None of these rows is better than another.** `research/CCP_ENTRY_MODELS.md`
+measured the shipped setting and found gross expectancy at a grab is about
+zero, so a looser shape marks more grabs without making the marks mean more.
+The row to pick is the one that matches what you call a pin, and that is a
+readability choice, not a performance one.
+
 ## The anchor is always in the window — and that is weaker than it sounds
 
     python3 audit/ccp_anchor_check.py

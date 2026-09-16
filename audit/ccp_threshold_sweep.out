@@ -1,0 +1,39 @@
+═══ Min15 — 43429 grabs ═══
+   body<=  wick>=     left    right     BOTH   both %   
+  --------------------------------------------------------------
+     0.35    0.50    37019    34637    29708    68.4%   the CCP sheet's own shape
+     0.35    0.60    32610    29068    22099    50.9%   
+     0.25    0.60    30099    26801    18863    43.4%   
+     0.25    0.70    22911    19818    10815    24.9%   
+     0.20    0.65    24924    21981    12853    29.6%   
+     0.15    0.70    18815    16336     7307    16.8%   SHIPPED
+     0.10    0.75    11886    10316     3012     6.9%   
+
+═══ Min30 — 22214 grabs ═══
+   body<=  wick>=     left    right     BOTH   both %   
+  --------------------------------------------------------------
+     0.35    0.50    19003    17928    15413    69.4%   the CCP sheet's own shape
+     0.35    0.60    16710    14962    11396    51.3%   
+     0.25    0.60    15474    13829     9777    44.0%   
+     0.25    0.70    11711     9959     5388    24.3%   
+     0.20    0.65    12835    11181     6564    29.5%   
+     0.15    0.70     9661     8308     3751    16.9%   SHIPPED
+     0.10    0.75     6033     5302     1489     6.7%   
+
+═══ Min60 — 10657 grabs ═══
+   body<=  wick>=     left    right     BOTH   both %   
+  --------------------------------------------------------------
+     0.35    0.50     8950     8474     7162    67.2%   the CCP sheet's own shape
+     0.35    0.60     7803     7060     5214    48.9%   
+     0.25    0.60     7206     6507     4439    41.7%   
+     0.25    0.70     5257     4596     2315    21.7%   
+     0.20    0.65     5914     5248     2939    27.6%   
+     0.15    0.70     4381     3859     1606    15.1%   SHIPPED
+     0.10    0.75     2748     2458      644     6.0%   
+
+READ IT AS A TRADE, NOT AN IMPROVEMENT. A looser shape marks more
+grabs; it does not make the marks mean more. research/
+CCP_ENTRY_MODELS.md measured the shipped setting and found gross
+expectancy at a grab is about zero, so nothing on this table is
+known to be better than anything else on it — only busier or
+quieter. Pick the one that matches what your eye calls a pin.
