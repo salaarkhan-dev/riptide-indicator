@@ -427,9 +427,30 @@ if bgOn and grabBarOk
 //  never revisited.
 // ─────────────────────────────────────────────────────────────────────────────
 
-ccpName(bool bull, bool green) =>
-    bull ? (green ? "Hammer" : "Hanging man")
-         : (green ? "Inverted hammer" : "Shooting star")
+// The four names, and the doji case the CCP sheet does not cover.
+//
+// The sheet's rule is that SHAPE decides direction and the body COLOUR only
+// picks which of the two names that shape gets. A hammer and a hanging man are
+// one candle in two colours, both bullish; an inverted hammer and a shooting
+// star likewise, both bearish.
+//
+// That rule breaks down at a body of zero. `close >= open` still returns
+// something, so a merged candle with open and close one tick apart — or equal,
+// where the comparison resolves to "green" on the tie — gets confidently named
+// "Inverted hammer" when a single tick the other way would have made it a
+// "Shooting star". The two names mean the same thing, so nothing about the
+// classification is wrong, but printing one of them implies a colour that is
+// not there.
+//
+// Below 2% of the range the body is invisible at any zoom and one tick flips
+// it, so the colour carries no information and the name says so instead of
+// pretending.
+DOJI_BODY = 0.02
+
+ccpName(bool bull, bool green, float bodyF) =>
+    bodyF <= DOJI_BODY ? (bull ? "Bullish pin (doji body — no colour, so neither name applies)" : "Bearish pin (doji body — no colour, so neither name applies)")
+         : bull ? (green ? "Hammer" : "Hanging man")
+              : (green ? "Inverted hammer" : "Shooting star")
 
 // Every window containing the bar `anchorOff` bars back, best one kept, and
 // ONLY windows whose shape points `wantBull`. Returns b = -1 for no match.
@@ -496,22 +517,22 @@ ccpScanAt(int anchorOff, float minRange, bool wantBull) =>
                                 bC := cc
     [bB, bF, bO, bH, bL, bC]
 
-// WHY an end found nothing. Walks the same windows as ccpScanAt and reports
-// which test did the rejecting, plus the closest window it saw.
+// EVERY WINDOW, and what happened to it. Walks the same windows as ccpScanAt
+// and reports each one's ratios and verdict.
 //
-// This exists because "no shape" is an unfalsifiable answer on a chart. Four
-// different things produce it — the range filter, the body cap, the wick
-// floor, and the direction gate — and they mean completely different things.
-// A window thrown out by the DIRECTION gate was a perfectly good pin pointing
-// the wrong way; one thrown out by ccpMinRangeATR was a good pin that was
-// simply small, and that filter is a volume control rather than part of the
-// shape test. Without this you cannot tell those apart by looking, and the
-// natural conclusion from a candle that obviously IS a hammer is that the
-// classifier is broken.
+// This exists because both halves of the question are otherwise invisible.
+// "No shape" is unfalsifiable on a chart — five different tests produce it and
+// they mean completely different things. And when an end DOES match, there is
+// no way to see why the winning window beat the others, so a smaller window
+// that looks right to the eye but failed a threshold is indistinguishable from
+// one the tie-break simply passed over.
 //
-// Debug-only, so the shipped path is untouched. Counts can exceed the window
-// count: one window can fail several tests at once, which is itself worth
-// seeing.
+// It is one function rather than two because ccpScanAt and a second copy of
+// this loop have already drifted once: ccpWhy shipped without the
+// anchor-extreme gate and printed a passing window under the words "no shape".
+// A third copy would be a third chance at that.
+//
+// Debug-only, so the shipped path is untouched.
 ccpWhy(int anchorOff, float minRange, bool wantBull) =>
     int nTried = 0
     int nRange = 0
@@ -519,9 +540,8 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
     int nWick = 0
     int nDir = 0
     int nAnchor = 0
-    float bS = -1.0
-    string bDesc = ""
-    string bFails = ""
+    int nOk = 0
+    string rows = ""
     if anchorOff >= 0 and anchorOff + ccpBack < 450 and anchorOff + ccpBack < bar_index
         for f = 0 to ccpFwd
             if f <= anchorOff
@@ -542,20 +562,15 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
                     float oo = open[firstOff]
                     float rng = hh - ll
                     nTried := nTried + 1
+                    string head = "\n      " + str.tostring(b) + " before + " + str.tostring(f) + " after (" + str.tostring(b + f + 1) + "c)"
                     if rng <= 0 or rng < minRange
                         nRange := nRange + 1
+                        rows := rows + head + "  ✗ too small"
                     else
                         float bodyF = math.abs(cc - oo) / rng
                         float upW = (hh - math.max(oo, cc)) / rng
                         float dnW = (math.min(oo, cc) - ll) / rng
                         float bigW = math.max(upW, dnW)
-                        // The anchor-extreme gate was MISSING from this
-                        // function when it shipped, and ccpScanAt applies it.
-                        // So with that input on, this tooltip could print a
-                        // closest window that passes body, wick and direction
-                        // while the scan had rejected it — an explanation that
-                        // contradicted the verdict it was explaining, which is
-                        // worse than no explanation at all.
                         bool ownX = not ccpAnchorExtreme or ((dnW > upW) ? low[anchorOff] == ll : high[anchorOff] == hh)
                         string fails = ""
                         if bodyF > ccpBodyMax
@@ -570,27 +585,16 @@ ccpWhy(int anchorOff, float minRange, bool wantBull) =>
                         if not ownX
                             nAnchor := nAnchor + 1
                             fails := fails + " ANCHOR-EXTREME"
-                        if bigW > bS
-                            bFails := fails
-                            bS := bigW
-                            bDesc := str.tostring(b + f + 1) + " candles (" + str.tostring(b) + " before + " + str.tostring(f) + " after), body " + str.tostring(bodyF, "#.00") + "  upper " + str.tostring(upW, "#.00") + "  lower " + str.tostring(dnW, "#.00")
-    string s = "\n    " + str.tostring(nTried) + " windows tried, all rejected:"
-    if nRange > 0
-        s := s + "\n      " + str.tostring(nRange) + " too small — the volume control, not the shape test. Set 'Ignore merges smaller than' to 0 to drop it."
-    if nBody > 0
-        s := s + "\n      " + str.tostring(nBody) + " body too big (cap " + str.tostring(ccpBodyMax, "#.00") + ")"
-    if nWick > 0
-        s := s + "\n      " + str.tostring(nWick) + " longer wick too short (floor " + str.tostring(ccpWickMin, "#.00") + ")"
-    if nDir > 0
-        s := s + "\n      " + str.tostring(nDir) + " WRONG DIRECTION — a real pin pointing the way this grab does not imply"
-    if nAnchor > 0
-        s := s + "\n      " + str.tostring(nAnchor) + " the long wick was a NEIGHBOUR'S, not the anchor's — that is the 'long wick must be the anchor's own' switch. It costs about four fifths of all matches; turn it off to see them."
-    // A window that fails NOTHING cannot exist here, because this function is
-    // only called when the scan found no match. If one is ever printed, this
-    // function and ccpScanAt have drifted apart and the tooltip says so rather
-    // than quietly showing a passing window next to the words "no shape".
-    string tail = bFails == "" ? "  → failed NOTHING, which is impossible: ccpWhy and ccpScanAt have drifted. Please report." : "  → failed:" + bFails
-    bDesc == "" ? s : s + "\n    closest window: " + bDesc + tail
+                        if fails == ""
+                            nOk := nOk + 1
+                        string nums = "  body " + str.tostring(bodyF, "#.00") + " up " + str.tostring(upW, "#.00") + " dn " + str.tostring(dnW, "#.00")
+                        rows := rows + head + nums + (fails == "" ? "  ✓ QUALIFIES" : "  ✗" + fails)
+    string s = "\n    " + str.tostring(nTried) + " windows tried, " + str.tostring(nOk) + " qualified:" + rows
+    if nOk > 1
+        s := s + "\n    Several qualified. '" + ccpPick + "' chose between them — smallest run prefers fewer candles, ties to the stronger wick."
+    if nOk == 0 and nAnchor > 0
+        s := s + "\n    " + str.tostring(nAnchor) + " were rejected ONLY by 'the long wick must be the anchor's own'. That switch costs about four fifths of all matches; turn it off to see them."
+    s
 
 // ── state ───────────────────────────────────────────────────────────────────
 var array<label> ccpLbs = array.new<label>()
@@ -616,7 +620,7 @@ ccpLeg(string which, int b, int f, float o, float h, float l, float c,
      bool bull) =>
     int n = b + f + 1
     float rng = h - l
-    string s = which + ": " + ccpName(bull, c >= o) + "  ·  " +
+    string s = which + ": " + ccpName(bull, c >= o, math.abs(c - o) / rng) + "  ·  " +
          (n == 1 ? "1 candle, no merge"
                  : str.tostring(n) + " candles (" + str.tostring(b) +
                    " before + " + str.tostring(f) + " after)")
@@ -688,10 +692,19 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                 // caught it.
                 string lTag = lOk ? (lB + lF == 0 ? "left alone" : "left merged") : "left none"
                 string rTag = rOk ? (rB + rF == 0 ? "right alone" : "right merged") : "right none"
-                string lWhy = ccpDebug and not lOk ? ccpWhy(leftOff, qMinRange, wantBull) : ""
-                string rWhy = ccpDebug and not rOk ? ccpWhy(rightOff, qMinRange, wantBull) : ""
-                string lTxt = lOk ? ccpLeg("LEFT  (the swing that built the level)", lB, lF, lO, lH, lL, lC, wantBull) : "LEFT: no shape" + lWhy
-                string rTxt = rOk ? ccpLeg("RIGHT (the candles that ran it)", rB, rF, rO, rH, rL, rC, wantBull) : "RIGHT: no shape" + rWhy
+                // The breakdown now runs for MATCHED ends too, not only for
+                // ends that found nothing. Seeing which windows qualified and
+                // which the tie-break passed over is the only way to tell a
+                // window that lost from one that never qualified, and the two
+                // look identical on a chart.
+                //
+                // The parentheses matter: `?:` binds looser than `+` in Pine,
+                // so the old form appended the breakdown to the no-shape
+                // branch alone.
+                string lWhy = ccpDebug ? ccpWhy(leftOff, qMinRange, wantBull) : ""
+                string rWhy = ccpDebug ? ccpWhy(rightOff, qMinRange, wantBull) : ""
+                string lTxt = (lOk ? ccpLeg("LEFT  (the swing that built the level)", lB, lF, lO, lH, lL, lC, wantBull) : "LEFT: no shape") + lWhy
+                string rTxt = (rOk ? ccpLeg("RIGHT (the candles that ran it)", rB, rF, rO, rH, rL, rC, wantBull) : "RIGHT: no shape") + rWhy
                 string side = q.isHigh ? "buy-side" : "sell-side"
                 string dir = wantBull ? "BULLISH" : "BEARISH"
                 string tip = dir + " after-effect at a " + side + " grab" +
