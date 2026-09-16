@@ -37,6 +37,17 @@ FUNC = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*=>")
 METH = re.compile(r"^method\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 ASSIGN = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:=")
 
+# A TOP-LEVEL variable declaration: at column 0, so not inside a function or an
+# if-block. Pine needs these before first use exactly as it needs functions
+# before first use, and this checker only had the function half of that rule
+# until a compile error found the gap — a `bool ccpBarOk = ...` declared in one
+# section and read by a block inserted above it.
+TOPVAR = re.compile(
+    r"^(?:var\s+|varip\s+)?"
+    r"(?:(?:int|float|bool|string|color|line|label|box|table|linefill"
+    r"|array<[^>]+>)\s+)?"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=|>)")
+
 
 def strip_strings(s: str) -> str:
     """Blank out string literals so their contents never match a rule."""
@@ -92,11 +103,19 @@ def check(path: str) -> list[str]:
 
     # ── pass 1: declarations, functions, and their first-use lines ──────────
     declared: dict[str, int] = {}
+    topvar: dict[str, int] = {}
     for i, ln in enumerate(lines):
         c = code_of(ln)
         m = FUNC.match(c) or METH.match(c)
         if m:
             declared[m.group(1)] = i
+            continue
+        # Only column 0 counts. An indented `x = ...` is local to a function or
+        # a block and says nothing about what is visible at the top level.
+        if c and not c[0].isspace():
+            m = TOPVAR.match(c)
+            if m and m.group(1) not in declared:
+                topvar.setdefault(m.group(1), i)
 
     depth = 0
     for i, ln in enumerate(lines):
@@ -167,6 +186,11 @@ def check(path: str) -> list[str]:
         for name, dl in declared.items():
             if dl > i and re.search(rf"(?<![A-Za-z0-9_.]){name}\s*\(", c):
                 bad(i, f"{name}() used at line {i+1} but declared at {dl+1}")
+
+        # top-level variable used before declaration, the same rule
+        for name, dl in topvar.items():
+            if dl > i and re.search(rf"(?<![A-Za-z0-9_.]){name}(?![A-Za-z0-9_(])", c):
+                bad(i, f"{name} read at line {i+1} but declared at {dl+1}")
 
     if depth != 0:
         found.append(f"{path}: file ends with bracket depth {depth}")
