@@ -1,0 +1,115 @@
+Do order blocks, FVGs or trend filters sort grabs?
+
+Pre-registered in PREREG_ccp_context_filters.md. Six arms, six primary tests,
+about a 26% chance of one false positive at z >= 2, so bar 5 alone carries nothing.
+
+Min15: 43152 grabs, unfiltered R -0.083
+Min30: 21962 grabs, unfiltered R -0.065
+Min60: 10419 grabs, unfiltered R -0.035
+
+═══ Min15 ═══
+  OLD  21576 bets   unfiltered -0.077 ± 0.010
+    F1  kept  13725  R -0.087   Δ -0.026  z -1.19   control Δ -0.011
+    F2  kept   4045  R -0.029   Δ +0.059  z +2.23   control Δ -0.012
+    F3  kept  10599  R -0.042   Δ +0.069  z +2.97   control Δ +0.023
+    F4  kept  12207  R -0.086   Δ -0.020  z -0.94   control Δ -0.001
+    F5  kept   7419  R -0.080   Δ -0.005  z -0.19   control Δ -0.013
+    F6  kept    998  R +0.013   Δ +0.095  z +1.91   control Δ +0.062
+  NEW  21576 bets   unfiltered -0.090 ± 0.010
+    F1  kept  13351  R -0.074   Δ +0.041  z +1.91   control Δ +0.026
+    F2  kept   4288  R -0.094   Δ -0.005  z -0.20   control Δ +0.003
+    F3  kept  10681  R -0.086   Δ +0.007  z +0.30   control Δ +0.031
+    F4  kept  11913  R -0.092   Δ -0.005  z -0.23   control Δ -0.009
+    F5  kept   7457  R -0.093   Δ -0.005  z -0.21   control Δ +0.009
+    F6  kept   1039  R -0.083   Δ +0.007  z +0.14   control Δ -0.020
+
+═══ Min30 ═══
+  OLD  10981 bets   unfiltered -0.059 ± 0.014
+    F1  kept   7169  R -0.060   Δ -0.003  z -0.11   control Δ -0.079
+    F2  kept   2035  R -0.018   Δ +0.050  z +1.37   control Δ -0.029
+    F3  kept   5399  R -0.030   Δ +0.057  z +1.81   control Δ -0.012
+    F4  kept   6457  R -0.071   Δ -0.028  z -0.97   control Δ -0.017
+    F5  kept   3929  R -0.033   Δ +0.040  z +1.23   control Δ -0.004
+    F6  kept    469  R -0.014   Δ +0.047  z +0.63   control Δ -0.158  UNDERPOWERED MDE 0.15
+  NEW  10981 bets   unfiltered -0.070 ± 0.014
+    F1  kept   6975  R -0.085   Δ -0.041  z -1.38   control Δ +0.004
+    F2  kept   2073  R -0.056   Δ +0.017  z +0.48   control Δ -0.054
+    F3  kept   5390  R -0.080   Δ -0.019  z -0.60   control Δ +0.060
+    F4  kept   6224  R -0.080   Δ -0.022  z -0.76   control Δ +0.007
+    F5  kept   3859  R -0.039   Δ +0.048  z +1.52   control Δ +0.019
+    F6  kept    505  R -0.087   Δ -0.017  z -0.25   control Δ -0.030  UNDERPOWERED MDE 0.14
+
+═══ Min60 ═══
+  OLD  5209 bets   unfiltered -0.000 ± 0.020
+    F1  kept   3445  R -0.001   Δ -0.003  z -0.08   control Δ +0.035
+    F2  kept    891  R +0.090   Δ +0.108  z +2.07   control Δ +0.020  UNDERPOWERED MDE 0.10
+    F3  kept   2541  R -0.005   Δ -0.010  z -0.22   control Δ +0.050
+    F4  kept   3185  R -0.002   Δ -0.004  z -0.09   control Δ -0.022
+    F5  kept   1837  R -0.010   Δ -0.014  z -0.33   control Δ -0.058
+    F6  kept    197  R +0.224   Δ +0.233  z +2.18   control Δ -0.038  BAR 1 FAIL n=197  UNDERPOWERED MDE 0.21
+  NEW  5210 bets   unfiltered -0.070 ± 0.019
+    F1  kept   3323  R -0.089   Δ -0.050  z -1.22   control Δ -0.040
+    F2  kept    926  R +0.034   Δ +0.127  z +2.53   control Δ -0.045  UNDERPOWERED MDE 0.10
+    F3  kept   2664  R -0.082   Δ -0.023  z -0.54   control Δ +0.014
+    F4  kept   2864  R -0.057   Δ +0.030  z +0.75   control Δ -0.123
+    F5  kept   1920  R -0.042   Δ +0.044  z +1.02   control Δ +0.055
+    F6  kept    195  R +0.017   Δ +0.091  z +0.81   control Δ -0.520  BAR 1 FAIL n=195  UNDERPOWERED MDE 0.22
+
+═══ VERDICT AGAINST THE PRE-REGISTERED BARS ═══
+Six arms. At z >= 2.0 each the chance of at least one false
+positive is about 26%, so bar 5 alone carries nothing.
+
+  F1
+      bar 1  PASS  200+ kept bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats unfiltered, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 6  FAIL  beats the same filter on random bars
+      power   worst MDE 0.086 R  (adequate)
+      → FAILS
+
+  F2
+      bar 1  PASS  200+ kept bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats unfiltered, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 6  FAIL  beats the same filter on random bars
+      power   worst MDE 0.105 R  UNDERPOWERED
+      → FAILS
+
+  F3
+      bar 1  PASS  200+ kept bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats unfiltered, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 6  FAIL  beats the same filter on random bars
+      power   worst MDE 0.087 R  (adequate)
+      → FAILS
+
+  F4
+      bar 1  PASS  200+ kept bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats unfiltered, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 6  FAIL  beats the same filter on random bars
+      power   worst MDE 0.083 R  (adequate)
+      → FAILS
+
+  F5
+      bar 1  PASS  200+ kept bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats unfiltered, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 6  FAIL  beats the same filter on random bars
+      power   worst MDE 0.088 R  (adequate)
+      → FAILS
+
+  F6
+      bar 1  FAIL  200+ kept bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats unfiltered, newer half
+      bar 4  FAIL  positive standalone R, newer half
+      bar 6  PASS  beats the same filter on random bars
+      power   worst MDE 0.224 R  UNDERPOWERED
+      → FAILS
+
