@@ -145,11 +145,44 @@ Both ends matching, with the grab gate in place, sweeping the shape:
      0.35    0.50   68.4%   69.4%   67.2%    the CCP sheet's own shape
      0.35    0.60   50.9%   51.3%   48.9%
      0.25    0.60   43.4%   44.0%   41.7%
+     1.00    0.65   39.6%   39.0%   36.2%    WICK ONLY — no body cap at all
+     0.35    0.65   39.6%   39.0%   36.2%    identical, and that is the point
+     0.30    0.65   37.8%   37.5%   34.9%    the cap binds again, barely
      0.20    0.65   29.6%   29.5%   27.6%
      0.25    0.70   24.9%   24.3%   21.7%
      0.15    0.70   16.8%   16.9%   15.1%    SHIPPED
      0.10    0.75    6.9%    6.7%    6.0%
 ```
+
+### The body cap and the wick floor are not independent
+
+Those two middle rows are identical to the digit — 17,213 / 8,666 / 3,859
+both-ends matches — because the three fractions sum to exactly one:
+
+```
+hi - lo  =  (hi - max(o,c))  +  |c - o|  +  (min(o,c) - lo)
+              upper wick         body         lower wick
+```
+
+The range IS those three pieces stacked, so **a longer wick of at least w
+already forces a body of at most 1 - w**, with no help from the body cap. The
+cap only rejects anything when `bodyMax < 1 - wickMin`; at or above that it is
+a dead input.
+
+| wick floor | implied body cap | a body cap of 0.35 is |
+|---|---|---|
+| 0.50 | 0.50 | binding |
+| 0.60 | 0.40 | binding |
+| **0.65** | **0.35** | **dead** |
+| 0.70 (shipped) | 0.30 | dead |
+
+At the shipped 0.70 floor the implied cap is 0.30, so the shipped **0.15 is
+doing real work** — it is half of what the wick floor already guarantees.
+
+This is worth knowing before tuning, because "loosen the body to 0.35" is a
+natural thing to try and above a 0.65 wick floor it changes nothing at all.
+The row above is the check: if those two ever stop matching, the identity is
+wrong about the code.
 
 **At the sheet's own shape, two grabs in three carry the mark at both ends.**
 The gate took the ungated 88% of all bars down to 68% of grabs at those
