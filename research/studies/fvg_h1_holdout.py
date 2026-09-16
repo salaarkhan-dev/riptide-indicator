@@ -166,4 +166,8 @@ async def main() -> None:
     print(f"\n  → {'CONFIRMED' if all((b1, b2, b3, b4, b5)) else 'NOT CONFIRMED'}")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    # Guarded because research/studies/fvg_h1_temporal.py imports build() from
+    # here. The temporal holdout must score with the EXACT same rules as the
+    # confirmation it is checking; importing makes drift impossible.
+    asyncio.run(main())
