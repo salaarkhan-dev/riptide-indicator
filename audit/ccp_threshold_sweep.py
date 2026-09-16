@@ -38,11 +38,24 @@ BACK = FWD = 2
 MIN_RANGE_ATR = 0.50
 DAYS = 333
 
-# The sheet's definition, the shipped one, and the ground between them.
+# THE BODY CAP AND THE WICK FLOOR ARE NOT INDEPENDENT. The three fractions sum
+# to one exactly —
+#
+#     hi - lo = (hi - max(o,c)) + |c - o| + (min(o,c) - lo)
+#     upWick  +      body       +   dnWick                  = 1
+#
+# — so the LONGER wick being >= w already forces body <= 1 - w. A body cap only
+# rejects anything when bodyMax < 1 - wickMin; at or above that it is a dead
+# input. 0.35/0.65 is exactly the boundary, which is why it is in the grid
+# twice, once as itself and once as a pure wick filter: the two rows must come
+# out identical, and if they do not, the algebra above is wrong about the code.
 GRID = [
     (0.35, 0.50, "the CCP sheet's own shape"),
     (0.35, 0.60, ""),
     (0.25, 0.60, ""),
+    (1.00, 0.65, "WICK ONLY — no body cap at all"),
+    (0.35, 0.65, "must equal the row above: 0.35 = 1 - 0.65, non-binding"),
+    (0.30, 0.65, "body cap binds again, barely"),
     (0.25, 0.70, ""),
     (0.20, 0.65, ""),
     (0.15, 0.70, "SHIPPED"),
