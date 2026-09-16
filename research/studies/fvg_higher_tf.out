@@ -1,0 +1,27 @@
+Does the FVG gradient continue above 1h?
+
+Gross R. pivot 3 / window 2 / horizon 48 BARS at every arm.
+
+arm     tf       syms   days   n FVG   gross R     SE        Δ      z     ctlΔ  risk%
+----------------------------------------------------------------------------------------
+anchor  Min60      85   1197   18630     0.053  0.010    0.076   6.69    0.036   1.78
+BTW_USDT Hour4: 1 discontinuities in 1043 bars
+H4      Hour4      81   1190    4508     0.037  0.021    0.041   1.77   -0.008   3.78
+BTW_USDT Hour8: 1 discontinuities in 522 bars
+H8      Hour8      67   1179    2092     0.067  0.031    0.105   3.01    0.051   5.45
+
+═══ VERDICT ═══
+  anchor Min60 gross +0.053   H4 +0.037   H8 +0.067   mean of the two +0.052
+
+  bar 1  PASS  300+ bets and 300+ days, both
+  bar 2  PASS  gross R positive at both
+  bar 3  FAIL  mean of H4 and H8 >= the anchor
+  bar 4  PASS  gross Δ beats the random-bar control, both
+  bar 5  FAIL  clustered |z| >= 2.0 on gross Δ, both
+  power   worst MDE 0.070 R  (adequate)
+
+  → THE GRADIENT DOES NOT CONTINUE
+  The leading explanation for the FVG line becomes that the
+  Min60 cell was noise, re-measured on overlapping data until
+  it looked solid. The three pre-registered passes stand as
+  recorded; the conclusion drawn from them does not.

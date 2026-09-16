@@ -169,10 +169,23 @@ async def main() -> None:
     ok = all((b1, b2, b3, b4, b5))
     print(f"\n  → {'THE GRADIENT CONTINUES' if ok else 'THE GRADIENT DOES NOT CONTINUE'}")
     if not ok:
-        print("  The leading explanation for the FVG line becomes that the")
-        print("  Min60 cell was noise, re-measured on overlapping data until")
-        print("  it looked solid. The three pre-registered passes stand as")
-        print("  recorded; the conclusion drawn from them does not.")
+        # The prereg's "if it fails" paragraph assumed ONE failure mode: the
+        # higher timeframes scattering around zero. That reading only applies
+        # if they actually did. Printing it unconditionally would assert
+        # something the data may flatly contradict, which is how a
+        # pre-written conclusion becomes a false one.
+        scattered = all(abs(h["m"]) < 2 * h["se"] for h in hi)
+        if scattered:
+            print("  Both higher timeframes are indistinguishable from zero,")
+            print("  which is what the noise explanation predicted. The three")
+            print("  pre-registered passes stand as recorded; the conclusion")
+            print("  drawn from them does not.")
+        else:
+            print("  BUT NOT BY SCATTERING AROUND ZERO, which is the only")
+            print("  failure mode the prereg wrote a conclusion for. The")
+            print("  higher timeframes are positive, so the noise explanation")
+            print("  is NOT supported either. Neither pre-registered story")
+            print("  fits; see the writeup before reading anything into this.")
 
 
 asyncio.run(main())
