@@ -1,15 +1,28 @@
 """Add Pine v6's `active =` to every input that depends on another input.
 
+    python3 deploy/pine-input-active.py            # write the gates in
+    python3 deploy/pine-input-active.py --check    # report, change nothing
+
 `active` takes an "input bool", so it may be any expression over inputs and
 constants — but the input it names must be DECLARED EARLIER in the file, and
 this script asserts that rather than trusting the table below.
 
 Nothing else changes: no name, no type, no default, no group.
 deploy/pine-input-audit.py --diff proves it.
+
+IT IS IDEMPOTENT, AND IT WAS NOT. Every run used to append another
+`, active = X` to an input that already had one, so six runs left six copies of
+the same argument on every gated line — which Pine rejects as a duplicate named
+argument. An input that already carries an `active =` is now skipped, and
+--check is what a preflight is allowed to call: a writer has no business
+running inside a check, and deploy/preflight.py refuses any pine check that
+modifies the tree.
 """
 import pathlib
 import re
 import sys
+
+CHECK = "--check" in sys.argv
 
 P = pathlib.Path("indicators/riptide_ms/pine/riptide-indicator-v2.pine")
 src = P.read_text()
@@ -135,20 +148,44 @@ if bad:
     sys.exit(1)
 
 # ── insert, once per input, after its `group = ` argument ───────────────────
-out, done, last = [], {}, 0
+# `already` is what makes a second run a no-op: the declaration text from this
+# input's name to the end of its call already carries an `active =`, so adding
+# another would be a duplicate named argument and Pine would refuse the file.
+def already_gated(pos: int) -> bool:
+    # To the NEXT declaration, not to the end of the line — several inputs
+    # here put their tooltip, and therefore their `active =`, on a
+    # continuation line, and a line-bounded search called those ungated and
+    # added a second copy.
+    nxt = min((s for s, _ in starts if s > pos), default=len(src))
+    return "active = " in src[pos:nxt]
+
+
+out, done, kept, last = [], {}, 0, 0
 for m in re.finditer(r"group\s*=\s*(g[A-Za-z]+)", src):
     name = owning(m.start())
     expr = DEPS.get(name)
     if not expr or name in done:
+        continue
+    start = next(s for s, n in starts if n == name)
+    if already_gated(start):
+        done[name] = expr
+        kept += 1
         continue
     out.append(src[last:m.end()])
     out.append(f", active = {expr}")
     done[name] = expr
     last = m.end()
 out.append(src[last:])
-P.write_text("".join(out))
+new = "".join(out)
+changed = new != src
+if changed and not CHECK:
+    P.write_text(new)
 
-print(f"{len(done)} inputs gated")
+print(f"{len(done)} inputs gated ({kept} already had one, "
+      f"{len(done) - kept} {'would be' if CHECK else ''} added)")
+if CHECK and changed:
+    print("CHECK FAILED: the file is missing gates this table declares.")
+    sys.exit(1)
 missing = sorted(set(DEPS) - set(done))
 if missing:
     print(f"NOT GATED ({len(missing)}): {', '.join(missing)}")

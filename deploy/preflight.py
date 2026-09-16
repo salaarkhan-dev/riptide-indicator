@@ -40,6 +40,7 @@ never runs one. `--quick` exists for the same reason at a smaller scale.
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import os
 import pathlib
@@ -70,7 +71,9 @@ PINE_CHECKS = [
     # The production indicator against the bot's own config. The one check
     # here that guards a live trading path rather than a research bench.
     ("check-parity", "riptide", []),
-    ("pine-input-active", "riptide_ms", []),
+    # --check, never the writing mode. See stage_pine: a check that edits
+    # the tree is not a check, and preflight fails one that does.
+    ("pine-input-active", "riptide_ms", ["--check"]),
     ("ms-py-parity", "riptide_ms", [
         PINE.format("riptide_ms", "riptide-indicator-v2.pine"),
         "indicators/riptide_ms/port/ms_struct.py"]),
@@ -192,14 +195,36 @@ def stage_tests(only):
     return len(files), bad
 
 
+def _pine_state() -> dict:
+    return {rel(p): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(ROOT.glob("indicators/*/pine/*.pine"))}
+
+
 def stage_pine(only):
+    """The Pine checks, and a guard that none of them WROTE anything.
+
+    One of these scripts is a writer with a --check mode, and running the
+    writing mode by mistake appended a duplicate `active =` argument to every
+    gated input on every run — six runs, six duplicates, a file Pine would
+    refuse, and no test anywhere noticed because no test reads the .pine.
+
+    So the .pine sources are hashed either side. A check that modifies the tree
+    is not a check, whatever it exits with, and this fails it by name.
+    """
+    before = _pine_state()
     bad, n = [], 0
     for label, ind, args in PINE_CHECKS:
         if only and ind not in (None, only):
             continue
         n += 1
         rc, out = _run([sys.executable, f"deploy/{label}.py", *args])
-        if rc != 0:
+        after = _pine_state()
+        touched = [f for f, h in after.items() if before.get(f) != h]
+        if touched:
+            bad.append((label, "MODIFIED " + ", ".join(touched)
+                        + " — a check must not write to the tree"))
+            before = after
+        elif rc != 0:
             bad.append((label, (out.strip().splitlines() or ["?"])[-1][:200]))
     return n, bad
 
