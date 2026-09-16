@@ -1,0 +1,26 @@
+Confirmatory: does the FVG/1h result hold on 90 symbols it has never seen?
+
+113 listed, 23 used by the discovery, 90 in the holdout
+BTW_USDT Min60: 1 discontinuities in 3418 bars
+84 of them have 2000+ bars at Min60
+
+38138 grabs, unfiltered R -0.031 ± 0.007
+
+  FVG grabs      n   6911   R +0.031 ± 0.016
+  no-FVG grabs   n  31227   R -0.045
+  Δ +0.076 ± 0.018   z +4.12
+  control Δ (same filter, random bars) +0.017
+
+  robustness, DESCRIPTIVE — cannot rescue a failure:
+    more history   n   6355   R +0.034 ± 0.017
+    less history   n    556   R +0.002 ± 0.057
+
+═══ VERDICT — family size ONE, no correction to argue about ═══
+  bar 1  PASS  300+ FVG grabs (got 6911)
+  bar 2  PASS  positive standalone R after fees
+  bar 3  PASS  beats grabs without an FVG
+  bar 4  PASS  beats the same filter on random bars
+  bar 5  PASS  clustered |z| >= 2.0 (got +4.12)
+  power   MDE 0.037 R  (adequate)
+
+  → CONFIRMED
