@@ -811,7 +811,10 @@ emCell(int row, string k, string v) =>
 
 if emOn and emStats and barstate.islast
     emTbl.cell(0, 0, "Entry model", text_size = size.small, text_color = chart.fg_color)
-    emTbl.cell(1, 0, str.tostring(emTargetR, "#.#") + "R" + (emPartialR > 0 and emPartialR < emTargetR ? " / part " + str.tostring(emPartialR, "#.#") + "R" : ""), text_size = size.small, text_color = chart.fg_color)
+    // A setup is only ever created inside the CCP pass, so with 'Merge
+    // candles' off this table is real, correct and entirely zeroes — which
+    // looks exactly like a broken table. Say which switch is missing instead.
+    emTbl.cell(1, 0, not ccpOn ? "needs 'Merge candles' ON" : str.tostring(emTargetR, "#.#") + "R" + (emPartialR > 0 and emPartialR < emTargetR ? " / part " + str.tostring(emPartialR, "#.#") + "R" : ""), text_size = size.small, text_color = not ccpOn ? color.orange : chart.fg_color)
     emCell(1, "closed", str.tostring(emN))
     emCell(2, "still open", str.tostring(emOpen.size()))
     emCell(3, "win %", emN > 0 ? str.tostring(100.0 * emWin / emN, "#.0") : "—")
