@@ -1,0 +1,74 @@
+Temporal holdout: does the FVG/1h result survive a different regime?
+
+111 symbols listed, fetching 1200 days at Min60
+XRP_USDT Min60: 1 discontinuities in 28010 bars
+ZEC_USDT Min60: 1 discontinuities in 28798 bars
+SUI_USDT Min60: 1 discontinuities in 28798 bars
+ARB_USDT Min60: 1 discontinuities in 28798 bars
+DOGE_USDT Min60: 1 discontinuities in 28010 bars
+LINK_USDT Min60: 1 discontinuities in 28010 bars
+UNI_USDT Min60: 1 discontinuities in 28798 bars
+NEAR_USDT Min60: 1 discontinuities in 28798 bars
+ADA_USDT Min60: 1 discontinuities in 28010 bars
+XLM_USDT Min60: 1 discontinuities in 28798 bars
+BTW_USDT Min60: 1 discontinuities in 3418 bars
+WLD_USDT Min60: 1 discontinuities in 27597 bars
+AVAX_USDT Min60: 1 discontinuities in 28010 bars
+INJ_USDT Min60: 1 discontinuities in 28798 bars
+BNB_USDT Min60: 1 discontinuities in 28798 bars
+LTC_USDT Min60: 1 discontinuities in 28798 bars
+DOT_USDT Min60: 1 discontinuities in 28798 bars
+FILECOIN_USDT Min60: 1 discontinuities in 28010 bars
+AAVE_USDT Min60: 1 discontinuities in 28010 bars
+APT_USDT Min60: 1 discontinuities in 28798 bars
+ASTR_USDT Min60: 1 discontinuities in 28798 bars
+OP_USDT Min60: 1 discontinuities in 28798 bars
+HBAR_USDT Min60: 1 discontinuities in 28010 bars
+ICP_USDT Min60: 1 discontinuities in 28798 bars
+ATOM_USDT Min60: 1 discontinuities in 28798 bars
+DASH_USDT Min60: 1 discontinuities in 28798 bars
+SHIB_USDT Min60: 1 discontinuities in 28798 bars
+XMR_USDT Min60: 1 discontinuities in 28798 bars
+BCH_USDT Min60: 1 discontinuities in 28798 bars
+SEI_USDT Min60: 1 discontinuities in 27065 bars
+CRV_USDT Min60: 1 discontinuities in 28010 bars
+PENDLE_USDT Min60: 1 discontinuities in 28101 bars
+LDO_USDT Min60: 1 discontinuities in 28798 bars
+TRX_USDT Min60: 1 discontinuities in 28798 bars
+ALGO_USDT Min60: 1 discontinuities in 28798 bars
+1000BONK_USDT Min60: 1 discontinuities in 28798 bars
+KAS_USDT Min60: 1 discontinuities in 28798 bars
+GALA_USDT Min60: 1 discontinuities in 28798 bars
+ETC_USDT Min60: 1 discontinuities in 28798 bars
+CAKE_USDT Min60: 1 discontinuities in 28010 bars
+ZEN_USDT Min60: 1 discontinuities in 28010 bars
+SAND_USDT Min60: 1 discontinuities in 28010 bars
+FLOKI_USDT Min60: 1 discontinuities in 28010 bars
+JASMY_USDT Min60: 1 discontinuities in 28010 bars
+ORDI_USDT Min60: 1 discontinuities in 28010 bars
+AR_USDT Min60: 1 discontinuities in 28010 bars
+EGLD_USDT Min60: 1 discontinuities in 28010 bars
+105 returned enough history overall
+88 symbols have 2000+ bars BEFORE the cutoff
+window: 2023-06-06 to 2025-10-16  (862 days)
+discovery window began 2025-10-18 — newest signal here is 2.0 days before it
+
+80873 grabs, unfiltered R -0.048 ± 0.005
+
+  FVG grabs      n  15201   R +0.046 ± 0.011
+  no-FVG grabs   n  65672   R -0.070
+  Δ +0.117 ± 0.013   z +9.19
+  control Δ (same filter, random bars) +0.045
+
+  the confirmed cross-sectional numbers, for comparison:
+    FVG R +0.031 ± 0.016   Δ +0.076 ± 0.018  z +4.12  control +0.017
+
+═══ VERDICT — family size ONE, older data only ═══
+  bar 1  PASS  300+ FVG grabs (got 15201)
+  bar 2  PASS  positive standalone R after fees
+  bar 3  PASS  beats grabs without an FVG
+  bar 4  PASS  beats the same filter on random bars
+  bar 5  PASS  clustered |z| >= 2.0 (got +9.19)
+  power   MDE 0.025 R  (adequate)
+
+  → SURVIVES THE REGIME CHANGE
