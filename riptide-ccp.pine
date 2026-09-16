@@ -605,7 +605,6 @@ ccpWindowBox(int firstBar, int lastBar, float hi, float lo, color col) =>
          bgcolor      = color.new(col, 90)))
 
 // ── the pass ────────────────────────────────────────────────────────────────
-float ccpMinRange = na(atr) ? 0.0 : atr * ccpMinRangeATR
 bool ccpBarOk = not confirmOnBarClose or barstate.isconfirmed
 
 if ccpOn and ccpBarOk and ccpQueue.size() > 0
@@ -617,8 +616,16 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
             bool wantBull = not q.isHigh
             int rightOff = bar_index - q.grabBar
             int leftOff  = bar_index - q.pivotBar
-            [rB, rF, rO, rH, rL, rC] = ccpScanAt(rightOff, ccpMinRange, wantBull)
-            [lB, lF, lO, lH, lL, lC] = ccpScanAt(leftOff, ccpMinRange, wantBull)
+            // ATR AT THE GRAB BAR, not at the bar that happens to judge it.
+            // This used to read the live `atr`, which is two bars later, so
+            // the size filter moved with whatever volatility arrived after the
+            // grab and the verdict depended on WHEN it was judged rather than
+            // on the grab. Every Python audit in this repo uses the ATR at the
+            // grab, so the chart and the studies were also measuring slightly
+            // different things. atr[rightOff] is the ATR at q.grabBar.
+            float qMinRange = na(atr[rightOff]) ? 0.0 : atr[rightOff] * ccpMinRangeATR
+            [rB, rF, rO, rH, rL, rC] = ccpScanAt(rightOff, qMinRange, wantBull)
+            [lB, lF, lO, lH, lL, lC] = ccpScanAt(leftOff, qMinRange, wantBull)
             bool rOk = rB >= 0
             bool lOk = lB >= 0
 
@@ -645,8 +652,8 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                 // caught it.
                 string lTag = lOk ? (lB + lF == 0 ? "left alone" : "left merged") : "left none"
                 string rTag = rOk ? (rB + rF == 0 ? "right alone" : "right merged") : "right none"
-                string lWhy = ccpDebug and not lOk ? ccpWhy(leftOff, ccpMinRange, wantBull) : ""
-                string rWhy = ccpDebug and not rOk ? ccpWhy(rightOff, ccpMinRange, wantBull) : ""
+                string lWhy = ccpDebug and not lOk ? ccpWhy(leftOff, qMinRange, wantBull) : ""
+                string rWhy = ccpDebug and not rOk ? ccpWhy(rightOff, qMinRange, wantBull) : ""
                 string lTxt = lOk ? ccpLeg("LEFT  (the swing that built the level)", lB, lF, lO, lH, lL, lC, wantBull) : "LEFT: no shape" + lWhy
                 string rTxt = rOk ? ccpLeg("RIGHT (the candles that ran it)", rB, rF, rO, rH, rL, rC, wantBull) : "RIGHT: no shape" + rWhy
                 string side = q.isHigh ? "buy-side" : "sell-side"

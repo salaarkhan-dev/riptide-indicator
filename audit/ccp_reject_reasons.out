@@ -1,0 +1,78 @@
+═══ Min15 — 43429 grabs ═══
+  LEFT end found nothing on 43058 grabs
+    at least one window failed on …
+      RANGE        1094    2.5%
+      BODY        43029   99.9%
+      WICK        43039  100.0%
+      DIRECTION   29342   68.1%
+    the ONE test that, if lifted, would have let something through:
+      mixed                   23141   53.7%
+      WICK alone              10640   24.7%
+      BODY+WICK                7172   16.7%
+      BODY alone               1950    4.5%
+      WICK+DIRECTION             53    0.1%
+  RIGHT end found nothing on 43202 grabs
+    at least one window failed on …
+      RANGE        2688    6.2%
+      BODY        43194  100.0%
+      WICK        43199  100.0%
+      DIRECTION   36960   85.6%
+    the ONE test that, if lifted, would have let something through:
+      mixed                   23794   55.1%
+      WICK alone              10411   24.1%
+      BODY+WICK                6765   15.7%
+      BODY alone               1812    4.2%
+      DIRECTION alone           190    0.4%
+
+═══ Min30 — 22214 grabs ═══
+  LEFT end found nothing on 22037 grabs
+    at least one window failed on …
+      RANGE         598    2.7%
+      BODY        22020   99.9%
+      WICK        22029  100.0%
+      DIRECTION   14809   67.2%
+    the ONE test that, if lifted, would have let something through:
+      mixed                   11808   53.6%
+      WICK alone               5590   25.4%
+      BODY+WICK                3646   16.5%
+      BODY alone                913    4.1%
+      DIRECTION alone            28    0.1%
+  RIGHT end found nothing on 22094 grabs
+    at least one window failed on …
+      RANGE        1355    6.1%
+      BODY        22088  100.0%
+      WICK        22094  100.0%
+      DIRECTION   19003   86.0%
+    the ONE test that, if lifted, would have let something through:
+      mixed                   12078   54.7%
+      WICK alone               5533   25.0%
+      BODY+WICK                3469   15.7%
+      BODY alone                812    3.7%
+      DIRECTION alone           107    0.5%
+
+═══ Min60 — 10657 grabs ═══
+  LEFT end found nothing on 10574 grabs
+    at least one window failed on …
+      RANGE         272    2.6%
+      BODY        10564   99.9%
+      WICK        10566   99.9%
+      DIRECTION    7107   67.2%
+    the ONE test that, if lifted, would have let something through:
+      mixed                    5352   50.6%
+      WICK alone               2878   27.2%
+      BODY+WICK                1876   17.7%
+      BODY alone                419    4.0%
+      WICK+DIRECTION             20    0.2%
+  RIGHT end found nothing on 10613 grabs
+    at least one window failed on …
+      RANGE         637    6.0%
+      BODY        10606   99.9%
+      WICK        10612  100.0%
+      DIRECTION    9235   87.0%
+    the ONE test that, if lifted, would have let something through:
+      mixed                    5674   53.5%
+      WICK alone               2799   26.4%
+      BODY+WICK                1657   15.6%
+      BODY alone                373    3.5%
+      DIRECTION alone            52    0.5%
+
