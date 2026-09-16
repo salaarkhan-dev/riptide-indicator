@@ -1,0 +1,164 @@
+Can an exit rule rescue an entry with no edge?
+
+23 symbols, 333 days, stop 0.25 ATR past the grab wick, SE clustered by (symbol, day)
+
+Min15: 23 symbols, 43429 scored grabs
+Min30: 23 symbols, 22215 scored grabs
+Min60: 23 symbols, 10655 scored grabs
+
+═══ STATS TABLE ═══
+R/bet is the only column that decides anything. Win rate and profit
+factor are here because a partial buys a higher win rate with
+smaller wins — it improves every column except that one.
+
+  Min15 OLDER   21714 bets
+    arm     bets   win%    R/bet     SE     totR     PF  targ%  stop%  time%
+    ------------------------------------------------------------------------
+    X1     21714   33.3   -0.081  0.010  -1749.3   0.89   32.6   66.6    0.8
+    X2     21714   39.6   -0.082  0.009  -1773.0   0.87   39.4   60.3    0.4
+    X3     21714   39.6   -0.114  0.009  -2484.3   0.83   27.3   72.2    0.5
+
+  Min15 NEWER   21715 bets
+    arm     bets   win%    R/bet     SE     totR     PF  targ%  stop%  time%
+    ------------------------------------------------------------------------
+    X1     21715   33.7   -0.089  0.010  -1930.2   0.88   32.8   66.0    1.2
+    X2     21715   40.2   -0.086  0.009  -1872.9   0.87   39.7   59.5    0.8
+    X3     21715   40.1   -0.117  0.009  -2537.9   0.82   28.0   71.0    1.0
+
+  Min30 OLDER   11107 bets
+    arm     bets   win%    R/bet     SE     totR     PF  targ%  stop%  time%
+    ------------------------------------------------------------------------
+    X1     11107   33.9   -0.057  0.014   -634.3   0.92   31.5   65.4    3.2
+    X2     11107   40.1   -0.053  0.012   -585.9   0.92   38.8   59.3    1.9
+    X3     11107   40.1   -0.083  0.012   -917.6   0.87   26.5   70.9    2.6
+
+  Min30 NEWER   11108 bets
+    arm     bets   win%    R/bet     SE     totR     PF  targ%  stop%  time%
+    ------------------------------------------------------------------------
+    X1     11108   33.8   -0.071  0.014   -790.1   0.90   31.2   65.0    3.8
+    X2     11108   39.9   -0.070  0.012   -773.2   0.89   38.2   59.0    2.7
+    X3     11108   39.9   -0.101  0.012  -1120.4   0.84   26.2   70.5    3.3
+
+  Min60 OLDER   5327 bets
+    arm     bets   win%    R/bet     SE     totR     PF  targ%  stop%  time%
+    ------------------------------------------------------------------------
+    X1      5327   36.6   -0.007  0.020    -36.5   0.99   29.6   60.7    9.7
+    X2      5327   41.4   -0.022  0.017   -116.2   0.96   37.2   56.2    6.6
+    X3      5327   41.4   -0.041  0.017   -216.2   0.93   25.4   66.1    8.6
+
+  Min60 NEWER   5328 bets
+    arm     bets   win%    R/bet     SE     totR     PF  targ%  stop%  time%
+    ------------------------------------------------------------------------
+    X1      5328   34.8   -0.062  0.019   -332.0   0.91   27.7   62.2   10.1
+    X2      5328   39.6   -0.071  0.017   -376.7   0.88   34.9   57.6    7.5
+    X3      5328   39.6   -0.092  0.017   -488.8   0.85   23.6   67.0    9.4
+
+═══ Min15 ═══
+  OLDER half   21714 bets
+    median risk 0.79% of price
+    X1  R -0.081 ± 0.010   win 33.3%
+    X2  R -0.082 ± 0.009   win 39.6%
+         Δ vs X1 -0.001 ± 0.005  z -0.21
+    X3  R -0.114 ± 0.009   win 39.6%   (harness -0.105, fee-corrected above)
+         Δ vs X1 -0.034 ± 0.004  z -8.34
+    control, 21714 random bars
+      C1  R -0.061 ± 0.011
+      C2  R -0.076 ± 0.009   Δ vs C1 -0.014 ± 0.005
+      C3  R -0.108 ± 0.009   Δ vs C1 -0.046 ± 0.004
+
+  NEWER half   21715 bets
+    median risk 0.65% of price
+    X1  R -0.089 ± 0.010   win 33.7%
+    X2  R -0.086 ± 0.009   win 40.2%
+         Δ vs X1 +0.003 ± 0.005  z +0.50
+    X3  R -0.117 ± 0.009   win 40.1%   (harness -0.106, fee-corrected above)
+         Δ vs X1 -0.028 ± 0.004  z -6.84
+    control, 21715 random bars
+      C1  R -0.119 ± 0.011
+      C2  R -0.131 ± 0.009   Δ vs C1 -0.012 ± 0.005
+      C3  R -0.164 ± 0.009   Δ vs C1 -0.045 ± 0.004
+
+═══ Min30 ═══
+  OLDER half   11107 bets
+    median risk 1.15% of price
+    X1  R -0.057 ± 0.014   win 33.9%
+    X2  R -0.053 ± 0.012   win 40.1%
+         Δ vs X1 +0.004 ± 0.007  z +0.59
+    X3  R -0.083 ± 0.012   win 40.1%   (harness -0.077, fee-corrected above)
+         Δ vs X1 -0.026 ± 0.006  z -4.42
+    control, 11107 random bars
+      C1  R -0.060 ± 0.014
+      C2  R -0.075 ± 0.012   Δ vs C1 -0.015 ± 0.007
+      C3  R -0.099 ± 0.013   Δ vs C1 -0.040 ± 0.005
+
+  NEWER half   11108 bets
+    median risk 0.97% of price
+    X1  R -0.071 ± 0.014   win 33.8%
+    X2  R -0.070 ± 0.012   win 39.9%
+         Δ vs X1 +0.002 ± 0.007  z +0.21
+    X3  R -0.101 ± 0.012   win 39.9%   (harness -0.094, fee-corrected above)
+         Δ vs X1 -0.030 ± 0.006  z -5.36
+    control, 11108 random bars
+      C1  R -0.079 ± 0.014
+      C2  R -0.089 ± 0.013   Δ vs C1 -0.010 ± 0.007
+      C3  R -0.121 ± 0.013   Δ vs C1 -0.042 ± 0.005
+
+═══ Min60 ═══
+  OLDER half   5327 bets
+    median risk 1.70% of price
+    X1  R -0.007 ± 0.020   win 36.6%
+    X2  R -0.022 ± 0.017   win 41.4%
+         Δ vs X1 -0.015 ± 0.009  z -1.63
+    X3  R -0.041 ± 0.017   win 41.4%   (harness -0.037, fee-corrected above)
+         Δ vs X1 -0.034 ± 0.007  z -4.74
+    control, 5327 random bars
+      C1  R -0.087 ± 0.019
+      C2  R -0.095 ± 0.017   Δ vs C1 -0.008 ± 0.009
+      C3  R -0.113 ± 0.017   Δ vs C1 -0.026 ± 0.007
+
+  NEWER half   5328 bets
+    median risk 1.44% of price
+    X1  R -0.062 ± 0.019   win 34.8%
+    X2  R -0.071 ± 0.017   win 39.6%
+         Δ vs X1 -0.008 ± 0.009  z -0.92
+    X3  R -0.092 ± 0.017   win 39.6%   (harness -0.087, fee-corrected above)
+         Δ vs X1 -0.029 ± 0.007  z -4.18
+    control, 5328 random bars
+      C1  R -0.103 ± 0.020
+      C2  R -0.103 ± 0.018   Δ vs C1 +0.000 ± 0.009
+      C3  R -0.129 ± 0.018   Δ vs C1 -0.025 ± 0.007
+
+═══ VERDICT AGAINST THE PRE-REGISTERED BARS ═══
+12 tests plus controls. At z >= 2.0 each the chance of at least one
+false positive is about 45%, so bar 6 alone carries nothing.
+
+      Min15 old: Δ -0.001  z -0.21  R -0.082  n 21714  control Δ -0.014
+      Min15 new: Δ +0.003  z +0.50  R -0.086  n 21715  control Δ -0.012
+      Min30 old: Δ +0.004  z +0.59  R -0.053  n 11107  control Δ -0.015
+      Min30 new: Δ +0.002  z +0.21  R -0.070  n 11108  control Δ -0.010
+      Min60 old: Δ -0.015  z -1.63  R -0.022  n 5327  control Δ -0.008
+      Min60 new: Δ -0.008  z -0.92  R -0.071  n 5328  control Δ +0.000
+  X2
+      bar 1  PASS  200+ bets in every panel
+      bar 2  FAIL  one sign across six panels
+      bar 3  FAIL  beats the plain exit, newer half
+      bar 4  FAIL  positive standalone R after the fee correction, newer half
+      bar 5  FAIL  beats the plain exit by MORE than the random control does
+      power   worst MDE 0.018 R  (adequate)
+      → FAILS
+
+      Min15 old: Δ -0.034  z -8.34  R -0.114  n 21714  control Δ -0.046
+      Min15 new: Δ -0.028  z -6.84  R -0.117  n 21715  control Δ -0.045
+      Min30 old: Δ -0.026  z -4.42  R -0.083  n 11107  control Δ -0.040
+      Min30 new: Δ -0.030  z -5.36  R -0.101  n 11108  control Δ -0.042
+      Min60 old: Δ -0.034  z -4.74  R -0.041  n 5327  control Δ -0.026
+      Min60 new: Δ -0.029  z -4.18  R -0.092  n 5328  control Δ -0.025
+  X3
+      bar 1  PASS  200+ bets in every panel
+      bar 2  PASS  one sign across six panels
+      bar 3  FAIL  beats the plain exit, newer half
+      bar 4  FAIL  positive standalone R after the fee correction, newer half
+      bar 5  FAIL  beats the plain exit by MORE than the random control does
+      power   worst MDE 0.014 R  (adequate)
+      → FAILS
+
