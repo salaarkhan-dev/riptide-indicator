@@ -193,4 +193,9 @@ async def main() -> None:
             print("  fits; see the writeup before reading anything into this.")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    # Guarded because research/studies/fvg_net_higher_tf.py imports build()
+    # and the constants from here. Without it the import re-ran this entire
+    # study first — 1,200 days across three timeframes — and wrote its output
+    # into the other study's file.
+    asyncio.run(main())
