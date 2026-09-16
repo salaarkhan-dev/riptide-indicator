@@ -1,0 +1,78 @@
+Is the FVG result coherent across timeframes, or only a 1h accident?
+
+temporal window ends 2025-10-18 — the discovery window starts there
+
+═══ Min15 — discovery said NEGATIVE (-0.094) ═══
+  95 symbols, 12933 grabs, 2025-09-21 to 2025-10-16
+  unfiltered R -0.132 ± 0.013
+  FVG grabs      n   2534   R -0.044 ± 0.030
+  no-FVG grabs   n  10399   R -0.153
+  Δ +0.108 ± 0.033   z +3.28   control Δ +0.096
+
+SOL_USDT Min30: 1 discontinuities in 57598 bars
+XRP_USDT Min30: 1 discontinuities in 54020 bars
+ZEC_USDT Min30: 1 discontinuities in 54021 bars
+SUI_USDT Min30: 1 discontinuities in 54021 bars
+ARB_USDT Min30: 1 discontinuities in 54021 bars
+DOGE_USDT Min30: 1 discontinuities in 54020 bars
+LINK_USDT Min30: 1 discontinuities in 54020 bars
+UNI_USDT Min30: 1 discontinuities in 54021 bars
+NEAR_USDT Min30: 1 discontinuities in 54021 bars
+ADA_USDT Min30: 1 discontinuities in 54020 bars
+XLM_USDT Min30: 1 discontinuities in 54021 bars
+PEPE_USDT Min30: 1 discontinuities in 57598 bars
+WLD_USDT Min30: 1 discontinuities in 54021 bars
+AVAX_USDT Min30: 1 discontinuities in 54020 bars
+INJ_USDT Min30: 1 discontinuities in 54021 bars
+BNB_USDT Min30: 1 discontinuities in 54021 bars
+LTC_USDT Min30: 1 discontinuities in 54021 bars
+DOT_USDT Min30: 1 discontinuities in 54022 bars
+FILECOIN_USDT Min30: 1 discontinuities in 54020 bars
+AAVE_USDT Min30: 1 discontinuities in 54020 bars
+HBAR_USDT Min30: 1 discontinuities in 54020 bars
+ICP_USDT Min30: 1 discontinuities in 54021 bars
+ATOM_USDT Min30: 1 discontinuities in 54021 bars
+DASH_USDT Min30: 1 discontinuities in 54021 bars
+SHIB_USDT Min30: 1 discontinuities in 54023 bars
+XMR_USDT Min30: 1 discontinuities in 54021 bars
+BCH_USDT Min30: 1 discontinuities in 54021 bars
+SEI_USDT Min30: 1 discontinuities in 54021 bars
+CRV_USDT Min30: 1 discontinuities in 54020 bars
+IOST_USDT Min30: 1 discontinuities in 54020 bars
+PENDLE_USDT Min30: 1 discontinuities in 54021 bars
+LDO_USDT Min30: 1 discontinuities in 54021 bars
+TRX_USDT Min30: 1 discontinuities in 54021 bars
+ALGO_USDT Min30: 1 discontinuities in 54021 bars
+1000BONK_USDT Min30: 1 discontinuities in 54021 bars
+VET_USDT Min30: 1 discontinuities in 54020 bars
+KAS_USDT Min30: 1 discontinuities in 54021 bars
+GALA_USDT Min30: 1 discontinuities in 54021 bars
+ETC_USDT Min30: 1 discontinuities in 54021 bars
+CAKE_USDT Min30: 1 discontinuities in 54020 bars
+ZEN_USDT Min30: 1 discontinuities in 54020 bars
+SAND_USDT Min30: 1 discontinuities in 54020 bars
+FLOKI_USDT Min30: 1 discontinuities in 54020 bars
+JASMY_USDT Min30: 1 discontinuities in 54020 bars
+ORDI_USDT Min30: 1 discontinuities in 54020 bars
+AR_USDT Min30: 1 discontinuities in 54020 bars
+EGLD_USDT Min30: 1 discontinuities in 54020 bars
+═══ Min30 — discovery said NEGATIVE (-0.056) ═══
+  88 symbols, 149093 grabs, 2023-06-05 to 2025-10-16
+  unfiltered R -0.065 ± 0.004
+  FVG grabs      n  28910   R +0.005 ± 0.009
+  no-FVG grabs   n 120183   R -0.082
+  Δ +0.087 ± 0.010   z +8.82   control Δ +0.014
+
+IOST_USDT Min60: 1 discontinuities in 28010 bars
+VET_USDT Min60: 1 discontinuities in 28010 bars
+═══ Min60 — discovery said ANCHOR, not a test — expect about +0.046 ═══
+  90 symbols, 83222 grabs, 2023-06-06 to 2025-10-16
+  unfiltered R -0.050 ± 0.005
+  FVG grabs      n  15639   R +0.045 ± 0.011
+  no-FVG grabs   n  67583   R -0.072
+  Δ +0.117 ± 0.013   z +9.33   control Δ +0.045
+
+═══ WHICH OUTCOME ═══
+  anchor Min60 R +0.045  reproduces — pipeline sound
+
+  → OUTCOME C: mixed signs across adjacent timeframes — UNSTABLE, not established, no forward run
