@@ -721,10 +721,17 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                 // at the grab keeps the finding and drops the illusion. The
                 // band and the $$$ line already say which swing it came from,
                 // and debug mode boxes the exact candles.
+                // ONE TRIANGLE PER GRAB, on the grab bar. Two would land on the
+                // same bar when both ends match and sit exactly on top of each
+                // other, and they would carry the same tooltip anyway — it
+                // already describes both ends.
+                string where = "\n\nDRAWN AT THE GRAB, NOT AT THE SHAPES IT DESCRIBES."
                 if lOk
-                    ccpMark(q.grabBar, wantBull, q.col, tip + "\n\nDRAWN AT THE GRAB, NOT AT THE SHAPE. The shape this describes is at the swing that built the level, " + str.tostring(bar_index - q.pivotBar) + " bars back — the left edge of the band. The triangle is placed here instead so that nothing on the chart sits far in the past looking like it was called at the time. Turn on debug to box the candles it actually used.")
+                    where := where + "\n  LEFT shape: at the swing that built the level, " + str.tostring(bar_index - q.pivotBar) + " bars back — the left edge of the band."
                 if rOk
-                    ccpMark(bar_index, wantBull, q.col, tip + "\n\nON THE CONFIRMING BAR. This triangle is on the bar where the verdict became knowable, so nothing about it is retrospective — it appeared the moment it could. The candles it describes end " + str.tostring(rightOff - rF) + " bars back; turn on debug to box them.")
+                    where := where + "\n  RIGHT shape: ends " + str.tostring(rightOff - rF) + " bars back."
+                where := where + "\nPlaced here so nothing on the chart sits far in the past looking like it was called at the time. It appears " + str.tostring(ccpFwd) + " bars after this candle closes, which is when the shape first becomes knowable. Turn on debug to box the candles each end used."
+                ccpMark(q.grabBar, wantBull, q.col, tip + where)
                 if ccpDebug
                     if lOk
                         ccpWindowBox(q.pivotBar - lB, q.pivotBar + lF, lH, lL,
