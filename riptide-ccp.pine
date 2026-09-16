@@ -582,14 +582,22 @@ if ccpOn and ccpBarOk and ccpQueue.size() > 0
                      "\n" + lTag + "  +  " + rTag +
                      "\n\n" + lTxt +
                      "\n\n" + rTxt +
-                     "\n\nOnly " + (wantBull ? "bullish" : "bearish") +
-                     " shapes are accepted here — the other direction is not a" +
-                     "\nweaker signal, it is the wrong one, so it is discarded." +
+                     "\n\nTHIS MARK WAS ACCEPTED. A " + (wantBull ? "bullish" : "bearish") + " shape is the one this grab" +
+                     "\nimplies. Had the shape pointed the other way it would have been" +
+                     "\ndiscarded — not drawn in another colour, and not shown at all." +
                      "\n\nContext only. No alert, no entry, nothing measured."
+                // Both arrows are created HERE, on this bar, however far back
+                // they are placed. The left one lands on the swing that built
+                // the level, which can be a long way before the grab that
+                // created it, and a chart cannot show that on its own: the
+                // arrow simply appears at an old bar with the move already
+                // visible after it. Saying the lag out loud is the only thing
+                // stopping that from reading as foresight.
+                string late = "\n\nDRAWN LATE. This whole mark was created when the grab confirmed, not when the candle under the arrow closed."
                 if lOk
-                    ccpMark(q.pivotBar, wantBull, q.col, tip)
+                    ccpMark(q.pivotBar, wantBull, q.col, tip + late + " This arrow sits " + str.tostring(bar_index - q.pivotBar) + " bars in the past — nothing was on the chart here at the time.")
                 if rOk
-                    ccpMark(q.grabBar, wantBull, q.col, tip)
+                    ccpMark(q.grabBar, wantBull, q.col, tip + late + " This arrow sits " + str.tostring(bar_index - q.grabBar) + " bars in the past — nothing was on the chart here at the time.")
                 if ccpDebug
                     if lOk
                         ccpWindowBox(q.pivotBar - lB, q.pivotBar + lF, lH, lL,
