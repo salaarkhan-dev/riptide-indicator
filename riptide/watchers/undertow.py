@@ -118,6 +118,12 @@ RECENT_BARS = 6
 # indicators/undertow/port/undertow.py::P is the authority; the two are held
 # together by test_watch_undertow.py.
 MS_SHORT_LEN = 2
+# THE CONFIRMATION ORDER, and it matches the port's default and the chart's.
+# v1 armed on "both lines, in either order", which was a misreading of the
+# strategy — see indicators/undertow/SPEC.md section 8. Every measurement page
+# in indicators/undertow/measurements was produced under the old rule and each
+# study now pins it; the WATCH trades the corrected one.
+CONFIRM_ORDER = "working then failure"
 SWING_SRC = "price move"
 SWING_K = 0.40
 SWING_K_MINOR = 0.12
@@ -301,12 +307,20 @@ def _atr(cs, length=14):
 
 class _Cand:
     __slots__ = ("bar", "hi", "lo", "focus", "workHi", "short", "pbExt",
-                 "state", "code", "workOk", "failOk", "armed", "armBar",
+                 "state", "code", "workOk", "failOk", "workBar",
+                 "armed", "armBar",
                  "stop", "target", "order")
 
     def __init__(self, **kw):
         for k in self.__slots__:
             setattr(self, k, kw.get(k, False))
+        # `workBar` CANNOT DEFAULT TO FALSE. Every other slot is a bool or is
+        # always passed, so the loop above is fine for them -- but False == 0
+        # in Python, so `cd.workBar >= 0` would be TRUE on a candidate that has
+        # never seen a working break, and the arming test would reduce to "any
+        # failure break". That is not a subtle difference: it armed 123 setups
+        # where the port armed 42, and test_watch_undertow caught it.
+        self.workBar = kw.get("workBar", -1)
 
 
 def run_setups(cs, ms_len: int = 6, max_live: int = 64):
@@ -496,18 +510,28 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
                     cd.pbExt = c.l
                 wHit = (c.c > cd.hi) if cd.workHi else (c.c < cd.lo)
                 fHit = (c.c < cd.lo) if cd.workHi else (c.c > cd.hi)
-                # WHICH LINE CLOSED FIRST. 1 = Working then Failure, 2 = the
-                # other way round. Both must happen and the order is free, so
-                # the alert says which — "it worked and then it failed" and
-                # "it failed and then it worked" are the same setup arriving
-                # by two different routes.
+                # THE ORDER IS NOT FREE, and this comment used to say it was.
+                # A WORKING break must come first and a FAILURE break after it:
+                # the pin is a counter-trend candle, W is it appearing to work
+                # as a reversal and F is that reversal failing, so the attempt
+                # has to happen first. W→F arms; F→W→F arms on the second F;
+                # F→W waits. STRICTLY after, because a bar spanning both lines
+                # gives no intrabar order.
+                #
+                # `order` still records the route for the alert text, because
+                # "it failed, then worked, then failed again" reads differently
+                # from a clean W→F and the message should say which.
                 if wHit and not cd.workOk:
                     cd.workOk = True
+                    cd.workBar = i
                     cd.order = cd.order or 1
                 if fHit and not cd.failOk:
                     cd.failOk = True
                     cd.order = cd.order or 2
-                if cd.workOk and cd.failOk:
+                ready = (fHit and cd.workBar >= 0 and i > cd.workBar
+                         if CONFIRM_ORDER == "working then failure"
+                         else cd.workOk and cd.failOk)
+                if ready:
                     stop = (cd.pbExt + atrBuf if cd.short
                             else cd.pbExt - atrBuf)
                     risk = abs(stop - cd.focus)

@@ -210,10 +210,16 @@ class P:
     # 3 · Setup
     workTest: str = T_CLOSE
     failTest: str = T_CLOSE
-    # THE DEFAULT IS v1's, deliberately. Every measurement page in
-    # ../measurements was produced under "either order" and has to keep
-    # reproducing; the corrected rule is measured on its own before it moves.
-    confirmOrder: str = C_EITHER
+    # THE DEFAULT IS THE CORRECTED RULE, and it matches the chart's. v1's
+    # "either order" was a misreading of the strategy, so shipping it as the
+    # default would mean the port and the Pine agree on a rule that is not the
+    # one being traded -- and a Pine default that differs from the port's is
+    # precisely the failure undertow-port-check.py exists to catch.
+    #
+    # EVERY MEASUREMENT PAGE WAS PRODUCED UNDER "either order", so every study
+    # now PINS it. That is the arrangement test_studies_pin_their_settings.py
+    # enforces, and confirmOrder is in its PINNED list for exactly this reason.
+    confirmOrder: str = C_WF
     # Require a BOS in the trend direction before a pullback is tradeable --
     # "look for the pullback AFTER the BOS". At False a fresh CHoCH with no
     # break of structure behind it is tradeable, which is what v1 did.

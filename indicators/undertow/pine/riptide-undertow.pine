@@ -109,6 +109,9 @@ workTest = input.string("close beyond", "Working test", group = gSet,
 failTest = input.string("close beyond", "Failure test", group = gSet,
   options = ["close beyond", "close at or beyond", "whole body beyond"],
   tooltip = "Same for the Failure line. While both match, which line is which changes nothing.")
+confirmOrder = input.string("working then failure", "Confirmations", group = gSet,
+  options = ["working then failure", "either order"],
+  tooltip = "THE ORDER THE TWO CONFIRMATIONS MUST ARRIVE IN, and the default is a CORRECTION rather than a preference.\n\n'working then failure' is the strategy: the pin is a counter-trend candle, W is it appearing to WORK as a reversal, F is that reversal FAILING, and the limit goes at the Focus line on the failure. So the attempt has to happen first.\n\n    W → F          arms\n    F → W → F      arms, on the second F\n    F → W          does NOT arm — waits for an F\n\n'either order' is what v1 did and it is a different event: it admits bars where the reversal never worked at all and only the same two lines were touched. Every measurement page in ../measurements was produced under it.\n\nA bar that spans BOTH lines does not arm either way — intrabar order is unknowable and this indicator resolves that against the trade everywhere else.")
 confirmBars = input.int(20, "Confirm within", minval = 2, maxval = 200, group = gSet,
   tooltip = "Bars for BOTH confirmations to land. Without a bound the rule is eventually true for almost any candle.")
 fillBars = input.int(20, "Fill within", minval = 1, maxval = 200, group = gSet,
@@ -169,8 +172,20 @@ overlapMode = input.string("collapse", "Overlapping setups", group = gShow,
 showZones = input.bool(true, "Risk / reward zones", group = gShow)
 showUnfilled = input.bool(true, "Draw setups that never filled", group = gShow,
   tooltip = "Armed setups that were stopped or expired before the limit filled, drawn muted with an ×. Off keeps the chart clean; ON is how you check past detection without waiting for live ones.")
-showStruct = input.bool(true, "Structure marks", group = gShow,
-  tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye.")
+showStruct = input.bool(true, "Market structure", group = gShow,
+  tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye. One toggle for all three.")
+showStats = input.bool(true, "Stats table", group = gShow,
+  tooltip = "The panel top-right. Its first row is the BIAS — direction and state — so turning the rest off still leaves that if you re-enable it. Off draws nothing and costs nothing.")
+showOB = input.bool(false, "Order blocks", group = gShow, inline = "z1",
+  tooltip = "The last unmitigated order block either side, drawn as a box to the right edge. This is the SAME detector the backup fill uses — see group 5 — so what you see is what that would trade, not a second opinion.\n\nOff by default: UNDERTOW_BACKUP_FILL.md measured the backup at +0.03 R per armed setup, positive on 3 of 3 and significant on none.")
+colOB = input.color(color.new(#2157f3, 80), "", group = gShow, inline = "z1")
+showFVG = input.bool(false, "Fair value gaps", group = gShow, inline = "z2",
+  tooltip = "Three-bar gaps, drawn as boxes. Same detector as the backup fill.")
+colFVG = input.color(color.new(#878b94, 80), "", group = gShow, inline = "z2")
+fvgExtend = input.int(5, "… extend zones by", minval = 0, maxval = 50, group = gShow,
+  tooltip = "How many bars past the gap the box is drawn. Cosmetic.")
+zoneAuto = input.bool(false, "… auto threshold", group = gShow,
+  tooltip = "Filter out small gaps using the average bar range. OFF by default because a filter nothing has measured is a filter nobody should trust — and every zone filter measured in this project has failed.")
 keepN = input.int(45, "Keep last N setups", minval = 1, maxval = 60, group = gShow,
   tooltip = "How far back setups stay drawn. TradingView caps total drawings at 500, so a high value on a busy chart silently loses the oldest.")
 colLong = input.color(color.new(#089981, 0), "Long", group = gShow, inline = "c1")
@@ -335,6 +350,7 @@ type Cand
     bool   workHi = false
     bool   workOk = false
     bool   failOk = false
+    int    workBar = -1
     bool   armed  = false
     int    armBar = na
     bool   short  = false
@@ -970,11 +986,24 @@ if barOk and cands.size() > 0
             bool fHit = c.workHi ? beyondDn(c.lo, failTest) : beyondUp(c.hi, failTest)
             if wHit and not c.workOk
                 c.workOk := true
+                c.workBar := bar_index
                 c.order := c.order == 0 ? 1 : c.order
             if fHit and not c.failOk
                 c.failOk := true
                 c.order := c.order == 0 ? 2 : c.order
-            if c.workOk and c.failOk
+            // THE ARMING EVENT IS THE FAILURE BREAK, and only one that lands
+            // STRICTLY AFTER a working break. v1 armed on "both, in either
+            // order", which was a misreading of the strategy: the pin is a
+            // counter-trend candle, W is it appearing to WORK as a reversal
+            // and F is that reversal FAILING, so the attempt has to happen
+            // first. Either-order admits bars where the reversal never worked.
+            //
+            // STRICTLY after, because a bar spanning both lines gives no
+            // intrabar order — the same reason a bar spanning entry and stop
+            // counts as the loss. That bar does not arm; a later F does, which
+            // is what makes F→W→F work.
+            bool ready = confirmOrder == "either order" ? (c.workOk and c.failOk) : (fHit and c.workBar >= 0 and bar_index > c.workBar)
+            if ready
                 // The stop uses values CONFIRMED at or before this bar. A stop
                 // drawn from a swing confirmed later is a stop that did not
                 // exist when the trade was taken.
@@ -993,7 +1022,7 @@ if barOk and cands.size() > 0
                     why := "stop is not beyond the entry"
                     gone := true
             else if bar_index - c.bar >= confirmBars
-                why := "confirm window · no " + (c.workOk ? "F" : "W")
+                why := "confirm window · no " + (not c.workOk ? "W" : confirmOrder == "either order" ? "F" : "F after the W")
                 gone := true
         // THE PULLBACK IS OFTEN NOT FINISHED WHEN A SETUP ARMS, and freezing
         // the stop there sets it on an unfinished move. A long cannot arm
@@ -1226,7 +1255,7 @@ if cands.size() > 0
             lb.set_xy(bar_index, c.focus)
             lb.set_color(color.new(lc, 25))
             lb.set_textcolor(color.white)
-            lb.set_text(c.code + " " + (c.armed ? "ARMED " + (c.order == 1 ? "W→F" : "F→W") : c.workOk ? "W✓ F·" : c.failOk ? "W· F✓" : "W· F·") + " " + str.tostring(bar_index - c.bar) + "b")
+            lb.set_text(c.code + " " + (c.armed ? "ARMED " + (c.order == 1 ? "W→F" : "F→W→F") : c.workOk ? "W✓ F·" : c.failOk ? "W· F✓" : "W· F·") + " " + str.tostring(bar_index - c.bar) + "b")
             slot := slot + 1
 
 // Structure, so the bias can be checked by eye rather than trusted.
@@ -1274,6 +1303,44 @@ if dbgOn and pinRaw and (pinOk or dbgRejects)
         label.delete(dbgBuf.shift())
 
 
+// ════════════════ 8b. ORDER BLOCKS AND FAIR VALUE GAPS ══════════════════════
+// DRAWN FROM THE SAME DEFINITIONS bkZone() USES, deliberately. A second
+// detector would be a second opinion, and the point of putting these on the
+// chart is to see what the backup fill in group 5 would actually take.
+//
+// Both are as loose as they look, which is why they are OFF by default:
+// UNDERTOW_BACKUP_FILL.md measured the thing they feed at +0.03 R per armed
+// setup, positive on 3 of 3 and significant on none.
+var array<box> zoneBuf = array.new<box>()
+
+zonePush(float top, float btm, color c) =>
+    zoneBuf.push(box.new(bar_index, top, bar_index + fvgExtend, btm,
+      border_color = color.new(c, 40), bgcolor = c))
+    while zoneBuf.size() > keepN
+        box.delete(zoneBuf.shift())
+
+// ta.* unconditionally. The threshold is only READ when zoneAuto is on.
+float zoneAvgRange = ta.sma(high - low, 50)
+float zoneMin = zoneAuto ? zoneAvgRange : 0.0
+
+if barOk and showFVG
+    // [2] is the OLDER bar. Pine counts backwards, and getting this inverted
+    // is what made the PORT's FVG detector silently find zero gaps until a
+    // test asserted both zone types fire.
+    bool fvgUp = low > high[2] and (low - high[2]) >= zoneMin
+    bool fvgDn = high < low[2] and (low[2] - high) >= zoneMin
+    if fvgUp
+        zonePush(low, high[2], colFVG)
+    if fvgDn
+        zonePush(low[2], high, colFVG)
+
+if barOk and showOB
+    // The last opposite-coloured candle before a close through its extreme.
+    bool obUp = close > high[1] and close[1] < open[1]
+    bool obDn = close < low[1] and close[1] > open[1]
+    if obUp or obDn
+        zonePush(high[1], low[1], colOB)
+
 // ═══════════════════════════ 9. THE STATUS PANEL ═════════════════════════════
 // A STATUS panel, not a stats table. It says what the indicator is currently
 // seeing. It scores no outcomes, because v1 has none.
@@ -1293,7 +1360,7 @@ row(int r, string k, string v, color c, string tip) =>
     table.cell(pnl, 1, r, v, text_color = c, text_size = size.normal,
       text_halign = text.align_left, tooltip = tip)
 
-if barstate.islast
+if barstate.islast and showStats
     color bc = not biasSeen ? color.gray : ending ? color.orange : biasDir > 0 ? colLong : colShort
     string dir = not biasSeen ? "—" : biasDir > 0 ? "LONG" : "SHORT"
     int noEntry = nMissBack + nMissStop + nMissGone + nMissBias

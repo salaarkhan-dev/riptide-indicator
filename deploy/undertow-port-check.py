@@ -44,7 +44,8 @@ PORT = ROOT / "indicators/undertow/port/undertow.py"
 # Pine inputs that only ever reach a drawing call. The port has no analogue and
 # must not grow one.
 DISPLAY_ONLY = {"showZones", "showUnfilled", "showStruct", "keepN",
-                "overlapMode",
+                "overlapMode", "showStats", "showOB", "colOB",
+                "showFVG", "colFVG", "fvgExtend", "zoneAuto",
                 "colLong", "colShort", "colLine", "dbgOn", "dbgRejects"}
 
 # input.color / input.string defaults that are Pine expressions rather than

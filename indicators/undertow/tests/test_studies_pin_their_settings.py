@@ -41,7 +41,8 @@ STUDIES = pathlib.Path(__file__).resolve().parents[1] / "studies"
 # The fields whose defaults have actually moved under a published study. Add to
 # this list when you move another one -- that is cheaper than the alternative,
 # which is finding out from a table that silently disagrees with its page.
-PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep", "endStale")
+PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
+          "endStale", "confirmOrder")
 # A study whose whole job is to describe what currently ships puts this on the
 # line that reads the default. It is a deliberate, visible opt-out.
 EXEMPT = "TRACKS THE CURRENT DEFAULT"
@@ -76,7 +77,13 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # 2026-09-17: bumped a fifth time, for `smcSwingLen`/`smcInternalLen` — the
 # LuxAlgo structure source. Additive, read only when biasSrc is BS_SMC, and
 # undertow_bias Min15 reproduced before this moved.
-DEFAULTS_FINGERPRINT = "a3faaa3eefcb08d5"
+#
+# 2026-09-17: `confirmOrder` DEFAULT flipped to the corrected rule, so the port
+# and the chart ship the same strategy. Every study now PINS C_EITHER because
+# every measurement page was produced under it -- that is why confirmOrder is
+# in PINNED above. undertow_bias Min15 and undertow_pullback Min15 reproduced
+# to the digit before this moved.
+DEFAULTS_FINGERPRINT = "d3ea82732ff465f0"
 DEFAULTS_COUNT = 63
 
 good = []

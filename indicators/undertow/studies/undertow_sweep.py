@@ -69,6 +69,7 @@ def grid():
                     # was run and are False now; pinned so the page still
                     # reproduces. See test_studies_pin_their_settings.py.
                     yield U.P(endMinor=em, htfMult=h, rr=rr, feeFrac=FEE,
+                              confirmOrder=U.C_EITHER,
                               endSweep=True, endStale=True, **sw)
 
 
