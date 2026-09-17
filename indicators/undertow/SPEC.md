@@ -223,6 +223,12 @@ left to taste: **tiny labels, hidden behind candles, colliding with each other.*
 
 ### On the chart
 
+**Every mark names itself.** CHoCH and BOS carry their own text on the bar,
+because three different things were drawing circles in the first cut and a
+legend you have to remember is the same failure as a label you cannot read.
+The two that cannot carry text — the swing dots and the entry triangle — are
+named in the panel's `marks` row.
+
 | thing | how |
 |---|---|
 | **Entry** | triangle, `size.small`, `location.abovebar` / `belowbar` so it never sits on the candle. **Down = short, up = long** — direction carries the meaning, so it reads without colour |
@@ -231,7 +237,8 @@ left to taste: **tiny labels, hidden behind candles, colliding with each other.*
 | **Risk zone** | entry→stop, tinted red |
 | **Reward zone** | entry→target, tinted green |
 | **Labels** | `size.normal`, anchored to the **right end** of their line with `label.style_label_left` and a background, never floating over candles |
-| **Failed / expired setups** | **not drawn** unless debug is on |
+| **Unfilled setups** | armed then stopped or expired: muted dashed line and an **×**, behind `Draw setups that never filled`. Off by default; on is how past detection gets checked without waiting for live ones |
+| **Rejected candidates** | not drawn at all unless debug is on |
 
 All colours are inputs, in one group, and default to a palette that reads on
 both the light and dark chart themes.

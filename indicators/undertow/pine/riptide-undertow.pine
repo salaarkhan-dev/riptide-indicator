@@ -111,10 +111,12 @@ rr = input.float(3.0, "Reward ratio", minval = 0.5, maxval = 20.0, step = 0.5, g
   tooltip = "Target as a multiple of risk. Drawing only — nothing here scores an outcome.")
 
 showZones = input.bool(true, "Risk / reward zones", group = gShow)
+showUnfilled = input.bool(false, "Draw setups that never filled", group = gShow,
+  tooltip = "Armed setups that were stopped or expired before the limit filled, drawn muted with an ×. Off keeps the chart clean; ON is how you check past detection without waiting for live ones.")
 showStruct = input.bool(true, "Structure marks", group = gShow,
   tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye.")
-keepN = input.int(10, "Keep last N setups", minval = 1, maxval = 60, group = gShow,
-  tooltip = "Drawings are capped by TradingView. A busy chart will hit the ceiling and silently lose the oldest.")
+keepN = input.int(20, "Keep last N setups", minval = 1, maxval = 60, group = gShow,
+  tooltip = "How far back setups stay drawn. TradingView caps total drawings at 500, so a high value on a busy chart silently loses the oldest.")
 colLong = input.color(color.new(#089981, 0), "Long", group = gShow, inline = "c1")
 colShort = input.color(color.new(#f23645, 0), "Short", group = gShow, inline = "c1")
 colLine = input.color(color.new(#787b86, 0), "Lines", group = gShow, inline = "c1")
@@ -392,6 +394,7 @@ var float pdStop = na
 var float pdTarget = na
 var float pdPbExt = na
 var int pdOrder = 0
+var string pdTag = ""
 
 var int nRaw = 0
 var int nPins = 0
@@ -407,6 +410,18 @@ float fillPx = na
 float fillStop = na
 float fillTarget = na
 int fillPinBar = na
+string fillTag = ""
+
+// The same six for a setup that ARMED and then did not fill. Drawing those is
+// what lets past detection be checked without waiting for live ones — an
+// unfilled setup still answers "was the pin right", which is the only question
+// v1 exists to answer.
+bool dropNow = false
+bool dropShort = false
+float dropPx = na
+float dropStop = na
+int dropPinBar = na
+string dropWhy = ""
 
 // ── the live candidate, processed BEFORE a new pin can replace it ────────────
 if barOk and not na(pdBar)
@@ -471,11 +486,22 @@ if barOk and not na(pdBar)
             fillStop := pdStop
             fillTarget := pdTarget
             fillPinBar := pdBar
+            fillTag := pdTag
             nFilled := nFilled + 1
             gone := true
         else if bar_index - pdArmBar >= fillBars
             lastReject := "fill window"
             gone := true
+    // One capture point, whichever branch above set `gone`. Only ARMED setups
+    // are recorded: a candidate that never confirmed has no entry, no stop and
+    // nothing to draw, and the debug × already marks it.
+    if gone and pdArmed and not fillNow
+        dropNow := true
+        dropShort := pdShort
+        dropPx := pdFocus
+        dropStop := pdStop
+        dropPinBar := pdBar
+        dropWhy := lastReject
     if gone
         pdBar := na
         pdArmed := false
@@ -515,6 +541,7 @@ if takeNew
     pdArmed := false
     pdShort := biasDir < 0
     pdPbExt := pbExt
+    pdTag := pinTag
 
 
 // ═══════════════════════════════ 8. DRAWING ══════════════════════════════════
@@ -537,7 +564,7 @@ prune() =>
         line.delete(lnBuf.shift())
     while bxBuf.size() > keepN * 2
         box.delete(bxBuf.shift())
-    while lbBuf.size() > keepN
+    while lbBuf.size() > keepN * 2
         label.delete(lbBuf.shift())
 
 drawLine(int x1, int x2, float y, color c, string st) =>
@@ -560,7 +587,24 @@ if fillNow
     lbBuf.push(label.new(bar_index, fillPx,
       (fillShort ? "SHORT " : "LONG ") + str.tostring(rr, "#.#") + "R",
       xloc = xloc.bar_index, style = label.style_label_left,
-      color = color.new(cc, 20), textcolor = color.white, size = size.normal))
+      color = color.new(cc, 20), textcolor = color.white, size = size.normal,
+      tooltip = fillTag + "\nentry " + str.tostring(fillPx, format.mintick)
+      + "\nstop  " + str.tostring(fillStop, format.mintick)
+      + "\ntgt   " + str.tostring(fillTarget, format.mintick)
+      + "\n" + str.tostring(bar_index - fillPinBar) + " bars from the pin"))
+    prune()
+
+if dropNow and showUnfilled
+    // Muted and dashed, so a setup that did not happen can never be mistaken
+    // for one that did at a glance. The × marks the entry that was missed.
+    drawLine(dropPinBar, bar_index, dropPx, color.new(color.gray, 55),
+      line.style_dashed)
+    lbBuf.push(label.new(bar_index, dropPx, "×", xloc = xloc.bar_index,
+      style = label.style_label_left, color = color.new(color.gray, 75),
+      textcolor = color.new(color.gray, 10), size = size.normal,
+      tooltip = (dropShort ? "SHORT" : "LONG") + " armed, never filled\n"
+      + dropWhy + "\nentry " + str.tostring(dropPx, format.mintick)
+      + "\nstop  " + str.tostring(dropStop, format.mintick)))
     prune()
 
 plotshape(fillNow and fillShort, "Entry short", shape.triangledown,
@@ -609,19 +653,25 @@ plot(showStruct ? msTop : na, "Swing high", color.new(colShort, 40), 4,
   plot.style_circles, offset = -msLen)
 plot(showStruct ? msBtm : na, "Swing low", color.new(colLong, 40), 4,
   plot.style_circles, offset = -msLen)
-// On the BAR, not at the top of the pane: location.top puts a CHoCH marker
-// wherever the pane happens to end, which tells you nothing about where the
-// structure turned.
+// EACH MARK CARRIES ITS OWN NAME, and sits on the BAR rather than at the top
+// of the pane. Three different things were drawing circles
+// — BOS, swing highs and swing lows — which is the "what was that glyph again"
+// problem this project keeps hitting. plotshape text costs nothing against the
+// drawing budget, unlike a label, and it means no legend has to be remembered.
 plotshape(showStruct and msChoch and msOs == 1, "CHoCH up", shape.diamond,
-  location.belowbar, color.new(color.orange, 20), size = size.tiny)
+  location.belowbar, color.new(color.orange, 20), size = size.tiny,
+  text = "CHoCH", textcolor = color.new(color.orange, 20))
 plotshape(showStruct and msChoch and msOs == 0, "CHoCH down", shape.diamond,
-  location.abovebar, color.new(color.orange, 20), size = size.tiny)
+  location.abovebar, color.new(color.orange, 20), size = size.tiny,
+  text = "CHoCH", textcolor = color.new(color.orange, 20))
 // BOS, because it is what separates Immature from Running and the panel says
-// which state it thinks it is in.
-plotshape(showStruct and msBosUp, "BOS up", shape.circle, location.belowbar,
-  color.new(color.gray, 45), size = size.tiny)
-plotshape(showStruct and msBosDn, "BOS down", shape.circle, location.abovebar,
-  color.new(color.gray, 45), size = size.tiny)
+// which of the two it thinks it is in.
+plotshape(showStruct and msBosUp, "BOS up", shape.cross, location.belowbar,
+  color.new(color.gray, 45), size = size.tiny, text = "BOS",
+  textcolor = color.new(color.gray, 35))
+plotshape(showStruct and msBosDn, "BOS down", shape.cross, location.abovebar,
+  color.new(color.gray, 45), size = size.tiny, text = "BOS",
+  textcolor = color.new(color.gray, 35))
 
 // Debug: a dot on every pin, and ONE line on hover. Not a paragraph.
 // Rejects get the cheap mark (a plot costs nothing against the object limit);
@@ -649,7 +699,7 @@ if dbgOn and pinOk
 // only question a quiet detector ever raises, and a count alone cannot answer
 // it.
 
-var table pnl = table.new(position.top_right, 2, 8, border_width = 1,
+var table pnl = table.new(position.top_right, 2, 9, border_width = 1,
   frame_width = 1, frame_color = color.new(color.gray, 60))
 
 row(int r, string k, string v, color c) =>
@@ -668,6 +718,9 @@ if barstate.islast
     row(4, "entries", str.tostring(nFilled), color.gray)
     row(5, "live", na(pdBar) ? "—" : pdArmed ? "armed · " + (pdOrder == 1 ? "W→F" : "F→W") : (pdWorkOk ? "W✓ F✗" : pdFailOk ? "W✗ F✓" : "waiting"), color.gray)
     row(6, "last reject", lastReject, color.new(color.gray, 20))
+    // The marks that cannot carry their own text. CHoCH and BOS name
+    // themselves on the bar, so they are deliberately not repeated here.
+    row(8, "marks", "● swing hi/lo · ▲▼ entry · × unfilled", color.gray)
     if dbgOn
         row(7, "pins·bias·col·loc·arm·fill", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·" + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·" + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray)
     else
