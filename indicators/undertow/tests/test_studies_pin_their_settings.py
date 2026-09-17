@@ -72,8 +72,12 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # Min15 were re-run and reproduced to the digit before this moved. When v2 is
 # measured and promoted, every page produced under v1 is superseded and this
 # comment is where that starts.
-DEFAULTS_FINGERPRINT = "3e91ab56c66ef1f6"
-DEFAULTS_COUNT = 61
+#
+# 2026-09-17: bumped a fifth time, for `smcSwingLen`/`smcInternalLen` — the
+# LuxAlgo structure source. Additive, read only when biasSrc is BS_SMC, and
+# undertow_bias Min15 reproduced before this moved.
+DEFAULTS_FINGERPRINT = "a3faaa3eefcb08d5"
+DEFAULTS_COUNT = 63
 
 good = []
 

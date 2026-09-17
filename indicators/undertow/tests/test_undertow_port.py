@@ -666,8 +666,72 @@ def test_htf_hours_is_the_same_gate_in_a_consistent_unit():
        f"{b.nHtf} turned away")
 
 
+def test_smc_is_the_same_swings_and_the_same_choch():
+    """THE TWO FINDINGS THAT DECIDED HOW smc.py WAS BUILT, pinned.
+
+    LuxAlgo's structure was asked for on the grounds that its swing detection
+    is better. It is not different: `leg()` expands to the same expression as
+    `bar_swings()`, and the CHoCH bars are the same list. What differs is the
+    PIVOT LENGTH and the BOS rule.
+
+    If either equivalence ever breaks, smc.py's decision to reuse bar_swings
+    stops being justified and its docstring starts lying. This is the alarm.
+    """
+    from indicators.undertow.port import smc
+
+    cs = walk(3000, seed=63, drift=0.0003)
+
+    def lux_leg(seq, size):
+        out, leg = [0] * len(seq), 0
+        for i in range(len(seq)):
+            if i >= size:
+                w = seq[i - size + 1:i + 1]
+                if seq[i - size].h > max(x.h for x in w):
+                    leg = 0
+                elif seq[i - size].l < min(x.l for x in w):
+                    leg = 1
+            out[i] = leg
+        return out
+
+    for size in (5, 6, 15, 50):
+        legs = lux_leg(cs, size)
+        lux_hi = {i for i in range(1, len(legs))
+                  if legs[i] == 0 and legs[i - 1] == 1}
+        tops, _, _, _ = bar_swings(cs, size)
+        mine = {i for i, v in enumerate(tops) if v is not None}
+        ok(lux_hi == mine,
+           f"size {size}: LuxAlgo leg() IS bar_swings() — "
+           f"{len(lux_hi)} pivot highs both ways")
+
+    # And the CHoCH, against the engine Undertow already had.
+    for size in (6, 15):
+        lux = smc.structure(cs, size)
+        mine = U.structure(cs, U.P(swingSrc=U.SW_BAR, msLen=size,
+                                   msShortLen=2))[0]
+        a = [i for i, v in enumerate(lux["choch"]) if v]
+        b = [i for i, v in enumerate(mine["choch"]) if v]
+        ok(a == b, f"size {size}: the CHoCH bars are the same list "
+                   f"({len(a)} of them)")
+
+    # NO LOOK-AHEAD. A break on bar i must be decidable from bars <= i, so
+    # truncating the series after i cannot change it.
+    full = smc.structure(cs, 15)
+    for cut in (900, 1500, 2100):
+        part = smc.structure(cs[:cut], 15)
+        same = all(part["dir"][i] == full["dir"][i] for i in range(cut - 60))
+        ok(same, f"truncating at {cut} leaves the earlier direction unchanged")
+
+    # It emits REAL breaks of structure, which is the whole reason it does not
+    # go through alt_structure.
+    st = smc.state(cs, U.P(biasSrc=U.BS_SMC))
+    nb = sum(st["bosUp"]) + sum(st["bosDn"])
+    ok(sum(st["choch"]) > 0 and nb > 0,
+       f"SMC emits both: {sum(st['choch'])} CHoCH, {nb} BOS")
+
+
 def main():
-    for fn in (test_swings_match_ms_struct, test_structure_matches_ms_struct,
+    for fn in (test_smc_is_the_same_swings_and_the_same_choch,
+               test_swings_match_ms_struct, test_structure_matches_ms_struct,
                test_atr_matches_the_bot, test_atr_swings_alternate_and_are_real,
                test_which_unit_survives_a_timeframe_change, test_beyond_modes,
                test_family_and_doji, test_target_before_fill_is_not_a_win,

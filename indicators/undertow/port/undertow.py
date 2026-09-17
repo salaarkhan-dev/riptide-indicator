@@ -46,6 +46,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from indicators.undertow.port import smc
 from indicators.undertow.port.swings import (bar_swings, bars_per,
                                              price_swings, range_basis)
 
@@ -94,6 +95,11 @@ BS_DON = "Range midpoint"
 # It is the first source here with a THIRD state. The others are always long or
 # short; this one abstains, which is why `mixed` needed a channel of its own.
 BS_MTF = "MTF EMA align"
+# LuxAlgo's Smart Money Concepts structure, asked for as the major character.
+# smc.py has the two measurements that say what is and is not different from
+# the original engine: the swing detector and the CHoCH are IDENTICAL, and the
+# pivot length and the BOS rule are not.
+BS_SMC = "SMC structure"
 # `swingSrc` — how a swing is DEFINED. Compared by value on both sides.
 SW_BAR = "bar pivot"
 SW_RANGE = "price move"
@@ -191,6 +197,11 @@ class P:
     # For every source EXCEPT the structure engine there is no BOS to count, so
     # "running" cannot mean "has broken structure once". It means the direction
     # has held this many bars since it last flipped. Structure ignores it.
+    # `BS_SMC`. LuxAlgo's own defaults, 50 and 5, because the pivot LENGTH is
+    # the real difference between that engine and this one and running it at
+    # Undertow's 6/2 would test the wrong thing.
+    smcSwingLen: int = 50
+    smcInternalLen: int = 5
     matureBars: int = 20
     # 2 · Candle
     wickEdge: float = 0.05
@@ -778,6 +789,12 @@ def structure(cs, p: P):
     riptide_ms/port/ms_struct.py. Section 4 is the same crossing machine run on
     the SHORT swings and is Undertow's own.
     """
+    # SMC has REAL breaks of structure, so it does not go through
+    # alt_structure -- that helper fabricates a BOS `matureBars` after a flip
+    # for sources that have none, and faking one here would throw away the
+    # thing that was asked for.
+    if p.biasSrc == BS_SMC:
+        return smc.state(cs, p), atr_series(cs, 14)
     if p.biasSrc != BS_STRUCT:
         return alt_structure(cs, p)
     n = len(cs)

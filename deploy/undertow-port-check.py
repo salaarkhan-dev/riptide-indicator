@@ -204,7 +204,10 @@ def main() -> int:
                # putting them on the chart now would repeat exactly the habit
                # that gave group 1 twenty inputs for four settings nothing
                # supported. All three default to v1 meanwhile.
-               "confirmOrder", "needBos", "pinNewest"}
+               "confirmOrder", "needBos", "pinNewest",
+               # The LuxAlgo structure source, same rule: port
+               # first, chart once measured.
+               "smcSwingLen", "smcInternalLen"}
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,
