@@ -144,6 +144,11 @@ useFVG = input.bool(true, "Fair value gaps", group = gFill,
   tooltip = "A three-bar imbalance in the trade's direction. Entry at the near edge on first touch.")
 bkLook = input.int(30, "… zones within bars", minval = 3, maxval = 200, group = gFill,
   tooltip = "How far back from the arming bar to look for a zone. Higher finds more backups and older, staler ones.")
+bkWhen = input.string("live", "Place it", group = gFill,
+  options = ["live", "after the limit expires"],
+  tooltip = "LIVE puts the backup on beside the Focus limit, so the nearer level fills first — which converts misses into trades and also takes a worse price on trades that were going to fill anyway. AFTER THE LIMIT EXPIRES waits for the Focus window to close unfilled, so nothing can be pre-empted — at the cost of every zone touch that happened inside the window. Measured in ../measurements/.")
+bkLateBars = input.int(20, "… then wait bars", minval = 1, maxval = 200, group = gFill,
+  tooltip = "Only for 'after the limit expires': how long the backup rests before the setup is finally dropped.")
 
 showZones = input.bool(true, "Risk / reward zones", group = gShow)
 showUnfilled = input.bool(true, "Draw setups that never filled", group = gShow,

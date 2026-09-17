@@ -57,6 +57,11 @@ T_BODY = "whole body beyond"
 S_PIN = "Pin high / low"
 S_PULL = "Pullback extreme"
 S_SWING = "Minor swing extreme"
+# `bkWhen` — the two strings the Pine's dropdown offers, compared by value on
+# both sides, so a reworded option silently breaks the branch. See
+# deploy/undertow-port-check.py, which is the guard against exactly that.
+B_LIVE = "live"
+B_LATE = "after the limit expires"
 # `endMinor`
 E_OFF = "off"
 E_FLIP = "on the flip"
@@ -104,6 +109,18 @@ class P:
     useOB: bool = True
     useFVG: bool = True
     bkLook: int = 30
+    # WHEN the backup is placed, and it is the whole question.
+    #   "live"  alongside the Focus limit, once the move has run bkTrigger x
+    #           risk. The zone is NEARER than the Focus, so price touches it
+    #           first -- which converts some misses into trades and takes a
+    #           worse price on others that were going to fill anyway. Measured:
+    #           +0.6R on the first group, -0.27R on the second, net nothing.
+    #   "late"  only once the Focus window has EXPIRED unfilled. There is then
+    #           no order left to pre-empt, so every backup is an added trade by
+    #           construction -- at the cost of every zone touch that happened
+    #           inside the window.
+    bkWhen: str = "live"   # or "after the limit expires"
+    bkLateBars: int = 20
     # ── port only ───────────────────────────────────────────────────────────
     # WHERE THE SWINGS COME FROM. See swings.py -- the choice is the answer to
     # "each works different on different TF", and the three options are not
@@ -671,6 +688,7 @@ class _Cand:
     bkPx: float = 0.0
     bkWhy: str = ""
     ran: bool = False
+    late: bool = False
 
 
 def run(cs, p: P = P(), symbol: str = "") -> Result:
@@ -792,10 +810,13 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     cd.target = (cd.focus - p.rr * rk2 if cd.short
                                  else cd.focus + p.rr * rk2)
 
-            # ── the backup arms, ONCE ───────────────────────────────────
+            # ── the LIVE backup arms, ONCE ──────────────────────────────
             # Re-scanning every bar would keep finding a nearer zone and would
             # converge on "enter at the current price", which is not a backup.
-            if p.useBackup and not gone and cd.armed and not cd.ran:
+            # In "late" mode nothing happens here: the backup is placed at the
+            # Focus window's expiry, below.
+            if (p.useBackup and p.bkWhen == B_LIVE
+                    and not gone and cd.armed and not cd.ran):
                 risk0 = abs(cd.stop - cd.focus)
                 ranR = 0.0
                 if risk0 > 0:
@@ -820,7 +841,10 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                 # The nearer level, so price reaches it first, and for a short
                 # the worse price. Checked before the Focus for both reasons.
                 bkHit = bool(cd.bkWhy) and c.h >= cd.bkPx >= c.l
-                touched = c.h >= cd.focus >= c.l
+                # Once the Focus window has expired its limit is CANCELLED, so
+                # a later touch of that price is not a fill. Without this the
+                # "late" arm would still pre-empt, just later.
+                touched = (c.h >= cd.focus >= c.l) and not cd.late
                 if tgtGone:
                     if not cd.ghost:
                         res.nMissGone += 1
@@ -849,7 +873,32 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                         target=cd.target, ghost=cd.ghost, state=cd.state,
                         code=cd.code, backup=cd.bkWhy))
                     gone = True
-                elif i - cd.armBar >= p.fillBars:
+                elif not cd.late and i - cd.armBar >= p.fillBars:
+                    # THE FOCUS WINDOW IS OVER. In "late" mode this is where
+                    # the backup is placed, not where the setup dies: the zone
+                    # is scanned NOW rather than at the earlier trigger,
+                    # because a zone found twenty bars ago may be behind price
+                    # by the time the window closes, and "the level I would
+                    # take now" is the rule being described.
+                    kept = False
+                    if p.useBackup and p.bkWhen == B_LATE:
+                        risk0 = abs(cd.stop - cd.focus)
+                        ext = c.l if cd.short else c.h
+                        if p.bkMode == "mid":
+                            px, why = (ext + cd.focus) / 2.0, "MID"
+                        else:
+                            px, why = bk_zone(cs, i, cd.short, cd.focus, ext,
+                                              p.bkLook, p.useOB, p.useFVG)
+                        if px is not None:
+                            rk = abs(cd.stop - px)
+                            if 0 < rk <= p.bkMaxRisk * risk0:
+                                cd.bkPx, cd.bkWhy, cd.late = px, why, True
+                                kept = True
+                    if not kept:
+                        if not cd.ghost:
+                            res.nMissBack += 1
+                        gone = True
+                elif cd.late and i - cd.armBar >= p.fillBars + p.bkLateBars:
                     if not cd.ghost:
                         res.nMissBack += 1
                     gone = True
