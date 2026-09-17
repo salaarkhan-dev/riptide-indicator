@@ -11,7 +11,7 @@ tools. Nothing about an indicator belongs in the repository root.
 | [`riptide_ms/`](riptide_ms/) | the market-structure engine (v2), the one usually charted | research |
 | [`ccp/`](ccp/) | combined candle patterns and the grab line — the research bench | research, **verdict: nothing tradeable** |
 | [`exhaustion/`](exhaustion/) | the 9-count and 13-count | ships as a watch, **off by default, measured at no edge** |
-| [`undertow/`](undertow/) | structure bias + a pin at the pullback extreme | Pine + port + study, **verdict: loses to a random entry of the same shape** |
+| [`undertow/`](undertow/) | structure bias + a pin at the pullback extreme | ships as a watch, **off by default, measured at no edge three ways** |
 
 ## The layout, and what each part is for
 

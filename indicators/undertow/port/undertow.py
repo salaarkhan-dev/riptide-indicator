@@ -181,6 +181,12 @@ class Result:
     # HTF disagreement, when htfMult is on
     nHtf: int = 0
     trades: list = field(default_factory=list)
+    # THE MOMENT A LIMIT ORDER WOULD GO ON. One entry per setup that armed:
+    # (bar, symbol, short, entry, stop, target, code, state). This is the only
+    # thing the live watcher alerts on, and indicators/undertow/tests/
+    # test_watch_undertow.py asserts the bot's own copy of the machine
+    # reproduces this list exactly.
+    armed: list = field(default_factory=list)
 
     @property
     def real(self):
@@ -206,6 +212,7 @@ class Result:
                 setattr(self, k, getattr(self, k) + v)
         self.bars += o.bars
         self.trades += o.trades
+        self.armed += o.armed
         return self
 
 
@@ -680,6 +687,11 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                             cd.target = (cd.focus - p.rr * risk if cd.short
                                          else cd.focus + p.rr * risk)
                             res.nArmed += 1
+                            res.armed.append(dict(
+                                bar=i, symbol=symbol, short=cd.short,
+                                entry=cd.focus, stop=cd.stop,
+                                target=cd.target, code=cd.code,
+                                state=cd.state, pin=cd.bar))
                         else:
                             gone = True
                 elif i - cd.bar >= p.confirmBars:

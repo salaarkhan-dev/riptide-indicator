@@ -575,6 +575,70 @@ EXHAUST_FRESH_BARS = int(os.getenv("RIPTIDE_EXHAUST_FRESH_BARS", "2"))
 EXHAUST_MAX_LINES = int(os.getenv("RIPTIDE_EXHAUST_MAX_LINES", "20"))
 
 
+# ── UNDERTOW SETUPS (riptide/watchers/undertow.py) ──────────────────────────
+#
+# IT SHIPS OFF, and the reason is stronger than the exhaustion watch's: this one
+# has been measured THREE times and all three came back negative.
+#
+#   UNDERTOW_PARAMS.md     -0.093 / +0.071 / -0.063 R per trade on a holdout
+#                          sharing neither symbols nor calendar with the search,
+#                          and it LOST to a seeded random entry on two of three
+#   UNDERTOW_PIN_VALUE.md  the candle taxonomy adds nothing; removing it scored
+#                          higher on two of three
+#   UNDERTOW_EXITS.md      8-12% of setups really do reach 7R -- but a coin
+#                          reaches 7R 12.5% of the time, and the measured rate
+#                          is at or below chance at every target
+#
+# So it is built, tested and dormant. /undertow on starts it.
+#
+# WHY IT EXISTS AT ALL. One explanation survives all three studies and no
+# backtest can reach it: whether a human choosing which one in ten setups to
+# take beats the machine taking all of them. That needs a PROSPECTIVE record --
+# alerts fired forward, taken or skipped, outcomes written down -- and this is
+# the instrument for building one. It is not a recommendation.
+#
+# THE ALERT IS THE ARMING BAR: a counter-trend pin at the pullback extreme,
+# then a close beyond BOTH of its extremes in either order. That is when the
+# limit would go on. Nothing has filled, and about half never do.
+#
+# VOLUME IS NOT THE PROBLEM HERE, and that is worth saying because it is the
+# thing that shaped every exhaustion default. From
+# indicators/undertow/studies/undertow_rate.py over 125 / 250 / 492 symbol-days
+# (rerun it; do not trust this comment) -- rows a day across 23 symbols:
+#
+#     tf      both   running   immature
+#     15m       11         8          3
+#     30m        5         3          1
+#     1h         3         2          1
+#     ALL       19        13          5
+#
+# Nineteen rows a day is readable, against the exhaustion watch's 295. So all
+# three timeframes is the default once it is switched on: the point of this
+# stream is not missing a setup across twenty-three symbols, and there is no
+# volume reason to start it narrow.
+UNDERTOW_ALERTS = os.getenv("RIPTIDE_UNDERTOW_ALERTS", "0") == "1"
+UNDERTOW_INTERVALS = tuple(dict.fromkeys(
+    i.strip() for i in
+    os.getenv("RIPTIDE_UNDERTOW_INTERVALS",
+              "Min15,Min30,Min60").split(",") if i.strip()))
+# "both", "running" or "immature" -- which bias states count. 'running' has
+# already broken structure at least once since its CHoCH.
+UNDERTOW_STATES = os.getenv("RIPTIDE_UNDERTOW_STATES", "both").strip().lower()
+if UNDERTOW_STATES not in ("both", "running", "immature"):
+    log.warning("RIPTIDE_UNDERTOW_STATES=%r is not both/running/immature, "
+                "using both", UNDERTOW_STATES)
+    UNDERTOW_STATES = "both"
+# The major swing, in BARS -- and note that means a different span of TIME on
+# every timeframe. That is a known flaw of the rule, measured in
+# indicators/undertow/port/swings.py, not a bug in this file.
+UNDERTOW_MS_LEN = int(os.getenv("RIPTIDE_UNDERTOW_MS_LEN", "15"))
+# Bars for BOTH confirmations to land. Without a bound the rule is eventually
+# true for almost any candle.
+UNDERTOW_CONFIRM_BARS = int(os.getenv("RIPTIDE_UNDERTOW_CONFIRM_BARS", "20"))
+UNDERTOW_FRESH_BARS = int(os.getenv("RIPTIDE_UNDERTOW_FRESH_BARS", "2"))
+UNDERTOW_MAX_LINES = int(os.getenv("RIPTIDE_UNDERTOW_MAX_LINES", "20"))
+
+
 def _min_fresh(name: str, value: int) -> int:
     """
     Freshness windows below 2 bars send nothing at all, ever.
@@ -601,6 +665,8 @@ FRESH_BARS = _min_fresh("RIPTIDE_FRESH_BARS", FRESH_BARS)
 SWEEP_FRESH_BARS = _min_fresh("RIPTIDE_SWEEP_FRESH_BARS", SWEEP_FRESH_BARS)
 EXHAUST_FRESH_BARS = _min_fresh("RIPTIDE_EXHAUST_FRESH_BARS",
                                 EXHAUST_FRESH_BARS)
+UNDERTOW_FRESH_BARS = _min_fresh("RIPTIDE_UNDERTOW_FRESH_BARS",
+                                 UNDERTOW_FRESH_BARS)
 
 
 @dataclass

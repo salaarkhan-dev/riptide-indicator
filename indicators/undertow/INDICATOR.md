@@ -1,13 +1,22 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED, and it did not clear its own bar. Research bench only —
-no alerts, and no watcher module.**
+**Status: MEASURED THREE TIMES, all negative. Ships as a watch, OFF by
+default, saying so in every message.**
 
-[`measurements/UNDERTOW_PARAMS.md`](measurements/UNDERTOW_PARAMS.md) is the
-result, against a pre-registration committed before the first number. On 334
-held-out trades across 15m, 30m and 1h it scores **−0.093, +0.071 and −0.063**
-R per trade, and it loses to a seeded random entry of the same shape on two of
-the three. [`SPEC.md`](SPEC.md) is the design.
+| study | result |
+|---|---|
+| [`UNDERTOW_PARAMS.md`](measurements/UNDERTOW_PARAMS.md) | −0.093 / +0.071 / −0.063 R per trade on a holdout sharing neither symbols nor calendar with the search; **lost to a random entry on two of three** |
+| [`UNDERTOW_PIN_VALUE.md`](measurements/UNDERTOW_PIN_VALUE.md) | the candle taxonomy adds nothing; removing it scored **higher** on two of three |
+| [`UNDERTOW_EXITS.md`](measurements/UNDERTOW_EXITS.md) | 8–12% of setups really do reach 7R — and a **coin reaches 7R 12.5% of the time** |
+
+**It ships anyway, off by default, for one reason.** One explanation survives
+all three and no backtest can reach it: whether a human choosing which one in
+ten setups to take beats the machine taking all of them. That needs a
+*prospective* record — alerts fired forward, taken or skipped, outcomes written
+down — and `riptide/watchers/undertow.py` is the instrument for building one.
+**19 alerts a day** across 23 symbols on all three timeframes.
+
+[`SPEC.md`](SPEC.md) is the design.
 
 ## In one paragraph
 
@@ -96,10 +105,16 @@ SPEC.md                        the design; the Pine is built against it
 pine/riptide-undertow.pine     v1 — draws setups and scores them on screen
 port/undertow.py               the Python transcription; three swing sources
 port/swings.py                 bar pivot · k x ATR · k x a fixed span of time
-prereg/                        written before each run — three of them
+prereg/                        written before each run — four of them
 studies/undertow_sweep.py      the parameter study
 studies/undertow_ablation.py   the six-arm ablation
+studies/undertow_exits.py      eight exits on identical fills
+studies/undertow_rate.py       how many alerts a day — the product decision
 measurements/                  what they concluded
+
+riptide/watchers/undertow.py   THE LIVE ADAPTER, in the bot tree, off by
+                               default. A second copy of the machine, held to
+                               this one by tests/test_watch_undertow.py
 tests/test_undertow_port.py    57 assertions; the parity chain and the orderings
 ```
 

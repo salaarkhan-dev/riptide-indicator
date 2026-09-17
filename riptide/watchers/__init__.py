@@ -24,3 +24,4 @@ from .registry import (Hit, Indicator, Option, all_indicators, get,  # noqa: F40
 
 # ---- the deployed set. One line per indicator; order is /status order. ----
 from . import exhaust            # noqa: F401,E402
+from . import undertow           # noqa: F401,E402
