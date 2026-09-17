@@ -65,6 +65,25 @@ string gFill = "5 · Backup fill"
 string gShow = "6 · Display"
 string gDbg = "7 · Debug"
 
+biasSrc = input.string("structure", "Bias from", group = gBias,
+  options = ["structure", "EMA cross", "Supertrend", "Slope", "Range position"],
+  tooltip = "WHERE THE DIRECTION COMES FROM. 'structure' is the CHoCH engine and is the original. The other four exist because a swing pivot measured in BARS means a different span of TIME on every timeframe — the same 6/2 flips the bias 2.3x a day on 15m and 1.1x on 30m. NONE OF THEM IS ENDORSED; they are here to be measured. The four Ending rules below that read minor structure and sweeps only apply to 'structure'; the retrace rule applies to all five.")
+emaFast = input.int(50, "EMA fast", minval = 2, maxval = 400, group = gBias,
+  tooltip = "Only for 'EMA cross'. Up when fast is above slow.")
+emaSlow = input.int(200, "EMA slow", minval = 3, maxval = 1000, group = gBias,
+  tooltip = "Only for 'EMA cross'.")
+stAtrLen = input.int(10, "Supertrend ATR", minval = 2, maxval = 100, group = gBias,
+  tooltip = "Only for 'Supertrend'.")
+stMult = input.float(3.0, "Supertrend mult", minval = 0.5, maxval = 10.0, step = 0.5, group = gBias,
+  tooltip = "Only for 'Supertrend'. Higher = wider bands, fewer flips.")
+slopeLen = input.int(50, "Slope bars", minval = 5, maxval = 500, group = gBias,
+  tooltip = "Only for 'Slope'. The least-squares fit window.")
+slopeMin = input.float(0.05, "… min ATR/bar", minval = 0.0, maxval = 2.0, step = 0.01, group = gBias,
+  tooltip = "Only for 'Slope'. The slope must reach this, in ATR per bar, to change the direction — below it the last direction HOLDS, so a flat patch does not manufacture a trend out of noise. ATR per bar rather than price per bar is what makes one number mean the same thing on any symbol.")
+donLen = input.int(50, "Range bars", minval = 5, maxval = 500, group = gBias,
+  tooltip = "Only for 'Range position'. Up when close is above the midpoint of the last N bars' high-low.")
+matureBars = input.int(20, "Mature after bars", minval = 1, maxval = 500, group = gBias,
+  tooltip = "For every source EXCEPT 'structure' there is no BOS to count, so 'running' means the direction has held this many bars since it last flipped. Ignored by 'structure', which counts breaks of structure instead.")
 msLen = input.int(6, "Major swing", minval = 2, maxval = 100, group = gBias,
   tooltip = "Bars either side of a major swing. Higher = fewer, larger trends.")
 msShortLen = input.int(2, "Minor swing", minval = 2, maxval = 50, group = gBias,
@@ -481,6 +500,75 @@ if close < msSBtmLvl and not msSBtmXd
 bool msMinorChoch = msSOs != msSOs[1]
 
 
+// ═════════════════ 4b. THE BIAS SOURCE — FOUR ALTERNATIVES ═══════════════════
+// Each answers one question: which way is the trend, on this bar. Everything
+// downstream — the pullback, the pin, the confirmations, the levels — reads the
+// muxed `b*` names below and does not know which source filled them.
+//
+// DELIBERATELY OUTSIDE THE COPIED SLAB. Section 3 is held statement-for-
+// statement against riptide-indicator-v2.pine by deploy/undertow-ms-check.py,
+// so nothing here may touch it. The alternatives are computed separately and
+// substituted after the fact.
+//
+// ta.* CALLED UNCONDITIONALLY, all of them, every bar. A ta.* inside a branch
+// grows a different history and would return a different number the moment the
+// dropdown changed.
+float emaF = ta.ema(close, emaFast)
+float emaS = ta.ema(close, emaSlow)
+[stVal, stDirRaw] = ta.supertrend(stMult, stAtrLen)
+float lrSlope = ta.linreg(close, slopeLen, 0) - ta.linreg(close, slopeLen, 1)
+float slopeR = lrSlope / ta.atr(14)
+var int slopeDir = 1
+if math.abs(slopeR) >= slopeMin
+    slopeDir := slopeR > 0 ? 1 : -1
+float donMid = (ta.highest(high, donLen) + ta.lowest(low, donLen)) / 2.0
+
+// ta.supertrend returns -1 for an UPTREND. Every other source here returns +1,
+// so it is flipped once, at the source, rather than remembered everywhere.
+int altDir = biasSrc == "EMA cross" ? (emaF > emaS ? 1 : -1) : biasSrc == "Supertrend" ? (stDirRaw == -1 ? 1 : -1) : biasSrc == "Slope" ? slopeDir : close >= donMid ? 1 : -1
+bool useAlt = biasSrc != "structure"
+bool altFlip = useAlt and altDir != nz(altDir[1], altDir)
+
+// The running extremes SINCE THE FLIP, which is what the structure engine's
+// msMax / msMin are since its CHoCH. The pullback and the retrace rule both
+// read these, so they have to mean the same thing or the sources are not
+// comparable.
+var float altMax = na
+var float altMin = na
+var int altMaxX = na
+var int altMinX = na
+var int altSince = 0
+if altFlip or na(altMax)
+    altMax := high
+    altMin := low
+    altMaxX := bar_index
+    altMinX := bar_index
+    altSince := 0
+else
+    altSince := altSince + 1
+    if high > altMax
+        altMax := high
+        altMaxX := bar_index
+    if low < altMin
+        altMin := low
+        altMinX := bar_index
+bool altMature = altSince == matureBars
+
+// ── the mux. Everything below reads these. ──────────────────────────────────
+int   bOs         = useAlt ? (altDir > 0 ? 1 : 0) : msOs
+bool  bChoch      = useAlt ? altFlip : msChoch
+bool  bBosUp      = useAlt ? (altMature and altDir > 0) : msBosUp
+bool  bBosDn      = useAlt ? (altMature and altDir < 0) : msBosDn
+bool  bSweepUp    = useAlt ? false : msSweepUp
+bool  bSweepDn    = useAlt ? false : msSweepDn
+int   bSOs        = useAlt ? (altDir > 0 ? 1 : 0) : msSOs
+bool  bMinorChoch = useAlt ? false : msMinorChoch
+float bMax        = useAlt ? altMax : msMax
+float bMin        = useAlt ? altMin : msMin
+int   bMaxX       = useAlt ? altMaxX : msMaxX
+int   bMinX       = useAlt ? altMinX : msMinX
+
+
 // ══════════════════════════ 5. BIAS — THE THREE STATES ═══════════════════════
 // None · Immature · Running · Ending. Only Immature and Running may trade.
 //
@@ -493,13 +581,13 @@ var bool biasSeen = false
 var int bosN = 0
 var bool ending = false
 
-if msChoch
+if bChoch
     biasSeen := true
     bosN := 0
     ending := false
 
-int biasDir = msOs == 1 ? 1 : -1
-bool bosNow = biasDir > 0 ? msBosUp : msBosDn
+int biasDir = bOs == 1 ? 1 : -1
+bool bosNow = biasDir > 0 ? bBosUp : bBosDn
 
 if bosNow
     bosN := bosN + 1
@@ -512,15 +600,15 @@ if bosNow
 // call Ending while the trend keeps running — that is the right direction to be
 // wrong in, because a false Ending costs a skipped setup and a missed one costs
 // a loss.
-bool minorAgainst = biasDir > 0 ? msSOs == 0 : msSOs == 1
-bool endA = endMinor == "off" ? false : endMinor == "while opposed" ? minorAgainst : (msMinorChoch and minorAgainst)
-bool endB = endSweep and (biasDir > 0 ? msSweepUp : msSweepDn)
-int lastExtX = biasDir > 0 ? msMaxX : msMinX
+bool minorAgainst = biasDir > 0 ? bSOs == 0 : bSOs == 1
+bool endA = endMinor == "off" ? false : endMinor == "while opposed" ? minorAgainst : (bMinorChoch and minorAgainst)
+bool endB = endSweep and (biasDir > 0 ? bSweepUp : bSweepDn)
+int lastExtX = biasDir > 0 ? bMaxX : bMinX
 bool endC = endStale and not na(lastExtX) and bar_index - lastExtX >= staleBars
 
 // RETRACE DEPTH — the strongest chop guard available, and it needs no extra
 // indicator. The impulse is the leg the engine has already tracked since the
-// CHoCH: msMin to msMax. Give back enough of it and the trend is over in any
+// CHoCH: bMin to bMax. Give back enough of it and the trend is over in any
 // practical sense, whatever the major structure still says.
 //
 // This exists because the chart showed a LONG reading "running" after price had
@@ -528,8 +616,8 @@ bool endC = endStale and not na(lastExtX) and bar_index - lastExtX >= staleBars
 // it had not broken its last swing low — it was just useless as a trade bias by
 // then, and every setup taken under it was a counter-trend trade wearing a
 // with-trend label.
-float msLeg = msMax - msMin
-float retraced = msLeg > 0 ? (biasDir > 0 ? (msMax - close) / msLeg : (close - msMin) / msLeg) : 0.0
+float msLeg = bMax - bMin
+float retraced = msLeg > 0 ? (biasDir > 0 ? (bMax - close) / msLeg : (close - bMin) / msLeg) : 0.0
 bool endD = retraceMax > 0 and retraced >= retraceMax / 100.0
 
 // ADX, and it is OFF BY DEFAULT for a reason worth stating where the code is.
@@ -568,7 +656,7 @@ var float pbExt = na
 var int pbExtX = na
 var int pbStartX = na
 
-bool pbReset = biasDir != nz(biasDir[1], biasDir) or (biasDir < 0 and msMinX != nz(msMinX[1], msMinX)) or (biasDir > 0 and msMaxX != nz(msMaxX[1], msMaxX))
+bool pbReset = biasDir != nz(biasDir[1], biasDir) or (biasDir < 0 and bMinX != nz(bMinX[1], bMinX)) or (biasDir > 0 and bMaxX != nz(bMaxX[1], bMaxX))
 
 if pbReset or na(pbExt)
     pbExt := biasDir < 0 ? high : low

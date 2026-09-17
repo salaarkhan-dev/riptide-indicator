@@ -62,6 +62,25 @@ S_SWING = "Minor swing extreme"
 # deploy/undertow-port-check.py, which is the guard against exactly that.
 B_LIVE = "live"
 B_LATE = "after the limit expires"
+# `biasSrc` — WHERE THE DIRECTION COMES FROM. Compared by value on both sides.
+#
+# The structure engine is the original and stays the default. The other four
+# exist because "swing can be messy" is a real complaint with a real number
+# behind it: a 6-bar pivot flips the bias 2.3 times a day on 15m and 1.1 on
+# 30m -- the SAME setting behaving differently per timeframe, because six bars
+# is ninety minutes on one chart and three hours on the other.
+#
+# NONE OF THEM IS ENDORSED. An earlier note in this project dismissed EMA,
+# ADX and Supertrend on the strength of CCP_CONTEXT_FILTERS.md -- that study
+# measured them as ENTRY FILTERS at liquidity grabs, which is a mean-reversion
+# event on a different population doing a different job. Carrying its verdict
+# to "direction source for a pullback-continuation strategy" was wrong, and
+# these are here to be measured rather than assumed either way.
+BS_STRUCT = "structure"
+BS_EMA = "EMA cross"
+BS_ST = "Supertrend"
+BS_SLOPE = "Slope"
+BS_DON = "Range position"
 # `endMinor`
 E_OFF = "off"
 E_FLIP = "on the flip"
@@ -82,6 +101,18 @@ class P:
     staleBars: int = 30
     retraceMax: int = 70
     adxMin: int = 0
+    biasSrc: str = BS_STRUCT
+    emaFast: int = 50
+    emaSlow: int = 200
+    stAtrLen: int = 10
+    stMult: float = 3.0
+    slopeLen: int = 50
+    slopeMin: float = 0.05
+    donLen: int = 50
+    # For every source EXCEPT the structure engine there is no BOS to count, so
+    # "running" cannot mean "has broken structure once". It means the direction
+    # has held this many bars since it last flipped. Structure ignores it.
+    matureBars: int = 20
     # 2 · Candle
     wickEdge: float = 0.05
     useHammer: bool = True
@@ -326,6 +357,189 @@ def adx_series(cs, diLen=14, adxLen=14):
     return [100.0 * v for v in _rma(dx, adxLen)]
 
 
+# ─────────────────────────────────────────────────────── the bias sources ──
+#
+# FOUR ALTERNATIVES TO THE STRUCTURE ENGINE, each answering only one question:
+# which way is the trend, on this bar. Everything downstream -- the pullback,
+# the pin, the confirmations, the levels -- is untouched, so a study of these
+# is a study of the DIRECTION and nothing else.
+#
+# Each returns a per-bar +1 / -1. None may look forward.
+
+
+def _ema(vals, length):
+    out, k = [], 2.0 / (length + 1.0)
+    for i, v in enumerate(vals):
+        out.append(v if i == 0 else out[-1] + k * (v - out[-1]))
+    return out
+
+
+def dir_ema(cs, p):
+    """Fast EMA above slow EMA. The oldest trend rule there is."""
+    cl = [c.c for c in cs]
+    f, sl = _ema(cl, p.emaFast), _ema(cl, p.emaSlow)
+    return [1 if a > b else -1 for a, b in zip(f, sl)]
+
+
+def dir_supertrend(cs, p):
+    """ta.supertrend(), transcribed including its band-carry rules.
+
+    The carry is the whole algorithm: a band only moves in the direction that
+    tightens it, unless the previous close broke through, which is what stops
+    it flapping on every bar. Pine returns -1 for an uptrend; this returns +1,
+    because every other source here does.
+    """
+    atr = atr_series(cs, p.stAtrLen)
+    n = len(cs)
+    out = [1] * n
+    lo_b = hi_b = None
+    st = None
+    d = 1
+    for i, c in enumerate(cs):
+        hl2 = (c.h + c.l) / 2.0
+        up = hl2 + p.stMult * atr[i]
+        dn = hl2 - p.stMult * atr[i]
+        pl, pu = (lo_b, hi_b) if lo_b is not None else (dn, up)
+        pc = cs[i - 1].c if i else c.c
+        dn = dn if (dn > pl or pc < pl) else pl
+        up = up if (up < pu or pc > pu) else pu
+        if i == 0:
+            d = 1
+        elif st is not None and st == pu:
+            d = -1 if c.c > up else 1
+        else:
+            d = 1 if c.c < dn else -1
+        st = dn if d == -1 else up
+        lo_b, hi_b = dn, up
+        out[i] = 1 if d == -1 else -1      # Pine's -1 is an uptrend
+    return out
+
+
+def dir_slope(cs, p):
+    """The slope of a least-squares fit over `slopeLen` bars, in ATR per bar.
+
+    ATR per bar, not price per bar, is what makes one threshold mean the same
+    thing on BTC at 90,000 and on a token at 0.02 -- and the same thing in a
+    quiet week as in a violent one. Below `slopeMin` the direction HOLDS rather
+    than flipping, so a flat patch does not manufacture a trend in whichever
+    way the noise happened to lean.
+    """
+    n, L = len(cs), max(2, p.slopeLen)
+    atr = atr_series(cs, 14)
+    cl = [c.c for c in cs]
+    # sum of (x - xbar)^2 for x = 0..L-1, constant, so only the cross term moves
+    xb = (L - 1) / 2.0
+    sxx = sum((x - xb) ** 2 for x in range(L))
+    out, d = [1] * n, 1
+    run = 0.0
+    for i in range(n):
+        if i + 1 >= L:
+            w = cl[i + 1 - L:i + 1]
+            yb = sum(w) / L
+            sxy = sum((x - xb) * (y - yb) for x, y in enumerate(w))
+            run = (sxy / sxx) / (atr[i] or 1e-12)
+        if abs(run) >= p.slopeMin:
+            d = 1 if run > 0 else -1
+        out[i] = d
+    return out
+
+
+def dir_donchian(cs, p):
+    """Where price sits in the last `donLen` bars' range: above the midpoint is
+    an uptrend. No pivots, no state, nothing to flap."""
+    hh = _roll_max([c.h for c in cs], max(2, p.donLen))
+    ll = _roll_min([c.l for c in cs], max(2, p.donLen))
+    return [1 if c.c >= (a + b) / 2.0 else -1 for c, a, b in zip(cs, hh, ll)]
+
+
+def _roll_max(v, L):
+    from collections import deque
+    out, dq = [0.0] * len(v), deque()
+    for i, x in enumerate(v):
+        while dq and v[dq[-1]] <= x:
+            dq.pop()
+        dq.append(i)
+        while dq[0] <= i - L:
+            dq.popleft()
+        out[i] = v[dq[0]]
+    return out
+
+
+def _roll_min(v, L):
+    from collections import deque
+    out, dq = [0.0] * len(v), deque()
+    for i, x in enumerate(v):
+        while dq and v[dq[-1]] >= x:
+            dq.pop()
+        dq.append(i)
+        while dq[0] <= i - L:
+            dq.popleft()
+        out[i] = v[dq[0]]
+    return out
+
+
+DIRS = {BS_EMA: dir_ema, BS_ST: dir_supertrend, BS_SLOPE: dir_slope,
+        BS_DON: dir_donchian}
+
+
+def alt_structure(cs, p):
+    """A non-structure direction, dressed as the state dict everything else
+    reads. The DOWNSTREAM IS UNCHANGED, which is the point: a study of the
+    sources is then a study of direction and nothing else.
+
+    What each key becomes, and why:
+
+      choch      the bar the direction flipped. There is no CHoCH here, but a
+                 flip is the same event for every purpose downstream.
+      bosUp/Dn   fired ONCE, `matureBars` after a flip. Without a break of
+                 structure to count, "running" has to mean "the direction has
+                 held a while" or every setup would read immature forever.
+      msMax/Min  the running extremes SINCE THE FLIP, which is exactly what the
+                 structure engine's are since its CHoCH. The pullback and the
+                 retrace rule both read these, so they must mean the same
+                 thing or the arms are not comparable.
+      sweeps, minor structure   absent. They are structure concepts and the
+                 Ending rules that use them are simply off for these sources --
+                 stated rather than faked, because a fabricated minor CHoCH
+                 would make the comparison look fair while not being.
+    """
+    d = DIRS[p.biasSrc](cs, p)
+    n = len(cs)
+    out = dict(os=[], choch=[], bosUp=[], bosDn=[], sweepUp=[], sweepDn=[],
+               msMax=[], msMin=[], msMaxX=[], msMinX=[], sOs=[],
+               minorChoch=[], sTopY=[], sBtmY=[])
+    mx = mn = None
+    mxX = mnX = 0
+    since = 0
+    for i in range(n):
+        c = cs[i]
+        flip = i > 0 and d[i] != d[i - 1]
+        if flip or mx is None:
+            mx, mn, mxX, mnX, since = c.h, c.l, i, i, 0
+        else:
+            since += 1
+            if c.h > mx:
+                mx, mxX = c.h, i
+            if c.l < mn:
+                mn, mnX = c.l, i
+        mature = since == p.matureBars
+        out["os"].append(1 if d[i] > 0 else 0)
+        out["choch"].append(flip)
+        out["bosUp"].append(mature and d[i] > 0)
+        out["bosDn"].append(mature and d[i] < 0)
+        out["sweepUp"].append(False)
+        out["sweepDn"].append(False)
+        out["sOs"].append(1 if d[i] > 0 else 0)
+        out["minorChoch"].append(False)
+        out["sTopY"].append(None)
+        out["sBtmY"].append(None)
+        out["msMax"].append(mx)
+        out["msMin"].append(mn)
+        out["msMaxX"].append(mxX)
+        out["msMinX"].append(mnX)
+    return out, atr_series(cs, 14)
+
+
 # ──────────────────────────────────────────────────── the structure engine ──
 
 
@@ -341,10 +555,17 @@ def _swings(cs, p: P, major: bool, atr):
 def structure(cs, p: P):
     """Sections 3 and 4 of the Pine, one pass, per-bar state out.
 
+    When `biasSrc` is not the structure engine this hands straight over to
+    `alt_structure`, which produces the same keys from a different direction.
+    Everything downstream reads this dict and nothing downstream knows or
+    cares which source filled it.
+
     Section 3 is the copied v2 engine and the statements are unchanged from
     riptide_ms/port/ms_struct.py. Section 4 is the same crossing machine run on
     the SHORT swings and is Undertow's own.
     """
+    if p.biasSrc != BS_STRUCT:
+        return alt_structure(cs, p)
     n = len(cs)
     atr = atr_series(cs, 14)
     msTop, msTopX, msBtm, msBtmX = _swings(cs, p, True, atr)
