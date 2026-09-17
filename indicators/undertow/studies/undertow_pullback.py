@@ -108,7 +108,17 @@ def control_full(trades, tf, seed=SEED):
                 r = BASE.rr
                 break
         if r is None:
-            continue
+            # MARKED TO MARKET, and getting this wrong is why the first run of
+            # this study was thrown away. Discarding the unresolved ones looks
+            # harmless and is not: at rr 3.5 the stop sits 1R away and the
+            # target 3.5R, so whatever DOES resolve inside a short window is
+            # mostly stop-outs. Dropping the rest kept the control's losers and
+            # threw away its survivors, and it printed -0.51 R against every
+            # previous control in this project at -0.02 to -0.15. undertow_
+            # sweep.control() already did this correctly and said so in a
+            # comment; this file did not copy it.
+            b = cs[min(i + hold, len(cs) - 1)]
+            r = ((entry - b.c) if t.short else (b.c - entry)) / risk
         out.append(dataclasses.replace(t, r=r - FEE * entry / risk,
                                        won=r > 0))
     return out

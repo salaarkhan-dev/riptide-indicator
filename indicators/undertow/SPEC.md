@@ -192,7 +192,17 @@ qualify. §2.3's "if the pullback pushes higher, a new pin takes over by itself"
 only covers the case where price extends; it says nothing about the case where
 the extreme bar is simply not a pin, which is the common one.
 
-**None of these is measured yet.** `locTol` has only ever been tested at 0 and
+**MEASURED — see [`UNDERTOW_PULLBACK.md`](measurements/UNDERTOW_PULLBACK.md).**
+Defect 3 is real and costs setups rather than money: pins 1–2 bars after the
+extreme score within **±0.025 R** of pins at it, and admitting them nearly
+doubles the population (0.63 → 1.06 trades a day on 15m) at the same
+expectancy. Defect 2 is a correct description and a useless filter — the
+shallow-pullback setups are **not** systematically worse (+0.055 / −0.015 /
+−0.065). `pbMinAge` is confirmed timeframe-dependent, keeping 39.9% / 29.8% /
+23.6% of setups for one setting. **Nothing was promoted**; all three still ship
+at the values below.
+
+The original text of this paragraph read: `locTol` has only ever been tested at 0 and
 at 50 — the ablation's "no location test" arm, which is a destroy-it control,
 not a 1-to-3-bar tolerance. The parameters below exist so the three can be
 measured separately, and **all three default to current behaviour**, so nothing
