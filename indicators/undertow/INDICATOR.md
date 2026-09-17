@@ -1,6 +1,6 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED NINE TIMES, nothing promoted. Ships as a watch, OFF by
+**Status: MEASURED TEN TIMES, nothing promoted. Ships as a watch, OFF by
 default, saying so in every message.**
 
 | study | result |
@@ -14,6 +14,7 @@ default, saying so in every message.**
 | [`UNDERTOW_OVERLAP.md`](measurements/UNDERTOW_OVERLAP.md) | **74% of 15m trades run alongside another in the same direction**, up to 13 at once, and those groups win or lose together **78%** of the time. Four longs within $10 is one idea at 4x size. Descriptive; the chart now collapses them and the strategy is unchanged |
 | [`UNDERTOW_SLOPE_DEFAULT.md`](measurements/UNDERTOW_SLOPE_DEFAULT.md) | the bias study's best number, Slope at **+0.198** on Min30, came back **−0.228** on a different stretch of the same symbols. A time-normalised Slope then cleared *every* bar on Min60 at z +3.61 — and lost to a coin at z −2.46 on Min30. **Nothing promoted** |
 | [`UNDERTOW_HTF.md`](measurements/UNDERTOW_HTF.md) | the HTF agreement gate, on **45 symbols nothing here had ever seen**, against a **random gate discarding the same count**: worth **+0.032 / +0.010 / −0.029 R** over that control on 22,875 trades. Best-powered null in the project, and the one that cannot be blamed on a spent holdout |
+| [`UNDERTOW_MTF_EMA.md`](measurements/UNDERTOW_MTF_EMA.md) | two timeframes, EMA 20/50, trade only when aligned. **The second timeframe is worth −0.005 to +0.020 R across six panels** — the abstain state fires on 19% of bars and removes 7–9% of trades, because disagreement clusters where nothing was arming anyway |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
@@ -136,9 +137,12 @@ Two measurement pages say it, as a limit on what could be asked next. The venue
 lists **594 crypto USDT perpetuals** that pass a mechanical filter; the 23 used
 by the first eight studies were never the available data, they were the data
 somebody once picked. [`research/symbols_fresh.py`](../../research/symbols_fresh.py)
-freezes **45 more, disjoint from them**, and `UNDERTOW_HTF.md` is the first
-study to run on a population nothing here has looked at. Fetch them with
-`undertow_sweep.py --fetch-fresh`.
+freezes **two further sets of 45, disjoint from the 23 and from each other**.
+`UNDERTOW_HTF.md` is the first study to run on a population nothing here had
+looked at; `UNDERTOW_MTF_EMA.md` got its own, because reading a set's baseline
+spends it. Fetch with `undertow_sweep.py --fetch-fresh` and `--fetch-fresh2`.
+A question now costs ten minutes of fetching to get a universe nobody has
+seen, and 594 symbols qualify.
 
 Where the older pages say a holdout is spent, they are right about *those 23*
 and wrong about the conclusion drawn from it.
@@ -165,6 +169,7 @@ and every one was **re-run and compared cell by cell**:
 | `undertow_rate` | — | exempt: it is *supposed* to track what ships |
 | `undertow_overlap` | `UNDERTOW_OVERLAP.md` | written after the audit; pinned from the start |
 | `undertow_htf` | `UNDERTOW_HTF.md` | written after the audit; pinned from the start |
+| `undertow_mtf` | `UNDERTOW_MTF_EMA.md` | its M0 reproduces `undertow_htf`'s H0 to the trade, on both shared panels |
 
 **The exits study is why enumerating fields does not work.** The first pass
 pinned `swingSrc`, `msLen`, `msShortLen` and `rr` — and missed `endSweep` and
@@ -191,6 +196,7 @@ studies/undertow_bias.py       five direction sources, head to head
 studies/undertow_rate.py       how many alerts a day — the product decision
 studies/undertow_overlap.py    how many of the trades are one idea
 studies/undertow_htf.py        the higher-timeframe gate, on fresh symbols
+studies/undertow_mtf.py        two timeframes of EMA, aligned or stand aside
 measurements/                  what they concluded
 
 riptide/watchers/undertow.py   THE LIVE ADAPTER, in the bot tree, off by
