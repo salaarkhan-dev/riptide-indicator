@@ -117,6 +117,37 @@ choosing, and the recency pick leans to the inverted hammer at the pullback
 top. The remaining 30% → 18% is the rest of the stack, mostly `needBos`
 (17.4% without it, so it is not the cause either).
 
+### AND THAT MEANS v2 MEASURED THE ONE FORM OF THE RULE ITS AUTHOR DID NOT STATE
+
+`famPriority` has effect only **inside** the `pinNewest` branch, by
+construction, so there are three configurations and not two. FRESH6, Min15,
+W→F throughout, bearish armed candidates:
+
+| | armed | hammer | R per trade |
+|---|---|---|---|
+| neither — what ships | 1,953 | 60.1% | +0.046 ±0.069 |
+| `pinNewest` only — pure recency | 279 | **30.1%** | **−0.115 ±0.137** |
+| `famPriority` only | 1,953 | 60.1% | +0.046 ±0.069 — bit-identical, inert |
+| **both — priority shape, newest of it** | 812 | **62.2%** | **+0.061 ±0.089** |
+
+**Pure recency is the defective form**: the only row that pins the
+second-choice shape 70% of the time, and the only negative one. The pairing is
+the rule as stated — *"priority shape wins, newest of that shape"* — and it
+holds the mix at 62% while halving the trade count rather than cutting it
+sevenfold.
+
+**`UNDERTOW_V2.md` therefore concluded against a rule nobody proposed.** L5
+removed `pinNewest` from a stack that never had `famPriority` in it, so what it
+scored was recency-only. That conclusion is correct about what it tested and
+does not transfer to the pairing.
+
+**NOTHING IS PROMOTED ON THIS TABLE AND IT MAY NOT BE.** +0.061 ±0.089 is 0.7
+SE on one timeframe, and FRESH6 is a **spent universe** — this study used it for
+its primary. Acting on a number found by looking again at data already scored
+is the −0.31 R per trade [`UNDERTOW_PARAMS.md`](UNDERTOW_PARAMS.md) measured.
+The pairing needs a fresh universe and a prereg of its own, and until it has
+one both switches stay off.
+
 ## The anchor on its own — W2, and the only number worth another look
 
 `W2 − W0` is **+0.023 / +0.023 / +0.054 R**, positive on 3 of 3 and inside one
