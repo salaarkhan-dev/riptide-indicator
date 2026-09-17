@@ -101,12 +101,11 @@ in a summary table and is a different thing.
 
 ## What changes
 
-**Nothing ships differently.** The watch stays on `structure` with the shipped
-settings, because nothing cleared bar 3 and the one arm that came close is
-contradicted by its own other two panels.
-
-**All five sources are on the chart** and in the port, selectable from one
-dropdown, so they can be looked at. That is what they earned.
+**No source is promoted on its expectancy.** Nothing cleared bar 3, and the one
+arm that came close — Slope on 30m — is contradicted by its own other two
+panels. The direction stays `structure`; EMA, Supertrend, Slope and Range
+position are on the chart and in the port behind one dropdown, which is what
+they earned and no more.
 
 **`range 0.40` is now the default** — in the Pine, the port and the watch — on
 grounds of consistency and nothing else. It is the only setting in this study
