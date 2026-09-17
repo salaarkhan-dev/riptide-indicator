@@ -580,6 +580,19 @@ is now two claims, not one:
 1. v1 has no edge — measured, repeatedly, on five symbol universes.
 2. **v1 is not the strategy.** Whether v2 has an edge is untested.
 
+**MEASURED — see [`UNDERTOW_V2.md`](measurements/UNDERTOW_V2.md), and v2 is
+null too.** Negative on 3 of 3 timeframes, beaten by its own random-entry
+control on 2 of 3, and worse than v1 on 15m and 30m. Every win rate in that
+study sits between 20.3% and 23.5% against a 22.2% break-even.
+
+So the two claims in §8.4 resolve like this: v1 has no edge, **and neither does
+v2**. The correction was real — v1 detected a different event — and correcting
+it did not produce one.
+
+**W→F ships anyway, in the chart, the port and the watch**, because it is a
+correction and not a promotion. The remaining v2 components did not earn their
+defaults and are off.
+
 **The three switches all default to v1**, so every page keeps reproducing and
 `test_studies_pin_their_settings.py` holds them to it. v2 is measured on its
 own, on a universe nothing has seen, before anything moves — and if it is

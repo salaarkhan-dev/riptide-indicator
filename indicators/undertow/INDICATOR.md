@@ -1,6 +1,7 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED TWELVE TIMES, nothing promoted. Ships as a watch, OFF by
+**Status: MEASURED THIRTEEN TIMES, nothing promoted. The last one measured
+the CORRECTED rule — see SPEC.md 8 — and it is null too. Ships as a watch, OFF by
 default, saying so in every message.**
 
 | study | result |
@@ -17,6 +18,7 @@ default, saying so in every message.**
 | [`UNDERTOW_MTF_EMA.md`](measurements/UNDERTOW_MTF_EMA.md) | two timeframes, EMA 20/50, trade only when aligned. **The second timeframe is worth −0.005 to +0.020 R across six panels** — the abstain state fires on 19% of bars and removes 7–9% of trades, because disagreement clusters where nothing was arming anyway |
 | [`UNDERTOW_MTF_DEFAULT.md`](measurements/UNDERTOW_MTF_DEFAULT.md) | MTF as the default against the **shipped** configuration: worse, on 2 of 3. The surprise is the BASELINE — structure as shipped is **+0.063 / +0.016 / −0.067** on an unseen universe, and `endMinor` discards **64%** of trades to get there, uncontrolled. The first number here worth a prereg rather than a shrug |
 | [`UNDERTOW_PULLBACK.md`](measurements/UNDERTOW_PULLBACK.md) | the three pullback defects in SPEC 2.3b, fixed and measured. **The 2nd and 3rd candle after the pullback extreme are within ±0.025 R of the 1st**, and `locTol=2` nearly doubles the setups for it — a throughput finding, not an edge. A minimum pullback depth removes trades that are not worse |
+| [`UNDERTOW_V2.md`](measurements/UNDERTOW_V2.md) | **the corrected strategy — W→F confirmation, SMC 50/5 structure, CHoCH+BOS only, pullback after the BOS, newest pin wins.** Negative on 3 of 3, loses to its control on 2 of 3, worse than v1 on two. **Every win rate in the study lands between 20.3% and 23.5% against a 22.2% break-even** |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
@@ -209,6 +211,8 @@ studies/undertow_htf.py        the higher-timeframe gate, on fresh symbols
 studies/undertow_mtf.py        two timeframes of EMA, aligned or stand aside
 studies/undertow_mtf_default.py  the same, against the SHIPPED config
 studies/undertow_pullback.py   the three pullback defects in SPEC 2.3b
+studies/undertow_v2.py         the corrected rule, whole stack, vs v1
+port/smc.py                    LuxAlgo's structure — same swings, same CHoCH
 measurements/                  what they concluded
 
 riptide/watchers/undertow.py   THE LIVE ADAPTER, in the bot tree, off by
