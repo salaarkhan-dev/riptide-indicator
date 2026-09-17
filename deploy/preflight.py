@@ -80,6 +80,7 @@ PINE_CHECKS = [
         "indicators/riptide_ms/port/ms_struct.py"]),
     ("ccp-grab-check", "ccp", []),
     ("undertow-ms-check", "undertow", []),
+    ("undertow-port-check", "undertow", []),
 ]
 
 

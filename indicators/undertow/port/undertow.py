@@ -10,11 +10,16 @@ TRANSCRIBED, NOT REIMPLEMENTED. Every identifier carries the Pine's name and
 every condition is written in the Pine's order, so the two can be compared
 mechanically rather than by eye:
 
-    python3 deploy/undertow-port-check.py
+    python3 deploy/undertow-port-check.py     the inputs: same names, same
+                                              defaults, same dropdown strings
+    indicators/undertow/tests/test_undertow_port.py    the logic
 
 That is why this file reads oddly for Python. `msSBtmCrossed`, `pbExtX` and
 `workHi` are not names anyone would choose here; they are the names in the
-Pine, so they are the names here.
+Pine, so they are the names here. The first of those two checks found a real
+drift on its first run -- `rr` had defaulted to 2.0 here and 3.0 in the Pine --
+which is exactly the silent kind: a study reporting a number for settings the
+chart is not running.
 
 THREE THINGS THE PORT HAS THAT THE PINE DOES NOT, each because Pine cannot:
 
@@ -87,7 +92,7 @@ class P:
     stopSrc: str = S_PULL
     stopTrack: bool = True
     stopBuf: float = 0.25
-    rr: float = 2.0
+    rr: float = 3.0
     # ── port only ───────────────────────────────────────────────────────────
     # WHERE THE SWINGS COME FROM. See swings.py -- the choice is the answer to
     # "each works different on different TF", and the three options are not
