@@ -68,11 +68,35 @@ SYMBOLS_FRESH2 = (
 ).split()
 
 
+# THE THIRD FRESH SET, ranks 91-135, frozen for the shipped-configuration
+# comparison in UNDERTOW_MTF_DEFAULT.md. Sets 1 and 2 both have published
+# baselines by now, so neither is untouched for a new contrast.
+#
+# RULE 3b, ADDED HERE: drop PEGGED bases. `USDC_USDT` ranked inside the top 45
+# and a stablecoin pair is a peg -- near-zero range, no trend to be right or
+# wrong about, and pure noise in a study of direction. It is a judgement, so it
+# is written down as a list rather than a volatility threshold nobody can
+# check. IT CHANGES NOTHING RETROACTIVELY: verified that no symbol in the 23,
+# in SYMBOLS_FRESH or in SYMBOLS_FRESH2 is excluded by it.
+PEGGED = frozenset("USDC USDE FDUSD DAI TUSD USDD BUSD PYUSD USD1 EURT EURS "
+                   "XAUT PAXG".split())
+SYMBOLS_FRESH3 = (
+    "CHIP_USDT CRO_USDT ZCAT_USDT AIA_USDT BLESS_USDT AR_USDT ALLO_USDT "
+    "ON_USDT MONAD_USDT RAVE_USDT KAITO_USDT EDEN_USDT JASMY_USDT MAGMA_USDT "
+    "THETA_USDT 0G_USDT LUNC_USDT KSM_USDT BOME_USDT TUT_USDT MORPHO_USDT "
+    "MINA_USDT CVC_USDT VELVET_USDT CNPY_USDT ZIL_USDT CC_USDT SOPH_USDT "
+    "VET_USDT TRB_USDT STX_USDT BILL_USDT ARX_USDT NAORIS_USDT GIGGLE_USDT "
+    "COAI_USDT ROSE_USDT CATE_USDT MEMEROBINHOOD_USDT AIOT_USDT MOODENG_USDT "
+    "XDC_USDT BASED_USDT MMT_USDT ZAMA_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
     sets = {"SYMBOLS": set(SYMBOLS), "SYMBOLS_FRESH": set(SYMBOLS_FRESH),
-            "SYMBOLS_FRESH2": set(SYMBOLS_FRESH2)}
+            "SYMBOLS_FRESH2": set(SYMBOLS_FRESH2),
+            "SYMBOLS_FRESH3": set(SYMBOLS_FRESH3)}
     names = sorted(sets)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
