@@ -106,6 +106,26 @@ SW_RANGE = "price move"
 # Port-only, and kept only because a test pins the measurement that rejected
 # it. Not an option on the chart and it must not become one.
 SW_ATR = "atr"
+# `pinAt` — WHICH END OF THE LEG THE COUNTER-TREND CANDLE SITS AT, and this is
+# the rule v1 and v2 both got wrong.
+#
+#   "pullback extreme"  the top of the rally in a downtrend. What every
+#                       measurement before UNDERTOW_V2.md used.
+#   "trend extreme"     the LEG LOW in a downtrend -- the bounce attempt. The
+#                       corrected reading, confirmed by the strategy's author.
+#
+# The geometry is what gives it away. The stated priority shape in a bearish
+# trend is the HAMMER, which has a long LOWER wick. A long lower wick at the
+# TOP of a rally is a candle that dipped and recovered; the rejection shape
+# there is the long UPPER wick. A hammer belongs at a LOW. Measured, the code
+# was picking hammer and inverted hammer 49/51 -- a coin flip -- because it was
+# looking somewhere neither shape means anything in particular.
+#
+# And it fits W->F exactly: a green hammer at the leg low is a bounce attempt,
+# W is the bounce WORKING (close above its high), F is it FAILING (close below
+# its low), and the limit sells the retrace back to its open.
+PIN_PULL = "pullback extreme"
+PIN_TREND = "trend extreme"
 # `slopeUnit` — whether the Slope source measures its window and its threshold
 # in bars (so it means a different thing on every chart) or in time.
 SL_BARS = "bars"
@@ -248,6 +268,13 @@ class P:
     #
     # `locTol` has only ever been measured at 0 and at 50, and 50 is the
     # ablation's destroy-it arm, not a 1-to-3-bar tolerance.
+    # DEFAULTS TO v1's so every measurement page keeps reproducing. The
+    # corrected reading is PIN_TREND and it is measured before it moves.
+    pinAt: str = PIN_PULL
+    # The stated priority: HAMMER in a bearish trend, SHOOTING STAR in a
+    # bullish one, with the other shape acceptable when the priority one is
+    # absent. v1 had no ordering at all and took whichever sat at the extreme.
+    famPriority: bool = False
     locTol: int = 0
     pbMinAge: int = 0
     pbMinDepth: float = 0.0
@@ -1467,6 +1494,14 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         # pullback STARTED, not from the extreme, so extending the pullback
         # does not reset the clock -- which is the point: a pullback that has
         # run ten bars and just made a new high is still ten bars old.
+        # THE ANCHOR. Under PIN_TREND the counter-trend candle sits at the
+        # running extreme in the TREND's own direction -- the leg low in a
+        # downtrend -- which the structure engine already tracks as msMinX.
+        anchorX = pbExtX
+        if p.pinAt == PIN_TREND:
+            anchorX = (st["msMinX"][i] if biasDir < 0 else st["msMaxX"][i])
+            if anchorX is None:
+                anchorX = i
         pbAge = i - pbStartX if pbStartX is not None else 0
         pbDepth = 0.0
         if p.pbMinDepth > 0.0:
@@ -1475,9 +1510,14 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             if leg > 0:
                 pbDepth = ((pbExt - mn) / leg if biasDir < 0
                            else (mx - pbExt) / leg)
-        locOk = ((i - pbExtX) <= p.locTol
-                 and pbAge >= p.pbMinAge
-                 and (p.pbMinDepth <= 0.0 or pbDepth >= p.pbMinDepth))
+        # pbMinAge / pbMinDepth measure how far a PULLBACK has run, which is
+        # meaningless at the trend extreme -- there the pullback has not
+        # started. They apply to PIN_PULL only, rather than silently refusing
+        # every setup.
+        locOk = (i - anchorX) <= p.locTol
+        if p.pinAt == PIN_PULL:
+            locOk = (locOk and pbAge >= p.pbMinAge
+                     and (p.pbMinDepth <= 0.0 or pbDepth >= p.pbMinDepth))
         # The HTF gate. A base-timeframe setup may only be taken when the
         # higher timeframe agrees on direction AND is itself tradeable. Off
         # when the gate is off, and then it is not counted either.
@@ -1507,9 +1547,20 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             # dropped -- one that has already confirmed is a live setup with an
             # order behind it and is not somebody's second opinion any more.
             if p.pinNewest:
-                for x in [x for x in cands
+                # THE PRIORITY SHAPE WINS, and the newest of that shape. A
+                # hammer (lower wick) in a bearish trend, a shooting star
+                # (upper wick) in a bullish one; the other shape is used only
+                # while the priority one is absent. With famPriority off this
+                # is plain newest-wins, which is what v2 measured.
+                isPriority = famHam if biasDir < 0 else famStar
+                rivals = [x for x in cands
                           if not x.armed and not x.ghost
-                          and x.short == (biasDir < 0)]:
+                          and x.short == (biasDir < 0)]
+                if p.famPriority and not isPriority:
+                    # A non-priority candle does not displace a priority one.
+                    held = any(x.workHi == (biasDir < 0) for x in rivals)
+                    rivals = [] if held else rivals
+                for x in rivals:
                     cands.remove(x)
             if len([x for x in cands if not x.ghost]) >= p.maxLive:
                 res.nCap += 1

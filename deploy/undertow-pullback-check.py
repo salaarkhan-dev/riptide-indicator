@@ -47,8 +47,8 @@ TERMS = [
      r"biasDir > 0 and low <= pbExt", r"biasDir > 0 and c\.l <= pbExt"),
     ("the pullback's START is recorded, and only on a reset",
      r"pbStartX := bar_index", r"pbStartX = i"),
-    ("locTol — bars past the extreme a pin may sit",
-     r"pbExtX <= locTol", r"pbExtX\) <= p\.locTol"),
+    ("locTol — bars past the ANCHOR a pin may sit",
+     r"pbExtX <= locTol", r"anchorX\) <= p\.locTol"),
     ("pbMinAge — bars the pullback must have run",
      r"pbAge >= pbMinAge", r"pbAge >= p\.pbMinAge"),
     ("pbMinDepth — fraction of the impulse given back",
@@ -62,6 +62,19 @@ TERMS = [
 # pullback made a new extreme and `pbMinAge` would silently mean nothing.
 ONCE = [("pine", PINE, r"pbStartX :="), ("port", PORT, r"pbStartX = i\b")]
 
+# THE ANCHOR IS PORT-ONLY FOR NOW, and this is the one divergence between the
+# two files on this path. `pinAt` moves the counter-trend candle from the
+# PULLBACK extreme to the TREND extreme -- the leg low in a downtrend -- which
+# SPEC.md 2.3c records as the rule v1 and v2 both got wrong. It defaults to v1
+# in the port, so the two files agree on what they actually DO; the Pine simply
+# cannot be switched. It goes on the chart when it is measured, and this note
+# is deleted then.
+PORT_ONLY_TERMS = [
+    ("pinAt — pullback extreme vs TREND extreme", r"p\.pinAt == PIN_TREND"),
+    ("famPriority — hammer first in bearish, star first in bullish",
+     r"p\.famPriority and not isPriority"),
+]
+
 
 def main() -> int:
     pine, port = PINE.read_text(), PORT.read_text()
@@ -72,6 +85,10 @@ def main() -> int:
         if not re.search(port_re, port):
             bad.append((label, f"MISSING FROM THE PORT — /{port_re}/"))
 
+    for label, pat in PORT_ONLY_TERMS:
+        if not re.search(pat, port):
+            bad.append((label, f"MISSING FROM THE PORT — /{pat}/"))
+
     for who, path, pat in ONCE:
         n = len(re.findall(pat, path.read_text()))
         if n != 1:
@@ -81,7 +98,8 @@ def main() -> int:
                         "new extreme and pbMinAge quietly means nothing"))
 
     print(f"{len(TERMS)} pullback terms compared across "
-          f"{PINE.name} and {PORT.name}")
+          f"{PINE.name} and {PORT.name}, plus {len(PORT_ONLY_TERMS)} "
+          f"port-only")
     if not bad:
         print("\nBOTH FILES APPLY EVERY TERM OF THE PULLBACK RULE.")
         print("Presence only — the LOGIC of sections 5-7 is held by")

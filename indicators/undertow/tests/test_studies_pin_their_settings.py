@@ -83,8 +83,12 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # every measurement page was produced under it -- that is why confirmOrder is
 # in PINNED above. undertow_bias Min15 and undertow_pullback Min15 reproduced
 # to the digit before this moved.
-DEFAULTS_FINGERPRINT = "d3ea82732ff465f0"
-DEFAULTS_COUNT = 63
+#
+# 2026-09-17: bumped for `pinAt`/`famPriority` — the corrected ANCHOR. Both
+# default to v1 so the thirteen pages keep reproducing; undertow_bias Min15 and
+# undertow_pullback Min15 reproduced before this moved.
+DEFAULTS_FINGERPRINT = "e514745926bfb147"
+DEFAULTS_COUNT = 65
 
 good = []
 

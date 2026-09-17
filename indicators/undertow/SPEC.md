@@ -232,6 +232,53 @@ candle at the running extreme qualifies immediately, and every bar that extends
 the pullback qualifies again as a new candidate. Nothing waits for the pullback
 to finish, because at the pin's own close it cannot be known that it has.
 
+### 2.3d THE ANCHOR WAS AT THE WRONG END OF THE LEG
+
+Confirmed by the strategy's author, and the geometry gives it away before any
+measurement does.
+
+**The stated priority in a bearish trend is the HAMMER — a long LOWER wick.**
+A long lower wick at the TOP of a rally is a candle that dipped and recovered;
+the rejection shape there is the long UPPER wick. **A hammer belongs at a LOW.**
+
+So the counter-trend candle is not at the pullback's top. It is the **bounce
+attempt at the leg low**, and that fits §8.3's W→F exactly:
+
+    downtrend makes a new leg low
+      └─ GREEN HAMMER at the low          ← the 1CP
+           ├─ W: close ABOVE its high     the bounce WORKS, price rallies
+           └─ F: close BELOW its low      the bounce FAILS
+                → limit SHORT at its open
+
+`pinAt = "trend extreme"` anchors there. Bullish mirrors: the shooting star at
+the leg high.
+
+**THE FAMILY MIX IS THE EVIDENCE**, and no priority rule is applied to produce
+it — it falls out of looking in the right place. Measured on `SYMBOLS_FRESH5`,
+Min15:
+
+| | priority shape | hammer (bearish) | shooting star (bullish) |
+|---|---|---|---|
+| pullback extreme — v1 and v2 | **51.1%** | 49.2% | 54.3% |
+| **trend extreme** | **76.7%** | **77.5%** | **75.7%** |
+
+A coin flip becomes three in four. The shape the strategy says should dominate
+starts dominating as soon as the anchor moves, which is about as direct a
+confirmation as a location rule can get.
+
+**And it re-reads defect 1.** §2.3b called it a defect that "the impulse bar can
+be its own pullback extreme" — a quarter to a third of setups. Under the
+corrected anchor **those are the only correct ones**, and the other two-thirds
+were the mistake.
+
+`famPriority` adds the ordering §2.1 never had: hammer before inverted hammer
+in a bearish trend, shooting star before hanging man in a bullish one, the
+other shape used only while the priority one is absent, newest of the priority
+shape winning.
+
+**Both default to v1** so the thirteen measurement pages keep reproducing.
+Neither is measured yet and neither is on the chart.
+
 **MEASURED — see [`UNDERTOW_PULLBACK.md`](measurements/UNDERTOW_PULLBACK.md).**
 Defect 3 is real and costs setups rather than money: pins 1–2 bars after the
 extreme score within **±0.025 R** of pins at it, and admitting them nearly

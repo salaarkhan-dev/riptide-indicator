@@ -208,7 +208,10 @@ def main() -> int:
                "confirmOrder", "needBos", "pinNewest",
                # The LuxAlgo structure source, same rule: port
                # first, chart once measured.
-               "smcSwingLen", "smcInternalLen"}
+               "smcSwingLen", "smcInternalLen",
+               # The corrected ANCHOR and the family priority.
+               # Port first, chart once measured.
+               "pinAt", "famPriority"}
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,
