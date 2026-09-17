@@ -128,6 +128,46 @@ SYMBOLS_FRESH6 = (
 ).split()
 
 
+# THE SEVENTH FRESH SET, for the pin-selection study, and it adds RULE 3c.
+#
+# `USDC_USDT` came top of the unused list at 0.6M 24h turnover — a stablecoin
+# pair, price pinned near 1.0000, which is not a market with trends and would
+# have gone into a trend-following study as 12,000 bars of flat. Rule 3b drops
+# a base containing `PEGGED` and USDC does not contain it, so the rule is
+# widened HERE, explicitly, rather than by deleting the name:
+#
+#   3c. DROP a base coin in the stablecoin list. Not "looks like a stablecoin"
+#       — the list is written down and a name is either on it or not.
+#
+# STABLE = USDC USDE FDUSD DAI TUSD USD1 BUSD PYUSD USDD USDP USDY RLUSD
+#          USDF USDX
+#
+# THE VENUE'S LIQUID END IS NOW SPENT, and this is worth recording before the
+# next set is wanted. 594 contracts qualify and 293 were already taken, so what
+# remains is the tail. Each set has been one step further down it, and the
+# steps are even rather than a cliff — 24h turnover in thousands of dollars:
+#
+#   FRESH5   min 227   median 278   max 376
+#   FRESH6   min 181   median 206   max 242
+#   FRESH7   min 145   median 163   max 190
+#
+# So FRESH7 is the same kind of population as FRESH6, about 25% thinner, which
+# is the same gap FRESH6 was from FRESH5. 255 unused contracts remain after
+# this one and they keep thinning. An eighth set is available; a twelfth is
+# not, and by then "liquid crypto perpetuals" will have stopped being a true
+# description of the population.
+SYMBOLS_FRESH7 = (
+    "CORE_USDT MTL_USDT SWARM_USDT BAT_USDT FORM_USDT IMX_USDT "
+    "ACH_USDT SUPER_USDT MANTRA_USDT BSB_USDT DODO_USDT SAHARA_USDT "
+    "PROVE_USDT POWR_USDT GUN_USDT SIREN_USDT INIT_USDT GPS_USDT "
+    "AT_USDT BAN_USDT OG_USDT HOLO_USDT PROM_USDT BIGTIME_USDT "
+    "BREV_USDT ONT_USDT HAEDAL_USDT G_USDT ASTR_USDT LISTA_USDT "
+    "TMX_USDT TST_USDT AKT_USDT ORCA_USDT NES_USDT ONG_USDT "
+    "CFG_USDT API3_USDT ZRX_USDT ID_USDT GRIFFAIN_USDT BARD_USDT "
+    "TRADOOR_USDT TOWNS_USDT LYN_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
@@ -136,7 +176,8 @@ def assert_disjoint():
             "SYMBOLS_FRESH3": set(SYMBOLS_FRESH3),
             "SYMBOLS_FRESH4": set(SYMBOLS_FRESH4),
             "SYMBOLS_FRESH5": set(SYMBOLS_FRESH5),
-            "SYMBOLS_FRESH6": set(SYMBOLS_FRESH6)}
+            "SYMBOLS_FRESH6": set(SYMBOLS_FRESH6),
+            "SYMBOLS_FRESH7": set(SYMBOLS_FRESH7)}
     names = sorted(sets)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
