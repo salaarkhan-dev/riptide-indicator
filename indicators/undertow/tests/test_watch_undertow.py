@@ -198,10 +198,6 @@ def test_frozen_constants_match_the_port():
 
 
 def test_ships_off():
-    ok(W.FILL.default_enabled is False,
-       "the FILL stream ships OFF too — same evidence, same verdict")
-    ok(W.FILL.name != W.SPEC.name and not W.FILL.caveat == W.SPEC.caveat,
-       "and it is a separate indicator with its own switch and caveat")
     ok(W.SPEC.default_enabled is False,
        "the stream ships OFF — three pre-registered studies, all negative")
     # The three claims, not the exact wording — the caveat gets reworded for
@@ -220,8 +216,10 @@ def test_ships_off():
     # value of this alert.
     ok("limit" in W.SPEC.caveat.lower(),
        "the armed caveat says the limit goes on NOW")
-    ok("filled" in W.FILL.caveat.lower(),
-       "and the fill caveat says the limit already filled")
+    ok(len([i for i in __import__("riptide.watchers", fromlist=["x"])
+            .all_indicators() if i.name.startswith("ut")
+            or i.name == "undertow"]) == 1,
+       "there is exactly ONE undertow stream — /utfill was removed")
 
 
 def test_rate_is_readable():

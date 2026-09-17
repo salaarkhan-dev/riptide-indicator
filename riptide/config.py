@@ -638,27 +638,13 @@ UNDERTOW_MS_LEN = int(os.getenv("RIPTIDE_UNDERTOW_MS_LEN", "6"))
 # Bars for BOTH confirmations to land. Without a bound the rule is eventually
 # true for almost any candle.
 UNDERTOW_CONFIRM_BARS = int(os.getenv("RIPTIDE_UNDERTOW_CONFIRM_BARS", "20"))
+# Bars the limit rests at the Focus line before the setup is dropped. Nothing
+# alerts on the fill itself -- there is one stream and it fires when both lines
+# close -- but the machine still has to know when to stop waiting.
 UNDERTOW_FILL_BARS = int(os.getenv("RIPTIDE_UNDERTOW_FILL_BARS", "20"))
 UNDERTOW_FRESH_BARS = int(os.getenv("RIPTIDE_UNDERTOW_FRESH_BARS", "2"))
 UNDERTOW_MAX_LINES = int(os.getenv("RIPTIDE_UNDERTOW_MAX_LINES", "20"))
 
-# ── UNDERTOW FILLS (the second stream, /utfill) ─────────────────────────────
-#
-# A SEPARATE ALERT FOR A DIFFERENT EVENT. /undertow fires when a setup ARMS --
-# "put a limit here". This one fires when that limit actually FILLED -- "you
-# are in". They are not the same message and they do not arrive together:
-# roughly half of armed setups never fill at all, and the ones that do fill a
-# median of one to two bars later.
-#
-# THE LEVELS CAN DIFFER FROM THE ARMING ALERT'S, which is the reason this is a
-# real event and not a formatting choice. The stop tracks the running pullback
-# extreme while the order rests, so on one symbol 15 of 111 fills carried a
-# different stop from the one their arming would have quoted. The fill alert
-# reports the level the trade is actually taken with.
-#
-# Same evidence, same caveat: five pre-registered studies, no edge, beaten by a
-# random entry. It ships OFF for the same reason.
-UNDERTOW_FILL_ALERTS = os.getenv("RIPTIDE_UNDERTOW_FILL_ALERTS", "0") == "1"
 
 
 def _min_fresh(name: str, value: int) -> int:

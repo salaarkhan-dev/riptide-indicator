@@ -1,6 +1,8 @@
 """How many alerts a day would the Undertow watches send?
 
-BOTH STREAMS: the armed setups (/undertow) and the fills (/utfill).
+The ALERT RATE is the armed count -- /undertow is the only stream. The
+fill columns are reported beside it as context: what fraction of the
+setups you are told about go on to fill. Nothing alerts on those.
 
     PYTHONPATH=. python3 indicators/undertow/studies/undertow_rate.py
 
@@ -93,14 +95,12 @@ def main():
         print(f'    "{s}": {{'
               + ", ".join(f'"{t}": {v[s]}' for t, v in table.items()) + "},")
     print("}")
-    print("\n  ...and FILL_BOTH / FILL_ONE (the /utfill stream):")
-    print("FILL_BOTH = {" + ", ".join(
-        f'"{t}": {v["both"]}' for t, v in ftable.items()) + "}")
-    print("FILL_ONE = {")
-    for s in ("running", "immature"):
-        print(f'    "{s}": {{'
-              + ", ".join(f'"{t}": {v[s]}' for t, v in ftable.items()) + "},")
-    print("}")
+    # Context, not a table to paste anywhere: nothing alerts on a fill.
+    print("\n  of those armed setups, how many later FILL:")
+    for t in table:
+        a, f = table[t]["both"], ftable[t]["both"]
+        print(f"    {t:7} {f:4} of {a:4} a day  ({100 * f / a:.0f}%)"
+              if a else f"    {t:7} —")
     return 0
 
 

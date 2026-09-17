@@ -105,9 +105,9 @@ import math
 from collections import deque
 
 from ..config import (BAR_SECONDS, UNDERTOW_ALERTS, UNDERTOW_CONFIRM_BARS,
-                      UNDERTOW_FILL_ALERTS, UNDERTOW_FILL_BARS,
-                      UNDERTOW_FRESH_BARS, UNDERTOW_INTERVALS,
-                      UNDERTOW_MAX_LINES, UNDERTOW_MS_LEN, UNDERTOW_STATES)
+                      UNDERTOW_FILL_BARS, UNDERTOW_FRESH_BARS,
+                      UNDERTOW_INTERVALS, UNDERTOW_MAX_LINES, UNDERTOW_MS_LEN,
+                      UNDERTOW_STATES)
 from .registry import Hit, Indicator, Option, register
 
 RECENT_BARS = 6
@@ -253,8 +253,16 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
     a different stop from the one their arming would have quoted, which is a
     13% chance of alerting a level the chart does not show.
 
-    Returns (armed, filled). The backup fill is deliberately absent: it is off
-    by default, unmeasured, and belongs to the port until that changes.
+    Returns (armed, filled). ONLY `armed` IS ALERTED ON — there is one stream
+    and it fires when both lines close, which is when the order goes on. The
+    fills are still computed because two other things need them: the parity
+    test holds this copy to the port past the arming bar, which is where the
+    stop tracking lives and where a drift would otherwise be invisible, and
+    undertow_rate.py reports what fraction of armed setups reach a fill (58%).
+    Neither sends a message.
+
+    The backup fill is deliberately absent: it is off by default, unmeasured,
+    and belongs to the port until that changes.
     """
     n = len(cs)
     if n < 60:
@@ -646,7 +654,16 @@ RATE_ONE = {
 SPEC = register(Indicator(
     name="undertow",
     title="UNDERTOW",
-    glyph="🌊",
+    # 🎯 ALONGSIDE THE WAVE, by request: the bullseye marks the confirmed
+    # moment — both lines closed, the order goes on — and the wave is what
+    # indicator it came from.
+    #
+    # WORTH KNOWING: 🎯 is already this chat's mark for THE PICK, which is the
+    # one signal here with a measured effect behind it. Undertow has five
+    # pre-registered studies and all of them are negative, so the two are not
+    # the same kind of thing. The word UNDERTOW and the caveat sit directly
+    # under it, which is what keeps them apart at a glance.
+    glyph="🎯🌊",
     unit="setup",
     # SHORT ENOUGH TO READ ON A PHONE, and it still says all three things: not
     # a trade, measured, and beaten by chance. The long version ran to four
@@ -699,8 +716,8 @@ SPEC = register(Indicator(
            "<i>The numbers are the pin's open (your limit), the stop a "
            "quarter ATR past the pullback extreme, and the target at the "
            "configured reward ratio. Nothing has filled yet — about 42% "
-           "never do. </i><code>/utfill</code><i> is the separate stream for "
-           "when one does.</i>"),
+           "never do, and nothing alerts when one does — by then "
+           "the order is resting and the decision is made.</i>"),
     evidence=("<b>Three pre-registered studies, all negative.</b> On a holdout "
               "sharing neither symbols nor calendar with the search it scored "
               "−0.093 / +0.071 / −0.063 R per trade on 15m / 30m / 1h, and "
@@ -720,153 +737,4 @@ SPEC = register(Indicator(
               "<code>/undertow running</code> — skip the fresh-CHoCH ones\n"
               "<code>/undertow swing 30</code> — far fewer, larger trends\n"
               "<code>/undertow off</code> — stop them"),
-))
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  THE SECOND STREAM: the limit FILLED
-# ══════════════════════════════════════════════════════════════════════════
-#
-# TWO INDICATORS, ONE MODULE, and that is deliberate against the "one module
-# per indicator" convention in __init__.py. They share `run_setups` -- the same
-# state machine produces both events -- and splitting them across files would
-# mean two copies of a machine that must agree bar for bar, which is the exact
-# failure this package exists to avoid. One import line still deploys both.
-#
-# WHY IT IS A SEPARATE INDICATOR RATHER THAN A SECOND GROUP IN THE SAME
-# DIGEST. The two events answer different questions and arrive at different
-# times. "Put a limit at X" and "your limit at X filled" in one message, under
-# one header counting them together, would be a digest whose own headline
-# number means nothing. Separate also means a separate switch: watching fills
-# only is a reasonable way to run this, and so is the reverse.
-
-
-def detect_fill(cs, symbol: str, tf: str, opts: dict) -> tuple:
-    """Limits that FILLED in the last RECENT_BARS bars.
-
-    The levels come from the fill, not from the arming: the stop tracks the
-    pullback while the order rests, so they are not always the same numbers.
-    """
-    want = opts.get("states", UNDERTOW_STATES)
-    ms_len = int(opts.get("swing", UNDERTOW_MS_LEN))
-    step = BAR_SECONDS[tf]
-    cut = len(cs) - RECENT_BARS
-    out, dropped = [], 0
-    for f in run_setups(cs, ms_len=ms_len)[1]:
-        if f["bar"] < cut:
-            continue
-        if want != "both" and f["state"] != want:
-            dropped += 1
-            continue
-        stop = _snap(f["stop"], f["entry"], True)
-        target = _snap(f["target"], f["entry"], True)
-        risk = abs(stop - f["entry"])
-        if risk <= 0:
-            dropped += 1
-            continue
-        out.append(Hit(
-            key=f"UTF|{symbol}|{tf}|{cs[f['bar']].t}|"
-                f"{'U' if not f['short'] else 'D'}",
-            symbol=symbol, tf=tf, is_long=not f["short"],
-            bar_time=cs[f["bar"]].t + step, price=f["entry"],
-            detail=(f"{f['code']} {f['state']} FILLED entry {f['entry']:g} "
-                    f"stop {stop:g} tgt {target:g}"),
-            entry=f["entry"], stop=stop, target=target, code=f["code"],
-            state=f["state"], waited=f["bar"] - f["armBar"],
-            riskPct=100.0 * risk / f["entry"] if f["entry"] else 0.0))
-    return out, dropped
-
-
-_FILL_GROUPS = {(True, "running"): (0, "▲ LONG · running"),
-                (False, "running"): (1, "▼ SHORT · running"),
-                (True, "immature"): (2, "▲ long · immature"),
-                (False, "immature"): (3, "▼ short · immature")}
-
-
-def classify_fill(h) -> tuple:
-    rank, name = _FILL_GROUPS.get((h.is_long, h.extra["state"]), (4, "other"))
-    return (rank, -BAR_SECONDS[h.tf], h.symbol), name
-
-
-def row_fill(h, group: str) -> str:
-    """Same three-line block as the armed digest, plus how long the limit
-    waited — which is the one fact this event has and the other does not."""
-    from .. import telegram as tg
-    e = h.extra
-    head = f"<b>{group}</b>\n\n" if group else "\n"
-    return (head
-            + f"<a href='{tg.tv_link(h.symbol, h.tf)}'>"
-            f"<b>{h.symbol.replace('_USDT', '')}</b></a> "
-            f"<code>{tg.tf_label(h.tf)}</code> "
-            f"<i>· filled {e['waited']}b later</i>\n"
-            f"  <code>in   {tg.fmt(h.price)} → tgt {tg.fmt(e['target'])}</code>\n"
-            f"  <code>stop {tg.fmt(e['stop'])}</code> <i>· risk "
-            f"{e['riskPct']:.1f}%</i>")
-
-
-def rate_fill(db, tfs=None, **over):
-    want = over.get("states", UNDERTOW_STATES)
-    per = FILL_BOTH if want == "both" else FILL_ONE.get(want, FILL_BOTH)
-    return sum(per.get(t, 0) for t in (tfs or UNDERTOW_INTERVALS))
-
-
-# Fills a day across 23 symbols, from undertow_rate.py at the shipped config.
-# Fewer than the armed stream by construction -- 21 of 36 on 15m and 10 of 18
-# on 30m, so about 58% of armed setups reach a fill. 31 rows a day across the
-# shipped 15m+30m, against the armed stream's 54.
-FILL_BOTH = {"Min15": 21, "Min30": 10, "Min60": 5}
-FILL_ONE = {
-    "running": {"Min15": 11, "Min30": 5, "Min60": 3},
-    "immature": {"Min15": 10, "Min30": 5, "Min60": 2},
-}
-
-
-FILL = register(Indicator(
-    name="utfill",
-    title="UNDERTOW FILLED",
-    glyph="✅",
-    unit="fill",   # pluralised with a bare "s"; "entry" became "entrys"
-    caveat=("a limit that just filled — not advice.\n"
-            "5 pre-registered studies: no edge,\n"
-            "and it lost to a random entry."),
-    detect=detect_fill,
-    row=row_fill,
-    classify=classify_fill,
-    min_bars=200,
-    recent_bars=RECENT_BARS,
-    fresh_bars=UNDERTOW_FRESH_BARS,
-    max_lines=UNDERTOW_MAX_LINES,
-    label_w=0,
-    default_enabled=UNDERTOW_FILL_ALERTS,
-    default_intervals=tuple(UNDERTOW_INTERVALS),
-    fallback_interval="Min30",
-    options=(
-        Option("states", "choice", UNDERTOW_STATES,
-               "which bias states count, same as /undertow",
-               choices=("both", "running", "immature")),
-        Option("swing", "number", UNDERTOW_MS_LEN,
-               "the major swing length in BARS — keep it equal to "
-               "/undertow's or the two streams describe different setups",
-               lo=2, hi=100),
-    ),
-    tf_counted=("Min15", "Min30", "Min60"),
-    rate=rate_fill,
-    blurb=("<i>Fires when an Undertow limit at the Focus line is actually "
-           "TOUCHED — the setup passed every step and the trade is on.</i>\n\n"
-           "<i>/undertow says put an order there; this says it filled. About "
-           "half of armed setups never get here, and the ones that do take a "
-           "median of one to two bars. The stop follows the pullback while the "
-           "order rests, so the levels here can differ from the ones the "
-           "arming alert quoted — these are the ones the trade is taken "
-           "with.</i>"),
-    evidence=("<b>Identical to /undertow's, because it is the same setup one "
-              "step later.</b> Five pre-registered studies: no edge on a "
-              "holdout sharing neither symbols nor calendar, and it lost to a "
-              "seeded random entry. Reaching the fill does not make a setup "
-              "better — filling is not a filter, it is just what happened "
-              "next, and the measurements already score only filled trades."),
-    examples=("<code>/utfill on</code> — start them\n"
-              "<code>/utfill 30m</code> — which timeframes\n"
-              "<code>/utfill running</code> — skip fresh-CHoCH setups\n"
-              "<code>/utfill off</code> — stop them"),
 ))
