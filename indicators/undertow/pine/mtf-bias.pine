@@ -1,0 +1,179 @@
+//@version=6
+// MTF Market Structure Bias — EMA 20/50 on two timeframes, aligned or not.
+//
+// WHAT IT SCORED, because you should not have to take a chart's word for it.
+// Measured in ../measurements/UNDERTOW_MTF_EMA.md over 47,000 trades on two
+// symbol universes: requiring the second timeframe to agree is worth between
+// -0.005 and +0.020 R per trade over the one-timeframe cross. The MIXED state
+// fires on 18-19% of bars and removes only 7-9% of trades, because
+// disagreement clusters in chop where little was setting up anyway. Read this
+// as context, not as a signal.
+//
+// FIXED: THE REPAINT. The original called
+//     request.security(syminfo.tickerid, biasTF, ta.ema(close, fastLen))
+// which returns the FORMING higher-timeframe bar on the live bar and the last
+// CLOSED one on historical bars. The two disagree, so the table you traded
+// live was not the table you see after a reload.
+//
+// `[1]` ALONE DOES NOT FIX IT, which is worth knowing. Under the default
+// lookahead_off, history already lags by one HTF bar; adding [1] makes history
+// lag by two while realtime still lags by one, and they still disagree.
+//
+// The fix is `[1]` TOGETHER WITH lookahead_on. On its own lookahead_on really
+// does read the future — it hands you the containing HTF bar's final value
+// before it closed. With [1] it means "the bar BEFORE the one forming now",
+// which is closed, known, identical on history and in realtime, and leaks
+// nothing. This is the standard non-repainting security idiom.
+//
+// It costs up to one higher-timeframe bar of lag against the repainting
+// version. That lag is not a defect; it is the part that was being borrowed
+// from the future.
+indicator("MTF Market Structure Bias", overlay = true)
+
+// =====================================================
+// INPUTS
+// =====================================================
+fastLen = input.int(20, title = "Fast EMA", minval = 1)
+slowLen = input.int(50, title = "Slow EMA", minval = 2)
+
+biasTF      = input.timeframe("30", title = "Directional Bias TF")
+structureTF = input.timeframe("15", title = "Trend Structure TF")
+
+// =====================================================
+// TIMEFRAME SANITY
+// =====================================================
+// A request for a timeframe BELOW the chart's is answered but is not
+// meaningful — you get one arbitrary sub-bar's value, not a series. And a
+// request for the chart's OWN timeframe should not go through request.security
+// at all: [1] would lag your own EMA by a bar for no reason.
+//
+// So each side falls back to the local EMA unless the requested timeframe is
+// genuinely higher, and the table says when it did.
+int chartSec  = timeframe.in_seconds()
+int biasSec   = timeframe.in_seconds(biasTF)
+int structSec = timeframe.in_seconds(structureTF)
+
+bool biasIsHigher   = biasSec   > chartSec
+bool structIsHigher = structSec > chartSec
+
+// =====================================================
+// EMAs
+// =====================================================
+// Every ta.* and request.security is called UNCONDITIONALLY, on every bar. One
+// inside a branch grows a different history and returns a different number the
+// moment an input changes.
+float locFast = ta.ema(close, fastLen)
+float locSlow = ta.ema(close, slowLen)
+
+float biasFastHTF = request.security(syminfo.tickerid, biasTF,
+     ta.ema(close, fastLen)[1], lookahead = barmerge.lookahead_on)
+float biasSlowHTF = request.security(syminfo.tickerid, biasTF,
+     ta.ema(close, slowLen)[1], lookahead = barmerge.lookahead_on)
+
+float structFastHTF = request.security(syminfo.tickerid, structureTF,
+     ta.ema(close, fastLen)[1], lookahead = barmerge.lookahead_on)
+float structSlowHTF = request.security(syminfo.tickerid, structureTF,
+     ta.ema(close, slowLen)[1], lookahead = barmerge.lookahead_on)
+
+float biasFast = biasIsHigher ? biasFastHTF : locFast
+float biasSlow = biasIsHigher ? biasSlowHTF : locSlow
+
+float structFast = structIsHigher ? structFastHTF : locFast
+float structSlow = structIsHigher ? structSlowHTF : locSlow
+
+// [1] on a higher timeframe means the first bars have nothing behind them.
+// Showing "—" beats showing a direction derived from na.
+bool ready = not na(biasFast) and not na(biasSlow)
+     and not na(structFast) and not na(structSlow)
+
+// =====================================================
+// DIRECTIONAL BIAS
+// =====================================================
+bool biasBullish = biasFast > biasSlow
+
+string biasText = not ready ? "—" : biasBullish ? "BULLISH" : "BEARISH"
+color biasColor = not ready ? color.gray : biasBullish ? color.green : color.red
+
+// =====================================================
+// TREND STRUCTURE
+// =====================================================
+bool structureBullish = structFast > structSlow
+
+string structureText = not ready ? "—"
+     : structureBullish ? "BULLISH" : "BEARISH"
+color structureColor = not ready ? color.gray
+     : structureBullish ? color.rgb(5, 75, 41) : color.rgb(199, 77, 58)
+
+// =====================================================
+// OVERALL ALIGNMENT
+// =====================================================
+bool alignedBullish = ready and biasBullish and structureBullish
+bool alignedBearish = ready and not biasBullish and not structureBullish
+
+string alignmentText = not ready ? "—"
+     : alignedBullish ? "FULL BULLISH"
+     : alignedBearish ? "FULL BEARISH"
+     : "MIXED"
+
+color alignmentColor = not ready ? color.gray
+     : alignedBullish ? color.rgb(115, 221, 118)
+     : alignedBearish ? color.red
+     : color.yellow
+
+// =====================================================
+// PLOTS
+// =====================================================
+plot(structFast, title = "Structure EMA fast", color = color.lime,
+     linewidth = 2)
+plot(structSlow, title = "Structure EMA slow", color = color.orange,
+     linewidth = 2)
+
+// =====================================================
+// TABLE
+// =====================================================
+var table biasTable = table.new(position.top_right, columns = 2, rows = 5,
+     border_width = 1)
+
+lbl(string tf, bool higher, string what) =>
+    higher ? tf + " " + what : "chart " + what + " *"
+
+if barstate.islast
+    table.cell(biasTable, 0, 0, "Timeframe", bgcolor = color.gray,
+         text_color = color.white)
+    table.cell(biasTable, 1, 0, "Bias", bgcolor = color.gray,
+         text_color = color.white)
+
+    table.cell(biasTable, 0, 1, lbl(biasTF, biasIsHigher, "Direction"),
+         text_color = color.white)
+    table.cell(biasTable, 1, 1, biasText, bgcolor = biasColor,
+         text_color = color.white)
+
+    table.cell(biasTable, 0, 2, lbl(structureTF, structIsHigher, "Structure"),
+         text_color = color.white)
+    table.cell(biasTable, 1, 2, structureText, bgcolor = structureColor,
+         text_color = color.white)
+
+    table.cell(biasTable, 0, 3, "Alignment", text_color = color.white)
+    table.cell(biasTable, 1, 3, alignmentText, bgcolor = alignmentColor,
+         text_color = color.black)
+
+    // The row that tells you what you are actually looking at. A "*" above
+    // means that side is NOT the timeframe you asked for — it fell back to the
+    // chart because what you asked for is at or below the chart's own
+    // timeframe, and a lower-timeframe request returns a number rather than a
+    // series.
+    bool fellBack = not biasIsHigher or not structIsHigher
+    table.cell(biasTable, 0, 4, "Source", text_color = color.white)
+    table.cell(biasTable, 1, 4,
+         fellBack ? "* chart TF used" : "confirmed HTF",
+         bgcolor = fellBack ? color.new(color.orange, 40)
+              : color.new(color.gray, 40),
+         text_color = color.white,
+         tooltip = "Both higher-timeframe reads use the LAST CLOSED bar — request.security(..., expr[1], lookahead = barmerge.lookahead_on). That is the non-repainting form: identical on history and in realtime, and it reads no future data. It lags the repainting version by up to one higher-timeframe bar, which is the part that was being borrowed from the future.\n\nA '*' means that side asked for a timeframe at or below the chart's, so the chart's own EMA was used instead.")
+
+// =====================================================
+// BACKGROUND
+// =====================================================
+bgcolor(alignedBullish ? color.new(#078e0c, 92)
+     : alignedBearish ? color.new(#d63d3d, 92)
+     : color.new(color.gray, 92))
