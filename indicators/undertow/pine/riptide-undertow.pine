@@ -1308,16 +1308,25 @@ if barstate.islast
         for i = 0 to trades.size() - 1
             if not trades.get(i).ghost
                 openReal := openReal + 1
-    row(5, "won / lost", str.tostring(nWon) + " / " + str.tostring(nLost)
-      + (openReal > 0 ? " · " + str.tostring(openReal) + " open" : ""),
-      nWon * rr > nLost ? colLong : nLost > nWon * rr ? colShort : color.gray,
-      "entered trades walked forward to their target or their stop, stop first when one bar spans both. `open` counts REAL trades only — a ghost still running is on the gate-cost row, not here, and won + lost + open always equals `entered`.")
     // Win rate needs its own break-even printed beside it or it means nothing:
     // at rr 3.5 a coin clears 22.2%, and a 30% win rate reads like a losing
-    // strategy until you know that.
+    // strategy until you know that. The break-even rides in the LABEL rather
+    // than the value because the label column is already the width of
+    // "minor·swp·stale·rt·adx" — it costs nothing there, and unlike a tooltip
+    // it survives a screenshot.
     int nRun = nWonRun + nLostRun
     int nImm = nWonImm + nLostImm
+    int nRes = nWon + nLost
     float beRate = 100.0 / (1.0 + rr)
+    // 1/(1+rr) is also what a driftless random walk returns, so "above the
+    // line" is the comparison that matters and the colour already encodes it:
+    // nWon * rr > nLost is the same inequality as nWon / nRes > 1 / (1 + rr).
+    row(5, "won / lost · be " + str.tostring(beRate, "#.#") + "%",
+      nRes == 0 ? "—" : str.tostring(nWon) + " / " + str.tostring(nLost)
+      + " · " + str.tostring(100.0 * nWon / nRes, "#.#") + "%"
+      + (openReal > 0 ? " · " + str.tostring(openReal) + " open" : ""),
+      nWon * rr > nLost ? colLong : nLost > nWon * rr ? colShort : color.gray,
+      "entered trades walked forward to their target or their stop, stop first when one bar spans both, and the share of them that won.\n\nBREAK-EVEN AT " + str.tostring(rr, "#.#") + "R IS " + str.tostring(beRate, "#.#") + "%, which is also what a driftless random walk returns — so this percentage is only information relative to that line, and the colour is that comparison. Green is above it, red below.\n\n`open` counts REAL trades only — a ghost still running is on the gate-cost row, not here, and won + lost + open always equals `entered`. IN-SAMPLE: same caveat as net R.")
     row(6, "  running", nRun == 0 ? "—" : str.tostring(nWonRun) + " / "
       + str.tostring(nLostRun) + " · "
       + str.tostring(100.0 * nWonRun / nRun, "#.#") + "%",
