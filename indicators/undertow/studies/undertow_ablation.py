@@ -2,7 +2,12 @@
 prereg/PREREG_undertow_pin_value.md pre-registered.
 
     PYTHONPATH=. python3 indicators/undertow/studies/undertow_ablation.py
+    PYTHONPATH=. python3 indicators/undertow/studies/undertow_ablation.py --uncapped
     PYTHONPATH=. python3 indicators/undertow/studies/undertow_ablation.py Min30
+
+RUN 1 (no flag) IS THE v1 PREREG AND IT IS VOID -- see the measurement file. It
+is kept runnable rather than deleted so the void can be reproduced. `--uncapped`
+is the v2 prereg: the same six arms with maxLive 64 instead of 4.
 
 Six arms, one frozen configuration, every arm reported. NOTHING IS SELECTED, so
 unlike undertow_sweep.py there is no maximum being taken and no holdout needed
@@ -41,7 +46,17 @@ from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
 from research.data import SYMBOLS                                # noqa: E402
 
 # The frozen baseline. Every Pine default, rr 3.0, costs on.
+#
+# maxLive: 4 is the Pine's, and the Pine has it for TradingView's 500-drawing
+# budget -- SPEC.md says so. It is a CHARTING ARTIFACT and in a measurement it
+# should not exist, which is what run 1 got wrong. `--uncapped` raises it to 64,
+# verified to bring nCap to exactly 0 on the loosest arm (1000 gives the
+# identical trade count, so 64 is "enough", not a tuned number).
+#
+# The port's DEFAULT stays 4 so deploy/undertow-port-check.py keeps holding the
+# port to the Pine's inputs. The override is here, in the open.
 BASE = U.P(rr=3.0, feeFrac=FEE)
+UNCAPPED = 64
 
 ARMS = [
     ("A0", "FULL", {}),
@@ -99,19 +114,22 @@ def diff_se(a, b):
     return math.sqrt(sa ** 2 + sb ** 2)
 
 
-def panel(tf, pairs, title):
+def panel(tf, pairs, title, cap):
     print(f"\n{'-' * 78}\n{tf} · {title}\n{'-' * 78}")
     print(f"  {'':3} {'arm':18} {'mean R':>8} {'+/-':>6} {'n':>5} "
           f"{'cap':>5} {'ctl':>7}  note")
     out = {}
     for k, (aid, name, over) in enumerate(ARMS):
-        p = dataclasses.replace(BASE, **over)
+        p = dataclasses.replace(BASE, maxLive=cap, **over)
         # A fixed per-arm offset, not hash(aid): str hashing is salted per
         # process, so a hashed seed would make the run irreproducible.
         r, ctl = run_arm(tf, p, pairs, seed=SEED + 101 * k)
         m, se, n = clustered(r.real)
         cm = clustered(ctl)[0] if ctl else float("nan")
-        confounded = r.nCap > max(1, n)
+        # v2 bar 2 is ZERO turned away, not "fewer than were traded": below
+        # zero-ish the cap is still choosing setups. v1's looser rule is kept
+        # for reproducing the void.
+        confounded = (r.nCap > 0) if cap == UNCAPPED else (r.nCap > max(1, n))
         note = []
         if n < 150:
             note.append("UNDERPOWERED")
@@ -126,7 +144,7 @@ def panel(tf, pairs, title):
     return out
 
 
-def verdict(tf, o):
+def verdict(tf, o, cap):
     """The primary contrast, against the bars written down beforehand."""
     a0, a3 = o["A0"], o["A3"]
     d = a0["m"] - a3["m"]
@@ -139,8 +157,9 @@ def verdict(tf, o):
     print(f"\n  PRIMARY  A0 - A3 = {d:+.3f} R  +/- {dse:.3f}  (z {z:+.2f})")
     print(f"    1 coverage      A0 {a0['n']}, A3 {a3['n']}"
           f"          {'PASS' if cover else 'FAIL — read as a bound'}")
-    print(f"    2 not confounded A0 cap {a0['cap']}, A3 cap {a3['cap']}"
-          f"     {'PASS' if clean else 'FAIL — contrast is void'}")
+    want = "must be 0" if cap == UNCAPPED else "must not exceed fills"
+    print(f"    2 not confounded A0 cap {a0['cap']}, A3 cap {a3['cap']} "
+          f"({want})   {'PASS' if clean else 'FAIL — contrast is void'}")
     if not (cover and clean):
         state = "VOID"
     elif earns:
@@ -155,6 +174,8 @@ def verdict(tf, o):
 
 
 def main():
+    uncapped = "--uncapped" in sys.argv[1:]
+    cap = UNCAPPED if uncapped else BASE.maxLive
     argv = [a for a in sys.argv[1:] if a in TFS]
     tfs = argv or list(TFS)
     for tf in tfs:
@@ -164,7 +185,12 @@ def main():
             return 2
 
     print("UNDERTOW ABLATION — which gate is doing anything?")
-    print("prereg: indicators/undertow/prereg/PREREG_undertow_pin_value.md")
+    print("prereg: indicators/undertow/prereg/PREREG_undertow_pin_value"
+          + ("_v2.md" if uncapped else ".md  (RUN 1 — VOID, see the "
+             "measurement file)"))
+    print(f"maxLive {cap}"
+          + ("  — the charting cap removed; bar 2 requires nCap == 0"
+             if uncapped else "  — the Pine's charting cap, kept"))
     print(f"frozen config: {BASE.tag()}")
     print(f"fees {FEE * 1e4:.0f}bp round trip, seed {SEED}")
     print("\nNOTHING IS SELECTED HERE. Six arms, all reported, one primary")
@@ -173,10 +199,10 @@ def main():
     allp = [(s, True) for s in SYMBOLS] + [(s, False) for s in SYMBOLS]
     vs = []
     for tf in tfs:
-        o = panel(tf, allp, "PRIMARY — all 23 symbols, both halves")
-        vs.append(verdict(tf, o))
+        o = panel(tf, allp, "PRIMARY — all 23 symbols, both halves", cap)
+        vs.append(verdict(tf, o, cap))
         panel(tf, FRESH, "SECOND PANEL — the two quadrants the sweep never "
-                         "scored")
+                         "scored", cap)
 
     print(f"\n{'=' * 78}\nVERDICT\n{'=' * 78}\n")
     print(f"  {'tf':8} {'A0-A3':>8} {'+/-':>6} {'z':>6} {'nA0':>6} {'nA3':>6}"
