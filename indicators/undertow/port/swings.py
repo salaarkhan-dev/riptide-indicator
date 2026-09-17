@@ -49,8 +49,10 @@ WHAT IT STILL COSTS:
 
 WHICH ONE MAKES MORE MONEY IS NOT KNOWN AND IS NOT ASSERTED HERE. Scale
 invariance is a property of the DETECTOR, proved above; it says nothing about
-whether the setups it finds are better. `bar` stays the default. This module
-exists so the question can be an arm in a study instead of an opinion.
+whether the setups it finds are better. `price move` is now the default, and
+UNDERTOW_BIAS_SOURCE.md is explicit that it earned that on the x0.89 above and
+on nothing else -- it beat none of the four alternatives on expectancy. This
+module exists so the question can be an arm in a study instead of an opinion.
 
 Both functions return the same four per-bar lists as the Pine's `msSwings()`:
 

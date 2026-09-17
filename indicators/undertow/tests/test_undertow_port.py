@@ -20,6 +20,7 @@ spanning both the entry and the stop, and a fill on the arming bar itself. Each
 would silently inflate the win rate, which is the only kind of bug a backtest
 cannot show you.
 """
+import math
 import os
 import random
 import sys
@@ -561,6 +562,55 @@ def test_price_swing_sources_run_end_to_end():
         ok("unknown swingSrc" in str(e), f"stale swingSrc raises: {e}")
 
 
+def test_slope_in_hours_survives_an_aggregation():
+    """THE CLAIM BEHIND `slopeUnit="hours"`, tested the same way the swings'
+    was: aggregate 4:1 and count direction flips per unit of TIME.
+
+    Slope in bars measures its window in bars AND its threshold in ATR per
+    bar, so both halves shrink when the chart coarsens. Slope in hours
+    measures neither in bars. If the hours variant does not hold its flip rate
+    better across the aggregation, the variant has no reason to exist and this
+    test is how that would be found out.
+    """
+    cs = walk(4000, seed=91, drift=0.0)          # 1-minute bars
+    hi, _ = U.aggregate(cs, 4)
+
+    def per_time(seq, p, mult):
+        """Flips per unit of TIME, not per bar. One aggregated bar is `mult`
+        units of time, so the span is len(seq) * mult -- getting that the wrong
+        way round is what this comment is here to stop, because it did."""
+        d = U.dir_slope(seq, p)
+        f = sum(1 for i in range(1, len(d)) if d[i] != d[i - 1])
+        return f / max(1, len(seq) * mult)
+
+    def survives(p):
+        lo = per_time(cs, p, 1) or 1e-12
+        return per_time(hi, p, 4) / lo
+
+    bars_p = U.P(slopeUnit=U.SL_BARS, slopeLen=50, slopeMin=0.05)
+    kb = survives(bars_p)
+    print(f"       Slope, bars 50 / 0.05        x{kb:.2f}")
+    # 50 minutes is the 50-bar window of a 1m chart, restated. Swept over the
+    # study's whole threshold ladder rather than pinned to one rung, because a
+    # single lucky rung would prove nothing.
+    worst = 0.0
+    for thr in (0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2):
+        k = survives(U.P(slopeUnit=U.SL_HOURS, slopeHours=50 / 60.0,
+                         slopeMinPerHr=thr))
+        print(f"       Slope, hours 0.83 / {thr:<5}      x{k:.2f}")
+        worst = max(worst, abs(math.log(k)))
+    ok(worst < abs(math.log(kb)),
+       f"every rung of the ladder holds its rate better than bars does: "
+       f"worst |log| {worst:.2f} vs {abs(math.log(kb)):.2f}")
+    # And the unit must actually be read -- a variant that ignored its own
+    # threshold would pass the ratio test by accident.
+    loose = U.dir_slope(cs, U.P(slopeUnit=U.SL_HOURS, slopeMinPerHr=0.0))
+    tight = U.dir_slope(cs, U.P(slopeUnit=U.SL_HOURS, slopeMinPerHr=10.0))
+    nl = sum(1 for i in range(1, len(loose)) if loose[i] != loose[i - 1])
+    nt = sum(1 for i in range(1, len(tight)) if tight[i] != tight[i - 1])
+    ok(nl > nt == 0, f"slopeMinPerHr is read: {nl} flips at 0.0, {nt} at 10.0")
+
+
 def main():
     for fn in (test_swings_match_ms_struct, test_structure_matches_ms_struct,
                test_atr_matches_the_bot, test_atr_swings_alternate_and_are_real,
@@ -578,7 +628,8 @@ def main():
                test_htf_aggregate_is_sound,
                test_htf_bias_cannot_look_ahead,
                test_htf_gate_only_removes_setups,
-               test_price_swing_sources_run_end_to_end):
+               test_price_swing_sources_run_end_to_end,
+               test_slope_in_hours_survives_an_aggregation):
         print(f"\n{fn.__name__}")
         fn()
     print(f"\n{'ALL PASS' if all(good) else 'FAILURES'}  "

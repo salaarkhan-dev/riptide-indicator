@@ -87,6 +87,10 @@ SW_RANGE = "price move"
 # Port-only, and kept only because a test pins the measurement that rejected
 # it. Not an option on the chart and it must not become one.
 SW_ATR = "atr"
+# `slopeUnit` — whether the Slope source measures its window and its threshold
+# in bars (so it means a different thing on every chart) or in time.
+SL_BARS = "bars"
+SL_HOURS = "hours"
 # `endMinor`
 E_OFF = "off"
 E_FLIP = "on the flip"
@@ -112,8 +116,23 @@ class P:
     emaSlow: int = 200
     stAtrLen: int = 10
     stMult: float = 3.0
+    # SLOPE, AND THE SAME TRAP THE SWINGS FELL INTO. `slopeLen` is a number of
+    # BARS and `slopeMin` is quoted in ATR per BAR, so BOTH halves of the rule
+    # move when the chart does: the shipped 50/0.05 flips the direction 1.2
+    # times a day on 15m and 0.5 on 30m. That is the exact defect `price move`
+    # swings were adopted to fix, and Slope as shipped does not fix it.
+    #
+    # `slopeUnit = "hours"` restates the same rule in time:
+    #   window     `slopeHours` of trading, however many bars that takes
+    #   threshold  `slopeMinPerHr` DAY-RANGES PER HOUR -- the fit's rise per
+    #              hour over the last 24h high-to-low, the same unit the swing
+    #              detector uses, and the only one here that is not per-bar.
+    # 12.5 hours is 50 bars on 15m: the shipped setting, restated, not retuned.
+    slopeUnit: str = SL_BARS
     slopeLen: int = 50
     slopeMin: float = 0.05
+    slopeHours: float = 12.5
+    slopeMinPerHr: float = 0.05
     donLen: int = 50
     # For every source EXCEPT the structure engine there is no BOS to count, so
     # "running" cannot mean "has broken structure once". It means the direction
@@ -428,16 +447,38 @@ def dir_supertrend(cs, p):
 
 
 def dir_slope(cs, p):
-    """The slope of a least-squares fit over `slopeLen` bars, in ATR per bar.
-
-    ATR per bar, not price per bar, is what makes one threshold mean the same
-    thing on BTC at 90,000 and on a token at 0.02 -- and the same thing in a
-    quiet week as in a violent one. Below `slopeMin` the direction HOLDS rather
-    than flipping, so a flat patch does not manufacture a trend in whichever
+    """The slope of a least-squares fit, in units per unit, direction held
+    below a threshold so a flat patch does not manufacture a trend in whichever
     way the noise happened to lean.
+
+    TWO UNITS, and the difference is the whole reason this has a switch.
+
+      "bars"   window `slopeLen` BARS, threshold in ATR per BAR. ATR per bar
+               rather than price per bar is what makes one number mean the
+               same thing on BTC at 90,000 and on a token at 0.02 -- but it
+               does NOT make it mean the same thing on 15m as on 1h, because
+               both the window and the unit are per-bar. This is the shipped
+               setting and the one measured in UNDERTOW_BIAS_SOURCE.md.
+      "hours"  window `slopeHours` of trading, threshold in DAY-RANGES PER
+               HOUR. Nothing per-bar survives, so the rule is the same rule on
+               every chart.
     """
-    n, L = len(cs), max(2, p.slopeLen)
-    atr = atr_series(cs, 14)
+    n = len(cs)
+    hours = p.slopeUnit == SL_HOURS
+    if hours:
+        # Both halves of the rule restated in time. `unit` is the last 24
+        # hours' high-to-low, a price that does not care how the day is
+        # sliced, and the fit's rise is converted to per HOUR before the
+        # comparison -- so 15m and 1h ask the same question.
+        L = max(2, bars_per(cs, p.slopeHours))
+        unit = range_basis(cs, bars_per(cs, 24.0))
+        per = float(bars_per(cs, 1.0))
+        thr = p.slopeMinPerHr
+    else:
+        L = max(2, p.slopeLen)
+        unit = atr_series(cs, 14)
+        per = 1.0
+        thr = p.slopeMin
     cl = [c.c for c in cs]
     # sum of (x - xbar)^2 for x = 0..L-1, constant, so only the cross term moves
     xb = (L - 1) / 2.0
@@ -449,8 +490,8 @@ def dir_slope(cs, p):
             w = cl[i + 1 - L:i + 1]
             yb = sum(w) / L
             sxy = sum((x - xb) * (y - yb) for x, y in enumerate(w))
-            run = (sxy / sxx) / (atr[i] or 1e-12)
-        if abs(run) >= p.slopeMin:
+            run = (sxy / sxx) * per / (unit[i] or 1e-12)
+        if abs(run) >= thr:
             d = 1 if run > 0 else -1
         out[i] = d
     return out
