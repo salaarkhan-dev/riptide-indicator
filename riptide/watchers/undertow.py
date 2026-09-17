@@ -468,10 +468,10 @@ def detect(cs, symbol: str, tf: str, opts: dict) -> tuple:
     return out, dropped
 
 
-_GROUPS = {(True, "running"): (0, "LONG · running"),
-           (False, "running"): (1, "SHORT · running"),
-           (True, "immature"): (2, "long · immature"),
-           (False, "immature"): (3, "short · immature")}
+_GROUPS = {(True, "running"): (0, "▲ LONG · running"),
+           (False, "running"): (1, "▼ SHORT · running"),
+           (True, "immature"): (2, "▲ long · immature"),
+           (False, "immature"): (3, "▼ short · immature")}
 
 
 def classify(h) -> tuple:
@@ -480,28 +480,56 @@ def classify(h) -> tuple:
     return (rank, -BAR_SECONDS[h.tf], h.symbol), name
 
 
-GROUP_W = 16
+# The framework's fixed-width label column is not used here, so this is 0.
+# WHY: that column assumes a wide screen. On a phone every row wrapped twice
+# and the indentation it exists to create collapsed -- the continuation lines
+# came back to the left margin and the block stopped reading as a list at all.
+# This digest puts the group on its OWN line instead, which costs one line per
+# block and survives any width.
+GROUP_W = 0
 
 
 def row(h, group: str) -> str:
-    """One armed setup. The levels are the product — see the module docstring
-    for why a watch prints them and what that still does not make them.
+    """One armed setup as a THREE-LINE BLOCK, built for a phone.
 
-    `watch.chart` already renders the price, and `Hit.price` IS the limit, so
-    the entry is NOT repeated here. The first version printed it twice, which
-    is worse than either choice: two numbers that are always equal read as two
+    The first version was one wide row with a fixed-width label column. On a 6"
+    screen every line wrapped twice, the indentation that column exists to
+    create collapsed back to the left margin, and the whole digest stopped
+    reading as a list. Horizontal space is the scarce thing on a phone and
+    vertical space is not, so this spends the cheap one.
+
+        ADA 15m
+          entry 0.1985 → tgt 0.204
+          stop  0.1969 · risk 0.8%
+
+    Every line under 34 characters, so nothing wraps on any phone. The labels
+    are words rather than positions, because a bare triple of numbers needs a
+    legend and a legend is one more thing to remember at the moment you are
+    deciding whether to place an order.
+
+    THE CANDLE CODE IS GONE. HAM / HGM / IH / SS was the first thing cut:
+    UNDERTOW_PIN_VALUE.md removed the taxonomy entirely and scored HIGHER on
+    two of three timeframes, so it is the one field measured to carry nothing.
+    It is still on the chart, one tap away.
+
+    `Hit.price` IS the limit, so the entry appears exactly once — an earlier
+    version printed it twice, and two numbers that are always equal read as two
     different levels until you check.
-
-    tg.fmt, not `:g`. A raw float prints 0.0246017 next to 0.027424 and the
-    columns stop lining up at exactly the moment a reader is comparing a stop
-    to an entry — which is the only thing this row is for.
     """
     from .. import telegram as tg
-    from .. import watch
     e = h.extra
-    return (watch.label(SPEC, group) + watch.chart(h)
-            + f"  <i>sl {tg.fmt(e['stop'])} · tp {tg.fmt(e['target'])}"
-            f" · {e['riskPct']:.2f}% · {e['code']}</i>")
+    # The blank line goes at the FRONT of a continuation row, never at the end
+    # of any row. `watch.digest` already inserts one before a new group, so a
+    # trailing newline here doubled it at every boundary — one blank inside a
+    # block and two between them reads as a rhythm that is not there.
+    head = f"<b>{group}</b>\n\n" if group else "\n"
+    return (head
+            + f"<a href='{tg.tv_link(h.symbol, h.tf)}'>"
+            f"<b>{h.symbol.replace('_USDT', '')}</b></a> "
+            f"<code>{tg.tf_label(h.tf)}</code>\n"
+            f"  <code>entry {tg.fmt(h.price)} → tgt {tg.fmt(e['target'])}</code>\n"
+            f"  <code>stop  {tg.fmt(e['stop'])}</code> <i>· risk "
+            f"{e['riskPct']:.1f}%</i>")
 
 
 def rate(db, tfs=None, **over):
@@ -547,9 +575,15 @@ SPEC = register(Indicator(
     title="UNDERTOW",
     glyph="🌊",
     unit="setup",
-    caveat=("a limit level to go look at, not a trade — three pre-registered "
-            "studies measured no edge, and it lost to a random entry. About "
-            "half of these never fill."),
+    # SHORT ENOUGH TO READ ON A PHONE, and it still says all three things: not
+    # a trade, measured, and beaten by chance. The long version ran to four
+    # wrapped lines above every digest, which is how a caveat stops being read.
+    # THREE SHORT LINES, not one long one. The original ran to four wrapped
+    # lines above every digest, which is how a caveat stops being read — and a
+    # caveat nobody reads is worse than none, because it looks like diligence.
+    caveat=("limits to look at — not trades.\n"
+            "5 studies found no edge, and it lost\n"
+            "to a random entry. ~half never fill."),
     detect=detect,
     row=row,
     classify=classify,
@@ -557,7 +591,7 @@ SPEC = register(Indicator(
     recent_bars=RECENT_BARS,
     fresh_bars=UNDERTOW_FRESH_BARS,
     max_lines=UNDERTOW_MAX_LINES,
-    label_w=GROUP_W,
+    label_w=GROUP_W,          # unused; the group is its own line
     default_enabled=UNDERTOW_ALERTS,
     default_intervals=tuple(UNDERTOW_INTERVALS),
     fallback_interval="Min60",

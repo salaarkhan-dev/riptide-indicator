@@ -159,8 +159,16 @@ def test_frozen_constants_match_the_port():
 def test_ships_off():
     ok(W.SPEC.default_enabled is False,
        "the stream ships OFF — three pre-registered studies, all negative")
-    ok("not a trade" in W.SPEC.caveat and "random" in W.SPEC.caveat,
-       "and the caveat under every digest says so in the reader's words")
+    # The three claims, not the exact wording — the caveat gets reworded for
+    # width and a test that pins its phrasing would fail on a rewrite that
+    # kept every promise. What must survive any rewrite is these three.
+    c = W.SPEC.caveat.lower()
+    for claim, word in (("it is not a trade", "not trade"),
+                        ("it was measured", "no edge"),
+                        ("it lost to a control", "random")):
+        ok(word in c, f"the caveat still says {claim}")
+    ok(all(len(l) <= 40 for l in W.SPEC.caveat.split("\n")),
+       "and every line of it fits a phone")
 
 
 def test_rate_is_readable():
@@ -207,6 +215,49 @@ def test_hit_is_dated_to_the_close():
         ok(long_ok, "stop, entry and target are on the right sides")
 
 
+def test_digest_fits_a_phone():
+    """THE DIGEST IS READ ON A 6" SCREEN AND NOWHERE ELSE.
+
+    The first version used the framework's fixed-width label column, which
+    assumes a wide terminal: on a phone every row wrapped twice, the
+    indentation that column exists to create collapsed back to the left
+    margin, and the block stopped reading as a list. This pins the fix, because
+    "it looks fine" is not a thing a test can check later and a wrapped digest
+    is indistinguishable from a working one in code review.
+    """
+    import re
+    from riptide import watch
+    cs = walk(4000, seed=12, drift=0.0006)
+    got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
+    hits = []
+    for a in got[-6:]:
+        hits += W.detect(cs[:a["bar"] + 2], "BTC_USDT", "Min15", {})[0]
+    # a tiny price and a huge one, which are the two width extremes
+    for a in got[-3:]:
+        hits += W.detect(cs[:a["bar"] + 2], "PEPE_USDT", "Min30", {})[0]
+    ok(len(hits) >= 3, f"the fixture renders something: {len(hits)}")
+    msg = watch.digest(W.SPEC, hits, ("Min15", "Min30"),
+                       max(h.bar_time for h in hits))
+    plain = re.sub(r"<[^>]+>", "", msg)
+    lines = plain.split("\n")
+    wide = [l for l in lines if len(l) > 40]
+    ok(not wide, "every line fits 40 characters"
+       + ("" if not wide else f" — {len(wide)} do not, worst "
+          f"{max(len(l) for l in wide)}: {max(wide, key=len)!r}"))
+    ok(not any(l.rstrip().endswith("·") for l in lines),
+       "no line ends on a dangling separator")
+    # The entry is Hit.price and must appear ONCE per block, never twice.
+    body = [l for l in lines if l.strip().startswith("entry")]
+    ok(len(body) == len(hits),
+       f"one entry line per setup: {len(body)} == {len(hits)}")
+    for h in hits[:3]:
+        from riptide import telegram as tg
+        shown = sum(l.count(tg.fmt(h.price)) for l in lines)
+        ok(shown >= 1, f"{h.symbol}: the limit is printed")
+    ok(all(("entry" in l) == ("tgt" in l) for l in body),
+       "entry and target are on one line, so the trade reads in one glance")
+
+
 def test_dedupe_key_is_stable():
     a = W.sig_of("BTC_USDT", "Min30", 1700000000, True)
     b = W.sig_of("BTC_USDT", "Min30", 1700000000, True)
@@ -249,6 +300,7 @@ def test_no_trading_path():
 def main():
     for fn in (test_copies_agree, test_agree_on_real_candles,
                test_frozen_constants_match_the_port, test_ships_off,
+               test_digest_fits_a_phone,
                test_rate_is_readable, test_hit_is_dated_to_the_close,
                test_dedupe_key_is_stable, test_detect_reports_its_drops,
                test_no_trading_path):
