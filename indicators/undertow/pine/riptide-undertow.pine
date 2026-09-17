@@ -193,6 +193,11 @@ type Cand
     string tag    = ""
     string code   = ""
     string state  = ""
+    // GHOST. An armed setup the bias gate cancelled, kept running anyway and
+    // scored into its own column. It draws nothing, takes no live slot and
+    // never touches the real totals — it exists only to answer whether the
+    // gate that killed it was right to. See section 7.
+    bool   ghost  = false
 
 // ── the drawing buffers, and the two calls section 7 makes ───────────────────
 var array<line> lnBuf = array.new<line>()
@@ -442,7 +447,14 @@ bool endD = retraceMax > 0 and retraced >= retraceMax / 100.0
 [diPlus, diMinus, adxVal] = ta.dmi(14, 14)
 bool endE = adxMin > 0 and adxVal < adxMin
 
+// WHICH gate ended it, latched at the moment it latches. The panel used to say
+// only that the bias killed a setup, and on three charts that was the single
+// largest bucket — larger than the entries. "Which of the five" is the whole
+// question, and one string answers it.
+var string endWhy = "—"
 if biasSeen and (endA or endB or endC or endD or endE)
+    if not ending
+        endWhy := endA ? "minor" : endB ? "sweep" : endC ? "stale" : endD ? "retrace" : "adx"
     ending := true
 
 string biasState = not biasSeen ? "none" : ending ? "ending" : bosN == 0 ? "immature" : "running"
@@ -579,6 +591,32 @@ var int nWon = 0
 var int nLost = 0
 var string lastReject = "—"
 
+// ── THE GHOST COLUMN ─────────────────────────────────────────────────────────
+// The bias gate cancels a triggered setup more often than it lets one through:
+// 39 of 62 no-entries on one chart, 25 of 34 on another, 13 of 15 on a third.
+// That is the largest single lever in the machine and nothing here measured it,
+// because a cancelled setup was deleted and its counterfactual never existed.
+//
+// So a cancelled setup is no longer deleted. It is marked `ghost` and walked to
+// the same fill, the same target and the same stop, into counters of its own.
+// It draws nothing, holds no live slot, and cannot touch the real totals. If
+// the ghosts lose, the gate is earning its place; if the ghosts win, the gate
+// is throwing away the trades.
+//
+// It is still in-sample and it still proves nothing on its own. What it does is
+// turn "should a triggered setup survive a bias flip" from an opinion into a
+// number that can be pre-registered and tested out of sample.
+var int gWon = 0
+var int gLost = 0
+var int gOpen = 0
+// …and WHICH gate did the cancelling, since they are five different rules with
+// one shared symptom.
+var int nEndMinor = 0
+var int nEndSweep = 0
+var int nEndStale = 0
+var int nEndRetr = 0
+var int nEndAdx = 0
+
 // ── every live candidate, oldest first, removed in place when it resolves ────
 if barOk and cands.size() > 0
     for i = cands.size() - 1 to 0
@@ -589,11 +627,26 @@ if barOk and cands.size() > 0
         // resolve on one bar and a shared string would label each of them with
         // the last one's reason.
         string why = ""
-        if not tradeable
-            why := "bias turned " + biasState
+        if not tradeable and not c.ghost
+            why := "bias turned " + biasState + " · " + endWhy
             if c.armed
                 nMissBias := nMissBias + 1
-            gone := true
+                nEndMinor := nEndMinor + (endWhy == "minor" ? 1 : 0)
+                nEndSweep := nEndSweep + (endWhy == "sweep" ? 1 : 0)
+                nEndStale := nEndStale + (endWhy == "stale" ? 1 : 0)
+                nEndRetr := nEndRetr + (endWhy == "retrace" ? 1 : 0)
+                nEndAdx := nEndAdx + (endWhy == "adx" ? 1 : 0)
+                // Counted as a no-entry exactly as before — the real totals do
+                // not change. Then kept, as a ghost, to find out what it would
+                // have done. Drawn once, now, because after this it is invisible.
+                if showUnfilled
+                    drawMiss(c, why)
+                // Said here, because the bottom of the loop deliberately lets
+                // no ghost write to it and this is the drop worth reporting.
+                lastReject := why
+                c.ghost := true
+            else
+                gone := true
         if not gone and not c.armed
             // THE PULLBACK CAN STILL EXTEND while a candidate waits, and its
             // stop has to follow. Tracked per candidate rather than read from
@@ -669,30 +722,34 @@ if barOk and cands.size() > 0
             // bar coming back from the target.
             if tgtGone
                 why := "target reached before the fill"
-                nMissGone := nMissGone + 1
+                nMissGone := nMissGone + (c.ghost ? 0 : 1)
                 gone := true
             // Stop next. When one bar spans both, which came first is
             // unknowable intrabar, so the setup is dropped rather than counted.
             else if stopHit
                 why := "stop taken before the fill"
-                nMissStop := nMissStop + 1
+                nMissStop := nMissStop + (c.ghost ? 0 : 1)
                 gone := true
             else if touched
-                nFilled := nFilled + 1
+                nFilled := nFilled + (c.ghost ? 0 : 1)
+                gOpen := gOpen + (c.ghost ? 1 : 0)
                 filled := true
-                drawFill(c)
+                if not c.ghost
+                    drawFill(c)
                 // Kept, to be walked to its target or its stop below. `c` is
                 // about to leave `cands`, but the object survives the removal.
                 trades.push(c)
                 gone := true
             else if bar_index - c.armBar >= fillBars
                 why := "fill window — price never came back"
-                nMissBack := nMissBack + 1
+                nMissBack := nMissBack + (c.ghost ? 0 : 1)
                 gone := true
         if gone
-            if why != ""
+            // A ghost is already counted, already drawn and already explained.
+            // It must not write over the live panel's reason or draw a second ×.
+            if why != "" and not c.ghost
                 lastReject := why
-            if c.armed and not filled and showUnfilled
+            if c.armed and not filled and showUnfilled and not c.ghost
                 drawMiss(c, why)
             cands.remove(i)
 
@@ -707,12 +764,18 @@ if barOk and trades.size() > 0
         bool lost = t.short ? high >= t.stop : low <= t.stop
         bool won = t.short ? low <= t.target : high >= t.target
         if lost
-            nLost := nLost + 1
-            drawResult(t, false)
+            nLost := nLost + (t.ghost ? 0 : 1)
+            gLost := gLost + (t.ghost ? 1 : 0)
+            gOpen := gOpen - (t.ghost ? 1 : 0)
+            if not t.ghost
+                drawResult(t, false)
             trades.remove(i)
         else if won
-            nWon := nWon + 1
-            drawResult(t, true)
+            nWon := nWon + (t.ghost ? 0 : 1)
+            gWon := gWon + (t.ghost ? 1 : 0)
+            gOpen := gOpen - (t.ghost ? 1 : 0)
+            if not t.ghost
+                drawResult(t, true)
             trades.remove(i)
 
 // ── a new pin ────────────────────────────────────────────────────────────────
@@ -729,8 +792,17 @@ if pinFound
     else if not locOk
         lastReject := "location · " + str.tostring(bar_index - pbExtX) + "b past extreme (tol " + str.tostring(locTol) + ")"
 
+// The cap counts LIVE candidates only. A ghost still sits in `cands` so the one
+// resolution loop can walk it, but it is not a setup any more and must not be
+// able to turn a real one away.
+int nLive = 0
+if cands.size() > 0
+    for i = 0 to cands.size() - 1
+        if not cands.get(i).ghost
+            nLive := nLive + 1
+
 if pinOk
-    if cands.size() >= maxLive
+    if nLive >= maxLive
         nCap := nCap + 1
         lastReject := "at the live cap (" + str.tostring(maxLive) + ")"
     else
@@ -770,32 +842,38 @@ for i = 0 to maxLive - 1
     lvLb.get(i).set_color(color(na))
     lvLb.get(i).set_textcolor(color(na))
 
+// `slot`, not `i`: `cands` now also holds ghosts, which draw nothing, so the
+// array index is no longer the pool index — and the pool is only maxLive * 3
+// lines wide, so using `i` would run off the end the first time a ghost existed.
+int slot = 0
 if cands.size() > 0
     for i = 0 to cands.size() - 1
         Cand c = cands.get(i)
-        color lc = c.short ? colShort : colLong
-        line a = lvLn.get(i * 3)
-        line b = lvLn.get(i * 3 + 1)
-        line f = lvLn.get(i * 3 + 2)
-        // The WORKING line carries the direction colour and the Failure line
-        // does not, so which is which reads without opening the settings.
-        a.set_xy1(c.bar, c.hi)
-        a.set_xy2(bar_index, c.hi)
-        a.set_color(c.workHi ? lc : colLine)
-        a.set_style(line.style_solid)
-        b.set_xy1(c.bar, c.lo)
-        b.set_xy2(bar_index, c.lo)
-        b.set_color(c.workHi ? colLine : lc)
-        b.set_style(line.style_solid)
-        f.set_xy1(c.bar, c.focus)
-        f.set_xy2(bar_index, c.focus)
-        f.set_color(lc)
-        f.set_style(line.style_dashed)
-        label lb = lvLb.get(i)
-        lb.set_xy(bar_index, c.focus)
-        lb.set_color(color.new(lc, 25))
-        lb.set_textcolor(color.white)
-        lb.set_text(c.code + " " + (c.armed ? "ARMED " + (c.order == 1 ? "W→F" : "F→W") : c.workOk ? "W✓ F·" : c.failOk ? "W· F✓" : "W· F·") + " " + str.tostring(bar_index - c.bar) + "b")
+        if not c.ghost and slot < maxLive
+            color lc = c.short ? colShort : colLong
+            line a = lvLn.get(slot * 3)
+            line b = lvLn.get(slot * 3 + 1)
+            line f = lvLn.get(slot * 3 + 2)
+            // The WORKING line carries the direction colour and the Failure
+            // line does not, so which is which reads without the settings.
+            a.set_xy1(c.bar, c.hi)
+            a.set_xy2(bar_index, c.hi)
+            a.set_color(c.workHi ? lc : colLine)
+            a.set_style(line.style_solid)
+            b.set_xy1(c.bar, c.lo)
+            b.set_xy2(bar_index, c.lo)
+            b.set_color(c.workHi ? colLine : lc)
+            b.set_style(line.style_solid)
+            f.set_xy1(c.bar, c.focus)
+            f.set_xy2(bar_index, c.focus)
+            f.set_color(lc)
+            f.set_style(line.style_dashed)
+            label lb = lvLb.get(slot)
+            lb.set_xy(bar_index, c.focus)
+            lb.set_color(color.new(lc, 25))
+            lb.set_textcolor(color.white)
+            lb.set_text(c.code + " " + (c.armed ? "ARMED " + (c.order == 1 ? "W→F" : "F→W") : c.workOk ? "W✓ F·" : c.failOk ? "W· F✓" : "W· F·") + " " + str.tostring(bar_index - c.bar) + "b")
+            slot := slot + 1
 
 // Structure, so the bias can be checked by eye rather than trusted.
 plot(showStruct ? msTop : na, "Swing high", color.new(colShort, 40), 4,
@@ -850,7 +928,7 @@ if dbgOn and pinRaw and (pinOk or dbgRejects)
 // only question a quiet detector ever raises, and a count alone cannot answer
 // it.
 
-var table pnl = table.new(position.top_right, 2, 13, border_width = 1,
+var table pnl = table.new(position.top_right, 2, 15, border_width = 1,
   frame_width = 1, frame_color = color.new(color.gray, 60))
 
 // `tip` rather than a wider cell: the caveats belong ON the number they
@@ -894,17 +972,36 @@ if barstate.islast
       str.tostring(nMissBack) + "·" + str.tostring(nMissGone) + "·"
       + str.tostring(nMissBias) + "·" + str.tostring(nMissStop), color.gray,
       "BACK = price never came back to the limit — the OB/FVG number, these are the ones a backup fill would have caught. GONE = the target printed before the fill, so the move was available at a worse price. BIAS = the trend turned Ending while waiting. STOP = price went beyond the planned stop first; this is 0 whenever the stop is set to follow the pullback, because a stop below the running low cannot be run.")
-    row(9, "live", cands.size() == 0 ? "—" : str.tostring(cands.size()), color.gray,
-      "candidates currently waiting for their confirmations")
-    row(10, "last reject", lastReject, color.new(color.gray, 20),
+    // WHICH gate cancelled them. On the three charts that prompted this row,
+    // BIAS was the largest no-entry bucket on all three — 39 of 62, 25 of 34,
+    // 13 of 15 — and the panel could not say which of the five rules did it.
+    row(9, "  minor·swp·stale·rt·adx",
+      str.tostring(nEndMinor) + "·" + str.tostring(nEndSweep) + "·"
+      + str.tostring(nEndStale) + "·" + str.tostring(nEndRetr) + "·"
+      + str.tostring(nEndAdx), color.gray,
+      "the BIAS number above, split by which Ending rule fired: minor structure · extreme swept · no new extreme · retrace % · ADX. Each is a separate toggle in group 1, so the largest number here names the setting to question first. A rule at 0 is costing nothing and a rule taking most of them is the one deciding this strategy.")
+    // THE GHOST COLUMN. See section 7: these are the cancelled setups, walked
+    // forward anyway. This is the only row here that tests a RULE rather than
+    // reporting a count.
+    float gNetR = gWon * rr - gLost
+    row(10, "  gate cost",
+      nMissBias == 0 ? "—" : str.tostring(gWon) + " / " + str.tostring(gLost)
+      + " · " + (gNetR > 0 ? "cost " + str.tostring(gNetR, "#.#")
+      : "saved " + str.tostring(-gNetR, "#.#")) + "R"
+      + (gOpen > 0 ? " · " + str.tostring(gOpen) + " open" : ""),
+      nMissBias == 0 ? color.gray : gNetR > 0 ? colShort : colLong,
+      "what the setups the bias gate CANCELLED would have done if it had been allowed to let them run: filled at the same limit, then walked to the same target or the same stop. They are in no number above and they never draw on the chart.\n\nSAVED means the gate is earning its place — the setups it killed were losers.\nCOST means the gate is throwing trades away, and this is how much.\n\nSame caveat as net R, doubled: in-sample, on whatever settings happen to be loaded, no control and no pre-registration. It is a reason to run a study, never a result.")
+    row(11, "live", slot == 0 ? "—" : str.tostring(slot), color.gray,
+      "candidates currently waiting for their confirmations. Ghosts are excluded — they hold no slot.")
+    row(12, "last reject", lastReject, color.new(color.gray, 20),
       "why the most recent candle was turned down. Hover any grey × on the chart for that candle's own reason.")
     if dbgOn
-        row(11, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
+        row(13, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
           + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·"
           + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray,
           "pin shape · bias tradeable · colour · location · triggered · entered. The biggest drop between two of these is where the detector is actually selecting.")
-        row(12, "at cap", str.tostring(nCap), color.gray,
+        row(14, "at cap", str.tostring(nCap), color.gray,
           "setups turned away because " + str.tostring(maxLive) + " were already live. If this is large, raise 'Live setups at once'.")
     else
-        row(11, "", "", color.gray, "")
-        row(12, "", "", color.gray, "")
+        row(13, "", "", color.gray, "")
+        row(14, "", "", color.gray, "")

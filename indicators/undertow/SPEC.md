@@ -70,6 +70,40 @@ sometimes call Ending while the trend keeps running — that is the right
 direction to be wrong in, because a false Ending costs a skipped setup and a
 missed one costs a loss.
 
+### The ghost column — measuring the gate instead of asserting it
+
+That last paragraph is an **assumption**, and the first three charts made it
+the most expensive one in the file. A triggered setup whose bias turns Ending
+while the limit is resting is cancelled, and on BTCUSDT.P 30m, XAUUSD and
+XAUUSDT.P that cancellation was the **largest single bucket** of no-entries —
+39 of 62, 25 of 34, 13 of 15. On two of the three it killed more setups than
+the strategy entered.
+
+There is also a structural reason to distrust it, and it is not subtle. Arming
+requires a close beyond **both** of the pin's extremes, which in a long means a
+close below the pin's low — so a setup always arms while the pullback is still
+deepening. A deepening pullback is exactly when the minor structure turns
+against `D` (condition 1) and when `retraced` grows (condition 4). **The bias
+gate is anti-correlated with the setup by construction**: it is most likely to
+fire during the very move the strategy is waiting on.
+
+So the gate is now measured rather than trusted. A cancelled setup is no longer
+deleted — it is marked a **ghost** and walked forward through the same fill,
+the same stop and the same target, into counters of its own. It draws nothing,
+it takes no live slot, and it cannot touch any number above it. The panel then
+reports two things it could not before:
+
+| row | what it answers |
+|---|---|
+| `minor·swp·stale·rt·adx` | **which of the five** rules did the cancelling |
+| `gate cost` | what the cancelled setups **would have done**: `saved NR` if they were losers, `cost NR` if the gate is throwing trades away |
+
+`saved` means the gate is earning its place. `cost` is its price, in R, on the
+bars on screen. Both numbers carry the same in-sample caveat as everything else
+here and neither settles anything — what they do is turn *"should a triggered
+setup survive a bias flip"* from an opinion into a quantity that can be
+pre-registered and then tested out of sample.
+
 ### Higher-timeframe bias
 
 Off by default; the chart timeframe is the bias. When on, the HTF read uses
@@ -391,3 +425,18 @@ backup fill, not the planned one.
   loosest single change available here.
 - Whether `retraceMax` 70 is the right depth, and whether ADX earns its place
   at all.
+- **Whether the bias gate should cancel a setup that has already triggered** —
+  the ghost column above exists to answer it, and the answer is not in yet.
+  Note that it is two separate questions: whether the gate should stop *new*
+  pins (nobody disputes that) and whether it should cancel a limit order that
+  is already resting (nothing supports that, and the anti-correlation argument
+  above is against it).
+- **`msLen` = 15** is the default and the first charts were run at 3, which
+  makes the major structure twitchy enough to change what "the trend" means.
+  Any comparison across symbols or settings has to hold it fixed.
+- **Results across venues are not comparable as they stand.** XAUUSD on a
+  broker CFD feed and XAUUSDT.P on a crypto perp are the same metal on
+  different session boundaries, different bar alignments, different history
+  depth and different wick microstructure — and every gate in section 2 is a
+  wick-shape test. They produced +15R and −12R. That gap is a statement about
+  the feeds and the sample size, not about the strategy.
