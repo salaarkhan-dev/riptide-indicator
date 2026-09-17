@@ -266,6 +266,20 @@ A coin flip becomes three in four. The shape the strategy says should dominate
 starts dominating as soon as the anchor moves, which is about as direct a
 confirmation as a location rule can get.
 
+> **THAT LAST SENTENCE IS WRONG, and
+> [`UNDERTOW_V3.md`](measurements/UNDERTOW_V3.md) is where it broke.** The
+> table above is measured at `locTol 0`, and the effect lives entirely there:
+> on `SYMBOLS_FRESH6` the trend anchor gives **75.6%** at tolerance 0, **53.2%**
+> at 1 and **51.5%** at 2. At tolerance 0 the pinned bar *is* the bar that made
+> the leg low, so a green bar there has its low below its body by construction
+> — which is the definition of a hammer. The mix was the anchor describing
+> itself, not evidence that it finds the right candle.
+>
+> The anchor may still be the correct reading — it is the author's own, the
+> geometry argument above stands on its own, and the trades it adds scored
+> **+0.054 / +0.107 / +0.089 R**, positive on 3 of 3 and significant on none.
+> But this table is not what supports it.
+
 **And it re-reads defect 1.** §2.3b called it a defect that "the impulse bar can
 be its own pullback extreme" — a quarter to a third of setups. Under the
 corrected anchor **those are the only correct ones**, and the other two-thirds
@@ -276,8 +290,12 @@ in a bearish trend, shooting star before hanging man in a bullish one, the
 other shape used only while the priority one is absent, newest of the priority
 shape winning.
 
-**Both default to v1** so the thirteen measurement pages keep reproducing.
-Neither is measured yet and neither is on the chart.
+**Both default to v1** so the fourteen measurement pages keep reproducing.
+**Both are now measured** —
+[`UNDERTOW_V3.md`](measurements/UNDERTOW_V3.md). The anchor cleared neither of
+the two bars that matter and was not actively harmful, so it is **on the chart
+as an input, off by default**. `famPriority` did nothing recoverable (−0.05 to
++0.10 R on 354–490 trades) and stays port-only.
 
 **MEASURED — see [`UNDERTOW_PULLBACK.md`](measurements/UNDERTOW_PULLBACK.md).**
 Defect 3 is real and costs setups rather than money: pins 1–2 bars after the
@@ -679,6 +697,19 @@ it did not produce one.
 **W→F ships anyway, in the chart, the port and the watch**, because it is a
 correction and not a promotion. The remaining v2 components did not earn their
 defaults and are off.
+
+**v3 — the anchor — is measured too, and it is the fourteenth null**
+([`UNDERTOW_V3.md`](measurements/UNDERTOW_V3.md)). It is the first arm here to
+be positive on 3 of 3 and above its control on 3 of 3, and it cleared neither
+bar, because every margin is a third of a standard error.
+
+That page also corrects a number quoted throughout this directory:
+**22.2% is the break-even win rate BEFORE fees.** The fee is charged in price
+and the trade is scored in R, so the drag is `fee / risk` and the line moves
+with the timeframe — 23.5% / 23.2% / 22.9% on 15m / 30m / 1h. v1's own win rate
+on an unseen universe is 23.6% / 23.6% / 22.9%. **The shipped rule sits on its
+fee-inclusive break-even to a tenth of a point on all three**, which is a
+sharper statement of fourteen nulls than the old line ever was.
 
 **The three switches all default to v1**, so every page keeps reproducing and
 `test_studies_pin_their_settings.py` holds them to it. v2 is measured on its

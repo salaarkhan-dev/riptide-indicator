@@ -1,8 +1,10 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED THIRTEEN TIMES, nothing promoted. The last one measured
-the CORRECTED rule — see SPEC.md 8 — and it is null too. Ships as a watch, OFF by
-default, saying so in every message.**
+**Status: MEASURED FOURTEEN TIMES, nothing promoted. The last two measured the
+CORRECTED rule — see SPEC.md 8 — and both are null. The fourteenth also found
+that the break-even line these pages quote, 22.2%, is the figure BEFORE costs:
+the real line is 22.9–23.5% and the shipped rule sits exactly on it. Ships as a
+watch, OFF by default, saying so in every message.**
 
 | study | result |
 |---|---|
@@ -19,6 +21,7 @@ default, saying so in every message.**
 | [`UNDERTOW_MTF_DEFAULT.md`](measurements/UNDERTOW_MTF_DEFAULT.md) | MTF as the default against the **shipped** configuration: worse, on 2 of 3. The surprise is the BASELINE — structure as shipped is **+0.063 / +0.016 / −0.067** on an unseen universe, and `endMinor` discards **64%** of trades to get there, uncontrolled. The first number here worth a prereg rather than a shrug |
 | [`UNDERTOW_PULLBACK.md`](measurements/UNDERTOW_PULLBACK.md) | the three pullback defects in SPEC 2.3b, fixed and measured. **The 2nd and 3rd candle after the pullback extreme are within ±0.025 R of the 1st**, and `locTol=2` nearly doubles the setups for it — a throughput finding, not an edge. A minimum pullback depth removes trades that are not worse |
 | [`UNDERTOW_V2.md`](measurements/UNDERTOW_V2.md) | **the corrected strategy — W→F confirmation, SMC 50/5 structure, CHoCH+BOS only, pullback after the BOS, newest pin wins.** Negative on 3 of 3, loses to its control on 2 of 3, worse than v1 on two. **Every win rate in the study lands between 20.3% and 23.5% against a 22.2% break-even** |
+| [`UNDERTOW_V3.md`](measurements/UNDERTOW_V3.md) | **the corrected ANCHOR — the counter-trend candle is the bounce attempt at the leg low, not the top of the pullback.** Positive on 3 of 3 and above its control on 3 of 3, the first arm here to do either, and **it clears neither bar** because every margin is a third of an SE. Two things it settled against me: **22.2% is the break-even BEFORE fees** — the real line is 22.9–23.5% and v1's win rate matches it to a tenth of a point on all three timeframes — and **the 76.7% family mix in my own prereg is an artifact of `locTol 0`**, where the pinned bar *is* the bar that made the low, so a green bar there is a hammer by construction. The trades the anchor ADDS are +0.054 / +0.107 / +0.089 R, none significant: the first thing here worth measuring twice |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in

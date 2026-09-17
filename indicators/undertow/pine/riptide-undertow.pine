@@ -118,8 +118,16 @@ fillBars = input.int(20, "Fill within", minval = 1, maxval = 200, group = gSet,
   tooltip = "Bars for the limit to fill before the setup expires unfilled.")
 maxLive = input.int(4, "Live setups at once", minval = 1, maxval = 8, group = gSet,
   tooltip = "A pullback contains several pins and any of them might be the one that works, so they all run independently. This caps how many, for the chart and the drawing budget; pins arriving at the cap are turned away and counted.")
-locTol = input.int(0, "Pullback extreme tolerance", minval = 0, maxval = 10, group = gSet,
-  tooltip = "Bars a pin may sit PAST the pullback extreme and still count. 0 means it must BE the extreme — so if the extreme bar is a doji or the wrong colour, the whole pullback is discarded and a textbook pin on the next bar, one tick lower, cannot qualify. That is defect 3 in ../SPEC.md 2.3b.\n\nNOT MEASURED at anything between 0 and 50. The ablation tested 50, which is the destroy-it arm, not a 1-to-3-bar tolerance.")
+// The two anchors, named once. Both spellings are the PORT's constants
+// verbatim — undertow-port-check.py compares dropdown strings by value, and a
+// reworded option makes every branch behind it fall through in silence.
+string sAnchPull = "pullback extreme"
+string sAnchTrend = "trend extreme"
+pinAt = input.string("pullback extreme", "Anchor the pin at", group = gSet,
+  options = ["pullback extreme", "trend extreme"],
+  tooltip = "WHERE THE COUNTER-TREND CANDLE IS LOOKED FOR, and the two options are different readings of the same rule — see ../SPEC.md 2.3d.\n\n'pullback extreme' is what v1 and v2 do and what every measurement page was produced under: the pin is the highest high of the rally away from the leg low.\n\n'trend extreme' is the strategy as its author states it: the pin is the BOUNCE ATTEMPT at the leg low itself. The stated priority shape in a downtrend is the hammer, which has a long LOWER wick, and a long lower wick at the TOP of a rally is not a rejection of anything.\n\nIT IS NOT THE DEFAULT AND IT IS NOT PROMOTED. ../measurements/UNDERTOW_V3.md measured it on 45 unseen symbols: +0.023 / +0.023 / +0.054 R per trade against v1, positive on 3 of 3 and inside one standard error on 3 of 3. Not actively harmful, not an edge — which is exactly why it is selectable rather than on.\n\nAt this anchor the two pullback minimums below do NOT apply, because at the leg low the pullback has not started yet.")
+locTol = input.int(0, "Anchor tolerance", minval = 0, maxval = 10, group = gSet,
+  tooltip = "Bars a pin may sit PAST the anchor above and still count. 0 means it must BE the anchor bar — so if that bar is a doji or the wrong colour, the whole pullback is discarded and a textbook pin on the next bar, one tick lower, cannot qualify. That is defect 3 in ../SPEC.md 2.3b.\n\nIT MATTERS MOST ON THE OTHER ANCHOR. At 'trend extreme' with tolerance 0 the pinned bar IS the bar that made the leg low, so 75.6% of pins are the priority shape — a green bar whose own low is the low of the leg is a hammer by construction. One bar of tolerance takes that to 53.2% and two takes it to 51.5%, which is what an unfiltered mix looks like. ../measurements/UNDERTOW_V3.md has the table; the share is a description of the anchor, not a result.\n\nMEASURED at 0 and at 2 (../measurements/UNDERTOW_PULLBACK.md: the 2nd and 3rd candle score within ±0.025 R of the 1st) and at 50, which is the ablation's destroy-it arm rather than a tolerance.")
 pbMinAge = input.int(0, "… pullback must have run bars", minval = 0, maxval = 20, group = gSet,
   tooltip = "How many bars the pullback must have RUN before a pin at its extreme counts. At 0 — what ships — the bar that makes a new trend extreme is immediately its own 'pullback extreme', so a quarter to a third of all setups have NO pullback at all: measured 25.3% / 30.8% / 33.6% on 15m / 30m / 1h. Defects 1 and 2 in ../SPEC.md 2.3b.\n\nThe clock runs from where the pullback STARTED, not from the extreme, so a pullback that has run ten bars and just made a new high is still ten bars old.")
 pbMinDepth = input.float(0.0, "… and retraced ≥ of the impulse", minval = 0.0, maxval = 0.9, step = 0.05, group = gSet,
@@ -794,7 +802,16 @@ bool colourOk = biasDir < 0 ? isGreen : not isGreen
 float pbLeg = bMax - bMin
 float pbDepth = pbLeg > 0 ? (biasDir < 0 ? (pbExt - bMin) / pbLeg : (bMax - pbExt) / pbLeg) : 0.0
 int pbAge = na(pbStartX) ? 0 : bar_index - pbStartX
-bool locOk = bar_index - pbExtX <= locTol and pbAge >= pbMinAge and (pbMinDepth <= 0.0 or pbDepth >= pbMinDepth)
+// THE ANCHOR. Under "trend extreme" the pin is looked for at the running
+// extreme in the TREND's own direction — the leg low in a downtrend — which
+// the bias block already tracks as bMinX / bMaxX.
+int anchorRaw = pinAt == sAnchTrend ? (biasDir < 0 ? bMinX : bMaxX) : pbExtX
+int anchorX = na(anchorRaw) ? bar_index : anchorRaw
+// `pbMinAge` and `pbMinDepth` measure how far a PULLBACK has run, which is
+// meaningless at the trend extreme: there the pullback has not started. They
+// apply to the pullback anchor only, rather than silently refusing every
+// setup on the other one.
+bool locOk = bar_index - anchorX <= locTol and (pinAt != sAnchPull or (pbAge >= pbMinAge and (pbMinDepth <= 0.0 or pbDepth >= pbMinDepth)))
 
 bool barOk = barstate.isconfirmed
 bool pinRaw = barOk and famOk
@@ -1173,7 +1190,7 @@ if pinFound
     if not colourOk
         lastReject := "colour · " + (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend")
     else if not locOk
-        lastReject := bar_index - pbExtX > locTol ? "location · " + str.tostring(bar_index - pbExtX) + "b past extreme (tol " + str.tostring(locTol) + ")" : pbAge < pbMinAge ? "pullback only " + str.tostring(pbAge) + "b old (min " + str.tostring(pbMinAge) + ")" : "pullback only " + str.tostring(math.round(pbDepth * 100)) + "% deep (min " + str.tostring(math.round(pbMinDepth * 100)) + "%)"
+        lastReject := bar_index - anchorX > locTol ? "location · " + str.tostring(bar_index - anchorX) + "b past " + (pinAt == sAnchTrend ? "the leg extreme" : "extreme") + " (tol " + str.tostring(locTol) + ")" : pbAge < pbMinAge ? "pullback only " + str.tostring(pbAge) + "b old (min " + str.tostring(pbMinAge) + ")" : "pullback only " + str.tostring(math.round(pbDepth * 100)) + "% deep (min " + str.tostring(math.round(pbMinDepth * 100)) + "%)"
 
 // The cap counts LIVE candidates only. A ghost still sits in `cands` so the one
 // resolution loop can walk it, but it is not a setup any more and must not be

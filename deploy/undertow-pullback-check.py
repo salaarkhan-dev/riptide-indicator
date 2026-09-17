@@ -48,7 +48,13 @@ TERMS = [
     ("the pullback's START is recorded, and only on a reset",
      r"pbStartX := bar_index", r"pbStartX = i"),
     ("locTol — bars past the ANCHOR a pin may sit",
-     r"pbExtX <= locTol", r"anchorX\) <= p\.locTol"),
+     r"anchorX <= locTol", r"anchorX\) <= p\.locTol"),
+    ("pinAt — the pullback extreme, or the TREND extreme",
+     r"pinAt == sAnchTrend \? \(biasDir < 0 \? bMinX : bMaxX\)",
+     r"p\.pinAt == PIN_TREND"),
+    ("… and the pullback minimums apply to the pullback anchor only",
+     r"pinAt != sAnchPull or \(pbAge >= pbMinAge",
+     r"p\.pinAt == PIN_PULL:\n\s+locOk = \(locOk and pbAge >= p\.pbMinAge"),
     ("pbMinAge — bars the pullback must have run",
      r"pbAge >= pbMinAge", r"pbAge >= p\.pbMinAge"),
     ("pbMinDepth — fraction of the impulse given back",
@@ -62,15 +68,12 @@ TERMS = [
 # pullback made a new extreme and `pbMinAge` would silently mean nothing.
 ONCE = [("pine", PINE, r"pbStartX :="), ("port", PORT, r"pbStartX = i\b")]
 
-# THE ANCHOR IS PORT-ONLY FOR NOW, and this is the one divergence between the
-# two files on this path. `pinAt` moves the counter-trend candle from the
-# PULLBACK extreme to the TREND extreme -- the leg low in a downtrend -- which
-# SPEC.md 2.3c records as the rule v1 and v2 both got wrong. It defaults to v1
-# in the port, so the two files agree on what they actually DO; the Pine simply
-# cannot be switched. It goes on the chart when it is measured, and this note
-# is deleted then.
+# `pinAt` WAS HERE AND IS NOW IN TERMS ABOVE -- UNDERTOW_V3.md measured the
+# anchor and its prereg's clause for a null-but-harmless result is that it goes
+# on the chart, selectable, defaulting to v1. `famPriority` stays port-only: it
+# was measured in the same study, did nothing recoverable, and an input nothing
+# supports is the habit that gave group 1 twenty inputs for four settings.
 PORT_ONLY_TERMS = [
-    ("pinAt — pullback extreme vs TREND extreme", r"p\.pinAt == PIN_TREND"),
     ("famPriority — hammer first in bearish, star first in bullish",
      r"p\.famPriority and not isPriority"),
 ]

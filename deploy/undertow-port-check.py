@@ -209,9 +209,14 @@ def main() -> int:
                # The LuxAlgo structure source, same rule: port
                # first, chart once measured.
                "smcSwingLen", "smcInternalLen",
-               # The corrected ANCHOR and the family priority.
-               # Port first, chart once measured.
-               "pinAt", "famPriority"}
+               # THE ANCHOR IS NO LONGER PORT-ONLY. UNDERTOW_V3.md measured it
+               # on 45 unseen symbols: not actively harmful (+0.023 / +0.023 /
+               # +0.054 R), not an edge, and its prereg said in advance that
+               # this is the outcome where it becomes selectable rather than
+               # default. `pinAt` is now compared like any other input.
+               # `famPriority` stays here -- it was measured in the same study
+               # and did nothing recoverable, so it has no claim on an input.
+               "famPriority"}
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,
