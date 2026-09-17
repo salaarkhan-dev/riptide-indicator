@@ -72,6 +72,22 @@ def run_arm(tf, p, pairs):
     """
     data = LOADED[tf]
     armed: dict = {}
+    # THE KEY IS (symbol, quadrant, PIN bar, arming bar) AND EVERY PART OF IT
+    # IS LOAD-BEARING. Both weaknesses were found by the same pre-registered
+    # impossibility -- the late arm reporting a pre-emption in a design where
+    # pre-emption cannot happen -- and the only way to get one is a mis-keyed
+    # match:
+    #
+    #   the QUADRANT, because a panel spans both halves of every symbol and
+    #   each half is indexed from 0, so a setup in the newer half matches one
+    #   at the same index in the older half;
+    #
+    #   the PIN BAR, because two candidates can ARM ON THE SAME BAR -- a
+    #   pullback holds several pins and their confirmations can land together.
+    #   Keyed on the arming bar alone they share a slot, and one filling at the
+    #   Focus while the other fills at a backup reads as a single setup that
+    #   did both.
+    bk: set = set()
     res = U.Result()
     for sym, older in pairs:
         cs = data.get(sym)
@@ -83,12 +99,14 @@ def run_arm(tf, p, pairs):
         r.armed = [a for a in r.armed if a["bar"] >= skip]
         res.add(r)
         for a in r.armed:
-            armed[(sym, older, a["bar"])] = 0.0
+            armed[(sym, older, a["pin"], a["bar"])] = 0.0
         for t in r.real:
-            k = (sym, older, t.armBar)
+            k = (sym, older, t.bar, t.armBar)
             if k in armed:
                 armed[k] = t.r
-    return res, armed
+            if t.backup:
+                bk.add(k)
+    return res, armed, bk
 
 
 def per_armed(armed):
@@ -98,13 +116,16 @@ def per_armed(armed):
     return clustered(ts)
 
 
-def decompose(off, on, on_res):
-    """ADDED against PRE-EMPTED, matched setup by setup."""
-    bk = {(t.symbol, t.armBar) for t in on_res.real if t.backup}
+def decompose(off, on, bk):
+    """ADDED against PRE-EMPTED, matched setup by setup.
+
+    `bk` is the set of FULL keys (symbol, quadrant, arming bar) that filled via
+    a backup -- see run_arm for why the quadrant has to be in there.
+    """
     added, preempt = [], []
     for k, r_on in on.items():
         r_off = off.get(k, 0.0)
-        if (k[0], k[2]) not in bk:
+        if k not in bk:
             continue                      # not a backup fill; nothing to say
         # Clustered by symbol, like everything else here -- one symbol's
         # backups are not independent of each other.
@@ -119,7 +140,7 @@ def panel(tf, pairs, title):
     base_armed = None
     for aid, name, over in ARMS:
         p = dataclasses.replace(BASE, **over)
-        res, armed = run_arm(tf, p, pairs)
+        res, armed, bk = run_arm(tf, p, pairs)
         m, se, n = per_armed(armed)
         if aid == "B0":
             base_armed = armed
@@ -134,7 +155,7 @@ def panel(tf, pairs, title):
         flag = " ·descriptive" if aid in DESCRIPTIVE else ""
         print(f"  {aid:3} {name:22} {m:+9.3f} {se:6.3f} {n:6} "
               f"{len(res.real):6} {res.nBackup:5}   {d}{flag}")
-        out[aid] = dict(m=m, se=se, n=n, res=res, armed=armed,
+        out[aid] = dict(m=m, se=se, n=n, res=res, armed=armed, bk=bk,
                         cap=res.nCap, fills=len(res.real))
     return out
 
@@ -166,7 +187,7 @@ def verdict(tf, o):
           + ("" if beats_ctl else
              "  → the zones are not doing the work"))
 
-    added, preempt, na, npre = decompose(b0["armed"], b3["armed"], b3["res"])
+    added, preempt, na, npre = decompose(b0["armed"], b3["armed"], b3["bk"])
     am, ase, _ = clustered(added)
     pm, pse, _ = clustered(preempt)
     sa = sum(t.r for t in added)

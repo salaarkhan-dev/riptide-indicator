@@ -59,22 +59,24 @@ def fill_timing(tf, pairs):
     Descriptive. It tests nothing; it says whether a late design had any
     population to work with in the first place.
     """
+    from indicators.undertow.studies.undertow_sweep import quadrant
     data = LOADED[tf]
-    off_r, _ = run_arm(tf, BASE, pairs)
     on_p = dataclasses.replace(BASE, useBackup=True)
-    off_by_key = {(t.symbol, t.armBar) for t in off_r.real}
     lags = []
+    # PER QUADRANT, not per symbol. Both halves of a symbol are indexed from 0,
+    # so a bar number alone matches across them -- the same collision that made
+    # the late arm report an impossible pre-emption.
     for sym, older in pairs:
         cs = data.get(sym)
         if not cs or len(cs) < 1200:
             continue
-        from indicators.undertow.studies.undertow_sweep import quadrant
         seg, skip = quadrant(cs, older)
-        r = U.run(seg, on_p, sym)
-        for t in r.real:
+        off_bars = {t.armBar for t in U.run(seg, BASE, sym).real
+                    if t.fillBar >= skip}
+        for t in U.run(seg, on_p, sym).real:
             if t.fillBar < skip or not t.backup:
                 continue
-            if (sym, t.armBar) in off_by_key:
+            if t.armBar in off_bars:
                 continue                      # pre-empted, not added
             lags.append(t.fillBar - t.armBar)
     return sorted(lags)
@@ -87,7 +89,7 @@ def panel(tf, pairs, title):
     out = {}
     for aid, name, over in ARMS:
         p = dataclasses.replace(BASE, **over)
-        res, armed = run_arm(tf, p, pairs)
+        res, armed, bk = run_arm(tf, p, pairs)
         m, se, n = per_armed(armed)
         d = ""
         if aid != "L0":
@@ -97,7 +99,8 @@ def panel(tf, pairs, title):
         print(f"  {aid:3} {name:26} {m:+9.3f} {se:6.3f} {n:6} "
               f"{len(res.real):6} {res.nBackup:5}   {d}"
               + (" ·descriptive" if aid in DESCRIPTIVE else ""))
-        out[aid] = dict(m=m, se=se, n=n, res=res, armed=armed, cap=res.nCap)
+        out[aid] = dict(m=m, se=se, n=n, res=res, armed=armed, bk=bk,
+                        cap=res.nCap)
     return out
 
 
@@ -109,7 +112,7 @@ def verdict(tf, o, pairs):
     dc, dcse = l1["m"] - l2["m"], math.sqrt(l1["se"] ** 2 + l2["se"] ** 2)
     dl = l1["m"] - l3["m"]
 
-    added, preempt, na, npre = decompose(l0["armed"], l1["armed"], l1["res"])
+    added, preempt, na, npre = decompose(l0["armed"], l1["armed"], l1["bk"])
     nbk = l1["res"].nBackup
     cover = l0["n"] >= 300
     powered = nbk >= 100

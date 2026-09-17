@@ -687,6 +687,14 @@ var int nBackup = 0
 // whatever settings happen to be loaded, and it is not evidence of anything.
 var int nWon = 0
 var int nLost = 0
+// SPLIT BY THE BIAS AT THE PIN, not by the bias now. A setup taken in an
+// immature trend stays an immature-trend trade however the chart reads by the
+// time it resolves; scoring it against today's state is how a panel tells you
+// a story about a trend that did not exist when the trade was placed.
+var int nWonImm = 0
+var int nLostImm = 0
+var int nWonRun = 0
+var int nLostRun = 0
 var string lastReject = "—"
 
 // ── THE GHOST COLUMN ─────────────────────────────────────────────────────────
@@ -900,8 +908,12 @@ if barOk and trades.size() > 0
         Cand t = trades.get(i)
         bool lost = t.short ? high >= t.stop : low <= t.stop
         bool won = t.short ? low <= t.target : high >= t.target
+        bool imm = t.state == "immature"
+        bool run = t.state == "running"
         if lost
             nLost := nLost + (t.ghost ? 0 : 1)
+            nLostImm := nLostImm + (t.ghost or not imm ? 0 : 1)
+            nLostRun := nLostRun + (t.ghost or not run ? 0 : 1)
             gLost := gLost + (t.ghost ? 1 : 0)
             gOpen := gOpen - (t.ghost ? 1 : 0)
             if not t.ghost
@@ -909,6 +921,8 @@ if barOk and trades.size() > 0
             trades.remove(i)
         else if won
             nWon := nWon + (t.ghost ? 0 : 1)
+            nWonImm := nWonImm + (t.ghost or not imm ? 0 : 1)
+            nWonRun := nWonRun + (t.ghost or not run ? 0 : 1)
             gWon := gWon + (t.ghost ? 1 : 0)
             gOpen := gOpen - (t.ghost ? 1 : 0)
             if not t.ghost
@@ -1065,7 +1079,7 @@ if dbgOn and pinRaw and (pinOk or dbgRejects)
 // only question a quiet detector ever raises, and a count alone cannot answer
 // it.
 
-var table pnl = table.new(position.top_right, 2, 15, border_width = 1,
+var table pnl = table.new(position.top_right, 2, 17, border_width = 1,
   frame_width = 1, frame_color = color.new(color.gray, 60))
 
 // `tip` rather than a wider cell: the caveats belong ON the number they
@@ -1113,19 +1127,35 @@ if barstate.islast
       + (openReal > 0 ? " · " + str.tostring(openReal) + " open" : ""),
       nWon * rr > nLost ? colLong : nLost > nWon * rr ? colShort : color.gray,
       "entered trades walked forward to their target or their stop, stop first when one bar spans both. `open` counts REAL trades only — a ghost still running is on the gate-cost row, not here, and won + lost + open always equals `entered`.")
-    row(6, "net R", (netR >= 0 ? "+" : "") + str.tostring(netR, "#.#"),
+    // Win rate needs its own break-even printed beside it or it means nothing:
+    // at rr 3.5 a coin clears 22.2%, and a 30% win rate reads like a losing
+    // strategy until you know that.
+    int nRun = nWonRun + nLostRun
+    int nImm = nWonImm + nLostImm
+    float beRate = 100.0 / (1.0 + rr)
+    row(6, "  running", nRun == 0 ? "—" : str.tostring(nWonRun) + " / "
+      + str.tostring(nLostRun) + " · "
+      + str.tostring(100.0 * nWonRun / nRun, "#.#") + "%",
+      nRun == 0 ? color.gray : 100.0 * nWonRun / nRun > beRate ? colLong : colShort,
+      "trades taken while the bias had already broken structure at least once since its CHoCH. The state is the one at the PIN, not now. Coloured against break-even for this reward ratio, which is " + str.tostring(beRate, "#.#") + "% at " + str.tostring(rr, "#.#") + "R — a win rate below that loses money however healthy it looks.")
+    row(7, "  immature", nImm == 0 ? "—" : str.tostring(nWonImm) + " / "
+      + str.tostring(nLostImm) + " · "
+      + str.tostring(100.0 * nWonImm / nImm, "#.#") + "%",
+      nImm == 0 ? color.gray : 100.0 * nWonImm / nImm > beRate ? colLong : colShort,
+      "trades taken on a fresh CHoCH, before any break of structure in the new direction. Same break-even line: " + str.tostring(beRate, "#.#") + "%. If these two rows differ by much on a few hundred trades it is worth a study, not a setting change — 'immature' and 'running' were never measured apart.")
+    row(8, "net R", (netR >= 0 ? "+" : "") + str.tostring(netR, "#.#"),
       netR > 0 ? colLong : netR < 0 ? colShort : color.gray,
       "won x " + str.tostring(rr, "#.#") + " minus lost, GROSS — no fees and no slippage, and both matter at this size. IN-SAMPLE AND NOT EVIDENCE: whatever settings are loaded, on the bars on screen, no pre-registration, no control. A filter picked by watching a number like this scored +0.089 in sample and -0.082 out elsewhere in this project. Read it to check the detection looks sane, never to choose settings.")
-    row(7, "no entry", str.tostring(noEntry), color.gray,
+    row(9, "no entry", str.tostring(noEntry), color.gray,
       "triggered, then lost before the limit filled. The breakdown below is what decides how much work a backup fill is worth.")
-    row(8, "  back·gone·bias·stop",
+    row(10, "  back·gone·bias·stop",
       str.tostring(nMissBack) + "·" + str.tostring(nMissGone) + "·"
       + str.tostring(nMissBias) + "·" + str.tostring(nMissStop), color.gray,
       "BACK = price never came back to the limit — the OB/FVG number, these are the ones a backup fill would have caught. GONE = the target printed before the fill, so the move was available at a worse price. BIAS = the trend turned Ending while waiting. STOP = price went beyond the planned stop first; this is 0 whenever the stop is set to follow the pullback, because a stop below the running low cannot be run.")
     // WHICH gate cancelled them. On the three charts that prompted this row,
     // BIAS was the largest no-entry bucket on all three — 39 of 62, 25 of 34,
     // 13 of 15 — and the panel could not say which of the five rules did it.
-    row(9, "  minor·swp·stale·rt·adx",
+    row(11, "  minor·swp·stale·rt·adx",
       str.tostring(nEndMinor) + "·" + str.tostring(nEndSweep) + "·"
       + str.tostring(nEndStale) + "·" + str.tostring(nEndRetr) + "·"
       + str.tostring(nEndAdx), color.gray,
@@ -1134,24 +1164,24 @@ if barstate.islast
     // forward anyway. This is the only row here that tests a RULE rather than
     // reporting a count.
     float gNetR = gWon * rr - gLost
-    row(10, "  gate cost",
+    row(12, "  gate cost",
       nMissBias == 0 ? "—" : str.tostring(gWon) + " / " + str.tostring(gLost)
       + " · " + (gNetR > 0 ? "cost " + str.tostring(gNetR, "#.#")
       : "saved " + str.tostring(-gNetR, "#.#")) + "R"
       + (gOpen > 0 ? " · " + str.tostring(gOpen) + " open" : ""),
       nMissBias == 0 ? color.gray : gNetR > 0 ? colShort : colLong,
       "what the setups the bias gate CANCELLED would have done if it had been allowed to let them run: filled at the same limit, then walked to the same target or the same stop. They are in no number above and they never draw on the chart.\n\nSAVED means the gate is earning its place — the setups it killed were losers.\nCOST means the gate is throwing trades away, and this is how much.\n\nSame caveat as net R, doubled: in-sample, on whatever settings happen to be loaded, no control and no pre-registration. It is a reason to run a study, never a result.")
-    row(11, "live", slot == 0 ? "—" : str.tostring(slot), color.gray,
+    row(13, "live", slot == 0 ? "—" : str.tostring(slot), color.gray,
       "candidates currently waiting for their confirmations. Ghosts are excluded — they hold no slot.")
-    row(12, "last reject", lastReject, color.new(color.gray, 20),
+    row(14, "last reject", lastReject, color.new(color.gray, 20),
       "why the most recent candle was turned down. Hover any grey × on the chart for that candle's own reason.")
     if dbgOn
-        row(13, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
+        row(15, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
           + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·"
           + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray,
           "pin shape · bias tradeable · colour · location · triggered · entered. The biggest drop between two of these is where the detector is actually selecting.")
-        row(14, "at cap", str.tostring(nCap), color.gray,
+        row(16, "at cap", str.tostring(nCap), color.gray,
           "setups turned away because " + str.tostring(maxLive) + " were already live. If this is large, raise 'Live setups at once'.")
     else
-        row(13, "", "", color.gray, "")
-        row(14, "", "", color.gray, "")
+        row(15, "", "", color.gray, "")
+        row(16, "", "", color.gray, "")

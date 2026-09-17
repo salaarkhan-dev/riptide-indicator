@@ -8,7 +8,8 @@ default, saying so in every message.**
 | [`UNDERTOW_PARAMS.md`](measurements/UNDERTOW_PARAMS.md) | −0.093 / +0.071 / −0.063 R per trade on a holdout sharing neither symbols nor calendar with the search; **lost to a random entry on two of three** |
 | [`UNDERTOW_PIN_VALUE.md`](measurements/UNDERTOW_PIN_VALUE.md) | the candle taxonomy adds nothing; removing it scored **higher** on two of three |
 | [`UNDERTOW_EXITS.md`](measurements/UNDERTOW_EXITS.md) | 8–12% of setups really do reach 7R — and a **coin reaches 7R 12.5% of the time** |
-| [`UNDERTOW_BACKUP_FILL.md`](measurements/UNDERTOW_BACKUP_FILL.md) | the OB/FVG backup nets **+0.02 R per armed setup**, positive on 3 of 3 and significant on none — because two large, individually significant halves nearly cancel |
+| [`UNDERTOW_BACKUP_FILL.md`](measurements/UNDERTOW_BACKUP_FILL.md) | the OB/FVG backup nets **+0.03 R per armed setup**, positive on 3 of 3 and significant on none — because two large, individually significant halves nearly cancel |
+| [`UNDERTOW_LATE_BACKUP.md`](measurements/UNDERTOW_LATE_BACKUP.md) | waiting for the Focus limit to expire removes the tax **and all the opportunity**: 100% of the +0.6 R trades fill inside the window, median 1–2 bars |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
@@ -57,9 +58,12 @@ straight back. Decomposing the backup fill setup by setup:
 price later returns to the Focus, which is in the future at the moment of
 entry. The tradeable number is the net, +0.02 R, z 0.6. The split is diagnosis.
 
-It points at one clean hypothesis — place the backup only *after* the Focus
-limit expires, and pre-emption becomes impossible by construction — which needs
-its own pre-registration and has not been run.
+That pointed at one clean hypothesis — place the backup only *after* the Focus
+limit expires, so pre-emption is impossible by construction — and it has now
+been run and **failed structurally**: 100% of the +0.6 R trades fill INSIDE the
+20-bar window, median 1–2 bars. There is nothing left for a late design to
+take. The two halves are the same population, separated only by what price did
+afterwards.
 
 **Three further things are established**, and they are worth more than the
 verdict:
@@ -123,11 +127,12 @@ SPEC.md                        the design; the Pine is built against it
 pine/riptide-undertow.pine     v1 — draws setups and scores them on screen
 port/undertow.py               the Python transcription; three swing sources
 port/swings.py                 bar pivot · k x ATR · k x a fixed span of time
-prereg/                        written before each run — five of them
+prereg/                        written before each run — six of them
 studies/undertow_sweep.py      the parameter study
 studies/undertow_ablation.py   the six-arm ablation
 studies/undertow_exits.py      eight exits on identical fills
 studies/undertow_backup.py     the OB/FVG backup, decomposed
+studies/undertow_late_backup.py  the same backup, placed after the limit dies
 studies/undertow_rate.py       how many alerts a day — the product decision
 measurements/                  what they concluded
 
