@@ -65,8 +65,15 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # minimums SPEC.md 2.3b added after reading the pullback rule against the code.
 # Both ship at the value that reproduces current behaviour. undertow_bias Min15
 # and undertow_htf Min15 were re-run and reproduced before this moved.
-DEFAULTS_FINGERPRINT = "d52b65be4bb0794e"
-DEFAULTS_COUNT = 58
+#
+# 2026-09-17: bumped a fourth time, for `confirmOrder`/`needBos`/`pinNewest` —
+# the v2 rule corrections in SPEC.md 8. All three default to v1 so the twelve
+# measurement pages keep reproducing; undertow_bias Min15 and undertow_pullback
+# Min15 were re-run and reproduced to the digit before this moved. When v2 is
+# measured and promoted, every page produced under v1 is superseded and this
+# comment is where that starts.
+DEFAULTS_FINGERPRINT = "3e91ab56c66ef1f6"
+DEFAULTS_COUNT = 61
 
 good = []
 

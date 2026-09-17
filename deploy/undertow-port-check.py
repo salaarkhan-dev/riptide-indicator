@@ -197,7 +197,14 @@ def main() -> int:
                # undertow_bias, undertow_slope and undertow_mtf have to keep
                # reproducing their pages.
                "biasSrc", "stAtrLen", "stMult", "matureBars",
-               "mtfFast", "mtfSlow", "mtfMult"}
+               "mtfFast", "mtfSlow", "mtfMult",
+               # THE v2 RULE CORRECTIONS, SPEC.md section 8. They are the
+               # strategy's author saying v1 detected the wrong thing, so they
+               # go to the port first and to the chart only once measured --
+               # putting them on the chart now would repeat exactly the habit
+               # that gave group 1 twenty inputs for four settings nothing
+               # supported. All three default to v1 meanwhile.
+               "confirmOrder", "needBos", "pinNewest"}
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,

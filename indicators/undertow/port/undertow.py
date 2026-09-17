@@ -110,6 +110,20 @@ SL_HOURS = "hours"
 HTF_BARS = "bars"
 HTF_HOURS = "hours"
 # `endMinor`
+# `confirmOrder` — THE ORDER THE TWO CONFIRMATIONS MUST ARRIVE IN.
+#
+# v1 required both "in either order", and that was a misreading of the
+# strategy, corrected by its author after twelve studies had been run on it.
+# The real rule is that a WORKING break must come FIRST and a FAILURE break
+# after it. W->F arms. F->W->F arms, on that second F. F->W does not arm until
+# another F arrives. An F with no W before it is not the setup at all.
+#
+# The mechanism is what makes it a rule rather than a detail: the pin is a
+# counter-trend candle, W is it appearing to WORK as a reversal, F is that
+# reversal failing. "Either order" admits bars where the reversal never worked,
+# which is a different event with the same two lines touched.
+C_EITHER = "either order"
+C_WF = "working then failure"
 E_OFF = "off"
 E_FLIP = "on the flip"
 E_OPPOSED = "while opposed"
@@ -185,6 +199,19 @@ class P:
     # 3 · Setup
     workTest: str = T_CLOSE
     failTest: str = T_CLOSE
+    # THE DEFAULT IS v1's, deliberately. Every measurement page in
+    # ../measurements was produced under "either order" and has to keep
+    # reproducing; the corrected rule is measured on its own before it moves.
+    confirmOrder: str = C_EITHER
+    # Require a BOS in the trend direction before a pullback is tradeable --
+    # "look for the pullback AFTER the BOS". At False a fresh CHoCH with no
+    # break of structure behind it is tradeable, which is what v1 did.
+    needBos: bool = False
+    # The NEWEST counter-trend candle in a pullback supersedes the ones before
+    # it, across families: a hammer then an inverted hammer uses the inverted
+    # hammer, and an inverted hammer then a hammer uses the hammer. At False
+    # every pin runs as its own candidate, which is what v1 did.
+    pinNewest: bool = False
     confirmBars: int = 20
     fillBars: int = 20
     maxLive: int = 4
@@ -1119,6 +1146,7 @@ class _Cand:
     code: str
     workOk: bool = False
     failOk: bool = False
+    workBar: int = -1
     # WHICH CONFIRMATION LANDED FIRST. 1 = Working then Failure, 2 = the other
     # way. The Pine has carried this since v1 (`Cand.order`) and the port did
     # not, which made it the one field on the chart with no counterpart here.
@@ -1219,11 +1247,20 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                         else _beyond_up(c, cd.hi, p.failTest))
                 if wHit and not cd.workOk:
                     cd.workOk = True
+                    cd.workBar = i
                     cd.order = cd.order or 1
                 if fHit and not cd.failOk:
                     cd.failOk = True
                     cd.order = cd.order or 2
-                if cd.workOk and cd.failOk:
+                # UNDER C_WF the arming event is the FAILURE break, and only
+                # one that lands STRICTLY AFTER a working break. Strictly,
+                # because a bar that spans both lines gives no intrabar order
+                # -- the same reason a bar spanning entry and stop counts as
+                # the loss. That bar does not arm; a later F does, which is
+                # what makes F->W->F work.
+                ready = (cd.workOk and cd.failOk if p.confirmOrder == C_EITHER
+                         else fHit and cd.workBar >= 0 and i > cd.workBar)
+                if ready:
                     sw = st["sTopY"][i] if cd.short else st["sBtmY"][i]
                     base = ((cd.hi if cd.short else cd.lo) if p.stopSrc == S_PIN
                             else cd.pbExt if p.stopSrc == S_PULL
@@ -1424,6 +1461,10 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         htfOk = True
         if hM:
             htfOk = hK[i] and hD[i] == biasDir
+        # "Look for the pullback AFTER the BOS." An Immature bias is a CHoCH
+        # with no break of structure behind it yet; requiring `running` is what
+        # makes the pullback a pullback FROM something.
+        bosOk = (not p.needBos) or st["biasState"][i] == "running"
 
         if famOk:
             res.nRaw += 1
@@ -1435,7 +1476,18 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     res.nLoc += 1
                     if not htfOk:
                         res.nHtf += 1
-        if famOk and tradeable[i] and colourOk and locOk and htfOk:
+        if famOk and tradeable[i] and colourOk and locOk and htfOk and bosOk:
+            # THE NEWEST COUNTER-TREND CANDLE SUPERSEDES THE ONES BEFORE IT,
+            # across families. A hammer then an inverted hammer uses the
+            # inverted hammer; an inverted hammer then a hammer uses the
+            # hammer. Only UNARMED candidates in the same direction are
+            # dropped -- one that has already confirmed is a live setup with an
+            # order behind it and is not somebody's second opinion any more.
+            if p.pinNewest:
+                for x in [x for x in cands
+                          if not x.armed and not x.ghost
+                          and x.short == (biasDir < 0)]:
+                    cands.remove(x)
             if len([x for x in cands if not x.ghost]) >= p.maxLive:
                 res.nCap += 1
             else:

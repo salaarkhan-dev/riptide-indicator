@@ -496,3 +496,96 @@ backup fill, not the planned one.
   depth and different wick microstructure — and every gate in section 2 is a
   wick-shape test. They produced +15R and −12R. That gap is a statement about
   the feeds and the sample size, not about the strategy.
+
+
+---
+
+# 8. v2 — THE RULE CORRECTIONS
+
+**Added after twelve studies had been run.** The strategy's author read the
+spec back against the intent and found that **§4 describes a different event
+from the one the strategy is about.** Everything in `measurements/` was
+produced under §4 as written. None of it is withdrawn — it is all correctly
+measured — but it measured **v1**, and v1 is not the rule below.
+
+Bearish is written out in full. **Bullish mirrors, and only mirrors** — every
+"green" becomes red, every high becomes a low, every "above" becomes below.
+
+## 8.1 The bias is CHoCH and BOS, and nothing else
+
+The five Ending rules go. Direction comes from the most recent major **CHoCH**;
+a **BOS** in that direction makes it a trend worth trading. No minor structure,
+no sweep rule, no stale rule, no retrace cap, no ADX.
+
+This is already expressible: `endMinor = off`, `endSweep = false`,
+`endStale = false`, `retraceMax = 0`, `adxMin = 0`.
+
+**And the pullback is looked for AFTER the BOS.** A fresh CHoCH with no break
+of structure behind it is not yet a trend to fade a pullback in — `needBos`.
+
+## 8.2 The counter-trend candle, newest wins ACROSS families
+
+In a bearish trend the candle working against it is **green**. Two shapes
+qualify and **the most recent one is the one in play**:
+
+* hammer, then an inverted hammer appears → use the **inverted hammer**
+* inverted hammer, then a hammer appears → use the **hammer**
+
+v1 ran every qualifying pin as its own independent candidate and let them all
+live at once. `pinNewest` makes the newest supersede the un-armed ones before
+it. A candidate that has already confirmed has an order behind it and is not
+superseded — it is a live setup, not a second opinion.
+
+The lines are unchanged and are worth restating because they are what the
+ordering rule below acts on:
+
+| shape | Working | Failure | Focus |
+|---|---|---|---|
+| hammer | **high** | low | open |
+| inverted hammer | **low** | high | open |
+
+## 8.3 THE ORDERING RULE, and this is the correction that matters
+
+§4 says both confirmations are required **in either order**. That is wrong.
+
+> **A WORKING break must come first, and a FAILURE break after it.**
+> The limit goes at the Focus line on that failure.
+
+| sequence | v1 | **v2** |
+|---|---|---|
+| W → F | arms | **arms** |
+| F → W → F | arms on the W | **arms on the second F** |
+| F → W | arms on the W | **does not arm** — waits for an F |
+| F only | no | no |
+| W only | no | no |
+
+**Why it is a rule and not a detail.** The pin is a counter-trend candle. W is
+that candle appearing to *work* as a reversal; F is the reversal *failing*.
+The setup is the failure of a counter-trend attempt — so the attempt has to
+happen first. "Either order" admits bars where the reversal never worked at
+all, which is a different event that happens to touch the same two lines.
+
+**A bar that spans both lines does not arm.** Intrabar order is unknowable, and
+this repository already resolves that ambiguity against the trade everywhere
+else — a bar spanning entry and stop counts as the loss. A later F arms it,
+which is exactly what makes `F → W → F` work.
+
+`confirmOrder = "working then failure"`.
+
+## 8.4 What this does to everything already measured
+
+**Every page in `measurements/` measured v1.** Twelve studies, all null. That
+is now two claims, not one:
+
+1. v1 has no edge — measured, repeatedly, on five symbol universes.
+2. **v1 is not the strategy.** Whether v2 has an edge is untested.
+
+**The three switches all default to v1**, so every page keeps reproducing and
+`test_studies_pin_their_settings.py` holds them to it. v2 is measured on its
+own, on a universe nothing has seen, before anything moves — and if it is
+promoted, every page produced under v1 is superseded rather than quietly
+reinterpreted.
+
+**v2 is not on the chart yet, on purpose.** Putting an unmeasured rule in the
+inputs is the habit that gave group 1 twenty inputs for four settings the
+measurements warned against. Port first, measure, then the Pine.
