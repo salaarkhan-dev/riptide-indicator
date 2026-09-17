@@ -104,13 +104,26 @@ SYMBOLS_FRESH4 = (
 ).split()
 
 
+# THE FIFTH FRESH SET, ranks 181-225, for the v2 rule study.
+SYMBOLS_FRESH5 = (
+    "BONER_USDT SUSHI_USDT LPT_USDT TAG_USDT XVG_USDT XTZ_USDT SHROOM_USDT "
+    "RSR_USDT IO_USDT BANK_USDT FF_USDT GRT_USDT RE_USDT DOS_USDT ALCH_USDT "
+    "ENJ_USDT MOVR_USDT ZBCN_USDT PNUT_USDT NEO_USDT ROBO_USDT ARK_USDT "
+    "OKB_USDT T_USDT STG_USDT STAR_USDT STABLE_USDT SYRUP_USDT ANSEM_USDT "
+    "APE_USDT AVNT_USDT SOMI_USDT BTR_USDT PORTAL_USDT GUA_USDT RUNE_USDT "
+    "UB_USDT TURBO_USDT SPK_USDT PLUME_USDT OPN_USDT STANDARD_USDT "
+    "NIGHT_USDT FLOW_USDT MUBARAK_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
     sets = {"SYMBOLS": set(SYMBOLS), "SYMBOLS_FRESH": set(SYMBOLS_FRESH),
             "SYMBOLS_FRESH2": set(SYMBOLS_FRESH2),
             "SYMBOLS_FRESH3": set(SYMBOLS_FRESH3),
-            "SYMBOLS_FRESH4": set(SYMBOLS_FRESH4)}
+            "SYMBOLS_FRESH4": set(SYMBOLS_FRESH4),
+            "SYMBOLS_FRESH5": set(SYMBOLS_FRESH5)}
     names = sorted(sets)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
