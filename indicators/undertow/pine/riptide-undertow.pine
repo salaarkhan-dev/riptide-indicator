@@ -238,6 +238,17 @@ drawFill(Cand c) =>
       tooltip = info))
     prune()
 
+// WHERE A FILLED TRADE ENDED. A tick or a cross on the bar that resolved it, so
+// the won/lost counts on the panel can be audited against the chart rather than
+// trusted. One label per filled setup.
+drawResult(Cand c, bool won) =>
+    lbBuf.push(label.new(bar_index, won ? c.target : c.stop, won ? "✓" : "✕",
+      xloc = xloc.bar_index, style = label.style_label_left,
+      color = color.new(won ? colLong : colShort, 45),
+      textcolor = color.white, size = size.normal,
+      tooltip = (won ? "target" : "stop") + " · " + c.code + " " + (c.short ? "short" : "long") + "\nentry " + str.tostring(c.focus, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin"))
+    prune()
+
 // ARMED and then gone. Muted and dashed, so a setup that did not happen can
 // never be mistaken at a glance for one that did.
 drawMiss(Cand c, string why) =>
@@ -534,6 +545,11 @@ string pinTag = pinFace + " · " + pinGrade + (math.min(upW, dnW) >= 0.05 ? " +w
 // Nothing beyond `filled` is tracked. v1 scores no outcomes.
 
 var array<Cand> cands = array.new<Cand>()
+// Filled setups, walked forward to their target or their stop. This is the one
+// place v1 scores anything, and it does so because the alternative — counting
+// by eye off the chart — is worse, not because the number means much. See the
+// tooltip on the panel row.
+var array<Cand> trades = array.new<Cand>()
 
 var int nRaw = 0
 var int nPins = 0
@@ -542,12 +558,18 @@ var int nLoc = 0
 var int nCap = 0
 var int nArmed = 0
 var int nFilled = 0
+// Armed and then lost, split by HOW — because the split is the whole point.
+// "no return" is the one that sizes the OB/FVG work: the setup was valid, the
+// limit was placed, and price simply never came back to it.
+var int nMissBack = 0
+var int nMissStop = 0
+var int nMissGone = 0
+var int nMissBias = 0
+// The scoreboard. See the tooltip on its panel row: this is in-sample, on
+// whatever settings happen to be loaded, and it is not evidence of anything.
+var int nWon = 0
+var int nLost = 0
 var string lastReject = "—"
-
-// One scalar copy of the newest fill, for the alert-shaped plot below. The
-// DRAWING happens inside the loop, because two candidates can fill on one bar
-// and a scalar cannot hold both.
-bool fillNow = false
 
 // ── every live candidate, oldest first, removed in place when it resolves ────
 if barOk and cands.size() > 0
@@ -561,6 +583,8 @@ if barOk and cands.size() > 0
         string why = ""
         if not tradeable
             why := "bias turned " + biasState
+            if c.armed
+                nMissBias := nMissBias + 1
             gone := true
         if not gone and not c.armed
             // THE PULLBACK CAN STILL EXTEND while a candidate waits, and its
@@ -598,7 +622,7 @@ if barOk and cands.size() > 0
                     why := "stop is not beyond the entry"
                     gone := true
             else if bar_index - c.bar >= confirmBars
-                why := "confirm window (" + (c.workOk ? "F" : "W") + " never landed)"
+                why := "confirm window · no " + (c.workOk ? "F" : "W")
                 gone := true
         // bar_index > c.armBar: the limit is only placed once the arming bar
         // has CLOSED, so a fill inside that same bar is look-ahead — the order
@@ -616,20 +640,25 @@ if barOk and cands.size() > 0
             // bar coming back from the target.
             if tgtGone
                 why := "target reached before the fill"
+                nMissGone := nMissGone + 1
                 gone := true
             // Stop next. When one bar spans both, which came first is
             // unknowable intrabar, so the setup is dropped rather than counted.
             else if stopHit
                 why := "stop taken before the fill"
+                nMissStop := nMissStop + 1
                 gone := true
             else if touched
                 nFilled := nFilled + 1
-                fillNow := true
                 filled := true
                 drawFill(c)
+                // Kept, to be walked to its target or its stop below. `c` is
+                // about to leave `cands`, but the object survives the removal.
+                trades.push(c)
                 gone := true
             else if bar_index - c.armBar >= fillBars
-                why := "fill window"
+                why := "fill window — price never came back"
+                nMissBack := nMissBack + 1
                 gone := true
         if gone
             if why != ""
@@ -637,6 +666,25 @@ if barOk and cands.size() > 0
             if c.armed and not filled and showUnfilled
                 drawMiss(c, why)
             cands.remove(i)
+
+// ── filled trades, walked to their target or their stop ─────────────────────
+// Checked from the FILL BAR onward, stop first. Both of those are the
+// conservative reading: a limit filled intrabar really was exposed to the rest
+// of that bar, and when one bar spans both levels the order is unknowable, so
+// it counts as the loss.
+if barOk and trades.size() > 0
+    for i = trades.size() - 1 to 0
+        Cand t = trades.get(i)
+        bool lost = t.short ? high >= t.stop : low <= t.stop
+        bool won = t.short ? low <= t.target : high >= t.target
+        if lost
+            nLost := nLost + 1
+            drawResult(t, false)
+            trades.remove(i)
+        else if won
+            nWon := nWon + 1
+            drawResult(t, true)
+            trades.remove(i)
 
 // ── a new pin ────────────────────────────────────────────────────────────────
 if pinRaw
@@ -648,14 +696,14 @@ if pinFound
     if colourOk and locOk
         nLoc := nLoc + 1
     if not colourOk
-        lastReject := "colour (" + (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend") + ")"
+        lastReject := "colour · " + (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend")
     else if not locOk
-        lastReject := "location (" + str.tostring(bar_index - pbExtX) + " bars past the pullback extreme, tolerance " + str.tostring(locTol) + ")"
+        lastReject := "location · " + str.tostring(bar_index - pbExtX) + "b past extreme (tol " + str.tostring(locTol) + ")"
 
 if pinOk
     if cands.size() >= maxLive
         nCap := nCap + 1
-        lastReject := "at the live cap of " + str.tostring(maxLive)
+        lastReject := "at the live cap (" + str.tostring(maxLive) + ")"
     else
         // WORKING IS THE DIRECTION THE CANDLE'S SHAPE PREDICTS, and Failure is
         // the opposite. They are NOT fixed to high and low. While the two
@@ -773,35 +821,54 @@ if dbgOn and pinRaw and (pinOk or dbgRejects)
 // only question a quiet detector ever raises, and a count alone cannot answer
 // it.
 
-var table pnl = table.new(position.top_right, 2, 10, border_width = 1,
+var table pnl = table.new(position.top_right, 2, 13, border_width = 1,
   frame_width = 1, frame_color = color.new(color.gray, 60))
 
-row(int r, string k, string v, color c) =>
+// `tip` rather than a wider cell: the caveats belong ON the number they
+// qualify, and the panel was already too wide. table.cell takes a tooltip.
+row(int r, string k, string v, color c, string tip) =>
     table.cell(pnl, 0, r, k, text_color = color.new(color.gray, 20),
-      text_size = size.normal, text_halign = text.align_left)
+      text_size = size.normal, text_halign = text.align_left, tooltip = tip)
     table.cell(pnl, 1, r, v, text_color = c, text_size = size.normal,
-      text_halign = text.align_left)
+      text_halign = text.align_left, tooltip = tip)
 
 if barstate.islast
     color bc = not biasSeen ? color.gray : ending ? color.orange : biasDir > 0 ? colLong : colShort
     string dir = not biasSeen ? "—" : biasDir > 0 ? "LONG" : "SHORT"
-    row(0, "bias", dir + " · " + biasState, bc)
-    row(1, "pullback", (na(pbStartX) ? "—" : str.tostring(bar_index - pbStartX) + " bars") + " · retraced " + str.tostring(math.round(retraced * 100)) + "%" + (adxMin > 0 ? " · ADX " + str.tostring(adxVal, "#.#") : ""), color.gray)
-    row(2, "candidates", str.tostring(nLoc), color.gray)
-    row(3, "turned away at cap", str.tostring(nCap), color.gray)
-    row(4, "armed", str.tostring(nArmed), color.gray)
-    row(5, "entries", str.tostring(nFilled), color.gray)
-    string liveTxt = "—"
-    if cands.size() > 0
-        int nArm = 0
-        for i = 0 to cands.size() - 1
-            if cands.get(i).armed
-                nArm := nArm + 1
-        liveTxt := str.tostring(cands.size()) + " · " + str.tostring(nArm) + " armed"
-    row(6, "live", liveTxt, color.gray)
-    row(7, "last reject", lastReject, color.new(color.gray, 20))
+    row(0, "bias", dir + " · " + biasState, bc,
+      "marks: HAM/HGM/IH/SS = the setup candle · ▲▼ entry · ✓✕ target/stop · × armed but never filled · ● swing high/low · CHoCH and BOS name themselves")
+    row(1, "pullback", (na(pbStartX) ? "—" : str.tostring(bar_index - pbStartX) + "b")
+      + " · rt " + str.tostring(math.round(retraced * 100)) + "%"
+      + (adxMin > 0 ? " · adx " + str.tostring(adxVal, "#") : ""), color.gray,
+      "bars since the pullback began, how much of the impulse it has given back, and ADX if it is switched on")
+    row(2, "candidates", str.tostring(nLoc), color.gray,
+      "pins that passed family, bias, colour and location")
+    row(3, "at cap", str.tostring(nCap), color.gray,
+      "pins turned away because " + str.tostring(maxLive) + " setups were already live")
+    row(4, "armed", str.tostring(nArmed), color.gray,
+      "both confirmations landed and a sane stop existed")
+    row(5, "filled", str.tostring(nFilled), color.gray,
+      "the limit at the Focus line was touched")
+    row(6, "won / lost", str.tostring(nWon) + " / " + str.tostring(nLost)
+      + (trades.size() > 0 ? " · " + str.tostring(trades.size()) + " open" : ""),
+      nWon > nLost ? colLong : nLost > nWon ? colShort : color.gray,
+      "IN-SAMPLE AND NOT EVIDENCE. This is whatever settings happen to be loaded, scored on the bars you are looking at, with no pre-registration and no control. A filter picked by watching this number scored +0.089 in sample and -0.082 out of sample elsewhere in this project. Use it to check the DETECTION looks sane, never to choose settings.")
+    row(7, "missed", str.tostring(nMissBack + nMissStop + nMissGone + nMissBias), color.gray,
+      "armed, then lost before the limit filled")
+    row(8, "  no return", str.tostring(nMissBack), color.gray,
+      "THE OB / FVG NUMBER. The setup was valid, the limit was placed, and price simply never came back to it. These are the ones a backup fill would have caught.")
+    row(9, "  stop / gone", str.tostring(nMissStop) + " / " + str.tostring(nMissGone), color.gray,
+      "stop taken before the fill, and target reached before the fill. The second group also had a move available that a backup fill might have caught, at a worse price.")
+    row(10, "live", cands.size() == 0 ? "—" : str.tostring(cands.size()), color.gray,
+      "candidates currently waiting for their confirmations")
+    row(11, "last reject", lastReject, color.new(color.gray, 20),
+      "why the most recent pin was turned down. Hover any grey × on the chart for that candle's own reason.")
+    // The early stages, which the rows above do not cover. Debug only, so it
+    // costs no width unless it is wanted.
     if dbgOn
-        row(8, "pin·bias·col·loc·cap·arm·fill", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·" + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·" + str.tostring(nCap) + "·" + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray)
+        row(12, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
+          + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·"
+          + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray,
+          "pin shape · bias tradeable · colour · location · armed · filled. The biggest drop between two of these is where the detector is actually selecting.")
     else
-        row(8, "", "", color.gray)
-    row(9, "marks", "HAM/HGM/IH/SS = setup candle · ▲▼ entry · × unfilled · ● swing", color.gray)
+        row(12, "", "", color.gray, "")

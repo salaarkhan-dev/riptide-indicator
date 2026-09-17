@@ -218,10 +218,17 @@ when the trade was taken.
 ## 6. Lifecycle
 
 ```
-candidate  ->  armed  ->  filled
+candidate  ->  armed  ->  filled  ->  target | stop
      \           \           \
-      dropped     expired     (v1 stops here — no outcome is scored)
+      dropped     missed      (still open at the right edge)
 ```
+
+**`missed` is split four ways and the split is the point.** `no return` is the
+one that sizes the OB/FVG work: the setup was valid, the limit was placed, and
+price simply never came back to it. Those are exactly the setups a backup fill
+would have caught. The other three — stop taken first, target reached first,
+bias turned — are not the same problem and should not be counted as if they
+were.
 
 - **Every qualifying pin becomes its own candidate**, up to `maxLive` (4).
   There is no newest-wins / first-wins choice, and removing it is the point.
@@ -289,8 +296,19 @@ both the light and dark chart themes.
 
 ### The status panel — top right
 
-This is a **status panel, not a stats table**. It says what the indicator is
-currently seeing. It does not score outcomes, because v1 does not have any.
+It says what the indicator is currently seeing, and **it does now count wins
+and losses** — that was added on request, and it comes with a warning printed
+on its own row's hover:
+
+> **In-sample and not evidence.** Whatever settings happen to be loaded, scored
+> on the bars on screen, with no pre-registration and no control. A filter
+> picked by watching a number like this scored **+0.089 in sample and −0.082
+> out** elsewhere in this project (`CCP_FILTER_OVERFIT.md`). Use it to check the
+> detection looks sane. Never to choose settings.
+
+Every row carries its caveat as a **cell tooltip** rather than in the text,
+because the panel was getting too wide to read. The glyph legend moved into the
+`bias` row's hover for the same reason.
 
 ```
 bias        SHORT · Running · 15m
@@ -353,7 +371,7 @@ count*, because on a detector that is the only thing any of them decides.
 | Lower-TF stop refinement | depends on the OB logic above |
 | Liquidity-based targets | needs the liquidity model; 1:3 stands in |
 | Alerts and the multi-symbol port | one module in `riptide/watchers/` once detection is trusted |
-| Any outcome scoring | v1 has no win rate, no R total, no stats table |
+| Any claim from the won/lost count | it exists so the detection can be sanity-checked, not to choose settings — see below |
 
 A backup fill **below** the Focus line degrades the trade — entry ~77,300
 instead of 77,380 against the same stop takes risk from 257 to ~337, about 30%
