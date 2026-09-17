@@ -687,6 +687,11 @@ class _Cand:
     code: str
     workOk: bool = False
     failOk: bool = False
+    # WHICH CONFIRMATION LANDED FIRST. 1 = Working then Failure, 2 = the other
+    # way. The Pine has carried this since v1 (`Cand.order`) and the port did
+    # not, which made it the one field on the chart with no counterpart here.
+    # It gates nothing; it is what the alert says happened.
+    order: int = 0
     armed: bool = False
     armBar: int = -1
     stop: float = 0.0
@@ -774,10 +779,12 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                         else _beyond_dn(c, cd.lo, p.workTest))
                 fHit = (_beyond_dn(c, cd.lo, p.failTest) if cd.workHi
                         else _beyond_up(c, cd.hi, p.failTest))
-                if wHit:
+                if wHit and not cd.workOk:
                     cd.workOk = True
-                if fHit:
+                    cd.order = cd.order or 1
+                if fHit and not cd.failOk:
                     cd.failOk = True
+                    cd.order = cd.order or 2
                 if cd.workOk and cd.failOk:
                     sw = st["sTopY"][i] if cd.short else st["sBtmY"][i]
                     base = ((cd.hi if cd.short else cd.lo) if p.stopSrc == S_PIN
@@ -801,7 +808,7 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                                 bar=i, symbol=symbol, short=cd.short,
                                 entry=cd.focus, stop=cd.stop,
                                 target=cd.target, code=cd.code,
-                                state=cd.state, pin=cd.bar))
+                                state=cd.state, pin=cd.bar, order=cd.order))
                         else:
                             gone = True
                 elif i - cd.bar >= p.confirmBars:

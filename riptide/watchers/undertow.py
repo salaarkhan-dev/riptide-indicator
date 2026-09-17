@@ -227,7 +227,7 @@ def _atr(cs, length=14):
 class _Cand:
     __slots__ = ("bar", "hi", "lo", "focus", "workHi", "short", "pbExt",
                  "state", "code", "workOk", "failOk", "armed", "armBar",
-                 "stop", "target")
+                 "stop", "target", "order")
 
     def __init__(self, **kw):
         for k in self.__slots__:
@@ -404,10 +404,17 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
                     cd.pbExt = c.l
                 wHit = (c.c > cd.hi) if cd.workHi else (c.c < cd.lo)
                 fHit = (c.c < cd.lo) if cd.workHi else (c.c > cd.hi)
-                if wHit:
+                # WHICH LINE CLOSED FIRST. 1 = Working then Failure, 2 = the
+                # other way round. Both must happen and the order is free, so
+                # the alert says which — "it worked and then it failed" and
+                # "it failed and then it worked" are the same setup arriving
+                # by two different routes.
+                if wHit and not cd.workOk:
                     cd.workOk = True
-                if fHit:
+                    cd.order = cd.order or 1
+                if fHit and not cd.failOk:
                     cd.failOk = True
+                    cd.order = cd.order or 2
                 if cd.workOk and cd.failOk:
                     stop = (cd.pbExt + atrBuf if cd.short
                             else cd.pbExt - atrBuf)
@@ -420,7 +427,7 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
                         armed.append(dict(
                             bar=i, short=cd.short, entry=cd.focus, stop=stop,
                             target=cd.target, code=cd.code, state=cd.state,
-                            pin=cd.bar))
+                            pin=cd.bar, order=cd.order))
                     else:
                         gone = True
                 elif i - cd.bar >= UNDERTOW_CONFIRM_BARS:
@@ -529,6 +536,7 @@ def detect(cs, symbol: str, tf: str, opts: dict) -> tuple:
                     f"stop {stop:g} tgt {target:g}"),
             entry=a["entry"], stop=stop, target=target,
             code=a["code"], state=a["state"],
+            order="W→F" if a["order"] == 1 else "F→W",
             riskPct=100.0 * risk / a["entry"] if a["entry"] else 0.0))
     return out, dropped
 
@@ -591,7 +599,7 @@ def row(h, group: str) -> str:
     return (head
             + f"<a href='{tg.tv_link(h.symbol, h.tf)}'>"
             f"<b>{h.symbol.replace('_USDT', '')}</b></a> "
-            f"<code>{tg.tf_label(h.tf)}</code>\n"
+            f"<code>{tg.tf_label(h.tf)}</code> <i>· {e['order']}</i>\n"
             f"  <code>entry {tg.fmt(h.price)} → tgt {tg.fmt(e['target'])}</code>\n"
             f"  <code>stop  {tg.fmt(e['stop'])}</code> <i>· risk "
             f"{e['riskPct']:.1f}%</i>")
@@ -646,9 +654,15 @@ SPEC = register(Indicator(
     # THREE SHORT LINES, not one long one. The original ran to four wrapped
     # lines above every digest, which is how a caveat stops being read — and a
     # caveat nobody reads is worse than none, because it looks like diligence.
-    caveat=("limits to look at — not trades.\n"
-            "5 studies found no edge, and it lost\n"
-            "to a random entry. ~half never fill."),
+    # THE FIRST LINE SAYS WHAT JUST HAPPENED, and it was missing. The digest
+    # never stated its own stage, so there was no way to tell from the message
+    # whether it fired at the pin, at the confirmations, or at the fill — and
+    # the whole value of this alert is that it lands at the moment the order
+    # goes on. A caveat that explains the risk but not the event is only half
+    # a caveat.
+    caveat=("both lines closed — set the limit now.\n"
+            "not a trade · 5 studies found no edge\n"
+            "and it lost to a random entry."),
     detect=detect,
     row=row,
     classify=classify,
@@ -675,13 +689,18 @@ SPEC = register(Indicator(
     ),
     tf_counted=("Min15", "Min30", "Min60"),
     rate=rate,
-    blurb=("<i>Fires the moment a setup ARMS: a counter-trend pin was found "
-           "at the pullback extreme, price has since closed beyond BOTH of "
-           "its extremes in either order, and a sane stop exists. That is "
-           "when the limit order would go on.</i>\n\n"
-           "<i>The three numbers are the pin's open (the limit), the stop "
-           "past the pullback extreme plus a quarter ATR, and 3R. Nothing "
-           "has filled — roughly half of armed setups never do.</i>"),
+    blurb=("<i>Fires the bar BOTH lines close — Working and Failure, in "
+           "either order. That is the moment the setup is complete and the "
+           "limit order goes on, which is the whole point of the alert.</i>"
+           "\n\n<b>W→F</b><i> means the Working line closed first and the "
+           "Failure line second; </i><b>F→W</b><i> is the other way round. "
+           "Both count and neither is better — the tag is there so the "
+           "message matches what you saw on the chart.</i>\n\n"
+           "<i>The numbers are the pin's open (your limit), the stop a "
+           "quarter ATR past the pullback extreme, and the target at the "
+           "configured reward ratio. Nothing has filled yet — about 42% "
+           "never do. </i><code>/utfill</code><i> is the separate stream for "
+           "when one does.</i>"),
     evidence=("<b>Three pre-registered studies, all negative.</b> On a holdout "
               "sharing neither symbols nor calendar with the search it scored "
               "−0.093 / +0.071 / −0.063 R per trade on 15m / 30m / 1h, and "

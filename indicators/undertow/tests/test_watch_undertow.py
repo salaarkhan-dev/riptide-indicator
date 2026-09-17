@@ -90,7 +90,7 @@ def test_copies_agree():
             continue
         bad = []
         for w, g in zip(want, got):
-            for k in ("bar", "short", "code", "state", "pin"):
+            for k in ("bar", "short", "code", "state", "pin", "order"):
                 if w[k] != g[k]:
                     bad.append((w["bar"], k, w[k], g[k]))
             for k in ("entry", "stop", "target"):
@@ -208,12 +208,20 @@ def test_ships_off():
     # width and a test that pins its phrasing would fail on a rewrite that
     # kept every promise. What must survive any rewrite is these three.
     c = W.SPEC.caveat.lower()
-    for claim, word in (("it is not a trade", "not trade"),
+    for claim, word in (("it is not a trade", "not a trade"),
                         ("it was measured", "no edge"),
                         ("it lost to a control", "random")):
         ok(word in c, f"the caveat still says {claim}")
     ok(all(len(l) <= 40 for l in W.SPEC.caveat.split("\n")),
        "and every line of it fits a phone")
+    # THE STAGE MUST BE IN THE MESSAGE. Without it there is no way to tell
+    # from a digest whether it fired at the pin, at the confirmations or at
+    # the fill -- and landing at the moment the order goes on is the entire
+    # value of this alert.
+    ok("limit" in W.SPEC.caveat.lower(),
+       "the armed caveat says the limit goes on NOW")
+    ok("filled" in W.FILL.caveat.lower(),
+       "and the fill caveat says the limit already filled")
 
 
 def test_rate_is_readable():
