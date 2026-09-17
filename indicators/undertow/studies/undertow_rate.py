@@ -1,4 +1,6 @@
-"""How many alerts a day would the Undertow watch send?
+"""How many alerts a day would the Undertow watches send?
+
+BOTH STREAMS: the armed setups (/undertow) and the fills (/utfill).
 
     PYTHONPATH=. python3 indicators/undertow/studies/undertow_rate.py
 
@@ -30,7 +32,7 @@ from indicators.undertow.studies.undertow_sweep import TFS, load   # noqa: E402
 from research.data import SYMBOLS                                  # noqa: E402
 from riptide.config import BAR_SECONDS                             # noqa: E402
 from indicators.undertow.port.undertow import P as _P              # noqa: E402
-from riptide.watchers.undertow import armed_setups                 # noqa: E402
+from riptide.watchers.undertow import run_setups                   # noqa: E402
 
 STATES = ("both", "running", "immature")
 # The shipped default first -- the row the watcher's RATE tables come from --
@@ -46,8 +48,9 @@ def main():
     print(f"{len(SYMBOLS)} symbols, cached 12,000-bar history per symbol")
     print(f"shipped config: swing {SWINGS[0]}/{_P().msShortLen}, endSweep {_P().endSweep}, endStale {_P().endStale}\n")
     print(f"  {'tf':7} {'days':>6} {'swing':>6} "
-          + " ".join(f"{s:>10}" for s in STATES))
-    table = {}
+          + " ".join(f"{s:>10}" for s in STATES)
+          + "   | " + " ".join(f"{'f-' + s[:6]:>8}" for s in STATES))
+    table, ftable = {}, {}
     for tf in tfs:
         data = load(tf)
         if not data:
@@ -56,22 +59,30 @@ def main():
         step = BAR_SECONDS[tf]
         for swing in SWINGS:
             tot = {s: 0 for s in STATES}
+            fil = {s: 0 for s in STATES}
             days = 0.0
             for sym, cs in data.items():
                 if len(cs) < 500:
                     continue
                 days += len(cs) * step / 86400.0
-                for a in armed_setups(cs, ms_len=swing):
+                armed, filled = run_setups(cs, ms_len=swing)
+                for a in armed:
                     tot["both"] += 1
                     tot[a["state"]] = tot.get(a["state"], 0) + 1
+                for f in filled:
+                    fil["both"] += 1
+                    fil[f["state"]] = fil.get(f["state"], 0) + 1
             # Symbol-days, so the rate is "rows a day across the universe"
             # exactly as the chat would see it.
             span = days / len(data) if data else 1.0
             per = {s: round(tot[s] / span) if span else 0 for s in STATES}
+            pef = {s: round(fil[s] / span) if span else 0 for s in STATES}
             if swing == SWINGS[0]:
                 table[tf] = per
+                ftable[tf] = pef
             print(f"  {tf:7} {span:6.0f} {swing:6} "
-                  + " ".join(f"{per[s]:10}" for s in STATES))
+                  + " ".join(f"{per[s]:10}" for s in STATES)
+                  + "   |" + " ".join(f"{pef[s]:8}" for s in STATES))
     print("\n  Rows a DAY. One digest per bar close, so 1h is at most 24")
     print("  messages however many rows they carry.\n")
     print("  For riptide/watchers/undertow.py — paste over RATE_BOTH / RATE_ONE:")
@@ -81,6 +92,14 @@ def main():
     for s in ("running", "immature"):
         print(f'    "{s}": {{'
               + ", ".join(f'"{t}": {v[s]}' for t, v in table.items()) + "},")
+    print("}")
+    print("\n  ...and FILL_BOTH / FILL_ONE (the /utfill stream):")
+    print("FILL_BOTH = {" + ", ".join(
+        f'"{t}": {v["both"]}' for t, v in ftable.items()) + "}")
+    print("FILL_ONE = {")
+    for s in ("running", "immature"):
+        print(f'    "{s}": {{'
+              + ", ".join(f'"{t}": {v[s]}' for t, v in ftable.items()) + "},")
     print("}")
     return 0
 

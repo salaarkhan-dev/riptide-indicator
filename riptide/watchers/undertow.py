@@ -105,6 +105,7 @@ import math
 from collections import deque
 
 from ..config import (BAR_SECONDS, UNDERTOW_ALERTS, UNDERTOW_CONFIRM_BARS,
+                      UNDERTOW_FILL_ALERTS, UNDERTOW_FILL_BARS,
                       UNDERTOW_FRESH_BARS, UNDERTOW_INTERVALS,
                       UNDERTOW_MAX_LINES, UNDERTOW_MS_LEN, UNDERTOW_STATES)
 from .registry import Hit, Indicator, Option, register
@@ -126,6 +127,7 @@ RETRACE_MAX = 70
 WICK_EDGE = 0.05
 LOC_TOL = 0
 STOP_BUF = 0.25
+STOP_TRACK = True
 RR = 3.5
 
 
@@ -224,21 +226,35 @@ def _atr(cs, length=14):
 
 class _Cand:
     __slots__ = ("bar", "hi", "lo", "focus", "workHi", "short", "pbExt",
-                 "state", "code", "workOk", "failOk")
+                 "state", "code", "workOk", "failOk", "armed", "armBar",
+                 "stop", "target")
 
     def __init__(self, **kw):
         for k in self.__slots__:
             setattr(self, k, kw.get(k, False))
 
 
-def armed_setups(cs, ms_len: int = 6, max_live: int = 64) -> list:
-    """Every bar at which a limit order would have gone on.
+def run_setups(cs, ms_len: int = 6, max_live: int = 64):
+    """The two moments worth alerting on: ARMED, and FILLED.
 
-    Sections 3-7 of riptide-undertow.pine, stopping at the arming bar. The
-    structure engine, the minor structure, the bias state machine, the
-    pullback, the pin and the two confirmations, in the Pine's order — which is
-    load-bearing, because the trailing extremes are updated AFTER the BOS and
-    sweep tests read them.
+    Sections 3-7 of riptide-undertow.pine. The structure engine, the minor
+    structure, the bias state machine, the pullback, the pin, the two
+    confirmations, and then the limit resting at the Focus line until it fills,
+    is stopped, is overtaken by its own target, or expires.
+
+    The Pine's ORDER is load-bearing throughout and is reproduced exactly: the
+    trailing extremes update AFTER the BOS and sweep tests read them; the
+    target-before-fill test runs BEFORE the fill test; the stop runs before the
+    touch, so a bar spanning both is the loss.
+
+    THE STOP MOVES BETWEEN ARMING AND FILLING and that is why a fill alert
+    cannot reuse the arming numbers. `stopTrack` keeps it at the running
+    pullback extreme while the order rests — on one symbol 15 of 111 fills had
+    a different stop from the one their arming would have quoted, which is a
+    13% chance of alerting a level the chart does not show.
+
+    Returns (armed, filled). The backup fill is deliberately absent: it is off
+    by default, unmeasured, and belongs to the port until that changes.
     """
     n = len(cs)
     if n < 60:
@@ -262,7 +278,8 @@ def armed_setups(cs, ms_len: int = 6, max_live: int = 64) -> list:
     bosN = 0
     pbExt = pbExtX = None
     cands: list = []
-    out: list = []
+    armed: list = []
+    filled: list = []
 
     def gt(a, b):
         return a is not None and b is not None and a > b
@@ -376,32 +393,74 @@ def armed_setups(cs, ms_len: int = 6, max_live: int = 64) -> list:
 
         # ── candidates ──────────────────────────────────────────────────────
         for cd in list(cands):
+            gone = False
             if not tradeable:
                 cands.remove(cd)
                 continue
-            if cd.short and c.h > cd.pbExt:
-                cd.pbExt = c.h
-            if not cd.short and c.l < cd.pbExt:
-                cd.pbExt = c.l
-            wHit = (c.c > cd.hi) if cd.workHi else (c.c < cd.lo)
-            fHit = (c.c < cd.lo) if cd.workHi else (c.c > cd.hi)
-            if wHit:
-                cd.workOk = True
-            if fHit:
-                cd.failOk = True
-            if cd.workOk and cd.failOk:
-                base = cd.pbExt
-                stop = base + atrBuf if cd.short else base - atrBuf
-                risk = abs(stop - cd.focus)
-                if risk > 0 and ((stop > cd.focus) if cd.short
-                                 else (stop < cd.focus)):
-                    out.append(dict(
-                        bar=i, short=cd.short, entry=cd.focus, stop=stop,
-                        target=(cd.focus - RR * risk if cd.short
-                                else cd.focus + RR * risk),
-                        code=cd.code, state=cd.state, pin=cd.bar))
-                cands.remove(cd)
-            elif i - cd.bar >= UNDERTOW_CONFIRM_BARS:
+            if not cd.armed:
+                if cd.short and c.h > cd.pbExt:
+                    cd.pbExt = c.h
+                if not cd.short and c.l < cd.pbExt:
+                    cd.pbExt = c.l
+                wHit = (c.c > cd.hi) if cd.workHi else (c.c < cd.lo)
+                fHit = (c.c < cd.lo) if cd.workHi else (c.c > cd.hi)
+                if wHit:
+                    cd.workOk = True
+                if fHit:
+                    cd.failOk = True
+                if cd.workOk and cd.failOk:
+                    stop = (cd.pbExt + atrBuf if cd.short
+                            else cd.pbExt - atrBuf)
+                    risk = abs(stop - cd.focus)
+                    if risk > 0 and ((stop > cd.focus) if cd.short
+                                     else (stop < cd.focus)):
+                        cd.armed, cd.armBar, cd.stop = True, i, stop
+                        cd.target = (cd.focus - RR * risk if cd.short
+                                     else cd.focus + RR * risk)
+                        armed.append(dict(
+                            bar=i, short=cd.short, entry=cd.focus, stop=stop,
+                            target=cd.target, code=cd.code, state=cd.state,
+                            pin=cd.bar))
+                    else:
+                        gone = True
+                elif i - cd.bar >= UNDERTOW_CONFIRM_BARS:
+                    gone = True
+
+            # THE STOP FOLLOWS THE PULLBACK while the order rests. Arming a
+            # long REQUIRES a close below the pin's low, so a setup always arms
+            # while the pullback is still deepening and its stop is set on an
+            # unfinished move. Nothing is lost by moving it -- there is no
+            # position yet -- and the target is recomputed with it, or RR would
+            # quietly stop meaning RR.
+            if not gone and cd.armed and STOP_TRACK:
+                deeper = c.h > cd.pbExt if cd.short else c.l < cd.pbExt
+                if deeper:
+                    cd.pbExt = c.h if cd.short else c.l
+                    cd.stop = (cd.pbExt + atrBuf if cd.short
+                               else cd.pbExt - atrBuf)
+                    rk = abs(cd.stop - cd.focus)
+                    cd.target = (cd.focus - RR * rk if cd.short
+                                 else cd.focus + RR * rk)
+
+            # The limit is only resting once the arming bar has CLOSED, so a
+            # fill inside that bar is look-ahead.
+            if not gone and cd.armed and i > cd.armBar:
+                tgtGone = c.l <= cd.target if cd.short else c.h >= cd.target
+                stopHit = c.h >= cd.stop if cd.short else c.l <= cd.stop
+                touched = c.h >= cd.focus >= c.l
+                if tgtGone or stopHit:
+                    # The move happened without us, or the stop went first.
+                    # Either way there is no trade to announce.
+                    gone = True
+                elif touched:
+                    filled.append(dict(
+                        bar=i, short=cd.short, entry=cd.focus, stop=cd.stop,
+                        target=cd.target, code=cd.code, state=cd.state,
+                        pin=cd.bar, armBar=cd.armBar))
+                    gone = True
+                elif i - cd.armBar >= UNDERTOW_FILL_BARS:
+                    gone = True
+            if gone:
                 cands.remove(cd)
 
         # ── a new pin ───────────────────────────────────────────────────────
@@ -419,7 +478,13 @@ def armed_setups(cs, ms_len: int = 6, max_live: int = 64) -> list:
                 short=biasDir < 0, pbExt=pbExt, state=state,
                 code=("HAM" if isGreen else "HGM") if famHam
                 else ("IH" if isGreen else "SS")))
-    return out
+    return armed, filled
+
+
+def armed_setups(cs, ms_len: int = 6, max_live: int = 64) -> list:
+    """Just the arming events. Kept because the rate study and the detectors
+    read one list at a time, and one machine must produce both."""
+    return run_setups(cs, ms_len, max_live)[0]
 
 
 # ───────────────────────────────────────────────────────── the indicator ──
@@ -636,4 +701,153 @@ SPEC = register(Indicator(
               "<code>/undertow running</code> — skip the fresh-CHoCH ones\n"
               "<code>/undertow swing 30</code> — far fewer, larger trends\n"
               "<code>/undertow off</code> — stop them"),
+))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  THE SECOND STREAM: the limit FILLED
+# ══════════════════════════════════════════════════════════════════════════
+#
+# TWO INDICATORS, ONE MODULE, and that is deliberate against the "one module
+# per indicator" convention in __init__.py. They share `run_setups` -- the same
+# state machine produces both events -- and splitting them across files would
+# mean two copies of a machine that must agree bar for bar, which is the exact
+# failure this package exists to avoid. One import line still deploys both.
+#
+# WHY IT IS A SEPARATE INDICATOR RATHER THAN A SECOND GROUP IN THE SAME
+# DIGEST. The two events answer different questions and arrive at different
+# times. "Put a limit at X" and "your limit at X filled" in one message, under
+# one header counting them together, would be a digest whose own headline
+# number means nothing. Separate also means a separate switch: watching fills
+# only is a reasonable way to run this, and so is the reverse.
+
+
+def detect_fill(cs, symbol: str, tf: str, opts: dict) -> tuple:
+    """Limits that FILLED in the last RECENT_BARS bars.
+
+    The levels come from the fill, not from the arming: the stop tracks the
+    pullback while the order rests, so they are not always the same numbers.
+    """
+    want = opts.get("states", UNDERTOW_STATES)
+    ms_len = int(opts.get("swing", UNDERTOW_MS_LEN))
+    step = BAR_SECONDS[tf]
+    cut = len(cs) - RECENT_BARS
+    out, dropped = [], 0
+    for f in run_setups(cs, ms_len=ms_len)[1]:
+        if f["bar"] < cut:
+            continue
+        if want != "both" and f["state"] != want:
+            dropped += 1
+            continue
+        stop = _snap(f["stop"], f["entry"], True)
+        target = _snap(f["target"], f["entry"], True)
+        risk = abs(stop - f["entry"])
+        if risk <= 0:
+            dropped += 1
+            continue
+        out.append(Hit(
+            key=f"UTF|{symbol}|{tf}|{cs[f['bar']].t}|"
+                f"{'U' if not f['short'] else 'D'}",
+            symbol=symbol, tf=tf, is_long=not f["short"],
+            bar_time=cs[f["bar"]].t + step, price=f["entry"],
+            detail=(f"{f['code']} {f['state']} FILLED entry {f['entry']:g} "
+                    f"stop {stop:g} tgt {target:g}"),
+            entry=f["entry"], stop=stop, target=target, code=f["code"],
+            state=f["state"], waited=f["bar"] - f["armBar"],
+            riskPct=100.0 * risk / f["entry"] if f["entry"] else 0.0))
+    return out, dropped
+
+
+_FILL_GROUPS = {(True, "running"): (0, "▲ LONG · running"),
+                (False, "running"): (1, "▼ SHORT · running"),
+                (True, "immature"): (2, "▲ long · immature"),
+                (False, "immature"): (3, "▼ short · immature")}
+
+
+def classify_fill(h) -> tuple:
+    rank, name = _FILL_GROUPS.get((h.is_long, h.extra["state"]), (4, "other"))
+    return (rank, -BAR_SECONDS[h.tf], h.symbol), name
+
+
+def row_fill(h, group: str) -> str:
+    """Same three-line block as the armed digest, plus how long the limit
+    waited — which is the one fact this event has and the other does not."""
+    from .. import telegram as tg
+    e = h.extra
+    head = f"<b>{group}</b>\n\n" if group else "\n"
+    return (head
+            + f"<a href='{tg.tv_link(h.symbol, h.tf)}'>"
+            f"<b>{h.symbol.replace('_USDT', '')}</b></a> "
+            f"<code>{tg.tf_label(h.tf)}</code> "
+            f"<i>· filled {e['waited']}b later</i>\n"
+            f"  <code>in   {tg.fmt(h.price)} → tgt {tg.fmt(e['target'])}</code>\n"
+            f"  <code>stop {tg.fmt(e['stop'])}</code> <i>· risk "
+            f"{e['riskPct']:.1f}%</i>")
+
+
+def rate_fill(db, tfs=None, **over):
+    want = over.get("states", UNDERTOW_STATES)
+    per = FILL_BOTH if want == "both" else FILL_ONE.get(want, FILL_BOTH)
+    return sum(per.get(t, 0) for t in (tfs or UNDERTOW_INTERVALS))
+
+
+# Fills a day across 23 symbols, from undertow_rate.py at the shipped config.
+# Fewer than the armed stream by construction -- 21 of 36 on 15m and 10 of 18
+# on 30m, so about 58% of armed setups reach a fill. 31 rows a day across the
+# shipped 15m+30m, against the armed stream's 54.
+FILL_BOTH = {"Min15": 21, "Min30": 10, "Min60": 5}
+FILL_ONE = {
+    "running": {"Min15": 11, "Min30": 5, "Min60": 3},
+    "immature": {"Min15": 10, "Min30": 5, "Min60": 2},
+}
+
+
+FILL = register(Indicator(
+    name="utfill",
+    title="UNDERTOW FILLED",
+    glyph="✅",
+    unit="fill",   # pluralised with a bare "s"; "entry" became "entrys"
+    caveat=("a limit that just filled — not advice.\n"
+            "5 pre-registered studies: no edge,\n"
+            "and it lost to a random entry."),
+    detect=detect_fill,
+    row=row_fill,
+    classify=classify_fill,
+    min_bars=200,
+    recent_bars=RECENT_BARS,
+    fresh_bars=UNDERTOW_FRESH_BARS,
+    max_lines=UNDERTOW_MAX_LINES,
+    label_w=0,
+    default_enabled=UNDERTOW_FILL_ALERTS,
+    default_intervals=tuple(UNDERTOW_INTERVALS),
+    fallback_interval="Min30",
+    options=(
+        Option("states", "choice", UNDERTOW_STATES,
+               "which bias states count, same as /undertow",
+               choices=("both", "running", "immature")),
+        Option("swing", "number", UNDERTOW_MS_LEN,
+               "the major swing length in BARS — keep it equal to "
+               "/undertow's or the two streams describe different setups",
+               lo=2, hi=100),
+    ),
+    tf_counted=("Min15", "Min30", "Min60"),
+    rate=rate_fill,
+    blurb=("<i>Fires when an Undertow limit at the Focus line is actually "
+           "TOUCHED — the setup passed every step and the trade is on.</i>\n\n"
+           "<i>/undertow says put an order there; this says it filled. About "
+           "half of armed setups never get here, and the ones that do take a "
+           "median of one to two bars. The stop follows the pullback while the "
+           "order rests, so the levels here can differ from the ones the "
+           "arming alert quoted — these are the ones the trade is taken "
+           "with.</i>"),
+    evidence=("<b>Identical to /undertow's, because it is the same setup one "
+              "step later.</b> Five pre-registered studies: no edge on a "
+              "holdout sharing neither symbols nor calendar, and it lost to a "
+              "seeded random entry. Reaching the fill does not make a setup "
+              "better — filling is not a filter, it is just what happened "
+              "next, and the measurements already score only filled trades."),
+    examples=("<code>/utfill on</code> — start them\n"
+              "<code>/utfill 30m</code> — which timeframes\n"
+              "<code>/utfill running</code> — skip fresh-CHoCH setups\n"
+              "<code>/utfill off</code> — stop them"),
 ))

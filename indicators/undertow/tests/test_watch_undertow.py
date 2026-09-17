@@ -101,6 +101,47 @@ def test_copies_agree():
     ok(total > 40, f"the comparison is not vacuous: {total} setups compared")
 
 
+def test_fills_agree():
+    """The SECOND event the bot alerts on, held to the port the same way.
+
+    Fills are where the two copies were most likely to drift, because the stop
+    MOVES between arming and filling -- it tracks the running pullback extreme
+    while the order rests. A copy that froze the stop at arming would produce
+    the right fill bars with the wrong levels, which is the kind of wrong that
+    looks right in a digest.
+    """
+    total = 0
+    for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006)):
+        cs = walk(4000, seed=seed, drift=drift)
+        want = U.run(cs, U.P(maxLive=64), "T").fills
+        got = W.run_setups(cs, ms_len=U.P().msLen, max_live=64)[1]
+        total += len(want)
+        ok(len(want) == len(got),
+           f"seed {seed}: {len(want)} fills, bot copy found {len(got)}")
+        if len(want) != len(got):
+            continue
+        bad = []
+        for w, g in zip(want, got):
+            for k in ("bar", "short", "code", "state", "pin", "armBar"):
+                if w[k] != g[k]:
+                    bad.append((w["bar"], k, w[k], g[k]))
+            for k in ("entry", "stop", "target"):
+                if abs(w[k] - g[k]) > 1e-9:
+                    bad.append((w["bar"], k, w[k], g[k]))
+        ok(not bad, f"seed {seed}: every fill field matches"
+           + ("" if not bad else f"  first: {bad[0]}"))
+    ok(total > 30, f"the comparison is not vacuous: {total} fills compared")
+    # And the thing that makes this test necessary: the stop really does move.
+    cs = walk(4000, seed=12, drift=0.0006)
+    a, f = W.run_setups(cs, ms_len=U.P().msLen, max_live=64)
+    by_arm = {x["bar"]: x for x in a}
+    moved = sum(1 for x in f if x["armBar"] in by_arm
+                and abs(by_arm[x["armBar"]]["stop"] - x["stop"]) > 1e-9)
+    ok(moved > 0,
+       f"{moved} of {len(f)} fills carry a stop that MOVED after arming — "
+       f"which is why the fill alert cannot reuse the arming numbers")
+
+
 def test_agree_on_real_candles():
     """A random walk has no market structure worth the name. If the cached
     study candles are present, the comparison runs on those too — same rules,
@@ -157,6 +198,10 @@ def test_frozen_constants_match_the_port():
 
 
 def test_ships_off():
+    ok(W.FILL.default_enabled is False,
+       "the FILL stream ships OFF too — same evidence, same verdict")
+    ok(W.FILL.name != W.SPEC.name and not W.FILL.caveat == W.SPEC.caveat,
+       "and it is a separate indicator with its own switch and caveat")
     ok(W.SPEC.default_enabled is False,
        "the stream ships OFF — three pre-registered studies, all negative")
     # The three claims, not the exact wording — the caveat gets reworded for
@@ -299,6 +344,7 @@ def test_no_trading_path():
 
 def main():
     for fn in (test_copies_agree, test_agree_on_real_candles,
+               test_fills_agree,
                test_frozen_constants_match_the_port, test_ships_off,
                test_digest_fits_a_phone,
                test_rate_is_readable, test_hit_is_dated_to_the_close,

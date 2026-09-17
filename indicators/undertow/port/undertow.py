@@ -234,6 +234,12 @@ class Result:
     # test_watch_undertow.py asserts the bot's own copy of the machine
     # reproduces this list exactly.
     armed: list = field(default_factory=list)
+    # THE MOMENT THE LIMIT ACTUALLY FILLED — you are in the trade. Separate
+    # from `armed` because roughly half of armed setups never reach it, and
+    # because the STOP CAN HAVE MOVED in between: it tracks the pullback while
+    # the order rests, so the level alerted at arming is not necessarily the
+    # level the trade is taken with.
+    fills: list = field(default_factory=list)
 
     @property
     def real(self):
@@ -260,6 +266,7 @@ class Result:
         self.bars += o.bars
         self.trades += o.trades
         self.armed += o.armed
+        self.fills += o.fills
         return self
 
 
@@ -872,6 +879,12 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                         short=cd.short, entry=cd.focus, stop=cd.stop,
                         target=cd.target, ghost=cd.ghost, state=cd.state,
                         code=cd.code, backup=cd.bkWhy))
+                    if not cd.ghost:
+                        res.fills.append(dict(
+                            bar=i, symbol=symbol, short=cd.short,
+                            entry=cd.focus, stop=cd.stop, target=cd.target,
+                            code=cd.code, state=cd.state, pin=cd.bar,
+                            armBar=cd.armBar, backup=cd.bkWhy))
                     gone = True
                 elif not cd.late and i - cd.armBar >= p.fillBars:
                     # THE FOCUS WINDOW IS OVER. In "late" mode this is where
