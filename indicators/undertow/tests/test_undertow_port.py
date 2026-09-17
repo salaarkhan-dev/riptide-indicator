@@ -346,7 +346,130 @@ def test_fees_only_ever_reduce_r():
           f"over {len(free.real)} trades")
 
 
-# ───────────────────────────────────────────────────────── 5. HTF bias ──
+# ─────────────────────────────────────────────────── 5. the backup fill ──
+#
+# The OB/FVG backup is the one component that was asked for from the start and
+# built last. It is off by default, unmeasured, and the tests below pin its
+# SHAPE -- that it can only add trades, that it never invents a better price
+# than the limit it replaces, and that it respects its own chase limit.
+
+
+def test_backup_never_invents_a_better_price():
+    """THE PROPERTY THAT MAKES IT HONEST. A backup entry sits between the
+    market and the Focus line, so for a short it is BELOW the Focus and for a
+    long ABOVE it — further from the stop, bigger risk, worse R. If a backup
+    ever filled on the far side of the Focus it would be a better price than
+    the order that was already missed, which is inventing a fill."""
+    cs = walk(6000, seed=71, drift=0.0004)
+    a = U.run(cs, U.P(maxLive=64, useBackup=True), "T")
+    bk = [t for t in a.real if t.backup]
+    ok(len(bk) > 3, f"the fixture produces backup fills: {len(bk)}")
+    bad = [t for t in bk
+           if (t.entry > t.stop if t.short else t.entry < t.stop)]
+    ok(not bad, f"every backup entry is still on the right side of its stop: "
+                f"{len(bad)} bad")
+    worse = [t for t in bk if abs(t.stop - t.entry) <= 0]
+    ok(not worse, "and every one has a positive risk")
+    print(f"       {len(bk)} backup fills of {len(a.real)}: "
+          f"{sum(1 for t in bk if t.backup == 'OB')} OB, "
+          f"{sum(1 for t in bk if t.backup == 'FVG')} FVG")
+
+
+def test_backup_only_adds_trades():
+    """It must not change a single decision made before the fill. The setups
+    found, the setups armed and the setups the bias cancelled are all upstream
+    of it, so turning it on may only convert a MISS into a FILL."""
+    cs = walk(6000, seed=71, drift=0.0004)
+    off = U.run(cs, U.P(maxLive=64), "T")
+    on = U.run(cs, U.P(maxLive=64, useBackup=True), "T")
+    ok(on.nLoc == off.nLoc and on.nArmed == off.nArmed,
+       f"setups and armings are untouched: {on.nLoc}/{on.nArmed} == "
+       f"{off.nLoc}/{off.nArmed}")
+    # nMissBias may FALL, and that is correct rather than a leak: a setup that
+    # filled via a backup has left `cands`, so a later bias flip can no longer
+    # cancel it. A filled trade cannot be un-armed.
+    ok(on.nMissBias <= off.nMissBias,
+       f"the bias gate can only cancel fewer, never more: "
+       f"{on.nMissBias} <= {off.nMissBias}")
+    ok(on.nFilled >= off.nFilled,
+       f"fills can only go up: {on.nFilled} >= {off.nFilled}")
+    # THE COST, MADE VISIBLE. Not every backup is an extra trade: the zone sits
+    # between the market and the Focus, so price touches it FIRST, and a setup
+    # that would have retraced all the way to the Focus fills at the worse
+    # price instead. That is what placing the order actually does, and the
+    # difference below is how many trades paid for it.
+    extra = on.nFilled - off.nFilled
+    ok(extra <= on.nBackup,
+       f"every extra fill is a backup: {extra} <= {on.nBackup}")
+    print(f"       {on.nBackup} backups: {extra} are trades that would not "
+          f"have happened, {on.nBackup - extra} pre-empted a Focus fill at a "
+          f"worse price")
+    ok(on.nMissBack + on.nMissGone + on.nMissStop
+       <= off.nMissBack + off.nMissGone + off.nMissStop,
+       "the misses it converted came out of the miss buckets")
+
+
+def test_backup_respects_its_chase_limit():
+    """bkMaxRisk is the only thing stopping it from entering arbitrarily far
+    from the stop and calling the result a trade."""
+    cs = walk(6000, seed=71, drift=0.0004)
+    for cap in (1.25, 2.0, 4.0):
+        a = U.run(cs, U.P(maxLive=64, useBackup=True, bkMaxRisk=cap), "T")
+        bk = [t for t in a.real if t.backup]
+        # The original risk is not recorded on the Trade, but the cap bounds
+        # the RATIO, so a tighter cap can only produce fewer or equal backups.
+        print(f"       bkMaxRisk {cap}: {len(bk)} backups")
+        if cap == 1.25:
+            tight = len(bk)
+        if cap == 4.0:
+            ok(len(bk) >= tight,
+               f"a looser chase limit admits at least as many: "
+               f"{len(bk)} >= {tight}")
+
+
+def test_backup_zones_are_real():
+    """bk_zone must return an edge that exists on a bar in the window, on the
+    correct side, and never a level price has already passed."""
+    cs = walk(3000, seed=73, drift=-0.0004)
+    hits = 0
+    for i in range(300, len(cs), 37):
+        for short in (True, False):
+            focus = cs[i].c * (1.02 if short else 0.98)
+            lo = cs[i].l if short else cs[i].h
+            px, why = U.bk_zone(cs, i, short, focus, lo, 30, True, True)
+            if px is None:
+                continue
+            hits += 1
+            inside = (lo < px < focus) if short else (focus < px < lo)
+            if not inside:
+                ok(False, f"bar {i}: zone {px} outside ({lo}, {focus})")
+                return
+            found = any(abs(px - c.l) < 1e-9 or abs(px - c.h) < 1e-9
+                        for c in cs[max(0, i - 31):i + 1])
+            if not found:
+                ok(False, f"bar {i}: zone edge {px} is on no bar in the window")
+                return
+            if why not in ("OB", "FVG"):
+                ok(False, f"bar {i}: unnamed zone {why!r}")
+                return
+    ok(hits > 20, f"{hits} zones found, all inside their bounds and on a real "
+                  f"bar, all named OB or FVG")
+    # Both kinds must actually fire. A silently-dead FVG detector is exactly
+    # the bug this assertion caught: the backup went on working from order
+    # blocks alone and nothing anywhere said the gaps were never found.
+    kinds = set()
+    for i in range(300, len(cs), 7):
+        for short in (True, False):
+            focus = cs[i].c * (1.02 if short else 0.98)
+            lo = cs[i].l if short else cs[i].h
+            _, why = U.bk_zone(cs, i, short, focus, lo, 30, False, True)
+            if why:
+                kinds.add(why)
+    ok("FVG" in kinds,
+       "the FVG detector finds gaps when asked for them alone")
+
+
+# ───────────────────────────────────────────────────────── 6. HTF bias ──
 
 
 def test_htf_aggregate_is_sound():
@@ -412,7 +535,12 @@ def main():
                test_no_fill_on_the_arming_bar, test_fill_window_expires,
                test_run_is_deterministic_and_self_consistent,
                test_ghosts_do_not_touch_the_real_numbers,
-               test_fees_only_ever_reduce_r, test_htf_aggregate_is_sound,
+               test_fees_only_ever_reduce_r,
+               test_backup_never_invents_a_better_price,
+               test_backup_only_adds_trades,
+               test_backup_respects_its_chase_limit,
+               test_backup_zones_are_real,
+               test_htf_aggregate_is_sound,
                test_htf_bias_cannot_look_ahead,
                test_htf_gate_only_removes_setups,
                test_price_swing_sources_run_end_to_end):

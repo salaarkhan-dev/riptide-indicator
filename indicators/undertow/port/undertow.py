@@ -68,12 +68,12 @@ class P:
     """Every input in the Pine, same names, same defaults, plus the three the
     Pine cannot have. Frozen so a sweep cannot mutate a shared config."""
     # 1 · Bias
-    msLen: int = 15
-    msShortLen: int = 3
+    msLen: int = 6
+    msShortLen: int = 2
     msBosNeedsIdm: bool = True
     endMinor: str = E_FLIP
-    endSweep: bool = True
-    endStale: bool = True
+    endSweep: bool = False
+    endStale: bool = False
     staleBars: int = 30
     retraceMax: int = 70
     adxMin: int = 0
@@ -92,7 +92,18 @@ class P:
     stopSrc: str = S_PULL
     stopTrack: bool = True
     stopBuf: float = 0.25
-    rr: float = 3.0
+    rr: float = 3.5
+    # 5 · Backup fill. "if we miss we can fill the order as a backup on any OB
+    # or FVG." OFF by default and unmeasured. It is NOT a better price: for a
+    # short the zone sits BELOW the Focus, so it is further from the stop --
+    # bigger risk, further target, worse R on the same move. What it buys is a
+    # trade instead of no trade.
+    useBackup: bool = False
+    bkTrigger: float = 1.0
+    bkMaxRisk: float = 2.0
+    useOB: bool = True
+    useFVG: bool = True
+    bkLook: int = 30
     # ── port only ───────────────────────────────────────────────────────────
     # WHERE THE SWINGS COME FROM. See swings.py -- the choice is the answer to
     # "each works different on different TF", and the three options are not
@@ -154,6 +165,7 @@ class Trade:
     ghost: bool = False          # the bias gate cancelled it; scored apart
     state: str = ""              # the bias AT THE PIN
     code: str = ""               # HAM / HGM / IH / SS
+    backup: str = ""             # "OB" / "FVG" if this was a backup fill
 
 
 @dataclass
@@ -172,6 +184,9 @@ class Result:
     nMissStop: int = 0
     nMissGone: int = 0
     nMissBias: int = 0
+    # Fills that came from a backup zone rather than the Focus line. Counted
+    # apart so no number can imply the limit worked when it did not.
+    nBackup: int = 0
     # which Ending rule cancelled an armed setup
     nEndMinor: int = 0
     nEndSweep: int = 0
@@ -568,6 +583,58 @@ def _beyond_dn(c, lvl, mode):
     return c.c < lvl
 
 
+def bk_zone(cs, i, short, focus, lo, look, want_ob, want_fvg):
+    """The Pine's `bkZone()`. The nearest order block or fair-value gap edge
+    between `lo` and `focus`, or None.
+
+    THE NEAR EDGE, ON FIRST TOUCH. A short retracing upward touches the bottom
+    of a zone above it, so that is the fill -- and it is the worse of the two
+    edges for a short, which makes it the conservative reading. The better
+    price needs a deeper retrace that may never come, and assuming it would be
+    assuming a fill that did not happen.
+
+    AN ORDER BLOCK NEEDS A CLOSE BEYOND IT, not a wick through. That is the fix
+    for the loose OB detection this project already has: a wick through an
+    up-candle is noise, a close beyond it is a decision.
+    """
+    best, why = None, ""
+    first = max(1, i - look)
+
+    def better(e):
+        return best is None or (e < best if short else e > best)
+
+    def in_range(e):
+        return (lo < e < focus) if short else (focus < e < lo)
+
+    for b in range(i - 1, first - 1, -1):
+        c = cs[b]
+        if want_ob:
+            is_opp = c.c > c.o if short else c.c < c.o
+            if is_opp:
+                disp = any((cs[j].c < c.l) if short else (cs[j].c > c.h)
+                           for j in range(b + 1, i + 1))
+                if disp:
+                    edge = c.l if short else c.h
+                    if in_range(edge) and better(edge):
+                        best, why = edge, "OB"
+        if want_fvg and 1 <= b < i:
+            # PINE INDICES RUN BACKWARDS AND THIS IS WHERE THAT BITES. In the
+            # Pine `high[b - 1]` is the bar AFTER b; here `cs[b - 1]` is the
+            # bar BEFORE it. Getting that the wrong way round produced a
+            # detector that found zero fair-value gaps while reporting the
+            # feature as on, which is the quietest possible failure -- the
+            # backup still worked, on order blocks alone, and nothing said so.
+            #   bearish gap (a short):  high[newer] < low[older]
+            #   bullish gap (a long):   low[newer]  > high[older]
+            newer, older = cs[b + 1], cs[b - 1]
+            edge = newer.h if short else newer.l
+            far = older.l if short else older.h
+            if (edge < far) if short else (edge > far):
+                if in_range(edge) and better(edge):
+                    best, why = edge, "FVG"
+    return best, why
+
+
 @dataclass(eq=False)
 class _Cand:
     bar: int
@@ -586,6 +653,9 @@ class _Cand:
     stop: float = 0.0
     target: float = 0.0
     ghost: bool = False
+    bkPx: float = 0.0
+    bkWhy: str = ""
+    ran: bool = False
 
 
 def run(cs, p: P = P(), symbol: str = "") -> Result:
@@ -707,9 +777,31 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     cd.target = (cd.focus - p.rr * rk2 if cd.short
                                  else cd.focus + p.rr * rk2)
 
+            # ── the backup arms, ONCE ───────────────────────────────────
+            # Re-scanning every bar would keep finding a nearer zone and would
+            # converge on "enter at the current price", which is not a backup.
+            if p.useBackup and not gone and cd.armed and not cd.ran:
+                risk0 = abs(cd.stop - cd.focus)
+                ranR = 0.0
+                if risk0 > 0:
+                    ranR = ((cd.focus - c.l) / risk0 if cd.short
+                            else (c.h - cd.focus) / risk0)
+                if ranR >= p.bkTrigger:
+                    cd.ran = True
+                    px, why = bk_zone(cs, i, cd.short, cd.focus,
+                                      c.l if cd.short else c.h,
+                                      p.bkLook, p.useOB, p.useFVG)
+                    if px is not None:
+                        rk = abs(cd.stop - px)
+                        if 0 < rk <= p.bkMaxRisk * risk0:
+                            cd.bkPx, cd.bkWhy = px, why
+
             if not gone and cd.armed and i > cd.armBar:
                 tgtGone = c.l <= cd.target if cd.short else c.h >= cd.target
                 stopHit = c.h >= cd.stop if cd.short else c.l <= cd.stop
+                # The nearer level, so price reaches it first, and for a short
+                # the worse price. Checked before the Focus for both reasons.
+                bkHit = bool(cd.bkWhy) and c.h >= cd.bkPx >= c.l
                 touched = c.h >= cd.focus >= c.l
                 if tgtGone:
                     if not cd.ghost:
@@ -719,7 +811,17 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     if not cd.ghost:
                         res.nMissStop += 1
                     gone = True
-                elif touched:
+                elif bkHit or touched:
+                    if bkHit:
+                        # Re-based onto the zone: same stop, bigger risk, and a
+                        # target recomputed from it -- or `rr` would quietly
+                        # stop meaning rr.
+                        cd.focus = cd.bkPx
+                        rk3 = abs(cd.stop - cd.focus)
+                        cd.target = (cd.focus - p.rr * rk3 if cd.short
+                                     else cd.focus + p.rr * rk3)
+                        if not cd.ghost:
+                            res.nBackup += 1
                     if not cd.ghost:
                         res.nFilled += 1
                     filled = True
@@ -727,7 +829,7 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                         symbol=symbol, bar=cd.bar, armBar=cd.armBar, fillBar=i,
                         short=cd.short, entry=cd.focus, stop=cd.stop,
                         target=cd.target, ghost=cd.ghost, state=cd.state,
-                        code=cd.code))
+                        code=cd.code, backup=cd.bkWhy))
                     gone = True
                 elif i - cd.armBar >= p.fillBars:
                     if not cd.ghost:

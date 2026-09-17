@@ -78,7 +78,7 @@ def test_copies_agree():
         # inherit a limit that silently refuses setups. That was the confound
         # that voided an entire study; see UNDERTOW_PIN_VALUE.md.
         want = U.run(cs, U.P(maxLive=64), "T").armed
-        got = W.armed_setups(cs, ms_len=15, max_live=64)
+        got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
         total += len(want)
         ok(len(want) == len(got),
            f"seed {seed}: {len(want)} armed setups, bot copy found {len(got)}")
@@ -118,7 +118,7 @@ def test_agree_on_real_candles():
     for sym in sorted(data)[:6]:
         cs = data[sym]
         want = U.run(cs, U.P(maxLive=64), sym).armed
-        got = W.armed_setups(cs, ms_len=15, max_live=64)
+        got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
         same = (len(want) == len(got)
                 and all(w["bar"] == g["bar"] and w["short"] == g["short"]
                         and abs(w["entry"] - g["entry"]) < 1e-9
@@ -130,6 +130,30 @@ def test_agree_on_real_candles():
 
 
 # ───────────────────────────────────────────── 2. the stream is sane ──
+
+
+def test_frozen_constants_match_the_port():
+    """The live copy's frozen settings ARE the port's defaults.
+
+    They are frozen in the bot rather than read from config on purpose -- a
+    live stream is the worst possible place to tune -- but frozen to the WRONG
+    values would mean the alert describes a different strategy from the one
+    every measurement ran on, silently.
+    """
+    p = U.P()
+    for name, live, want in (
+            ("msShortLen", W.MS_SHORT_LEN, p.msShortLen),
+            ("msBosNeedsIdm", W.BOS_NEEDS_IDM, p.msBosNeedsIdm),
+            ("endMinor", W.END_MINOR, p.endMinor),
+            ("endSweep", W.END_SWEEP, p.endSweep),
+            ("endStale", W.END_STALE, p.endStale),
+            ("staleBars", W.STALE_BARS, p.staleBars),
+            ("retraceMax", W.RETRACE_MAX, p.retraceMax),
+            ("wickEdge", W.WICK_EDGE, p.wickEdge),
+            ("locTol", W.LOC_TOL, p.locTol),
+            ("stopBuf", W.STOP_BUF, p.stopBuf),
+            ("rr", W.RR, p.rr)):
+        ok(live == want, f"{name}: watcher {live!r} == port {want!r}")
 
 
 def test_ships_off():
@@ -144,11 +168,13 @@ def test_rate_is_readable():
     problem, and the defaults are set by what is useful rather than what is
     survivable — but that only holds while the rate stays small, so it is
     pinned here rather than left to a comment."""
-    all3 = W.rate(None, tfs=("Min15", "Min30", "Min60"))
-    ok(all3 == 19, f"all three timeframes is {all3} rows a day")
-    ok(all3 < 40,
-       f"which is readable — the exhaustion watch's equivalent was 295")
-    ok(W.rate(None, tfs=("Min60",)) < all3, "and 1h alone is fewer")
+    shipped = W.rate(None, tfs=W.SPEC.default_intervals)
+    ok(W.SPEC.default_intervals == ("Min15", "Min30"),
+       f"the shipped set is 15m and 30m: {W.SPEC.default_intervals}")
+    ok(shipped < 60,
+       f"the shipped timeframes are {shipped} rows a day — readable; the "
+       f"exhaustion watch's equivalent was 295")
+    ok(W.rate(None, tfs=("Min30",)) < shipped, "and 30m alone is fewer")
     ok(W.rate(None, tfs=("Min15",), states="running")
        < W.rate(None, tfs=("Min15",)),
        "the 'running' filter reduces it, as /undertow claims")
@@ -159,7 +185,7 @@ def test_hit_is_dated_to_the_close():
     the bar has CLOSED, so the moment it became real is t + step — which is
     what the freshness gate and the 'Nm ago' row both measure from."""
     cs = walk(4000, seed=12, drift=0.0006)
-    got = W.armed_setups(cs, ms_len=15, max_live=64)
+    got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
     ok(got, "the fixture produces setups at all")
     last = max(g["bar"] for g in got)
     # Trim so the newest setup lands inside the recent window.
@@ -196,7 +222,7 @@ def test_detect_reports_its_drops():
     """'6 setups, all immature' and 'the loop never woke' look identical from
     the chat. The second number is what tells them apart in /status."""
     cs = walk(4000, seed=12, drift=0.0006)
-    got = W.armed_setups(cs, ms_len=15, max_live=64)
+    got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
     last = max(g["bar"] for g in got)
     trimmed = cs[:last + 2]
     _, dropped = W.detect(trimmed, "T_USDT", "Min30", {"states": "running"})
@@ -221,7 +247,8 @@ def test_no_trading_path():
 
 
 def main():
-    for fn in (test_copies_agree, test_agree_on_real_candles, test_ships_off,
+    for fn in (test_copies_agree, test_agree_on_real_candles,
+               test_frozen_constants_match_the_port, test_ships_off,
                test_rate_is_readable, test_hit_is_dated_to_the_close,
                test_dedupe_key_is_stable, test_detect_reports_its_drops,
                test_no_trading_path):

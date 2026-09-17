@@ -607,20 +607,23 @@ EXHAUST_MAX_LINES = int(os.getenv("RIPTIDE_EXHAUST_MAX_LINES", "20"))
 # (rerun it; do not trust this comment) -- rows a day across 23 symbols:
 #
 #     tf      both   running   immature
-#     15m       11         8          3
-#     30m        5         3          1
-#     1h         3         2          1
-#     ALL       19        13          5
+#     15m       36        18         17
+#     30m       18         9          9
+#     SHIPPED   54        27         26
 #
-# Nineteen rows a day is readable, against the exhaustion watch's 295. So all
-# three timeframes is the default once it is switched on: the point of this
-# stream is not missing a setup across twenty-three symbols, and there is no
-# volume reason to start it narrow.
+# 1h is NOT in the shipped set, by request.
+#
+# FIFTY-FOUR A DAY IS THE HIGH END OF READABLE, and it is a consequence of the
+# chart settings this ships with: swing 6/2 with the sweep and stale Ending
+# rules off. At swing 15 with those rules on the same measurement was 16 a day.
+# A shorter swing means a twitchier structure and more CHoCHs; two fewer Ending
+# rules leaves far more bars tradeable. `/undertow running` halves it to 27 and
+# is the first thing to reach for if the digest stops getting read.
 UNDERTOW_ALERTS = os.getenv("RIPTIDE_UNDERTOW_ALERTS", "0") == "1"
 UNDERTOW_INTERVALS = tuple(dict.fromkeys(
     i.strip() for i in
     os.getenv("RIPTIDE_UNDERTOW_INTERVALS",
-              "Min15,Min30,Min60").split(",") if i.strip()))
+              "Min15,Min30").split(",") if i.strip()))
 # "both", "running" or "immature" -- which bias states count. 'running' has
 # already broken structure at least once since its CHoCH.
 UNDERTOW_STATES = os.getenv("RIPTIDE_UNDERTOW_STATES", "both").strip().lower()
@@ -631,7 +634,7 @@ if UNDERTOW_STATES not in ("both", "running", "immature"):
 # The major swing, in BARS -- and note that means a different span of TIME on
 # every timeframe. That is a known flaw of the rule, measured in
 # indicators/undertow/port/swings.py, not a bug in this file.
-UNDERTOW_MS_LEN = int(os.getenv("RIPTIDE_UNDERTOW_MS_LEN", "15"))
+UNDERTOW_MS_LEN = int(os.getenv("RIPTIDE_UNDERTOW_MS_LEN", "6"))
 # Bars for BOTH confirmations to land. Without a bound the rule is eventually
 # true for almost any candle.
 UNDERTOW_CONFIRM_BARS = int(os.getenv("RIPTIDE_UNDERTOW_CONFIRM_BARS", "20"))

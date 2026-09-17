@@ -29,17 +29,22 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3]))
 from indicators.undertow.studies.undertow_sweep import TFS, load   # noqa: E402
 from research.data import SYMBOLS                                  # noqa: E402
 from riptide.config import BAR_SECONDS                             # noqa: E402
+from indicators.undertow.port.undertow import P as _P              # noqa: E402
 from riptide.watchers.undertow import armed_setups                 # noqa: E402
 
 STATES = ("both", "running", "immature")
-SWINGS = (15, 30)
+# The shipped default first -- the row the watcher's RATE tables come from --
+# then two wider settings, so the cost of tightening is visible beside it
+# rather than needing a second run.
+SWINGS = (_P().msLen, 15, 30)
 
 
 def main():
     argv = [a for a in sys.argv[1:] if a in TFS]
     tfs = argv or list(TFS)
     print("UNDERTOW ALERT RATE — armed setups a day across the universe")
-    print(f"{len(SYMBOLS)} symbols, cached 12,000-bar history per symbol\n")
+    print(f"{len(SYMBOLS)} symbols, cached 12,000-bar history per symbol")
+    print(f"shipped config: swing {SWINGS[0]}/{_P().msShortLen}, endSweep {_P().endSweep}, endStale {_P().endStale}\n")
     print(f"  {'tf':7} {'days':>6} {'swing':>6} "
           + " ".join(f"{s:>10}" for s in STATES))
     table = {}
@@ -63,7 +68,7 @@ def main():
             # exactly as the chat would see it.
             span = days / len(data) if data else 1.0
             per = {s: round(tot[s] / span) if span else 0 for s in STATES}
-            if swing == 15:
+            if swing == SWINGS[0]:
                 table[tf] = per
             print(f"  {tf:7} {span:6.0f} {swing:6} "
                   + " ".join(f"{per[s]:10}" for s in STATES))

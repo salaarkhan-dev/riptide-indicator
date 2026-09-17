@@ -88,6 +88,13 @@ This copy stops at the arming bar. It has no fill, no outcome, no ghost column
 and no scoring, because a watch has none of those and carrying them would be
 carrying a trading path into the bot package.
 
+IT ALSO HAS NO BACKUP FILL, and that is not an omission. The OB/FVG backup only
+comes into existence once the move has run without you, which is minutes to
+hours AFTER the alert this watch sends. Alerting on it would be a second,
+later message about the same setup; the machinery for that is the port's and it
+is not measured yet. For now the alert is the limit at the Focus line, and the
+backup is something you place yourself if you miss it.
+
 NO EXCHANGE API KEY AND NO ORDER PLACEMENT. This sends a Telegram message.
 """
 
@@ -107,17 +114,17 @@ RECENT_BARS = 6
 # tuning against a live stream, which is the worst possible place to tune.
 # indicators/undertow/port/undertow.py::P is the authority; the two are held
 # together by test_watch_undertow.py.
-MS_SHORT_LEN = 3
+MS_SHORT_LEN = 2
 BOS_NEEDS_IDM = True
 END_MINOR = "on the flip"
-END_SWEEP = True
-END_STALE = True
+END_SWEEP = False
+END_STALE = False
 STALE_BARS = 30
 RETRACE_MAX = 70
 WICK_EDGE = 0.05
 LOC_TOL = 0
 STOP_BUF = 0.25
-RR = 3.0
+RR = 3.5
 
 
 def sig_of(symbol: str, tf: str, bar_time: int, is_long: bool) -> str:
@@ -194,7 +201,7 @@ class _Cand:
             setattr(self, k, kw.get(k, False))
 
 
-def armed_setups(cs, ms_len: int = 15, max_live: int = 64) -> list:
+def armed_setups(cs, ms_len: int = 6, max_live: int = 64) -> list:
     """Every bar at which a limit order would have gone on.
 
     Sections 3-7 of riptide-undertow.pine, stopping at the arming bar. The
@@ -462,15 +469,27 @@ def rate(db, tfs=None, **over):
     return sum(per.get(t, 0) for t in (tfs or UNDERTOW_INTERVALS))
 
 
-# Armed setups a day across 23 symbols, from undertow_rate.py over 125 / 250 /
-# 492 symbol-days. THE VOLUME IS THE GOOD NEWS HERE: all three timeframes with
-# no state filter is 19 rows a day, against the exhaustion watch's 295. There
-# is no volume problem to design around, so the defaults are set by what is
-# useful rather than by what is survivable.
-RATE_BOTH = {"Min15": 11, "Min30": 5, "Min60": 3}
+# Armed setups a day across 23 symbols, from undertow_rate.py over 125 / 250
+# symbol-days, AT THE SHIPPED CONFIG -- swing 6/2 with the sweep and stale
+# Ending rules off.
+#
+# THAT CONFIG TRIPLES THE RATE. The same measurement at swing 15 with those two
+# rules on was 11 and 5; a shorter swing means a twitchier structure and more
+# CHoCHs, and turning off two of the five Ending rules leaves far more bars
+# tradeable. 15m + 30m together is 54 rows a day, which is the point at which a
+# digest starts not getting read.
+#
+#     swing   15m both   15m running   30m both   30m running
+#       6         36          18           18          9
+#      15         22          16           10          7
+#      30         16          13            8          6
+#
+# `/undertow running` halves it to 27 and is the first thing to reach for.
+# 1h is not shipped: it is not in the default intervals.
+RATE_BOTH = {"Min15": 36, "Min30": 18, "Min60": 9}
 RATE_ONE = {
-    "running": {"Min15": 8, "Min30": 3, "Min60": 2},
-    "immature": {"Min15": 3, "Min30": 1, "Min60": 1},
+    "running": {"Min15": 18, "Min30": 9, "Min60": 5},
+    "immature": {"Min15": 17, "Min30": 9, "Min60": 4},
 }
 
 
