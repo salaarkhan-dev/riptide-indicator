@@ -372,6 +372,7 @@ string pinWhy = not famOk ? "no dominant wick (doji, or the family is off)" : no
 
 string pinGrade = bodyR <= 0.35 ? "normal" : "partial"
 string pinFace = famHam ? (isGreen ? "Hammer" : "Hanging man") : (isGreen ? "Inv hammer" : "Shooting star")
+string pinCode = famHam ? (isGreen ? "HAM" : "HGM") : (isGreen ? "IH" : "SS")
 string pinTag = pinFace + " · " + pinGrade + (math.min(upW, dnW) >= 0.05 ? " +wick" : "")
 
 
@@ -400,6 +401,7 @@ var float pdTarget = na
 var float pdPbExt = na
 var int pdOrder = 0
 var string pdTag = ""
+var string pdCode = ""
 
 var int nRaw = 0
 var int nPins = 0
@@ -416,7 +418,10 @@ float fillPx = na
 float fillStop = na
 float fillTarget = na
 int fillPinBar = na
+float fillPinHi = na
+float fillPinLo = na
 string fillTag = ""
+string fillCode = ""
 
 // The same six for a setup that ARMED and then did not fill. Drawing those is
 // what lets past detection be checked without waiting for live ones — an
@@ -427,6 +432,9 @@ bool dropShort = false
 float dropPx = na
 float dropStop = na
 int dropPinBar = na
+float dropPinHi = na
+float dropPinLo = na
+string dropCode = ""
 string dropWhy = ""
 
 // ── the live candidate, processed BEFORE a new pin can replace it ────────────
@@ -492,7 +500,10 @@ if barOk and not na(pdBar)
             fillStop := pdStop
             fillTarget := pdTarget
             fillPinBar := pdBar
+            fillPinHi := pdHigh
+            fillPinLo := pdLow
             fillTag := pdTag
+            fillCode := pdCode
             nFilled := nFilled + 1
             gone := true
         else if bar_index - pdArmBar >= fillBars
@@ -507,6 +518,9 @@ if barOk and not na(pdBar)
         dropPx := pdFocus
         dropStop := pdStop
         dropPinBar := pdBar
+        dropPinHi := pdHigh
+        dropPinLo := pdLow
+        dropCode := pdCode
         dropWhy := lastReject
     if gone
         pdBar := na
@@ -554,6 +568,7 @@ if takeNew
     pdShort := biasDir < 0
     pdPbExt := pbExt
     pdTag := pinTag
+    pdCode := pinCode
 
 
 // ═══════════════════════════════ 8. DRAWING ══════════════════════════════════
@@ -576,7 +591,7 @@ prune() =>
         line.delete(lnBuf.shift())
     while bxBuf.size() > keepN * 2
         box.delete(bxBuf.shift())
-    while lbBuf.size() > keepN * 2
+    while lbBuf.size() > keepN * 4
         label.delete(lbBuf.shift())
 
 drawLine(int x1, int x2, float y, color c, string st) =>
@@ -596,6 +611,15 @@ if fillNow
         bxBuf.push(box.new(fillPinBar, math.max(fillPx, fillTarget), bar_index,
           math.min(fillPx, fillTarget), border_color = color.new(cc, 70),
           bgcolor = color.new(colLong, 92)))
+    // THE CANDLE THE TRADE WAS BUILT FROM, named on the bar itself. It sits
+    // outside the pin — above it on a short, below on a long — so it never
+    // covers the candle it is pointing at, and it carries the pin's own short
+    // code so the four are distinguishable at a glance.
+    lbBuf.push(label.new(fillPinBar, fillShort ? fillPinHi : fillPinLo,
+      fillCode, xloc = xloc.bar_index,
+      style = fillShort ? label.style_label_down : label.style_label_up,
+      color = color.new(cc, 35), textcolor = color.white, size = size.normal,
+      tooltip = "the setup candle\n" + fillTag))
     lbBuf.push(label.new(bar_index, fillPx,
       (fillShort ? "SHORT " : "LONG ") + str.tostring(rr, "#.#") + "R",
       xloc = xloc.bar_index, style = label.style_label_left,
@@ -611,6 +635,11 @@ if dropNow and showUnfilled
     // for one that did at a glance. The × marks the entry that was missed.
     drawLine(dropPinBar, bar_index, dropPx, color.new(color.gray, 55),
       line.style_dashed)
+    lbBuf.push(label.new(dropPinBar, dropShort ? dropPinHi : dropPinLo,
+      dropCode, xloc = xloc.bar_index,
+      style = dropShort ? label.style_label_down : label.style_label_up,
+      color = color.new(color.gray, 75), textcolor = color.new(color.gray, 10),
+      size = size.normal, tooltip = "setup candle, never filled\n" + dropWhy))
     lbBuf.push(label.new(bar_index, dropPx, "×", xloc = xloc.bar_index,
       style = label.style_label_left, color = color.new(color.gray, 75),
       textcolor = color.new(color.gray, 10), size = size.normal,
@@ -737,7 +766,7 @@ if barstate.islast
     row(7, "last reject", lastReject, color.new(color.gray, 20))
     // The marks that cannot carry their own text. CHoCH and BOS name
     // themselves on the bar, so they are deliberately not repeated here.
-    row(9, "marks", "● swing hi/lo · ▲▼ entry · × unfilled", color.gray)
+    row(9, "marks", "HAM/HGM/IH/SS = setup candle · ▲▼ entry · × unfilled · ● swing", color.gray)
     if dbgOn
         row(8, "pin·bias·col·loc·sup·arm·fill", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·" + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·" + str.tostring(nSuper) + "·" + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray)
     else

@@ -242,6 +242,7 @@ named in the panel's `marks` row.
 
 | thing | how |
 |---|---|
+| **The setup candle** | named on the bar the setup was built from — `HAM` · `HGM` · `IH` · `SS` — placed outside the pin so it never covers it. Not a debug mark: which candle a trade came from is part of the setup |
 | **Entry** | triangle, `size.small`, `location.abovebar` / `belowbar` so it never sits on the candle. **Down = short, up = long** — direction carries the meaning, so it reads without colour |
 | **Working / Failure** | thin solid lines, from the pin to the trigger bar |
 | **Focus** | dashed, extended to the fill bar or expiry |
