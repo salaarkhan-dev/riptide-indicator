@@ -46,7 +46,8 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # read no swing setting at all (Slope is not the structure engine), so the swing
 # pins matter only to A0, which names its own.
 BASE = U.P(maxLive=64, feeFrac=FEE, rr=3.5,
-           swingSrc=U.SW_RANGE, msLen=6, msShortLen=2)
+           swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,
+           endSweep=False, endStale=False)
 # Retrace-only Ending: the only rule that exists for a slope.
 MATCH = dict(endMinor=U.E_OFF, endSweep=False, endStale=False)
 

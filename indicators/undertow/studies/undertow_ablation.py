@@ -62,7 +62,8 @@ from research.data import SYMBOLS                                # noqa: E402
 # script would print different numbers under the same page's name. A study that
 # cannot reproduce its own measurement is not a record of anything.
 BASE = U.P(rr=3.0, feeFrac=FEE,
-           swingSrc=U.SW_BAR, msLen=15, msShortLen=3)
+           swingSrc=U.SW_BAR, msLen=15, msShortLen=3,
+           endSweep=True, endStale=True)
 UNCAPPED = 64
 
 ARMS = [

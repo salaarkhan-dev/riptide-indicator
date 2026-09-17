@@ -128,6 +128,35 @@ data nobody looked at first is between **−0.09 and +0.07**. Manual replay has 
 known failure mode — a setup is judged valid after its outcome is visible — and
 this is what that failure mode is worth.
 
+## Every study reproduces its page — audited 2026-09-17
+
+A study that leans on `P`'s defaults stops measuring what its page describes the
+moment a default moves, and moves nothing else: it still runs, still prints a
+table, and the table is wrong under a name that says otherwise. Two defaults
+moved (`swingSrc`, then `slopeUnit`), and three more had moved earlier
+(`msLen`/`msShortLen`, `endSweep`/`endStale`, `rr`). Every study now pins what
+its measurement was run under, reconstructed from git at each page's own commit,
+and every one was **re-run and compared cell by cell**:
+
+| study | checked against | result |
+|---|---|---|
+| `undertow_sweep` | `UNDERTOW_PARAMS.md` | all 3 tf: train/holdout/control/n exact |
+| `undertow_ablation --uncapped` | `UNDERTOW_PIN_VALUE.md` run 2 | 6 arms × 3 tf exact; `A0 − A3` −0.073 / −0.049 / +0.092 exact |
+| `undertow_exits` | `UNDERTOW_EXITS.md` | all 3 tf exact **after** a second fix — see below |
+| `undertow_backup` | `UNDERTOW_BACKUP_FILL.md` | 4442 armed, `B3 − B0` +0.026 ± 0.047 exact |
+| `undertow_late_backup` | `UNDERTOW_LATE_BACKUP.md` | 3 tf exact, incl. the 100%-inside-window diagnostic |
+| `undertow_bias` | `UNDERTOW_BIAS_SOURCE.md` | 7 arms exact |
+| `undertow_slope` | `UNDERTOW_SLOPE_DEFAULT.md` | +0.310 at z +3.61 exact |
+| `undertow_rate` | — | exempt: it is *supposed* to track what ships |
+
+**The exits study is why enumerating fields does not work.** The first pass
+pinned `swingSrc`, `msLen`, `msShortLen` and `rr` — and missed `endSweep` and
+`endStale`, which had also flipped. Exits then chose a *different exit arm* on
+two of three timeframes and only the full re-run found it. So
+`test_studies_pin_their_settings.py` also fingerprints `P`'s defaults and fails
+on **any** of them moving, which is the cause rather than a consequence. When it
+fails, re-run the studies before touching the fingerprint.
+
 ## Layout
 
 ```

@@ -65,7 +65,11 @@ def grid():
         for em in END_MINOR:
             for h in HTF:
                 for rr in RRS:
-                    yield U.P(endMinor=em, htfMult=h, rr=rr, feeFrac=FEE, **sw)
+                    # endSweep/endStale were True when UNDERTOW_PARAMS.md
+                    # was run and are False now; pinned so the page still
+                    # reproduces. See test_studies_pin_their_settings.py.
+                    yield U.P(endMinor=em, htfMult=h, rr=rr, feeFrac=FEE,
+                              endSweep=True, endStale=True, **sw)
 
 
 # ───────────────────────────────────────────────────────────────── data ──

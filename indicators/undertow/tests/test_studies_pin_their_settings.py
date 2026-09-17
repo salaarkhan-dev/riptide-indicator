@@ -41,10 +41,14 @@ STUDIES = pathlib.Path(__file__).resolve().parents[1] / "studies"
 # The fields whose defaults have actually moved under a published study. Add to
 # this list when you move another one -- that is cheaper than the alternative,
 # which is finding out from a table that silently disagrees with its page.
-PINNED = ("swingSrc", "msLen", "msShortLen", "rr")
+PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep", "endStale")
 # A study whose whole job is to describe what currently ships puts this on the
 # line that reads the default. It is a deliberate, visible opt-out.
 EXEMPT = "TRACKS THE CURRENT DEFAULT"
+# sha256 of P's field defaults, first 16 hex. See the third test for what to do
+# when this fails -- the answer is not to paste the new value.
+DEFAULTS_FINGERPRINT = "0c4fc370d72b4df7"
+DEFAULTS_COUNT = 51
 
 good = []
 
@@ -93,9 +97,47 @@ def test_the_marker_is_not_a_blank_cheque():
            f"{p.name}: the exemption sits next to the default it reads")
 
 
+def test_the_defaults_have_not_moved_unnoticed():
+    """THE GUARD THAT DOES NOT NEED A LIST, and the reason it exists is that
+    the list above was WRONG on its first outing.
+
+    PINNED named swingSrc, msLen, msShortLen and rr. It missed `endSweep` and
+    `endStale`, which had also flipped, so undertow_exits still failed to
+    reproduce -- it chose a different exit arm on two of three timeframes --
+    and only a full re-run found it. Enumerating consequences does not work,
+    because the enumerator is the thing that is out of date.
+
+    So this fails on ANY default moving, which is the CAUSE. It is meant to be
+    updated deliberately: change a default, re-run the studies, confirm they
+    still reproduce their pages or pin what they need, then paste the new
+    fingerprint. The failure message is the procedure.
+    """
+    import dataclasses
+    import hashlib
+    import json
+
+    from indicators.undertow.port import undertow as U
+
+    fields = {f.name: f.default for f in dataclasses.fields(U.P)}
+    got = hashlib.sha256(
+        json.dumps(fields, sort_keys=True, default=str).encode()).hexdigest()
+    ok(got.startswith(DEFAULTS_FINGERPRINT),
+       "P's defaults are the ones the studies were audited against"
+       if got.startswith(DEFAULTS_FINGERPRINT) else
+       f"P's DEFAULTS MOVED — fingerprint {got[:16]}, expected "
+       f"{DEFAULTS_FINGERPRINT}.\n"
+       "         Every study that does not pin the field you changed is now\n"
+       "         measuring something its page does not describe. Re-run them,\n"
+       "         confirm each reproduces its measurement, pin what it needs,\n"
+       "         then paste the new fingerprint here. Do not just paste it.")
+    ok(len(fields) == DEFAULTS_COUNT,
+       f"P has {len(fields)} fields (audited against {DEFAULTS_COUNT})")
+
+
 def main():
     for fn in (test_every_study_pins_or_opts_out,
-               test_the_marker_is_not_a_blank_cheque):
+               test_the_marker_is_not_a_blank_cheque,
+               test_the_defaults_have_not_moved_unnoticed):
         print(f"\n{fn.__name__}")
         fn()
     print(f"\n{'ALL PASS' if all(good) else 'FAILURES'}  "

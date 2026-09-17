@@ -51,7 +51,8 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # script would print different numbers under the same page's name. A study that
 # cannot reproduce its own measurement is not a record of anything.
 BASE = U.P(maxLive=64, feeFrac=FEE, rr=3.5,
-           swingSrc=U.SW_BAR, msLen=6, msShortLen=2)
+           swingSrc=U.SW_BAR, msLen=6, msShortLen=2,
+           endSweep=False, endStale=False)
 # Retrace-only Ending: the only rule that exists for every source.
 MATCH = dict(endMinor=U.E_OFF, endSweep=False, endStale=False)
 

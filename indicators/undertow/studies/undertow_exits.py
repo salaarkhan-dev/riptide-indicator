@@ -57,7 +57,8 @@ HORIZON = 200
 # script would print different numbers under the same page's name. A study that
 # cannot reproduce its own measurement is not a record of anything.
 BASE = U.P(rr=3.0, feeFrac=FEE, maxLive=64,
-           swingSrc=U.SW_BAR, msLen=15, msShortLen=3)
+           swingSrc=U.SW_BAR, msLen=15, msShortLen=3,
+           endSweep=True, endStale=True)
 
 EXITS = ["E0 fixed 2R", "E1 fixed 3R", "E2 fixed 5R", "E3 fixed 7R",
          "E4 BE then run", "E5 liquidity", "E6 ATR trail 2.0",
