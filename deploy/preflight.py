@@ -81,6 +81,10 @@ PINE_CHECKS = [
     ("ccp-grab-check", "ccp", []),
     ("undertow-ms-check", "undertow", []),
     ("undertow-port-check", "undertow", []),
+    # Sections 5-7 have no v2 counterpart, so the parity chain does not
+    # reach the pullback rule and the Pine is in none of the behaviour
+    # tests. This holds the two copies of that rule together by term.
+    ("undertow-pullback-check", "undertow", []),
 ]
 
 
