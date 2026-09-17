@@ -1,6 +1,6 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED EIGHT TIMES, nothing promoted. Ships as a watch, OFF by
+**Status: MEASURED NINE TIMES, nothing promoted. Ships as a watch, OFF by
 default, saying so in every message.**
 
 | study | result |
@@ -13,6 +13,7 @@ default, saying so in every message.**
 | [`UNDERTOW_BIAS_SOURCE.md`](measurements/UNDERTOW_BIAS_SOURCE.md) | five direction sources — structure, EMA, Supertrend, Slope, range midpoint — and **none beat the baseline**. EMA swung 0.54 R per trade between two halves of the same universe, which is the clearest "this is noise" in the project |
 | [`UNDERTOW_OVERLAP.md`](measurements/UNDERTOW_OVERLAP.md) | **74% of 15m trades run alongside another in the same direction**, up to 13 at once, and those groups win or lose together **78%** of the time. Four longs within $10 is one idea at 4x size. Descriptive; the chart now collapses them and the strategy is unchanged |
 | [`UNDERTOW_SLOPE_DEFAULT.md`](measurements/UNDERTOW_SLOPE_DEFAULT.md) | the bias study's best number, Slope at **+0.198** on Min30, came back **−0.228** on a different stretch of the same symbols. A time-normalised Slope then cleared *every* bar on Min60 at z +3.61 — and lost to a coin at z −2.46 on Min30. **Nothing promoted** |
+| [`UNDERTOW_HTF.md`](measurements/UNDERTOW_HTF.md) | the HTF agreement gate, on **45 symbols nothing here had ever seen**, against a **random gate discarding the same count**: worth **+0.032 / +0.010 / −0.029 R** over that control on 22,875 trades. Best-powered null in the project, and the one that cannot be blamed on a spent holdout |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
@@ -129,6 +130,19 @@ data nobody looked at first is between **−0.09 and +0.07**. Manual replay has 
 known failure mode — a setup is judged valid after its outcome is visible — and
 this is what that failure mode is worth.
 
+## "Every quadrant is spent" was wrong
+
+Two measurement pages say it, as a limit on what could be asked next. The venue
+lists **594 crypto USDT perpetuals** that pass a mechanical filter; the 23 used
+by the first eight studies were never the available data, they were the data
+somebody once picked. [`research/symbols_fresh.py`](../../research/symbols_fresh.py)
+freezes **45 more, disjoint from them**, and `UNDERTOW_HTF.md` is the first
+study to run on a population nothing here has looked at. Fetch them with
+`undertow_sweep.py --fetch-fresh`.
+
+Where the older pages say a holdout is spent, they are right about *those 23*
+and wrong about the conclusion drawn from it.
+
 ## Every study reproduces its page — audited 2026-09-17
 
 A study that leans on `P`'s defaults stops measuring what its page describes the
@@ -150,6 +164,7 @@ and every one was **re-run and compared cell by cell**:
 | `undertow_slope` | `UNDERTOW_SLOPE_DEFAULT.md` | +0.310 at z +3.61 exact |
 | `undertow_rate` | — | exempt: it is *supposed* to track what ships |
 | `undertow_overlap` | `UNDERTOW_OVERLAP.md` | written after the audit; pinned from the start |
+| `undertow_htf` | `UNDERTOW_HTF.md` | written after the audit; pinned from the start |
 
 **The exits study is why enumerating fields does not work.** The first pass
 pinned `swingSrc`, `msLen`, `msShortLen` and `rr` — and missed `endSweep` and
@@ -175,6 +190,7 @@ studies/undertow_late_backup.py  the same backup, placed after the limit dies
 studies/undertow_bias.py       five direction sources, head to head
 studies/undertow_rate.py       how many alerts a day — the product decision
 studies/undertow_overlap.py    how many of the trades are one idea
+studies/undertow_htf.py        the higher-timeframe gate, on fresh symbols
 measurements/                  what they concluded
 
 riptide/watchers/undertow.py   THE LIVE ADAPTER, in the bot tree, off by
