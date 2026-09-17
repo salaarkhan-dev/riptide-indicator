@@ -101,18 +101,16 @@ def per_armed(armed):
 def decompose(off, on, on_res):
     """ADDED against PRE-EMPTED, matched setup by setup."""
     bk = {(t.symbol, t.armBar) for t in on_res.real if t.backup}
-    added, preempt, n_add, n_pre = [], [], 0, 0
+    added, preempt = [], []
     for k, r_on in on.items():
         r_off = off.get(k, 0.0)
         if (k[0], k[2]) not in bk:
             continue                      # not a backup fill; nothing to say
-        if r_off == 0.0:
-            added.append(r_on)
-            n_add += 1
-        else:
-            preempt.append(r_on - r_off)
-            n_pre += 1
-    return added, preempt, n_add, n_pre
+        # Clustered by symbol, like everything else here -- one symbol's
+        # backups are not independent of each other.
+        (added if r_off == 0.0 else preempt).append(
+            U.Trade(symbol=k[0], r=r_on if r_off == 0.0 else r_on - r_off))
+    return added, preempt, len(added), len(preempt)
 
 
 def panel(tf, pairs, title):
@@ -169,14 +167,18 @@ def verdict(tf, o):
              "  → the zones are not doing the work"))
 
     added, preempt, na, npre = decompose(b0["armed"], b3["armed"], b3["res"])
-    am = sum(added) / na if na else 0.0
-    pm = sum(preempt) / npre if npre else 0.0
+    am, ase, _ = clustered(added)
+    pm, pse, _ = clustered(preempt)
+    sa = sum(t.r for t in added)
+    sp = sum(t.r for t in preempt)
     print(f"\n  DECOMPOSITION of {b3['res'].nBackup} backup fills")
     print(f"    ADDED       {na:4} trades that would not have happened   "
-          f"{am:+.3f} R each   ({sum(added):+.1f} R total)")
+          f"{am:+.3f} +/- {ase:.3f} R each  (z {am / ase if ase else 0:+.1f})"
+          f"   {sa:+.1f} R")
     print(f"    PRE-EMPTED  {npre:4} that took a worse price anyway       "
-          f"{pm:+.3f} R each   ({sum(preempt):+.1f} R total)")
-    net = sum(added) + sum(preempt)
+          f"{pm:+.3f} +/- {pse:.3f} R each  (z {pm / pse if pse else 0:+.1f})"
+          f"   {sp:+.1f} R")
+    net = sa + sp
     print(f"    NET         {net:+.1f} R over {b0['n']} armed setups = "
           f"{net / max(1, b0['n']):+.3f} R each")
 
@@ -232,6 +234,7 @@ def main():
           f"{'PASS' if b5 else 'FAIL'}")
     win = [v for v in vs if all(v["bars"])]
     zones = [v for v in vs if v["bars"][3]]
+    improves = [v for v in vs if v["bars"][2]]
     print()
     if b5 and len(win) >= 2:
         print("  THE BACKUP FILL CLEARS ITS BARS on "
@@ -239,11 +242,17 @@ def main():
         print("  First component of Undertow ever to do so. It earns default-on")
         print("  in the Pine, a second alert in the watch, and a forward run —")
         print("  not a conclusion.")
-    elif b5 and len(pos) >= 2 and not zones:
+    elif b5 and len(improves) >= 2 and not zones:
         print("  THE BACKUP HELPS AND THE ZONES DO NOT.")
-        print("  It did not beat the midpoint control, so what is working is")
-        print("  'enter later into a running move' — the OB and FVG detection")
-        print("  is decoration on top of that. Simpler, and a different claim.")
+        print("  It cleared bar 3 but not the midpoint control, so what is")
+        print("  working is 'enter later into a running move' — the OB and FVG")
+        print("  detection is decoration on top of it. A different claim.")
+    elif b5 and not improves:
+        print("  POSITIVE ON EVERY TIMEFRAME, AND NOT ESTABLISHED.")
+        print("  Bar 3 failed everywhere: the net is real in sign and too")
+        print("  small to call, because the two halves of it very nearly")
+        print("  cancel. Read the decomposition, not the net — that is what")
+        print("  it is there for, and it is where the next question is.")
     else:
         print("  THE BACKUP FILL DOES NOT CLEAR ITS BARS.")
         print("  Every component of Undertow has now been ablated — bias gate,")

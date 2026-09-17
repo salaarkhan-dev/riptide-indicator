@@ -8,6 +8,7 @@ default, saying so in every message.**
 | [`UNDERTOW_PARAMS.md`](measurements/UNDERTOW_PARAMS.md) | −0.093 / +0.071 / −0.063 R per trade on a holdout sharing neither symbols nor calendar with the search; **lost to a random entry on two of three** |
 | [`UNDERTOW_PIN_VALUE.md`](measurements/UNDERTOW_PIN_VALUE.md) | the candle taxonomy adds nothing; removing it scored **higher** on two of three |
 | [`UNDERTOW_EXITS.md`](measurements/UNDERTOW_EXITS.md) | 8–12% of setups really do reach 7R — and a **coin reaches 7R 12.5% of the time** |
+| [`UNDERTOW_BACKUP_FILL.md`](measurements/UNDERTOW_BACKUP_FILL.md) | the OB/FVG backup nets **+0.02 R per armed setup**, positive on 3 of 3 and significant on none — because two large, individually significant halves nearly cancel |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
@@ -42,6 +43,23 @@ describing a filter that does not filter.
 
 The honest version of this strategy is one sentence: **take the pullback
 extreme while the structure bias is running.**
+
+**THE LARGEST EFFECT FOUND ANYWHERE IN THIS INDICATOR**, and it is given
+straight back. Decomposing the backup fill setup by setup:
+
+* a setup that arms, runs 1R away without filling, then retraces into a zone is
+  worth **+0.56 to +0.67 R**, on ~400 trades per timeframe, clustered z of
+  **4 to 7**. Not noise, not small.
+* taking that same zone when price was going to return to the Focus anyway
+  costs **−0.23 to −0.29 R**, also z 5 to 7, and it happens ~1.4× as often.
+
+**You cannot take only the good half**: which one you are in depends on whether
+price later returns to the Focus, which is in the future at the moment of
+entry. The tradeable number is the net, +0.02 R, z 0.6. The split is diagnosis.
+
+It points at one clean hypothesis — place the backup only *after* the Focus
+limit expires, and pre-emption becomes impossible by construction — which needs
+its own pre-registration and has not been run.
 
 **Three further things are established**, and they are worth more than the
 verdict:
@@ -105,10 +123,11 @@ SPEC.md                        the design; the Pine is built against it
 pine/riptide-undertow.pine     v1 — draws setups and scores them on screen
 port/undertow.py               the Python transcription; three swing sources
 port/swings.py                 bar pivot · k x ATR · k x a fixed span of time
-prereg/                        written before each run — four of them
+prereg/                        written before each run — five of them
 studies/undertow_sweep.py      the parameter study
 studies/undertow_ablation.py   the six-arm ablation
 studies/undertow_exits.py      eight exits on identical fills
+studies/undertow_backup.py     the OB/FVG backup, decomposed
 studies/undertow_rate.py       how many alerts a day — the product decision
 measurements/                  what they concluded
 
