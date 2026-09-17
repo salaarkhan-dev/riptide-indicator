@@ -100,6 +100,8 @@ NO EXCHANGE API KEY AND NO ORDER PLACEMENT. This sends a Telegram message.
 
 from __future__ import annotations
 
+import math
+
 from collections import deque
 
 from ..config import (BAR_SECONDS, UNDERTOW_ALERTS, UNDERTOW_CONFIRM_BARS,
@@ -125,6 +127,34 @@ WICK_EDGE = 0.05
 LOC_TOL = 0
 STOP_BUF = 0.25
 RR = 3.5
+
+
+def _dp(ref: float) -> int:
+    """Decimal places of a price that was actually TRADED.
+
+    The entry is a candle's open, so it sits on the exchange's tick grid and
+    its own precision is the best available read of that grid — no symbol
+    metadata, no extra request. The stop and the target are COMPUTED (an ATR
+    fraction past an extreme), so they carry float noise well past any real
+    tick: an entry of 0.1985 printed beside a stop of 0.19694503 is eight
+    figures of a number whose last four cannot be placed.
+    """
+    t = f"{ref:.8g}"
+    return len(t.split(".")[1]) if "." in t and "e" not in t else 0
+
+
+def _snap(v: float, entry: float, away: bool) -> float:
+    """Round a level onto the entry's grid, AWAY from the entry.
+
+    Away, not nearest, and in both directions: a stop rounded toward the entry
+    is a tighter stop than the one that was measured, and a target rounded
+    toward it is an easier one. Both would make the row flatter than the trade.
+    Rounding outward costs a fraction of a tick and cannot overstate anything.
+    """
+    n = _dp(entry)
+    q = 10.0 ** n
+    return (math.floor(v * q) / q if v < entry else math.ceil(v * q) / q) \
+        if away else round(v, n)
 
 
 def sig_of(symbol: str, tf: str, bar_time: int, is_long: bool) -> str:
@@ -413,7 +443,16 @@ def detect(cs, symbol: str, tf: str, opts: dict) -> tuple:
         if want != "both" and a["state"] != want:
             dropped += 1
             continue
-        risk = abs(a["stop"] - a["entry"])
+        # Snapped BEFORE the risk is computed, so every number on the row
+        # agrees with every other one. riptide/telegram.py::fmt carries the
+        # lesson: a displayed percentage that disagrees with the displayed
+        # prices puts the order in the wrong place.
+        stop = _snap(a["stop"], a["entry"], True)
+        target = _snap(a["target"], a["entry"], True)
+        risk = abs(stop - a["entry"])
+        if risk <= 0:
+            dropped += 1
+            continue
         out.append(Hit(
             key=sig_of(symbol, tf, cs[a["bar"]].t, not a["short"]),
             symbol=symbol, tf=tf, is_long=not a["short"],
@@ -422,8 +461,8 @@ def detect(cs, symbol: str, tf: str, opts: dict) -> tuple:
             # the freshness gate and the "Nm ago" both measure from.
             bar_time=cs[a["bar"]].t + step, price=a["entry"],
             detail=(f"{a['code']} {a['state']} entry {a['entry']:g} "
-                    f"stop {a['stop']:g} tgt {a['target']:g}"),
-            entry=a["entry"], stop=a["stop"], target=a["target"],
+                    f"stop {stop:g} tgt {target:g}"),
+            entry=a["entry"], stop=stop, target=target,
             code=a["code"], state=a["state"],
             riskPct=100.0 * risk / a["entry"] if a["entry"] else 0.0))
     return out, dropped
@@ -446,12 +485,22 @@ GROUP_W = 16
 
 def row(h, group: str) -> str:
     """One armed setup. The levels are the product — see the module docstring
-    for why a watch prints them and what that still does not make them."""
+    for why a watch prints them and what that still does not make them.
+
+    `watch.chart` already renders the price, and `Hit.price` IS the limit, so
+    the entry is NOT repeated here. The first version printed it twice, which
+    is worse than either choice: two numbers that are always equal read as two
+    different levels until you check.
+
+    tg.fmt, not `:g`. A raw float prints 0.0246017 next to 0.027424 and the
+    columns stop lining up at exactly the moment a reader is comparing a stop
+    to an entry — which is the only thing this row is for.
+    """
+    from .. import telegram as tg
     from .. import watch
     e = h.extra
     return (watch.label(SPEC, group) + watch.chart(h)
-            + f"  <code>{e['entry']:g}</code>"
-            f" <i>sl {e['stop']:g} · tp {e['target']:g}"
+            + f"  <i>sl {tg.fmt(e['stop'])} · tp {tg.fmt(e['target'])}"
             f" · {e['riskPct']:.2f}% · {e['code']}</i>")
 
 

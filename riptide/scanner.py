@@ -27,7 +27,7 @@ from .engine import (Early, Sweep, atr_series, grade_of, run_engine,
                      sweep_worth)
 from .exchange import fetch_candles, list_symbols
 from .storage import (already_sent, early_already_sent, early_sig, first_run,
-                      meta_get, meta_set, record, record_early,
+                      meta_get, meta_set, paused_for, record, record_early,
                       record_sweep, sweep_already_sent, sweep_sig, sig_id)
 
 async def scan_symbol(sess, sem, symbol, trend_on=None, interval=""):
@@ -533,7 +533,7 @@ async def cycle(sess, db, symbols):
     bootstrap = first_run(db) and not ALERT_ON_FIRST_RUN
     # /pause records everything as usual but sends nothing, so resuming does
     # not replay the backlog.
-    paused = meta_get(db, "alerts_paused", "0") == "1"
+    paused = paused_for(db, "riptide")
     mute = bootstrap or paused
     # Freshness is counted in BARS, and a bar is a different length on each
     # timeframe, so it is read off the signal rather than off a single global.

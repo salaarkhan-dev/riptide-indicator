@@ -324,8 +324,13 @@ drawFill(Cand c) =>
       : label.style_label_up, color = color.new(cc, 35),
       textcolor = color.white, size = size.normal,
       tooltip = "the setup candle\n" + info))
+    // "▲ LONG 3.5R" WAS A CHART THAT LIED. `rr` is the configured reward
+    // ratio, drawn at the moment of FILL — it is a plan, not a result — and it
+    // sat in a green label over trades that stopped out on the next bar. The
+    // ✓ / ✕ from drawResult is the outcome and it is the only thing here that
+    // may carry a number. This label now says what it is: an entry, and where.
     lbBuf.push(label.new(bar_index, c.focus,
-      (c.short ? "▼ SHORT " : "▲ LONG ") + str.tostring(rr, "#.#") + "R",
+      (c.short ? "▼ SHORT " : "▲ LONG ") + str.tostring(c.focus, format.mintick),
       xloc = xloc.bar_index, style = label.style_label_left,
       color = color.new(cc, 20), textcolor = color.white, size = size.normal,
       tooltip = info))
@@ -335,7 +340,8 @@ drawFill(Cand c) =>
 // the won/lost counts on the panel can be audited against the chart rather than
 // trusted. One label per filled setup.
 drawResult(Cand c, bool won) =>
-    lbBuf.push(label.new(bar_index, won ? c.target : c.stop, won ? "✓" : "✕",
+    lbBuf.push(label.new(bar_index, won ? c.target : c.stop,
+      won ? "✓ +" + str.tostring(rr, "#.#") + "R" : "✕ −1R",
       xloc = xloc.bar_index, style = label.style_label_left,
       color = color.new(won ? colLong : colShort, 45),
       textcolor = color.white, size = size.normal,
@@ -1087,10 +1093,21 @@ if barstate.islast
       + (nBackup > 0 ? "  (" + str.tostring(nBackup) + " backup)" : ""),
       color.gray,
       "of those, the ones where price came back and touched the limit at the Focus line. A BACKUP count means that many of them filled at an order block or fair-value gap instead, after the Focus limit was missed — a worse entry, a bigger risk, and unmeasured. Hover the ▲▼ to see which.")
+    // `trades` HOLDS GHOSTS TOO, and counting them here was a real bug: the
+    // panel read "28 / 58 · 1 open" while `entered` read 86, because the one
+    // open trade was a GHOST — a setup the bias gate cancelled, already
+    // reported on its own row. 28 + 58 + 1 = 87 against 86 entered is the
+    // arithmetic that gave it away, and on the chart it looked like a live
+    // position that had plainly already stopped out.
+    int openReal = 0
+    if trades.size() > 0
+        for i = 0 to trades.size() - 1
+            if not trades.get(i).ghost
+                openReal := openReal + 1
     row(5, "won / lost", str.tostring(nWon) + " / " + str.tostring(nLost)
-      + (trades.size() > 0 ? " · " + str.tostring(trades.size()) + " open" : ""),
+      + (openReal > 0 ? " · " + str.tostring(openReal) + " open" : ""),
       nWon * rr > nLost ? colLong : nLost > nWon * rr ? colShort : color.gray,
-      "entered trades walked forward to their target or their stop, stop first when one bar spans both.")
+      "entered trades walked forward to their target or their stop, stop first when one bar spans both. `open` counts REAL trades only — a ghost still running is on the gate-cost row, not here, and won + lost + open always equals `entered`.")
     row(6, "net R", (netR >= 0 ? "+" : "") + str.tostring(netR, "#.#"),
       netR > 0 ? colLong : netR < 0 ? colShort : color.gray,
       "won x " + str.tostring(rr, "#.#") + " minus lost, GROSS — no fees and no slippage, and both matter at this size. IN-SAMPLE AND NOT EVIDENCE: whatever settings are loaded, on the bars on screen, no pre-registration, no control. A filter picked by watching a number like this scored +0.089 in sample and -0.082 out elsewhere in this project. Read it to check the detection looks sane, never to choose settings.")

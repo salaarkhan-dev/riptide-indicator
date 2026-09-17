@@ -53,7 +53,7 @@ HELP = (
     "/trend on|off — filter setups by the higher-timeframe trend\n"
     + "".join(f"/{i.name} on|off|30m — {i.title.lower()} heads-ups "
               f"(not trades)\n" for i in all_indicators()) +
-    "/pause — record setups but stop sending\n"
+    "/pause [riptide|watch] — record setups but stop sending\n"
     "/resume — start sending again\n"
     "/update — check GitHub for a new build now\n"
     "/restart — restart the service\n"
@@ -317,7 +317,8 @@ def status_text(db, state) -> str:
     # while the scanner was correctly running every 15, which looks exactly
     # like a broken scanner and is only a broken status line.
     step = BAR_SECONDS[SCAN_INTERVAL]
-    paused = meta_get(db, "alerts_paused", "0") == "1"
+    pause_v = meta_get(db, "alerts_paused", "0").strip().lower()
+    paused = pause_v != "0"
     seen_n = db.execute("SELECT COUNT(*) FROM seen").fetchone()[0]
     swp_n = db.execute("SELECT COUNT(*) FROM seen_sweeps").fetchone()[0]
     last = state.get("last_cycle", 0)
@@ -394,7 +395,8 @@ def status_text(db, state) -> str:
         f"build      <code>{build_id()}</code>\n"
         f"symbols    {len(state.get('symbols', []))} · {'+'.join(INTERVALS)}"
         f"{f' → {ENTRY_INTERVAL} entries' if ENTRY_INTERVAL else ''}\n"
-        f"alerts     {'PAUSED' if paused else 'on'} · sweeps {sweeps}\n"
+        f"alerts     {('PAUSED ' + pause_v) if paused else 'on'} · "
+        f"sweeps {sweeps}\n"
         f"filter     {poi_line}\n"
         f"trend      {trend_line}\n"
         f"outcomes   {track_line}\n"
@@ -760,9 +762,23 @@ async def handle_command(sess, db, state, text: str) -> None:
         await tg.tg_send(sess, watch_cmd(db, get_indicator(cmd), text))
 
     elif cmd == "pause":
-        meta_set(db, "alerts_paused", "1")
-        await tg.tg_send(sess, "Paused. Setups are still recorded, so /resume "
-                            "will not replay the backlog.")
+        # SCOPED. `/pause` is still everything -- that is what it has always
+        # meant and what the value on disk already says. `/pause riptide`
+        # silences the measured alerts and leaves the watch digests running,
+        # which is what switching a watch on is usually for; `/pause watch` is
+        # the mirror.
+        what = (text.split() + [""])[1].strip().lower()
+        scope = what if what in ("riptide", "watch") else "all"
+        meta_set(db, "alerts_paused", scope)
+        which = ("everything" if scope == "all" else
+                 "Riptide alerts only — the watch digests keep running"
+                 if scope == "riptide" else
+                 "the watch digests only — Riptide alerts keep running")
+        await tg.tg_send(sess, f"Paused: {which}. Setups are still recorded, "
+                               f"so /resume will not replay the backlog.\n\n"
+                               f"<code>/pause riptide</code> · "
+                               f"<code>/pause watch</code> · "
+                               f"<code>/pause</code> for both")
 
     elif cmd == "resume":
         meta_set(db, "alerts_paused", "0")

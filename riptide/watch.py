@@ -350,9 +350,11 @@ async def cycle(sess, db, ind: Indicator, symbols, tfs=None) -> int:
                 continue
             fresh.append(h)
 
-    # /pause is one switch over everything the bot sends. A watch list that
-    # kept talking through a pause would make the switch useless.
-    paused = storage.meta_get(db, "alerts_paused", "0") == "1"
+    # /pause is one switch over everything the bot sends, and a watch list that
+    # kept talking through it would make the switch useless. `/pause riptide`
+    # is the narrower one: silence the measured alerts and leave the watches
+    # running, which is what switching a watch on is usually for.
+    paused = storage.paused_for(db, "watch")
     sent = 0
     if fresh and not paused:
         if await tg.tg_send(sess, digest(ind, fresh, tfs,

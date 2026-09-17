@@ -310,6 +310,16 @@ def test_run_is_deterministic_and_self_consistent():
        "no trade fills on or before its arming bar")
     ok(all(t.exitBar >= t.fillBar for t in a.trades),
        "no trade exits before it fills")
+    # THE IDENTITY THE PINE PANEL BROKE. It counted ghosts among its open
+    # trades and printed "28 / 58 · 1 open" beside "86 entered", which is 87.
+    # A ghost is not a position; it is a cancelled setup being walked forward
+    # to find out whether the gate was right.
+    ok(a.nFilled == len(a.real) + a.nOpenReal,
+       f"entered == won + lost + open, REAL only: {a.nFilled} == "
+       f"{len(a.real)} + {a.nOpenReal}")
+    ok(len(a.ghosts) + a.nOpenGhost == sum(
+        1 for t in a.trades if t.ghost) + a.nOpenGhost,
+       "and the ghosts account for themselves separately")
     print(f"       {a.nLoc} setups, {a.nArmed} armed, {a.nFilled} filled, "
           f"{len(a.real)} closed, net {a.netR:+.1f}R")
 

@@ -203,6 +203,13 @@ class Result:
     nEndAdx: int = 0
     # HTF disagreement, when htfMult is on
     nHtf: int = 0
+    # Still running when the data ended, split by kind. THE SPLIT IS THE POINT:
+    # the Pine panel counted ghosts as live trades and read "28 / 58 · 1 open"
+    # against 86 entered, which is 87. Keeping the two apart here makes the
+    # identity nFilled == won + lost + nOpenReal testable, which is what would
+    # have caught it.
+    nOpenReal: int = 0
+    nOpenGhost: int = 0
     trades: list = field(default_factory=list)
     # THE MOMENT A LIMIT ORDER WOULD GO ON. One entry per setup that armed:
     # (bar, symbol, short, entry, stop, target, code, state). This is the only
@@ -918,6 +925,8 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     code=("HAM" if isGreen else "HGM") if famHam
                     else ("IH" if isGreen else "SS")))
 
+    res.nOpenReal = sum(1 for t in live if not t.ghost)
+    res.nOpenGhost = sum(1 for t in live if t.ghost)
     # Trades still open at the end of the data have not had their window.
     # Counting them as anything would score an unfinished trade at whatever
     # price the fetch happened to stop on, which is noise dressed as an

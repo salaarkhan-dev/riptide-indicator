@@ -81,6 +81,30 @@ def meta_set(db, k: str, v) -> None:
     db.commit()
 
 
+# ── the pause, and why it has a SCOPE ───────────────────────────────────────
+# `/pause` used to be one switch over everything, and a watch list that kept
+# talking through a pause would have made it useless. That is still the
+# default. But the bot now sends two unrelated streams -- the measured Riptide
+# alerts and the watch digests -- and the reason to silence one is almost never
+# a reason to silence the other: a watch is switched on precisely to be
+# observed for a while, which is the moment its owner most wants the rest quiet.
+#
+# ONE KEY, THREE VALUES, AND THE OLD ONE STILL MEANS WHAT IT MEANT. "1" is the
+# value already on disk in every running install; it has to keep meaning "all"
+# or the first update after this change un-pauses somebody silently.
+PAUSE_ALL = ("1", "all")
+
+
+def paused_for(db, who: str) -> bool:
+    """Is `who` ("riptide" or "watch") currently muted?
+
+    Reads one key so the two callers cannot disagree about what is paused,
+    which two keys would eventually let them do.
+    """
+    v = meta_get(db, "alerts_paused", "0").strip().lower()
+    return v in PAUSE_ALL or v == who
+
+
 def sweep_sig(s: Sweep) -> str:
     return (f"SWP|{s.symbol}|{tf_of(s)}|{s.anchor_time}|{s.sweep_time}|"
             f"{'H' if s.is_high else 'L'}")
