@@ -22,24 +22,49 @@ pullback, target 3R.
 
 **Not an edge.** See the table above and the measurement file behind it.
 
-**Three things ARE established**, and they are worth more than the verdict:
+**The candle adds nothing.** A six-arm ablation
+([`UNDERTOW_PIN_VALUE.md`](measurements/UNDERTOW_PIN_VALUE.md)) removed one gate
+at a time over 12,000 bars x 23 symbols. Full rule minus location-only is
+**−0.073, −0.049, +0.092 R** on 15m / 30m / 1h — inside ±0.15 everywhere, not
+close to significance, and not even a consistent sign. On two of three, *no
+candle test at all* scored higher with twice the trades. The 16-variant
+taxonomy, the wick-edge doji margin and the whole of input group 2 are
+describing a filter that does not filter.
 
-1. **The bias gate earns its place.** The ghost column walks every setup the
-   gate cancelled forward anyway. Those setups are worth −0.61, −0.40 and
-   −0.49 R each on the three timeframes — far worse than the population — so
-   the gate saved 5.5, 19.8 and 21.3 R. Letting a triggered setup survive a
-   bias flip would have lost money everywhere. I argued before the run that the
-   gate was probably harmful; it is not.
+The honest version of this strategy is one sentence: **take the pullback
+extreme while the structure bias is running.**
+
+**Three further things are established**, and they are worth more than the
+verdict:
+
+1. **The bias gate does two jobs and probably only one works.** The ghost
+   column — setups the gate cancelled, walked forward anyway — says cancelling
+   an *already-armed* setup saves 0.40 to 0.61 R each, on all three
+   timeframes. But removing the Ending rules entirely (ablation arm A5) is
+   *better* than keeping them on 15m, identical on 30m and worse on 1h. Both
+   can be true if the cancellation earns its place and the admission block does
+   not. That is a hypothesis, nothing here varied the two independently, and it
+   is Undertow's most concrete open question.
 2. **Selecting on a chart is worth about −0.31 R per trade.** Best-of-48 on
    train, then holdout: −0.377, −0.277, −0.286. Three timeframes, same answer.
 3. **A pivot measured in bars really is a different rule on every timeframe,
    and `swingSrc="range"` fixes it** — a swing as k × the last 24 hours' range
    survives a 4:1 aggregation at ×0.89 against ×0.30 for the bar pivot. It buys
    consistency, not expectancy.
+4. **`maxLive = 4` is not a neutral setting.** It exists for TradingView's
+   drawing budget, and on these populations it refuses more setups than it
+   trades — 683 against 811 fills on 15m at the baseline, and seven to nine per
+   fill once a gate is removed. It voided the first ablation run. The chart's
+   "at cap" row is the same effect, and any number read off the panel is biased
+   by it.
 
-**What the study cannot say.** With 45–153 trades per panel the minimum
-detectable effect is about ±0.5 R. It refutes the +0.27 to +0.45 R the single
-charts showed. It does not exclude a small edge.
+**What the studies cannot say.** The parameter study had 45–153 trades per
+panel, an MDE of about ±0.5 R. The ablation is far better powered — 700 to
+2,400 trades per arm, and 11,000–12,000 on the widest — and there the best
+estimate of the underlying bet lands at **−0.04 to −0.07 R ± 0.03** after 7bp
+of fees. That is what a zero-edge entry with costs on looks like. Neither study
+finds a rate anyone could trade against in either direction; what they exclude
+is the +0.27 to +0.45 R the single charts appeared to show.
 
 The two nearest priors in this repository both came back negative and both
 pointed here:
@@ -71,9 +96,10 @@ SPEC.md                        the design; the Pine is built against it
 pine/riptide-undertow.pine     v1 — draws setups and scores them on screen
 port/undertow.py               the Python transcription; three swing sources
 port/swings.py                 bar pivot · k x ATR · k x a fixed span of time
-prereg/                        written before each run
+prereg/                        written before each run — three of them
 studies/undertow_sweep.py      the parameter study
-measurements/                  what it concluded
+studies/undertow_ablation.py   the six-arm ablation
+measurements/                  what they concluded
 tests/test_undertow_port.py    57 assertions; the parity chain and the orderings
 ```
 
