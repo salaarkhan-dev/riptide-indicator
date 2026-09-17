@@ -176,6 +176,20 @@ class Indicator:
     # block each row falls in. Groups appear in first-seen sorted order.
     classify: Callable[..., tuple]
 
+    # WHETHER THE CAVEAT IS PRINTED ABOVE EVERY DIGEST, or only in /name.
+    #
+    # It is mandatory to WRITE one either way -- register() refuses an
+    # indicator without it -- because the point is that somebody had to state
+    # what the evidence is before the thing could ship. What this controls is
+    # only whether it is repeated on every message.
+    #
+    # Default True, which is right when a digest might be read by someone who
+    # did not commission the studies. Set False when the only reader is the
+    # person who did: three lines of disclaimer above four lines of levels is
+    # noise, and a caveat that gets scrolled past is worse than one that lives
+    # one command away, because it looks like diligence while doing nothing.
+    caveat_in_digest: bool = True
+
     min_bars: int = 60               # under this the symbol has no answer
     recent_bars: int = 6             # how far back a cycle looks for a hit
     fresh_bars: int = 2              # older than this is recorded, not sent

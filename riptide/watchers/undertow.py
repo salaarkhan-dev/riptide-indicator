@@ -677,9 +677,13 @@ SPEC = register(Indicator(
     # the whole value of this alert is that it lands at the moment the order
     # goes on. A caveat that explains the risk but not the event is only half
     # a caveat.
-    caveat=("both lines closed — set the limit now.\n"
-            "not a trade · 5 studies found no edge\n"
-            "and it lost to a random entry."),
+    caveat=("both lines closed — set the limit now. Not a trade: five "
+            "pre-registered studies found no edge and it lost to a random "
+            "entry of the same shape."),
+    # OFF THE DIGEST, ON /undertow. The only reader here is the person who
+    # commissioned all five studies and knows the answers; repeating them above
+    # every four-line alert is noise, and noise is how a caveat stops working.
+    caveat_in_digest=False,
     detect=detect,
     row=row,
     classify=classify,

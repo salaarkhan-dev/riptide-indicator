@@ -246,11 +246,13 @@ def digest(ind: Indicator, hits: list, tfs, when: int) -> str:
     head = (f"{ind.glyph} <b>{ind.title}</b> — {len(hits)} "
             f"{ind.unit}{'s' if len(hits) != 1 else ''} · {label_tf}"
             + (f" · {clock}" if clock else ""))
-    sub = f"<i>{ind.caveat}</i>"
+    # See Indicator.caveat_in_digest. The caveat always exists and /name
+    # always prints it; this is only whether every message repeats it.
+    sub = f"<i>{ind.caveat}</i>" if ind.caveat_in_digest else ""
     # The same `when` row every other alert ends on, so a digest is not the one
     # message in the bot with its own footer shape.
     foot = "\n" + tg.row("when", f"<i>{tg.signal_age(when)}</i>")
-    parts = [head, sub]
+    parts = [head, sub] if sub else [head]
     used = len(head) + len(sub) + len(foot) + 40    # 40: the "+N more" line
     shown, last_group = 0, None
     for (_sort, group), h in tagged:
