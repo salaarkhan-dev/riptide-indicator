@@ -50,7 +50,14 @@ from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
 from research.data import SYMBOLS                                # noqa: E402
 
 HORIZON = 200
-BASE = U.P(rr=3.0, feeFrac=FEE, maxLive=64)
+# AS PUBLISHED, PINNED. Every setting this study's page was run under is
+# named here even where it matched P's default at the time, because a default
+# that later moves silently re-points a published study: `swingSrc` went from
+# the bar pivot to "price move" after this ran, so without these lines the
+# script would print different numbers under the same page's name. A study that
+# cannot reproduce its own measurement is not a record of anything.
+BASE = U.P(rr=3.0, feeFrac=FEE, maxLive=64,
+           swingSrc=U.SW_BAR, msLen=15, msShortLen=3)
 
 EXITS = ["E0 fixed 2R", "E1 fixed 3R", "E2 fixed 5R", "E3 fixed 7R",
          "E4 BE then run", "E5 liquidity", "E6 ATR trail 2.0",

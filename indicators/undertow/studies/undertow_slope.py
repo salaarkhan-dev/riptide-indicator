@@ -41,7 +41,12 @@ from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
 from research.data import SYMBOLS                                # noqa: E402
 from riptide.config import BAR_SECONDS                           # noqa: E402
 
-BASE = U.P(maxLive=64, feeFrac=FEE)
+# AS PUBLISHED, PINNED — see test_studies_pin_their_settings.py. `rr` is the
+# one that would bite here: every R on the page is quoted at 3.5, and A1 and A2
+# read no swing setting at all (Slope is not the structure engine), so the swing
+# pins matter only to A0, which names its own.
+BASE = U.P(maxLive=64, feeFrac=FEE, rr=3.5,
+           swingSrc=U.SW_RANGE, msLen=6, msShortLen=2)
 # Retrace-only Ending: the only rule that exists for a slope.
 MATCH = dict(endMinor=U.E_OFF, endSweep=False, endStale=False)
 
@@ -177,7 +182,10 @@ def verdict(aid, a, base, ratio):
 def main():
     argv = [a for a in sys.argv[1:] if a in TFS]
     tfs = argv or list(TFS)
-    for tf in tfs:
+    # THE CALIBRATION IS ALWAYS ON Min15, whatever is being scored, because the
+    # prereg fixed it there. So Min15 is loaded even when it is not scored --
+    # otherwise `undertow_slope.py Min60` dies in calibrate() on a KeyError.
+    for tf in sorted(set(tfs) | {"Min15"}):
         LOADED[tf] = load(tf)
         if not LOADED[tf]:
             print(f"{tf}: no cached candles. Run undertow_sweep.py --fetch.")

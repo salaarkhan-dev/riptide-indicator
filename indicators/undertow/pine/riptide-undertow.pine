@@ -76,17 +76,17 @@ stAtrLen = input.int(10, "Supertrend ATR", minval = 2, maxval = 100, group = gBi
   tooltip = "Only for 'Supertrend'.")
 stMult = input.float(3.0, "Supertrend mult", minval = 0.5, maxval = 10.0, step = 0.5, group = gBias,
   tooltip = "Only for 'Supertrend'. Higher = wider bands, fewer flips.")
-slopeUnit = input.string("bars", "Slope measured in", group = gBias,
+slopeUnit = input.string("hours", "Slope measured in", group = gBias,
   options = ["bars", "hours"],
-  tooltip = "Only for 'Slope', and it is the same trap the swings fell into. 'bars' measures the fit window in BARS and the threshold in ATR per BAR — both per-bar, so the same setting is a different rule on every chart: 50/0.05 flips the direction 1.2x a day on 15m and 0.5x on 30m. 'hours' restates the identical rule in time — a window of N hours, a threshold in day-ranges per hour — so nothing per-bar is left and 15m and 1h ask the same question. 12.5 hours IS 50 bars on 15m; it is the shipped setting restated, not retuned.")
+  tooltip = "Only for 'Slope', and it is the same trap the swings fell into. 'bars' measures the fit window in BARS and the threshold in ATR per BAR — both per-bar, so the same setting is a different rule on every chart: measured, 50/0.05 flips the direction 1.21 / 0.63 / 0.28 times a day on 15m / 30m / 1h. 'hours' restates the identical rule in time — a window of N hours, a threshold in day-ranges per hour — and flips 1.21 / 1.16 / 1.55. Nothing per-bar is left, so every chart asks the same question. 12.5 hours IS 50 bars on 15m: the shipped setting restated, not retuned.\n\n'hours' IS THE DEFAULT, on that consistency and on nothing else. IT IS NOT A PROMOTION — Slope is not the default bias and did not clear the promotion rule in ../measurements/UNDERTOW_SLOPE_DEFAULT.md. This only decides which Slope you get if you pick Slope.")
 slopeLen = input.int(50, "… bars", minval = 5, maxval = 500, group = gBias,
   tooltip = "Only for 'Slope' with 'bars'. The least-squares fit window.")
 slopeMin = input.float(0.05, "… min ATR/bar", minval = 0.0, maxval = 2.0, step = 0.01, group = gBias,
   tooltip = "Only for 'Slope' with 'bars'. The slope must reach this, in ATR per bar, to change the direction — below it the last direction HOLDS, so a flat patch does not manufacture a trend out of noise. ATR per bar rather than price per bar is what makes one number mean the same thing on any symbol — but not on any timeframe.")
 slopeHours = input.float(12.5, "… hours", minval = 0.5, maxval = 240.0, step = 0.5, group = gBias,
   tooltip = "Only for 'Slope' with 'hours'. The fit window as a span of TIME, however many bars that takes on this chart.")
-slopeMinPerHr = input.float(0.05, "… min day-range/hour", minval = 0.0, maxval = 2.0, step = 0.01, group = gBias,
-  tooltip = "Only for 'Slope' with 'hours'. The fit's rise per HOUR, as a fraction of the last 24 hours' high-to-low, needed to turn the direction. A day's range is the same price whichever chart you open it on — the same unit the 'price move' swings use, and the only one on this panel that is not per-bar.")
+slopeMinPerHr = input.float(0.02, "… min day-range/hour", minval = 0.0, maxval = 2.0, step = 0.01, group = gBias,
+  tooltip = "Only for 'Slope' with 'hours'. The fit's rise per HOUR, as a fraction of the last 24 hours' high-to-low, needed to turn the direction. A day's range is the same price whichever chart you open it on — the same unit the 'price move' swings use, and the only one on this panel that is not per-bar.\n\n0.02 is not a taste. It is the rung a pre-registered ladder picked by matching this rule's FLIP RATE to the 50-bar/0.05-ATR setting it restates: 1.120 flips a day against a target of 1.066, on a quadrant that scored no trades. 0.05 would give 0.412 a day and a 45-hour hold — a different rule under the same name.")
 donLen = input.int(50, "Range bars", minval = 5, maxval = 500, group = gBias,
   tooltip = "Only for 'Range midpoint'. Up when close is above the midpoint of the last N bars' high-low.")
 matureBars = input.int(20, "Mature after bars", minval = 1, maxval = 500, group = gBias,

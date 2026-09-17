@@ -149,17 +149,32 @@ found the largest effect in the project.
 promotion rule was fixed before the run and A2 missed it on bar 3 at two of
 three timeframes.
 
-**`slopeUnit` stays defaulted to `bars`** even though `hours` is the version
-that clears bar 7. This is deliberate and it is worth being explicit, because
-the argument for switching is real: consistency is the *declared* basis for the
-current swing default, bar 7 was pre-registered, and A2 passes it while A1
-fails. The reason I am not switching is that the prereg says the residue is
-"available behind a dropdown, **promoted to nothing**", and quietly moving a
-sub-default *after* seeing that the same arm scored better is the move the
-prereg exists to stop. **If you want `hours` to be the default whenever Slope
-is selected, that is a defensible call on the consistency ground alone and it
-is a one-line change — but it should be your call, not one I make on the back
-of a score.**
+**`slopeUnit` now defaults to `hours`, by an explicit decision after this page
+was first written.** This page originally left it at `bars` and put the call to
+the user, because quietly moving a sub-default *after* seeing that the same arm
+scored better is the move a prereg exists to stop. The call was made and the
+default moved.
+
+**The grounds are bar 7 and nothing else**, and that distinction is the whole
+reason it is recorded here:
+
+* bar 7 was **pre-registered**, and it is the same criterion — consistency
+  across timeframes — that already decides the `price move` swing default. A2
+  passes it at 1.05×; A1 fails it at 1.92×.
+* it is **not a promotion**. Slope is not the default bias and did not clear
+  the promotion rule. `slopeUnit` only decides *which Slope you get if you pick
+  Slope*, and picking Slope is still a decision this repository's measurements
+  do not support.
+* **nobody should read A2's +0.310 into this.** That number did not move the
+  default and could not have; the promotion rule refused it on bar 3 at two of
+  three timeframes and the refusal stands.
+
+**`slopeMinPerHr` moves with it, from 0.05 to 0.02**, and this is not a second
+choice — it is the first one being applied. 0.05 was a placeholder written
+before the calibration ran. 0.02 is the rung the pre-registered ladder picked
+by matching flip rate to the bars setting: 1.120 a day against a target of
+1.066. Shipping `hours` at 0.05 would give 0.412 flips a day and a 45-hour
+hold — a different rule under the same name, and not the one measured above.
 
 **Every quadrant of this dataset is now spent for this question.** Even/older
 and odd/newer went to the bias study; even/newer and odd/older went to this

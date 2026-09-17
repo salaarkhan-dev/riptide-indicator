@@ -128,11 +128,24 @@ class P:
     #              hour over the last 24h high-to-low, the same unit the swing
     #              detector uses, and the only one here that is not per-bar.
     # 12.5 hours is 50 bars on 15m: the shipped setting, restated, not retuned.
-    slopeUnit: str = SL_BARS
+    #
+    # "hours" IS THE DEFAULT, on the consistency ground alone and by an explicit
+    # decision recorded in UNDERTOW_SLOPE_DEFAULT.md. It is NOT a promotion:
+    # Slope is not the default bias and did not clear the promotion rule. This
+    # only decides which Slope you get if you pick Slope. Measured flips per
+    # day across 15m / 30m / 1h: bars 1.21 / 0.63 / 0.28, hours 1.21 / 1.16 /
+    # 1.55. A rule whose activity quarters between two charts is two rules.
+    #
+    # 0.02, not 0.05, and the difference matters. 0.02 is the rung the
+    # pre-registered ladder picked by matching flip rate to the bars setting on
+    # 15m -- 1.120 a day against a target of 1.066. 0.05 was a placeholder
+    # written before that ran and gives 0.412 a day with a 45-hour hold, which
+    # is a different rule wearing the same name.
+    slopeUnit: str = SL_HOURS
     slopeLen: int = 50
     slopeMin: float = 0.05
     slopeHours: float = 12.5
-    slopeMinPerHr: float = 0.05
+    slopeMinPerHr: float = 0.02
     donLen: int = 50
     # For every source EXCEPT the structure engine there is no BOS to count, so
     # "running" cannot mean "has broken structure once". It means the direction

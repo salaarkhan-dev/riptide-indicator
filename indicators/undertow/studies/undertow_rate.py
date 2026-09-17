@@ -41,6 +41,11 @@ STATES = ("both", "running", "immature")
 # The shipped default first -- the row the watcher's RATE tables come from --
 # then two wider settings, so the cost of tightening is visible beside it
 # rather than needing a second run.
+# TRACKS THE CURRENT DEFAULT, deliberately: this file's tables describe what
+# the LIVE WATCHER will actually alert on, so reading P's shipped values is the
+# whole point and pinning them would make it describe a watcher nobody runs.
+# Every other study pins instead — see test_studies_pin_their_settings.py.
+#
 # The bar-pivot lengths only mean anything when swingSrc is the bar pivot.
 # Under the shipped "price move" source msLen is unread, so sweeping it would
 # print the same row three times and invite somebody to read a difference in.

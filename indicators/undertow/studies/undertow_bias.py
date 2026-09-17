@@ -44,17 +44,34 @@ from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
 from research.data import SYMBOLS                                # noqa: E402
 from riptide.config import BAR_SECONDS                           # noqa: E402
 
-BASE = U.P(maxLive=64, feeFrac=FEE)
+# AS PUBLISHED, PINNED. Every setting this study's page was run under is
+# named here even where it matched P's default at the time, because a default
+# that later moves silently re-points a published study: `swingSrc` went from
+# the bar pivot to "price move" after this ran, so without these lines the
+# script would print different numbers under the same page's name. A study that
+# cannot reproduce its own measurement is not a record of anything.
+BASE = U.P(maxLive=64, feeFrac=FEE, rr=3.5,
+           swingSrc=U.SW_BAR, msLen=6, msShortLen=2)
 # Retrace-only Ending: the only rule that exists for every source.
 MATCH = dict(endMinor=U.E_OFF, endSweep=False, endStale=False)
 
 ARMS = [
     ("S0", "structure, as shipped", {}),
     ("S1", "structure — THE BASELINE", MATCH),
-    ("S2", "EMA cross 50/200", {**MATCH, "biasSrc": U.BS_EMA}),
-    ("S3", "Supertrend 10/3.0", {**MATCH, "biasSrc": U.BS_ST}),
-    ("S4", "Slope 50 @ 0.05", {**MATCH, "biasSrc": U.BS_SLOPE}),
-    ("S5", "Range position 50", {**MATCH, "biasSrc": U.BS_DON}),
+    # EVERY ARM PINS ITS OWN PARAMETERS, even where they match P's defaults.
+    # A PUBLISHED STUDY MUST STILL REPRODUCE ITS PUBLISHED PAGE, and leaning on
+    # a default does not survive the default changing -- S4 read `slopeUnit`
+    # from P, so the day it moved to "hours" this script silently stopped
+    # running the arm UNDERTOW_BIAS_SOURCE.md reports and would have printed
+    # different numbers under the same name.
+    ("S2", "EMA cross 50/200", {**MATCH, "biasSrc": U.BS_EMA,
+                                "emaFast": 50, "emaSlow": 200}),
+    ("S3", "Supertrend 10/3.0", {**MATCH, "biasSrc": U.BS_ST,
+                                 "stAtrLen": 10, "stMult": 3.0}),
+    ("S4", "Slope 50 @ 0.05", {**MATCH, "biasSrc": U.BS_SLOPE,
+                               "slopeUnit": U.SL_BARS, "slopeLen": 50,
+                               "slopeMin": 0.05}),
+    ("S5", "Range position 50", {**MATCH, "biasSrc": U.BS_DON, "donLen": 50}),
     ("S6", "structure, range swings", {**MATCH, "swingSrc": U.SW_RANGE,
                                        "swingK": 0.40, "swingKMinor": 0.12}),
 ]
