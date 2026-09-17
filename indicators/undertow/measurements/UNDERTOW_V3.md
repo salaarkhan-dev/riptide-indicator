@@ -77,9 +77,45 @@ this project's paperwork, and the arm list is what caught it: W2 reports 50.2%
 
 **What is not an artifact**: W1 and W3 sit at 66–71% and 57–63%, so inside the
 v2 stack the anchor does shift the mix. And **the v2 stack anchors the priority
-shape only 16–20% of the time** — `pinNewest` at the pullback top systematically
-selects the *opposite* shape, an inverted hammer in a downtrend. v2 was not
-neutral about the rule its author stated; it was the reverse of it.
+shape only 16–20% of the time.** v2 was not neutral about the rule its author
+stated; it was the reverse of it.
+
+### Why v2 pins the second-choice shape, and the attribution I got wrong
+
+The first version of this section said `pinNewest` causes it. One change at a
+time on v1 says otherwise — FRESH6, Min15, bearish armed candidates, where the
+priority shape is the hammer:
+
+| | armed | hammer | inv. hammer |
+|---|---|---|---|
+| v1 as shipped | 2,881 | 48.9% | 51.1% |
+| + `pinNewest` only | 461 | 43.2% | 56.8% |
+| + W→F only | 1,953 | **60.1%** | 39.9% |
+| + both | 279 | **30.1%** | 69.9% |
+| the whole v2 stack | 723 | **18.0%** | 82.0% |
+
+**`pinNewest` alone moves it six points. W→F alone moves it the other way.**
+Only the two together collapse the mix, so the cause is an interaction and not
+a component — which is what naming one without isolating it costs.
+
+The mechanism is visible in how far each confirmation sits from the pin's own
+close, as a fraction of that candle's range:
+
+| | to W — a close above its high | to F — a close below its low |
+|---|---|---|
+| hammer | **0.11** | 0.89 |
+| inverted hammer | 0.44 | 0.56 |
+
+A green hammer closes near its high, so **W is nearly free**. Under W→F it
+almost always gets its W in first and then waits for the F, while an inverted
+hammer is a coin flip on which side arrives first and half are disqualified for
+arriving F-first. That is the +11 points.
+
+`pinNewest` then cancels that selection, because it leaves **one** candidate per
+pullback chosen by recency rather than shape — so W→F never gets to do the
+choosing, and the recency pick leans to the inverted hammer at the pullback
+top. The remaining 30% → 18% is the rest of the stack, mostly `needBos`
+(17.4% without it, so it is not the cause either).
 
 ## The anchor on its own — W2, and the only number worth another look
 
