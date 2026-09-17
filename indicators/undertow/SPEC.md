@@ -51,6 +51,19 @@ fires and any that prove too twitchy can be turned off:
    a level and cannot be, at the cost of far more Ending
 2. a **sweep** of the running extreme that closes back inside
 3. **no new extreme in `D` for `staleBars`** bars
+4. **retraced ≥ `retraceMax`% of the impulse** (default 70). The strongest chop
+   guard here and it needs no extra indicator: the impulse is the leg the engine
+   already tracks from the CHoCH, `msMin` to `msMax`. This exists because the
+   chart showed a LONG still reading "running" after price had given back a
+   3,000-point impulse in full — the major structure was not wrong, it simply
+   had not broken its last swing low yet, and by then it was useless as a trade
+   bias
+5. **ADX(14) below `adxMin`** — **off by default**. ADX was measured as a filter
+   in this project and failed: it improved seeded random entries *more* than
+   real ones (`indicators/ccp/measurements/CCP_CONTEXT_FILTERS.md`). As a
+   *regime* gate rather than an entry filter it is a different question, and an
+   untested one. It is here because it was asked for, switched off because
+   nothing supports it yet
 
 Every one is decidable at a bar close and none of them repaint. They will
 sometimes call Ending while the trend keeps running — that is the right
@@ -210,19 +223,27 @@ candidate  ->  armed  ->  filled
       dropped     expired     (v1 stops here — no outcome is scored)
 ```
 
-- **One live setup per pullback, newest pin wins.** Input flips it to "first
-  wins".
+- **Every qualifying pin becomes its own candidate**, up to `maxLive` (4).
+  There is no newest-wins / first-wins choice, and removing it is the point.
 
-  **This is the biggest single effect in the funnel and it is not a rejection.**
-  On a real chart it took 270 candidates down to 14 armed. A pullback that keeps
-  extending replaces its own candidate every time, and worse: in a long bias the
-  bar that closes below the pin's low — one of the two confirmations — is itself
-  a new pullback low, so if it is also a valid pin it destroys the candidate it
-  was confirming. A candidate survives mainly when the confirming bar happens
-  *not* to be a pin, which is a strange thing to be selecting on. The panel
-  counts supersessions on their own row rather than hiding them inside
-  `candidates`. Whether "first wins" is the better rule is now an open
-  question with evidence behind it.
+  A pullback does not contain one pin, it contains several. Keeping exactly one
+  forced a choice with no good answer, and the chart measured both:
+
+  | | superseded | armed | entries |
+  |---|---|---|---|
+  | newest wins | 256 | 14 | 5 |
+  | first wins | 0 | 28 | 13 |
+
+  Newest-wins also had a perverse edge: in a long bias the bar that closes below
+  the pin's low — one of the two confirmations — is itself a new pullback low,
+  so when it is also a pin it destroys the candidate it was confirming. A
+  candidate survived mainly when the confirming bar happened *not* to be a pin.
+  First-wins locks onto the first pin of the pullback, which is almost never the
+  extreme, so its three levels are the wrong ones.
+
+  Neither is the rule. Any of those pins might be the one that works and v1
+  exists to find out which, so they all run independently. Pins arriving at the
+  cap are turned away and counted on their own panel row.
 - A setup is dropped when: the bias turns Ending · the confirm window runs out ·
   the fill window runs out · the stop is taken before the fill · **the target is
   reached before the fill**.
@@ -346,7 +367,8 @@ backup fill, not the planned one.
 - **Confirm and fill windows** default to 20 bars each; both are guesses and
   the chart will correct them.
 - **`wickEdge` = 0.05** is a guess for the doji margin, same.
-- Whether a **near-miss on location** (pin one or two bars off the pullback
-  extreme) should count. Currently: no — and it rejects roughly 6 in 10 of the
-  colour-correct pins, so it is the strictest gate before supersession.
-- **Newest wins vs first wins**, given the supersession effect above.
+- **`locTol`**, the location tolerance, is 0 — the pin must BE the pullback
+  extreme, which rejects roughly 6 in 10 colour-correct pins. Raising it is the
+  loosest single change available here.
+- Whether `retraceMax` 70 is the right depth, and whether ADX earns its place
+  at all.

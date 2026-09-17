@@ -35,6 +35,11 @@ DECL = re.compile(
     r"([A-Za-z_][A-Za-z0-9_]*)\s*=")
 FUNC = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*=>")
 METH = re.compile(r"^method\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+# A Pine v6 user-defined type. Its body is a block of indented FIELD
+# declarations — `float focus = na` — which are neither continuation lines nor
+# top-level variables. Both of those rules fired on the first UDT written in
+# this project, so the block is skipped whole.
+TYPE = re.compile(r"^type\s+([A-Za-z_][A-Za-z0-9_]*)\s*$")
 ASSIGN = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:=")
 
 # A TOP-LEVEL variable declaration: at column 0, so not inside a function or an
@@ -94,8 +99,36 @@ def outer(s: str) -> str:
     return "".join(out)
 
 
+def type_body(lines: list[str]) -> set[int]:
+    """Line numbers inside a `type` block, fields included.
+
+    A UDT's fields look like declarations at indent 4 and like continuation
+    lines to the indent rule, and they are neither. Returning the set once is
+    simpler than teaching both rules about types separately, and it means a new
+    rule cannot rediscover the same false positive.
+    """
+    out: set[int] = set()
+    inside = False
+    for i, ln in enumerate(lines):
+        c = code_of(ln)
+        if TYPE.match(c):
+            inside = True
+            out.add(i)
+            continue
+        if inside:
+            if not c.strip():
+                out.add(i)
+                continue
+            if c[0].isspace():
+                out.add(i)
+                continue
+            inside = False
+    return out
+
+
 def check(path: str) -> list[str]:
     lines = open(path).read().splitlines()
+    in_type = type_body(lines)
     found: list[str] = []
 
     def bad(i: int, msg: str):
@@ -105,6 +138,8 @@ def check(path: str) -> list[str]:
     declared: dict[str, int] = {}
     topvar: dict[str, int] = {}
     for i, ln in enumerate(lines):
+        if i in in_type:
+            continue
         c = code_of(ln)
         m = FUNC.match(c) or METH.match(c)
         if m:
@@ -119,6 +154,8 @@ def check(path: str) -> list[str]:
 
     depth = 0
     for i, ln in enumerate(lines):
+        if i in in_type:
+            continue
         c = code_of(ln)
         if not c.strip():
             continue
