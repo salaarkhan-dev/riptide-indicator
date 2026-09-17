@@ -47,10 +47,36 @@ SYMBOLS_FRESH = (
 ).split()
 
 
+# THE SECOND FRESH SET, ranks 46-90 under the identical rule, frozen the same
+# day. It exists because UNDERTOW_HTF.md has now been read on SYMBOLS_FRESH:
+# the numbers there are known, so that set is no longer untouched for a new
+# question. Fetching another 45 costs ten minutes and 594 qualify, which is a
+# better answer than arguing about how much contamination a known baseline is.
+#
+# ONE NAME LOOKS WRONG AND IS NOT. `4STOCK_USDT` and `SPX_USDT` are MEMECOINS
+# named after equities -- the venue tags them `mc-trade-zone-MEME` and they
+# trade 24/7. The genuinely tokenised stocks carry `mc-trade-zone-tradfi`, as
+# TESLA_USDT does, and rule 3 excludes those. Do not "fix" this by name.
+SYMBOLS_FRESH2 = (
+    "1000BONK_USDT BTW_USDT IOST_USDT BRETT_USDT BATON_USDT PYTH_USDT "
+    "GENIUS_USDT LDO_USDT COTI_USDT SKYAI_USDT UAI_USDT KAS_USDT JUP_USDT "
+    "HEI_USDT EGLD_USDT SPX_USDT SAGA_USDT POL_USDT PENDLE_USDT ALGO_USDT "
+    "ATOM_USDT LONGXIA_USDT RENDER_USDT ORDI_USDT EIGEN_USDT GALA_USDT "
+    "VIRTUAL_USDT ZRO_USDT PI_USDT CFX_USDT FLOKI_USDT LAB_USDT RIVER_USDT "
+    "JTO_USDT PIEVERSE_USDT GRAM_USDT REZ_USDT 4_USDT TRX_USDT SAND_USDT "
+    "BSV_USDT 4STOCK_USDT NIULAI_USDT AERO_USDT KITE_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
-    both = sorted(set(SYMBOLS) & set(SYMBOLS_FRESH))
-    if both:
-        raise AssertionError(f"not disjoint from research.data.SYMBOLS: {both}")
+    sets = {"SYMBOLS": set(SYMBOLS), "SYMBOLS_FRESH": set(SYMBOLS_FRESH),
+            "SYMBOLS_FRESH2": set(SYMBOLS_FRESH2)}
+    names = sorted(sets)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            both = sorted(sets[a] & sets[b])
+            if both:
+                raise AssertionError(f"{a} and {b} overlap: {both}")
     return True

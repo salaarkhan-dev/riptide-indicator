@@ -349,6 +349,13 @@ def main():
               f"{len(TFS)} timeframes into {CACHE.relative_to(ROOT)}/")
         asyncio.run(_fetch_all(SYMBOLS_FRESH))
         argv = [a for a in argv if a != "--fetch-fresh"]
+    if "--fetch-fresh2" in argv:
+        from research.symbols_fresh import SYMBOLS_FRESH2, assert_disjoint
+        assert_disjoint()
+        print(f"fetching {BARS} bars x {len(SYMBOLS_FRESH2)} FRESH-2 symbols x "
+              f"{len(TFS)} timeframes into {CACHE.relative_to(ROOT)}/")
+        asyncio.run(_fetch_all(SYMBOLS_FRESH2))
+        argv = [a for a in argv if a != "--fetch-fresh2"]
     tfs = [a for a in argv if a in TFS] or list(TFS)
 
     for tf in tfs:

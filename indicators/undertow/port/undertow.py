@@ -81,6 +81,19 @@ BS_EMA = "EMA cross"
 BS_ST = "Supertrend"
 BS_SLOPE = "Slope"
 BS_DON = "Range midpoint"
+# TWO TIMEFRAMES, EMA 20/50 ON EACH, AND TRADE ONLY WHEN THEY AGREE. Supplied
+# as a Pine script ("MTF Market Structure Bias"): bias from the slower
+# timeframe, structure from the faster, FULL BULLISH / FULL BEARISH / MIXED,
+# and MIXED means stand aside. It is NOT any of the four above:
+#   * S2 in UNDERTOW_BIAS_SOURCE.md was EMA 50/200 on ONE timeframe, and that
+#     prereg said in as many words that "EMA 20/50 might do better" is a
+#     different prereg. This is it.
+#   * the HTF gate in UNDERTOW_HTF.md ran the STRUCTURE engine one timeframe
+#     up. That page's own closing line says an HTF direction "from something
+#     else entirely" is a different question. This is that too.
+# It is the first source here with a THIRD state. The others are always long or
+# short; this one abstains, which is why `mixed` needed a channel of its own.
+BS_MTF = "MTF EMA align"
 # `swingSrc` — how a swing is DEFINED. Compared by value on both sides.
 SW_BAR = "bar pivot"
 SW_RANGE = "price move"
@@ -152,6 +165,15 @@ class P:
     slopeHours: float = 12.5
     slopeMinPerHr: float = 0.02
     donLen: int = 50
+    # `BS_MTF`. The EMA pair is run on the BASE bars and again on bars
+    # aggregated `mtfMult` times, and a direction is only taken when the two
+    # agree. mtfMult 2 on a 15m chart is exactly the 15m / 30m pairing the
+    # script was written with; expressing it as a ratio rather than two fixed
+    # timeframe strings is what lets the same rule be run on 30m and 1h at all,
+    # since a 15m series cannot be built from 1h bars.
+    mtfFast: int = 20
+    mtfSlow: int = 50
+    mtfMult: int = 2
     # For every source EXCEPT the structure engine there is no BOS to count, so
     # "running" cannot mean "has broken structure once". It means the direction
     # has held this many bars since it last flipped. Structure ignores it.
@@ -317,6 +339,7 @@ class Result:
     nEndStale: int = 0
     nEndRetr: int = 0
     nEndAdx: int = 0
+    nEndMixed: int = 0
     # HTF disagreement, when htfMult is on
     nHtf: int = 0
     # Still running when the data ended, split by kind. THE SPLIT IS THE POINT:
@@ -534,6 +557,51 @@ def dir_slope(cs, p):
     return out
 
 
+def dir_mtf_ema(cs, p):
+    """Two timeframes, EMA `mtfFast`/`mtfSlow` on each, aligned or stand aside.
+
+    Returns (dirs, mixed): the direction to take, and a per-bar flag saying the
+    two timeframes disagree and NOTHING should be taken. Every other source
+    here is always long or short; this is the first that abstains.
+
+    NO LOOK-AHEAD, and it is the one place this differs from the Pine it came
+    from. `request.security(sym, "30", ta.ema(close, 20))` returns the value of
+    the FORMING higher-timeframe bar on the live bar, so the table flips
+    intrabar and the historical chart is cleaner than live trading would be.
+    Here the slower EMA is read from `aggregate`, whose verdict is written onto
+    base bars only from the bar AFTER the one that closed it -- the same rule
+    `htf_dir` follows. A study of the repainting version would measure the
+    repaint.
+    """
+    n = len(cs)
+    fast = _ema([c.c for c in cs], p.mtfFast)
+    slow = _ema([c.c for c in cs], p.mtfSlow)
+    base = [1 if fast[i] > slow[i] else -1 for i in range(n)]
+
+    mult = max(1, p.mtfMult)
+    hb, closeX = aggregate(cs, mult) if mult > 1 else ([], [])
+    if not hb:
+        # Nothing to aggregate: the pair degenerates to one timeframe, which is
+        # a real answer and not an error. Nothing is mixed, so nothing abstains.
+        return base, [False] * n
+    hf = _ema([c.c for c in hb], p.mtfFast)
+    hs = _ema([c.c for c in hb], p.mtfSlow)
+    hi = [1 if hf[j] > hs[j] else -1 for j in range(len(hb))]
+
+    slow_d = [0] * n
+    for j, ci in enumerate(closeX):
+        lo = ci + 1
+        end = closeX[j + 1] if j + 1 < len(closeX) else n - 1
+        for i in range(lo, min(end, n - 1) + 1):
+            slow_d[i] = hi[j]
+    dirs, mixed = [], []
+    for i in range(n):
+        agree = slow_d[i] != 0 and slow_d[i] == base[i]
+        dirs.append(base[i])
+        mixed.append(not agree)
+    return dirs, mixed
+
+
 def dir_donchian(cs, p):
     """Where price sits in the last `donLen` bars' range: above the midpoint is
     an uptrend. No pivots, no state, nothing to flap."""
@@ -569,7 +637,7 @@ def _roll_min(v, L):
 
 
 DIRS = {BS_EMA: dir_ema, BS_ST: dir_supertrend, BS_SLOPE: dir_slope,
-        BS_DON: dir_donchian}
+        BS_DON: dir_donchian, BS_MTF: dir_mtf_ema}
 
 
 def alt_structure(cs, p):
@@ -594,6 +662,9 @@ def alt_structure(cs, p):
                  would make the comparison look fair while not being.
     """
     d = DIRS[p.biasSrc](cs, p)
+    # A source may return a bare direction list, or (dirs, mixed) when it has a
+    # stand-aside state. Only BS_MTF has one so far.
+    d, mixed = d if isinstance(d, tuple) else (d, [False] * len(cs))
     n = len(cs)
     out = dict(os=[], choch=[], bosUp=[], bosDn=[], sweepUp=[], sweepDn=[],
                msMax=[], msMin=[], msMaxX=[], msMinX=[], sOs=[],
@@ -627,6 +698,7 @@ def alt_structure(cs, p):
         out["msMin"].append(mn)
         out["msMaxX"].append(mxX)
         out["msMinX"].append(mnX)
+    out["mixed"] = mixed
     return out, atr_series(cs, 14)
 
 
@@ -887,6 +959,7 @@ def bias(cs, st, p: P):
     in `st["endWhy"]` so a study can attribute a cancellation."""
     n = len(cs)
     adx = adx_series(cs) if p.adxMin > 0 else [0.0] * n
+    mixedSeries = st.get("mixed") or [False] * n
     biasSeen = False
     bosN = 0
     ending = False
@@ -920,6 +993,12 @@ def bias(cs, st, p: P):
                         else (cs[i].c - msMin) / msLeg)
         endD = p.retraceMax > 0 and retraced >= p.retraceMax / 100.0
         endE = p.adxMin > 0 and adx[i] < p.adxMin
+        # THE STAND-ASIDE STATE. Only BS_MTF sets it: the two timeframes
+        # disagree, so there is no direction to trade. Unlike the five rules
+        # above it is not latched -- it goes away the moment they agree again,
+        # which is what "MIXED" means on the chart it came from. Latching it
+        # would turn one bar of disagreement into a permanent cancellation.
+        endF = mixedSeries[i]
 
         if biasSeen and (endA or endB or endC or endD or endE):
             if not ending:
@@ -928,9 +1007,10 @@ def bias(cs, st, p: P):
             ending = True
 
         dirs.append(biasDir)
-        ok.append(biasSeen and not ending)
-        whys.append(endWhy)
+        ok.append(biasSeen and not ending and not endF)
+        whys.append("mixed" if (endF and not ending) else endWhy)
         states.append("none" if not biasSeen else "ending" if ending
+                      else "mixed" if endF
                       else "immature" if bosN == 0 else "running")
     st["endWhy"] = whys
     st["biasState"] = states
@@ -1102,6 +1182,8 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                         res.nEndRetr += 1
                     elif w == "adx":
                         res.nEndAdx += 1
+                    elif w == "mixed":
+                        res.nEndMixed += 1
                     cd.ghost = True
                 else:
                     gone = True

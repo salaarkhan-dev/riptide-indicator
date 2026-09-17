@@ -54,8 +54,14 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # test_htf_hours_is_the_same_gate_in_a_consistent_unit), and undertow_bias
 # Min15 and undertow_slope Min60 were re-run and reproduced their pages to the
 # digit before this line changed.
-DEFAULTS_FINGERPRINT = "8dbb2c7f777fa5cd"
-DEFAULTS_COUNT = 53
+#
+# 2026-09-17: bumped again, for `mtfFast`/`mtfSlow`/`mtfMult`. That change also
+# touched SHARED code -- bias() gained a stand-aside channel for BS_MTF -- so
+# the re-run mattered more than the field count did. undertow_bias Min15 (all
+# seven arms) and undertow_htf Min15 (all five arms plus its random gate) both
+# reproduced to the digit first.
+DEFAULTS_FINGERPRINT = "614dae7aa501fa9a"
+DEFAULTS_COUNT = 56
 
 good = []
 
