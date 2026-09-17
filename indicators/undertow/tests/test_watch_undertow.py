@@ -208,14 +208,20 @@ def test_ships_off():
                         ("it was measured", "no edge"),
                         ("it lost to a control", "random")):
         ok(word in c, f"the caveat still says {claim}")
-    ok(all(len(l) <= 40 for l in W.SPEC.caveat.split("\n")),
-       "and every line of it fits a phone")
+    # The width rule applies to what the DIGEST shows. Undertow's caveat is
+    # off the digest and lives in /undertow, where it is prose and wraps
+    # wherever Telegram likes.
+    ok(W.SPEC.caveat_in_digest is False,
+       "undertow's caveat is in /undertow, not above every message")
+    ok(all(len(l) <= 40 for l in W.SPEC.caveat.split("\n"))
+       or not W.SPEC.caveat_in_digest,
+       "a caveat that IS shown in a digest has to fit a phone")
     # THE STAGE MUST BE IN THE MESSAGE. Without it there is no way to tell
     # from a digest whether it fired at the pin, at the confirmations or at
     # the fill -- and landing at the moment the order goes on is the entire
     # value of this alert.
     ok("limit" in W.SPEC.caveat.lower(),
-       "the armed caveat says the limit goes on NOW")
+       "the caveat still says the limit goes on NOW")
     ok(len([i for i in __import__("riptide.watchers", fromlist=["x"])
             .all_indicators() if i.name.startswith("ut")
             or i.name == "undertow"]) == 1,
