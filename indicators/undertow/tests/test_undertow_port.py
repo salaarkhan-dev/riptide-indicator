@@ -362,7 +362,11 @@ def test_ghosts_do_not_touch_the_real_numbers():
 
 def test_fees_only_ever_reduce_r():
     cs = walk(3000, seed=41, drift=0.0004)
-    free = U.run(cs, U.P(), "T")
+    # feeFrac IS NOW 0.0007 BY DEFAULT, so the free arm has to say so
+    # explicitly. Reading the default here is what the test used to do, and it
+    # silently became a comparison of 7bp against 7bp -- which is the same
+    # class of failure test_studies_pin_their_settings.py exists to catch.
+    free = U.run(cs, U.P(feeFrac=0.0), "T")
     paid = U.run(cs, U.P(feeFrac=0.0007), "T")
     ok(len(free.trades) == len(paid.trades),
        "a fee changes no decision, only the score")

@@ -30,7 +30,9 @@ ten setups to take beats the machine taking all of them. That needs a
 down — and `riptide/watchers/undertow.py` is the instrument for building one.
 **19 alerts a day** across 23 symbols on all three timeframes.
 
-[`SPEC.md`](SPEC.md) is the design.
+[`SPEC.md`](SPEC.md) is the design. **[`SETTINGS.md`](SETTINGS.md) is where
+every one of the 65 settings got its value** — 17 from a study, 15 from a
+chart, 28 inert, 4 definitions, and the one that was wrong.
 
 ## In one paragraph
 

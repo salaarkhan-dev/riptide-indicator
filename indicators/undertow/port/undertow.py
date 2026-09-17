@@ -368,7 +368,17 @@ class P:
     # Round-trip cost as a fraction of NOTIONAL, subtracted per trade after
     # conversion to R. 0.0007 is a maker-in / taker-out round trip on a major
     # perp. Not a guess at slippage, which is separate and worse.
-    feeFrac: float = 0.0
+    #
+    # IT DEFAULTED TO ZERO AND THAT WAS A REPORTING BUG, not a neutral choice.
+    # Every study passes 0.0007 explicitly, so no measurement moves -- but the
+    # CHART and the WATCH read the default, so both reported gross R and a
+    # gross break-even line. UNDERTOW_V3.md is what made that indefensible: the
+    # fee is charged in price and the trade is scored in R, so the drag is
+    # fee/risk, and with risk at 1.3% of entry on 15m the break-even win rate
+    # is 23.5% rather than 22.2%. A panel colouring 23.0% green was calling a
+    # losing strategy a winning one. The default is now the same 7bp every
+    # study has used since the first one.
+    feeFrac: float = 0.0007
 
     def tag(self) -> str:
         """The settings that a sweep varies, in one short line."""

@@ -145,6 +145,8 @@ stopBuf = input.float(0.25, "Stop buffer, ATR", minval = 0.0, maxval = 3.0, step
   tooltip = "Beyond the extreme, so a one-tick undercut does not take it. 0.25 is the buffer the CCP entry model used. 0 puts the stop exactly on the extreme.")
 rr = input.float(3.5, "Reward ratio", minval = 0.5, maxval = 20.0, step = 0.5, group = gLvl,
   tooltip = "Target as a multiple of risk. Drawing only — nothing here scores an outcome.")
+feeFrac = input.float(0.0007, "Round-trip fee", minval = 0.0, maxval = 0.01, step = 0.0001, group = gLvl,
+  tooltip = "Round-trip cost as a fraction of NOTIONAL — 0.0007 is a maker-in / taker-out round trip on a major perp, and it is what every study in ../measurements used. It is not a guess at slippage, which is separate and worse.\n\nIT CHANGES THE PANEL, NOT THE STRATEGY. No level, entry or exit moves; what moves is `net R` and the break-even line beside the win rate.\n\nAND THE LINE MOVES MORE THAN IT LOOKS. The fee is charged in PRICE and the trade is scored in R, so the drag per trade is fee ÷ (risk as a fraction of entry). Risk runs about 1.3% of entry on 15m and 2.4% on 1h, so the same 7bp costs 0.055R there and 0.029R here, and break-even at 3.5R is 23.5% rather than 22.2%. ../measurements/UNDERTOW_V3.md found this by measuring a rule whose win rate sat above 22.2% on all three timeframes and was still making nothing.\n\nSet it to 0 to read the panel gross. That is what this indicator did until now, and a 23.0% win rate showed green.")
 
 // ── THE BACKUP FILL ─────────────────────────────────────────────────────────
 // "if we miss we can fill the order as a backup on any OB or FVG." The limit at
@@ -931,6 +933,11 @@ var int nWonImm = 0
 var int nLostImm = 0
 var int nWonRun = 0
 var int nLostRun = 0
+// THE FEE, IN R, SUMMED OVER CLOSED REAL TRADES. It cannot be a flat number
+// per trade: the cost is charged in price and the trade is scored in R, so a
+// wider stop is a smaller cost. Accumulated at close, against the risk the
+// trade actually carried — the same expression the port uses.
+var float sumFee = 0.0
 var string lastReject = "—"
 
 // ── THE GHOST COLUMN ─────────────────────────────────────────────────────────
@@ -1159,10 +1166,13 @@ if barOk and trades.size() > 0
         bool won = t.short ? low <= t.target : high >= t.target
         bool imm = t.state == "immature"
         bool run = t.state == "running"
+        float tRisk = math.abs(t.focus - t.stop)
+        float tFee = t.ghost or tRisk <= 0 ? 0.0 : feeFrac * t.focus / tRisk
         if lost
             nLost := nLost + (t.ghost ? 0 : 1)
             nLostImm := nLostImm + (t.ghost or not imm ? 0 : 1)
             nLostRun := nLostRun + (t.ghost or not run ? 0 : 1)
+            sumFee := sumFee + tFee
             gLost := gLost + (t.ghost ? 1 : 0)
             gOpen := gOpen - (t.ghost ? 1 : 0)
             if not t.ghost
@@ -1172,6 +1182,7 @@ if barOk and trades.size() > 0
             nWon := nWon + (t.ghost ? 0 : 1)
             nWonImm := nWonImm + (t.ghost or not imm ? 0 : 1)
             nWonRun := nWonRun + (t.ghost or not run ? 0 : 1)
+            sumFee := sumFee + tFee
             gWon := gWon + (t.ghost ? 1 : 0)
             gOpen := gOpen - (t.ghost ? 1 : 0)
             if not t.ghost
@@ -1382,9 +1393,10 @@ if barstate.islast and showStats
     string dir = not biasSeen ? "—" : biasDir > 0 ? "LONG" : "SHORT"
     int noEntry = nMissBack + nMissStop + nMissGone + nMissBias
     // Every resolved trade is exactly rr:1 by construction — the target is
-    // recomputed whenever the stop moves — so the net is arithmetic, not a sum
-    // of individual results.
-    float netR = nWon * rr - nLost
+    // recomputed whenever the stop moves — so the GROSS net is arithmetic, not
+    // a sum of individual results. The fee is not: it depends on each trade's
+    // own risk, so it is summed as the trades close and subtracted here.
+    float netR = nWon * rr - nLost - sumFee
     row(0, "bias", dir + " · " + biasState, bc,
       "marks: HAM/HGM/IH/SS = the setup candle · ▲▼ entry · ✓✕ target/stop · × triggered but never entered · ● swing high/low · CHoCH and BOS name themselves")
     row(1, "pullback", (na(pbStartX) ? "—" : str.tostring(bar_index - pbStartX) + "b")
@@ -1419,16 +1431,25 @@ if barstate.islast and showStats
     int nRun = nWonRun + nLostRun
     int nImm = nWonImm + nLostImm
     int nRes = nWon + nLost
-    float beRate = 100.0 / (1.0 + rr)
-    // 1/(1+rr) is also what a driftless random walk returns, so "above the
-    // line" is the comparison that matters and the colour already encodes it:
-    // nWon * rr > nLost is the same inequality as nWon / nRes > 1 / (1 + rr).
+    // THE BREAK-EVEN LINE INCLUDES THE FEE, and until ../measurements/
+    // UNDERTOW_V3.md it did not. 100/(1+rr) is the line BEFORE costs — 22.2%
+    // at 3.5R, which is also what a driftless random walk returns. The fee
+    // moves it: break-even solves w*rr - (1-w) - drag = 0, so it is
+    // (1 + drag)/(1 + rr), where drag is the average per-trade cost IN R.
+    // That is 23.5% on 15m and 22.9% on 1h at 7bp, because the same fee is a
+    // bigger share of a tighter stop. A panel colouring 23.0% green was
+    // calling a losing strategy a winning one, on every chart, for thirteen
+    // studies' worth of pages.
+    float feeR = nRes > 0 ? sumFee / nRes : 0.0
+    float beRate = 100.0 * (1.0 + feeR) / (1.0 + rr)
+    // The colour is the same comparison as the number: net R above zero after
+    // costs is exactly a win rate above this line.
     row(5, "won / lost · be " + str.tostring(beRate, "#.#") + "%",
       nRes == 0 ? "—" : str.tostring(nWon) + " / " + str.tostring(nLost)
       + " · " + str.tostring(100.0 * nWon / nRes, "#.#") + "%"
       + (openReal > 0 ? " · " + str.tostring(openReal) + " open" : ""),
-      nWon * rr > nLost ? colLong : nLost > nWon * rr ? colShort : color.gray,
-      "entered trades walked forward to their target or their stop, stop first when one bar spans both, and the share of them that won.\n\nBREAK-EVEN AT " + str.tostring(rr, "#.#") + "R IS " + str.tostring(beRate, "#.#") + "%, which is also what a driftless random walk returns — so this percentage is only information relative to that line, and the colour is that comparison. Green is above it, red below.\n\n`open` counts REAL trades only — a ghost still running is on the gate-cost row, not here, and won + lost + open always equals `entered`. IN-SAMPLE: same caveat as net R.")
+      netR > 0 ? colLong : netR < 0 ? colShort : color.gray,
+      "entered trades walked forward to their target or their stop, stop first when one bar spans both, and the share of them that won.\n\nBREAK-EVEN AT " + str.tostring(rr, "#.#") + "R IS " + str.tostring(beRate, "#.#") + "%, AFTER THE ROUND-TRIP FEE. Before it the line would be " + str.tostring(100.0 / (1.0 + rr), "#.#") + "%, which is also what a driftless random walk returns — but the fee is charged in price and the trade is scored in R, so it costs " + str.tostring(feeR, "#.###") + "R on the trades taken here and the line moves up by that much. This percentage is only information relative to the line, and the colour is that comparison. Green is above it, red below.\n\nSet the round-trip fee to 0 under Levels to read it gross.\n\n`open` counts REAL trades only — a ghost still running is on the gate-cost row, not here, and won + lost + open always equals `entered`. IN-SAMPLE: same caveat as net R.")
     row(6, "  running", nRun == 0 ? "—" : str.tostring(nWonRun) + " / "
       + str.tostring(nLostRun) + " · "
       + str.tostring(100.0 * nWonRun / nRun, "#.#") + "%",

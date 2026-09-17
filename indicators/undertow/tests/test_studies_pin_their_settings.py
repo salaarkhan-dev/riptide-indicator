@@ -87,7 +87,18 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # 2026-09-17: bumped for `pinAt`/`famPriority` — the corrected ANCHOR. Both
 # default to v1 so the thirteen pages keep reproducing; undertow_bias Min15 and
 # undertow_pullback Min15 reproduced before this moved.
-DEFAULTS_FINGERPRINT = "e514745926bfb147"
+#
+# 2026-09-17: bumped for `feeFrac`, 0.0 → 0.0007, and this one is a REPORTING
+# fix rather than a strategy change. The procedure was followed and it is short
+# here for a reason worth writing down: every study in this directory passes
+# feeFrac=FEE explicitly, so NO measurement page moves by a digit. The one
+# study that reads the default is undertow_rate.py, which is the file's own
+# exemption case, and it reports alert RATE and never scores R — checked, not
+# assumed. What did read the zero were the CHART and the WATCH, which is the
+# whole point: both reported gross R and a gross break-even line, and
+# UNDERTOW_V3.md showed that the gap between 22.2% and 23.5% is exactly the
+# difference between "this rule makes money" and "this rule is the fee".
+DEFAULTS_FINGERPRINT = "9b5793dbde158edf"
 DEFAULTS_COUNT = 65
 
 good = []
