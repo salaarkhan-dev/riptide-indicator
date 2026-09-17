@@ -40,7 +40,33 @@ relaxing.
 ## Layout
 
 ```
-SPEC.md     the design, and the only thing to argue with before Pine exists
-pine/       (empty — v1 not written)
-tests/      (empty — v1 not written)
+SPEC.md                      the design; the Pine is built against it
+pine/riptide-undertow.pine   v1 — draws setups, nothing else
 ```
+
+## v1 is on the chart
+
+Paste `pine/riptide-undertow.pine` into TradingView. Six input groups, a status
+panel top-right, and a debug mode that is off by default.
+
+**What it draws:** the live candidate's three lines as they develop, with a
+label saying which confirmations have landed and how many bars in; then, on a
+fill, the entry triangle, the stop and target, and the risk / reward zones.
+A setup that never fills leaves nothing behind.
+
+**What the panel says:** bias and state, how long the pullback has run, the
+counts, what the live candidate is waiting for, and — the row that matters —
+*why the last candidate was rejected*. A count alone cannot tell "nothing
+qualified" from "the detector is broken".
+
+**What it does not do:** score outcomes, send alerts, or claim anything. There
+is no win rate and no R total in it.
+
+## The parity check
+
+The market-structure engine is copied from `riptide-indicator-v2.pine`, because
+Pine cannot import. `deploy/undertow-ms-check.py` compares every engine
+condition and assignment in both files, in both directions, and runs inside
+`deploy/preflight.py`. Two copies drift the moment one of them gets a fix, and
+the symptom would not be a crash — it would be two charts quietly disagreeing
+about what a CHoCH is.

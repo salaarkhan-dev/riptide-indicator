@@ -67,7 +67,8 @@ PINE_CHECKS = [
         PINE.format("ccp", "riptide-ccp.pine"),
         PINE.format("riptide", "riptide-indicator.pine"),
         PINE.format("riptide_ms", "riptide-indicator-v2.pine"),
-        PINE.format("exhaustion", "riptide-reversal.pine")]),
+        PINE.format("exhaustion", "riptide-reversal.pine"),
+        PINE.format("undertow", "riptide-undertow.pine")]),
     # The production indicator against the bot's own config. The one check
     # here that guards a live trading path rather than a research bench.
     ("check-parity", "riptide", []),
@@ -78,6 +79,7 @@ PINE_CHECKS = [
         PINE.format("riptide_ms", "riptide-indicator-v2.pine"),
         "indicators/riptide_ms/port/ms_struct.py"]),
     ("ccp-grab-check", "ccp", []),
+    ("undertow-ms-check", "undertow", []),
 ]
 
 

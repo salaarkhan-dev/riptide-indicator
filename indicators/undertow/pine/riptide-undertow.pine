@@ -1,0 +1,674 @@
+//@version=6
+// ══════════════════════════════════════════════════════════════════════════════
+//  RIPTIDE UNDERTOW — Structure Bias & Pin Continuation
+//
+//  An undertow is the current beneath the surface that drags you back out. That
+//  is the whole thesis: the pullback is the surface move, the trend is the
+//  current under it, and a setup exists when the surface fails and the undertow
+//  takes price back.
+//
+//  WHAT IT DOES, in one pass:
+//    1. reads the trend from major/minor market structure, and refuses to trade
+//       a trend that is ENDING
+//    2. finds the counter-trend-coloured pin at the pullback extreme — green in
+//       a downtrend, red in an uptrend
+//    3. takes that candle's high, low and open as Working, Failure and Focus
+//    4. waits for a close beyond BOTH the high and the low, in either order,
+//       inside a bar window
+//    5. draws a limit at the Focus line, a stop beyond the pullback, and a 3R
+//       target
+//
+//  NOTHING HERE IS MEASURED AND NOTHING HERE IS A TRADE. This is v1 of a bench:
+//  it draws setups so the DETECTION can be judged by eye and fixed. There is no
+//  win rate, no R total, no stats table and no alert, because none of that
+//  would mean anything until the detection is right. The design, the defaults
+//  and every open question are in ../SPEC.md; the two nearest measurements in
+//  this project — both negative — are named in ../INDICATOR.md.
+//
+//  SECTION 3 IS A COPY, AND NOT A VERBATIM ONE. The market-structure engine is
+//  section 12 of riptide-indicator-v2.pine with the DRAWING removed and each
+//  condition hoisted into a named bool so it can also be counted. Pine cannot
+//  import, so a copy is the only option, and a copy is free to drift.
+//
+//  deploy/undertow-ms-check.py holds it: it extracts every engine condition and
+//  assignment from both files, ignores anything that only draws, and reports
+//  any statement present in one and not the other — in EITHER direction, since
+//  the likelier drift is a fix landing in v2 that never reaches here. It runs
+//  inside deploy/preflight.py. That check is the only thing standing between
+//  this and two charts quietly disagreeing about what a CHoCH is.
+//
+//  SECTION 4 IS NOT A COPY. v2 has no minor-structure state machine; it uses
+//  the short swings only for the inducement. Section 4 is Undertow's own and
+//  the parity check does not cover it.
+//
+//  REPAINT, stated plainly. The structure engine reads the CURRENT forming bar,
+//  exactly as it does in v2, so its labels can move intrabar and settle at the
+//  close. Everything Undertow itself decides — the pin, the confirmations, the
+//  fill — is gated on `barstate.isconfirmed`, so a setup never appears and then
+//  vanishes. The swing dots lag by their detection period and are plotted back
+//  in time; they do not repaint.
+// ══════════════════════════════════════════════════════════════════════════════
+indicator("Riptide Undertow — Structure Bias & Pin Continuation", "Undertow",
+  overlay = true, max_lines_count = 500, max_labels_count = 500,
+  max_boxes_count = 500)
+
+
+// ═════════════════════════════ 1. INPUTS ═════════════════════════════════════
+// Six groups, ~25 inputs. Every tooltip says what the setting does to the
+// COUNT, because on a detector that is the only thing any of them decides.
+
+string gBias = "1 · Bias"
+string gPin = "2 · Candle"
+string gSet = "3 · Setup"
+string gLvl = "4 · Levels"
+string gShow = "5 · Display"
+string gDbg = "6 · Debug"
+
+msLen = input.int(15, "Major swing", minval = 2, maxval = 100, group = gBias,
+  tooltip = "Bars either side of a major swing. Higher = fewer, larger trends.")
+msShortLen = input.int(3, "Minor swing", minval = 2, maxval = 50, group = gBias,
+  tooltip = "The short swings. These drive the inducement and the minor CHoCH that ends a trend.")
+msBosNeedsIdm = input.bool(true, "BOS needs inducement", group = gBias,
+  tooltip = "The original engine's rule: a break only counts once the inducement was taken. Off labels every break, so far more.")
+endMinor = input.bool(true, "End: minor CHoCH against trend", group = gBias,
+  tooltip = "The short swings turn before the long ones. Earliest honest warning; also the twitchiest.")
+endSweep = input.bool(true, "End: extreme swept", group = gBias,
+  tooltip = "A wick through the running extreme that closes back inside — a failed continuation.")
+endStale = input.bool(true, "End: no new extreme", group = gBias,
+  tooltip = "The trend stopped extending. Catches drift into a range.")
+staleBars = input.int(30, "… within bars", minval = 3, maxval = 300, group = gBias,
+  tooltip = "How long without a new extreme counts as stalled. Lower = more Ending, fewer setups.")
+
+wickEdge = input.float(0.05, "Wick edge", minval = 0.0, maxval = 0.5, step = 0.01, group = gPin,
+  tooltip = "How much the dominant wick must beat the other, as a fraction of the bar's range. THIS IS THE DOJI FILTER. 0 accepts near-balanced bars.")
+useHammer = input.bool(true, "Hammer family (lower wick)", group = gPin,
+  tooltip = "Hammer and hanging man. Off halves the candidates.")
+useStar = input.bool(true, "Star family (upper wick)", group = gPin,
+  tooltip = "Shooting star and inverted hammer. Off halves the candidates.")
+
+string tTouch = "close at or beyond"
+string tBody = "whole body beyond"
+workTest = input.string("close beyond", "Working test", group = gSet,
+  options = ["close beyond", "close at or beyond", "whole body beyond"],
+  tooltip = "How hard price must clear the Working line. Stricter = fewer setups.")
+failTest = input.string("close beyond", "Failure test", group = gSet,
+  options = ["close beyond", "close at or beyond", "whole body beyond"],
+  tooltip = "Same for the Failure line. While both match, which line is which changes nothing.")
+confirmBars = input.int(20, "Confirm within", minval = 2, maxval = 200, group = gSet,
+  tooltip = "Bars for BOTH confirmations to land. Without a bound the rule is eventually true for almost any candle.")
+fillBars = input.int(20, "Fill within", minval = 1, maxval = 200, group = gSet,
+  tooltip = "Bars for the limit to fill before the setup expires unfilled.")
+newestWins = input.bool(true, "Newest pin wins", group = gSet,
+  tooltip = "A higher pin replaces the pending one. Off means the FIRST pin of a pullback holds until it resolves. Either way one setup at a time; debug marks show the ones passed over.")
+
+string sPin = "Pin high / low"
+string sPull = "Pullback extreme"
+string sSwing = "Minor swing extreme"
+stopSrc = input.string("Pullback extreme", "Stop", group = gLvl,
+  options = ["Pin high / low", "Pullback extreme", "Minor swing extreme"],
+  tooltip = "Where the stop sits. Tighter stops mean bigger R and more setups stopped before the fill.")
+rr = input.float(3.0, "Reward ratio", minval = 0.5, maxval = 20.0, step = 0.5, group = gLvl,
+  tooltip = "Target as a multiple of risk. Drawing only — nothing here scores an outcome.")
+
+showZones = input.bool(true, "Risk / reward zones", group = gShow)
+showStruct = input.bool(true, "Structure marks", group = gShow,
+  tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye.")
+keepN = input.int(10, "Keep last N setups", minval = 1, maxval = 60, group = gShow,
+  tooltip = "Drawings are capped by TradingView. A busy chart will hit the ceiling and silently lose the oldest.")
+colLong = input.color(color.new(#089981, 0), "Long", group = gShow, inline = "c1")
+colShort = input.color(color.new(#f23645, 0), "Short", group = gShow, inline = "c1")
+colLine = input.color(color.new(#787b86, 0), "Lines", group = gShow, inline = "c1")
+
+dbgOn = input.bool(false, "Debug marks", group = gDbg,
+  tooltip = "A dot on every pin found, one line of why, and a funnel in the panel.")
+dbgRejects = input.bool(false, "Show rejected pins", group = gDbg,
+  tooltip = "Also mark pins that failed colour or location. Needs Debug marks on.")
+
+
+// ═════════════════════════════ 2. HELPERS ════════════════════════════════════
+// Declared first: Pine reads top-down and a function used before it is declared
+// does not compile.
+
+// "Beyond" in each direction, under the three comparison modes. A line at the
+// bar's HIGH is cleared upward; a line at its LOW is cleared downward. Which of
+// the two is Working and which is Failure depends on the family (section 6).
+beyondUp(float lvl, string mode) =>
+    mode == tTouch ? close >= lvl : mode == tBody ? math.min(open, close) > lvl : close > lvl
+
+beyondDn(float lvl, string mode) =>
+    mode == tTouch ? close <= lvl : mode == tBody ? math.max(open, close) < lvl : close < lvl
+
+// The swing detector, from riptide-indicator-v2.pine section 12. `simple int`
+// because ta.highest needs a compile-time length.
+msSwings(simple int msL) =>
+    var int sOs = 0
+    var int sTopX = na
+    var int sBtmX = na
+    int was = nz(sOs[1], 0)
+    float hh = ta.highest(msL)
+    float ll = ta.lowest(msL)
+    sOs := high[msL] > hh ? 0 : low[msL] < ll ? 1 : was
+    float sTop = sOs == 0 and was != 0 ? high[msL] : na
+    sTopX := sOs == 0 and was != 0 ? bar_index[msL] : sTopX
+    float sBtm = sOs == 1 and was != 1 ? low[msL] : na
+    sBtmX := sOs == 1 and was != 1 ? bar_index[msL] : sBtmX
+    [sTop, sTopX, sBtm, sBtmX]
+
+
+// ═══════════════════ 3. MARKET STRUCTURE — COPIED ENGINE ═════════════════════
+// Section 12 of riptide-indicator-v2.pine with the DRAWING removed. The engine
+// statements are unchanged; deploy/undertow-ms-check.py holds them to that.
+//
+// One property worth knowing: this engine's boundaries MIGRATE. msTopY and
+// msBtmY are re-seeded by every new swing, so a level cannot go stale and the
+// state machine cannot deadlock.
+
+[msTop, msTopX, msBtm, msBtmX] = msSwings(msLen)
+[msSTop, msSTopX, msSBtm, msSBtmX] = msSwings(msShortLen)
+
+var int msOs = 0
+var bool msTopCrossed = false
+var bool msBtmCrossed = false
+var float msMax = na
+var float msMin = na
+var int msMaxX = na
+var int msMinX = na
+var float msTopY = na
+var float msBtmY = na
+var bool msSTopCrossed = false
+var bool msSBtmCrossed = false
+
+if not na(msTop)
+    msTopY := msTop
+    msTopCrossed := false
+if not na(msBtm)
+    msBtmY := msBtm
+    msBtmCrossed := false
+
+if close > msTopY and not msTopCrossed
+    msOs := 1
+    msTopCrossed := true
+if close < msBtmY and not msBtmCrossed
+    msOs := 0
+    msBtmCrossed := true
+
+bool msChoch = msOs != msOs[1]
+
+if msChoch
+    msMax := high
+    msMin := low
+    msMaxX := bar_index
+    msMinX := bar_index
+    msSTopCrossed := false
+    msSBtmCrossed := false
+
+float msSTopY = fixnan(msSTop)
+float msSBtmY = fixnan(msSBtm)
+
+// ── bullish ──────────────────────────────────────────────────────────────────
+bool msIdmUp = low < msSBtmY and not msSBtmCrossed and msOs == 1 and msSBtmY != msBtmY
+if msIdmUp
+    msSBtmCrossed := true
+
+bool msBosUp = close > msMax and (not msBosNeedsIdm or msSBtmCrossed) and msOs == 1
+if msBosUp
+    msSBtmCrossed := false
+
+// ── bearish ──────────────────────────────────────────────────────────────────
+bool msIdmDn = high > msSTopY and not msSTopCrossed and msOs == 0 and msSTopY != msTopY
+if msIdmDn
+    msSTopCrossed := true
+
+bool msBosDn = close < msMin and (not msBosNeedsIdm or msSTopCrossed) and msOs == 0
+if msBosDn
+    msSTopCrossed := false
+
+// ── sweeps ───────────────────────────────────────────────────────────────────
+bool msSweepUp = high > msMax and close < msMax and msOs == 1 and bar_index - msMaxX > 1
+bool msSweepDn = low < msMin and close > msMin and msOs == 0 and bar_index - msMinX > 1
+
+// Trailing extremes, AFTER the tests above read them. Order matters: the BOS
+// and sweep tests are meant to see the previous bar's running extreme.
+msMax := math.max(high, msMax)
+msMin := math.min(low, msMin)
+if msMax > msMax[1]
+    msMaxX := bar_index
+if msMin < msMin[1]
+    msMinX := bar_index
+
+
+// ══════════════════════ 4. MINOR STRUCTURE — NOT A COPY ══════════════════════
+// The same crossing state machine as above, run on the SHORT swings, so a minor
+// trend flip can be read the same way a major one is. v2 has no equivalent —
+// it uses the short swings only for the inducement — so this is Undertow's own
+// code and the parity check does not cover it.
+
+var int msSOs = 0
+var bool msSTopXd = false
+var bool msSBtmXd = false
+var float msSTopLvl = na
+var float msSBtmLvl = na
+
+if not na(msSTop)
+    msSTopLvl := msSTop
+    msSTopXd := false
+if not na(msSBtm)
+    msSBtmLvl := msSBtm
+    msSBtmXd := false
+
+if close > msSTopLvl and not msSTopXd
+    msSOs := 1
+    msSTopXd := true
+if close < msSBtmLvl and not msSBtmXd
+    msSOs := 0
+    msSBtmXd := true
+
+bool msMinorChoch = msSOs != msSOs[1]
+
+
+// ══════════════════════════ 5. BIAS — THE THREE STATES ═══════════════════════
+// None · Immature · Running · Ending. Only Immature and Running may trade.
+//
+// Every test below is true at a bar CLOSE. "Ending" in particular must never be
+// a hindsight label: if a trend were only knowable as ending once the next one
+// began, the chart would paint it correctly on history and the live scanner
+// could never reproduce it.
+
+var bool biasSeen = false
+var int bosN = 0
+var bool ending = false
+
+if msChoch
+    biasSeen := true
+    bosN := 0
+    ending := false
+
+int biasDir = msOs == 1 ? 1 : -1
+bool bosNow = biasDir > 0 ? msBosUp : msBosDn
+
+if bosNow
+    bosN := bosN + 1
+    // A break in the trend's own direction is the trend proving itself again,
+    // so it clears a previous Ending rather than leaving it latched forever.
+    ending := false
+
+// The three ending conditions, each its own toggle so the chart shows which one
+// fires and any that prove too twitchy can be turned off. They will sometimes
+// call Ending while the trend keeps running — that is the right direction to be
+// wrong in, because a false Ending costs a skipped setup and a missed one costs
+// a loss.
+bool endA = endMinor and msMinorChoch and (biasDir > 0 ? msSOs == 0 : msSOs == 1)
+bool endB = endSweep and (biasDir > 0 ? msSweepUp : msSweepDn)
+int lastExtX = biasDir > 0 ? msMaxX : msMinX
+bool endC = endStale and not na(lastExtX) and bar_index - lastExtX >= staleBars
+
+if biasSeen and (endA or endB or endC)
+    ending := true
+
+string biasState = not biasSeen ? "none" : ending ? "ending" : bosN == 0 ? "immature" : "running"
+bool tradeable = biasSeen and not ending
+
+
+// ═══════════════════════ 6. THE PULLBACK, AND THE PIN ════════════════════════
+
+// THE PULLBACK begins at the most recent structural extreme in the trend's
+// direction — in a downtrend, the low that ended the last impulse leg. Its
+// extreme is tracked as a RUNNING value, never the final one, so the pin test
+// below is true at the pin's own close. A rule phrased around the swing high
+// would need several more bars to confirm and would draw pins on history that
+// no live scanner could have known about.
+var float pbExt = na
+var int pbExtX = na
+var int pbStartX = na
+
+bool pbReset = biasDir != nz(biasDir[1], biasDir) or (biasDir < 0 and msMinX != nz(msMinX[1], msMinX)) or (biasDir > 0 and msMaxX != nz(msMaxX[1], msMaxX))
+
+if pbReset or na(pbExt)
+    pbExt := biasDir < 0 ? high : low
+    pbExtX := bar_index
+    pbStartX := bar_index
+else if biasDir < 0 and high >= pbExt
+    pbExt := high
+    pbExtX := bar_index
+else if biasDir > 0 and low <= pbExt
+    pbExt := low
+    pbExtX := bar_index
+
+// THE PIN. Size is irrelevant, body size is irrelevant. Three tests.
+float rng = high - low
+float upW = rng > 0 ? (high - math.max(open, close)) / rng : 0.0
+float dnW = rng > 0 ? (math.min(open, close) - low) / rng : 0.0
+float bodyR = rng > 0 ? math.abs(close - open) / rng : 0.0
+bool isGreen = close >= open
+
+// 1. FAMILY — which wick dominates, by a margin. The margin IS the doji
+//    exclusion: without it, dn 0.21 against up 0.20 passes as a hammer while
+//    looking exactly like the balanced bar being excluded.
+bool famHam = dnW - upW >= wickEdge
+bool famStar = upW - dnW >= wickEdge
+bool famOk = (famHam and useHammer) or (famStar and useStar)
+
+// 2. COLOUR — counter-trend. The candle's own direction is ignored: the bias
+//    decides the trade, the pin only supplies the levels. So in a downtrend
+//    BOTH green families qualify, hammer and inverted hammer alike.
+bool colourOk = biasDir < 0 ? isGreen : not isGreen
+
+// 3. LOCATION — the pin must BE the pullback extreme as of its own close.
+bool locOk = pbExtX == bar_index
+
+bool barOk = barstate.isconfirmed
+bool pinRaw = barOk and famOk
+bool pinFound = pinRaw and tradeable
+bool pinOk = pinFound and colourOk and locOk
+
+// The grade is a LABEL and gates nothing. Free to record, and if partials later
+// behave differently we can already tell them apart.
+string pinGrade = bodyR <= 0.35 ? "normal" : "partial"
+string pinFace = famHam ? (isGreen ? "Hammer" : "Hanging man") : (isGreen ? "Inv hammer" : "Shooting star")
+string pinTag = pinFace + " · " + pinGrade + (math.min(upW, dnW) >= 0.05 ? " +wick" : "")
+
+
+// ═══════════════════════════ 7. THE SETUP MACHINE ════════════════════════════
+// One live candidate at a time when "One setup per pullback" is on, which is
+// the default — so this is scalar state, not an array of pending setups.
+//
+//   candidate  ->  armed  ->  filled
+//        \           \
+//         dropped     expired
+//
+// Nothing beyond `filled` is tracked. v1 scores no outcomes.
+
+var int pdBar = na
+var float pdHigh = na
+var float pdLow = na
+var float pdFocus = na
+var bool pdWorkIsHigh = false
+var bool pdWorkOk = false
+var bool pdFailOk = false
+var bool pdArmed = false
+var int pdArmBar = na
+var bool pdShort = false
+var float pdStop = na
+var float pdTarget = na
+var float pdPbExt = na
+var int pdOrder = 0
+
+var int nRaw = 0
+var int nPins = 0
+var int nColour = 0
+var int nLoc = 0
+var int nArmed = 0
+var int nFilled = 0
+var string lastReject = "—"
+
+bool fillNow = false
+bool fillShort = false
+float fillPx = na
+float fillStop = na
+float fillTarget = na
+int fillPinBar = na
+
+// ── the live candidate, processed BEFORE a new pin can replace it ────────────
+if barOk and not na(pdBar)
+    bool gone = false
+    if not tradeable
+        lastReject := "bias turned " + biasState
+        gone := true
+    if not gone and not pdArmed
+        // THE PULLBACK CAN STILL EXTEND while the candidate waits, and the
+        // stop has to follow it. Tracked on the candidate rather than read
+        // from pbExt, because pbExt RESETS when price makes a new structural
+        // extreme — which is exactly what the Failure close often does — and
+        // the reset would throw away the level the stop needs.
+        if pdShort and high > pdPbExt
+            pdPbExt := high
+        if not pdShort and low < pdPbExt
+            pdPbExt := low
+        bool wHit = pdWorkIsHigh ? beyondUp(pdHigh, workTest) : beyondDn(pdLow, workTest)
+        bool fHit = pdWorkIsHigh ? beyondDn(pdLow, failTest) : beyondUp(pdHigh, failTest)
+        if wHit and not pdWorkOk
+            pdWorkOk := true
+            pdOrder := pdOrder == 0 ? 1 : pdOrder
+        if fHit and not pdFailOk
+            pdFailOk := true
+            pdOrder := pdOrder == 0 ? 2 : pdOrder
+        if pdWorkOk and pdFailOk
+            // The stop is taken from values CONFIRMED at or before this bar. A
+            // stop drawn from a swing confirmed later is a stop that did not
+            // exist when the trade was taken.
+            float sw = pdShort ? msSTopY : msSBtmY
+            float st = stopSrc == sPin ? (pdShort ? pdHigh : pdLow) : stopSrc == sPull ? pdPbExt : stopSrc == sSwing ? sw : na
+            float risk = math.abs(st - pdFocus)
+            bool sane = not na(st) and risk > 0 and (pdShort ? st > pdFocus : st < pdFocus)
+            if sane
+                pdArmed := true
+                pdArmBar := bar_index
+                pdStop := st
+                pdTarget := pdShort ? pdFocus - rr * risk : pdFocus + rr * risk
+                nArmed := nArmed + 1
+            else
+                lastReject := "stop is not beyond the entry"
+                gone := true
+        else if bar_index - pdBar >= confirmBars
+            lastReject := "confirm window (" + (pdWorkOk ? "F" : "W") + " never landed)"
+            gone := true
+    // bar_index > pdArmBar: the limit is only placed once the arming bar has
+    // CLOSED, so a fill inside that same bar is look-ahead — the order was not
+    // resting while it traded. This is the cheapest possible way to flatter a
+    // detector and it costs one comparison to refuse.
+    if not gone and pdArmed and bar_index > pdArmBar
+        bool stopHit = pdShort ? high >= pdStop : low <= pdStop
+        bool touched = high >= pdFocus and low <= pdFocus
+        // Stop FIRST. When one bar spans both, which came first is unknowable
+        // intrabar, so the setup is dropped rather than counted as an entry.
+        if stopHit
+            lastReject := "stop taken before the fill"
+            gone := true
+        else if touched
+            fillNow := true
+            fillShort := pdShort
+            fillPx := pdFocus
+            fillStop := pdStop
+            fillTarget := pdTarget
+            fillPinBar := pdBar
+            nFilled := nFilled + 1
+            gone := true
+        else if bar_index - pdArmBar >= fillBars
+            lastReject := "fill window"
+            gone := true
+    if gone
+        pdBar := na
+        pdArmed := false
+        pdWorkOk := false
+        pdFailOk := false
+        pdOrder := 0
+
+// ── a new pin ────────────────────────────────────────────────────────────────
+if pinRaw
+    nRaw := nRaw + 1
+if pinFound
+    nPins := nPins + 1
+    if colourOk
+        nColour := nColour + 1
+    if colourOk and locOk
+        nLoc := nLoc + 1
+    if not colourOk
+        lastReject := "colour (" + (isGreen ? "green" : "red") + " in a " + (biasDir < 0 ? "down" : "up") + "trend)"
+    else if not locOk
+        lastReject := "location (not the pullback extreme)"
+
+bool takeNew = pinOk and (na(pdBar) or (newestWins and not pdArmed))
+if takeNew
+    pdBar := bar_index
+    pdHigh := high
+    pdLow := low
+    pdFocus := open
+    // WORKING IS THE DIRECTION THE CANDLE'S SHAPE PREDICTS, and Failure is the
+    // opposite. They are NOT fixed to high and low. While both comparison modes
+    // match, the two are mechanically identical — a close beyond the high and a
+    // close beyond the low — and the labelling only starts to matter when the
+    // Working and Failure tests differ.
+    pdWorkIsHigh := famHam
+    pdWorkOk := false
+    pdFailOk := false
+    pdOrder := 0
+    pdArmed := false
+    pdShort := biasDir < 0
+    pdPbExt := pbExt
+
+
+// ═══════════════════════════════ 8. DRAWING ══════════════════════════════════
+// Sizing and placement are specified rather than left to taste, because the
+// previous indicators in this project failed on exactly this: tiny labels,
+// hidden behind candles, colliding with each other.
+//
+//   * the entry marker sits OFF the candle, and DIRECTION carries the meaning —
+//     down is short, up is long — so it reads without relying on colour
+//   * labels are size.normal, anchored to the RIGHT end of their line with a
+//     background, never floating over price
+//   * failed and expired setups are not drawn at all unless Debug is on
+
+var array<line> lnBuf = array.new<line>()
+var array<box> bxBuf = array.new<box>()
+var array<label> lbBuf = array.new<label>()
+
+prune() =>
+    while lnBuf.size() > keepN * 3
+        line.delete(lnBuf.shift())
+    while bxBuf.size() > keepN * 2
+        box.delete(bxBuf.shift())
+    while lbBuf.size() > keepN
+        label.delete(lbBuf.shift())
+
+drawLine(int x1, int x2, float y, color c, string st) =>
+    lnBuf.push(line.new(x1, y, x2, y, xloc = xloc.bar_index, color = c, style = st, width = 1))
+
+if fillNow
+    color cc = fillShort ? colShort : colLong
+    drawLine(fillPinBar, bar_index, fillPx, cc, line.style_dashed)
+    drawLine(fillPinBar, bar_index, fillStop, colLine, line.style_dotted)
+    drawLine(fillPinBar, bar_index, fillTarget, colLine, line.style_dotted)
+    if showZones
+        // math.max/min rather than positional: on a LONG the stop is BELOW
+        // the entry, and passing them in fixed order draws the box inverted.
+        bxBuf.push(box.new(fillPinBar, math.max(fillStop, fillPx), bar_index,
+          math.min(fillStop, fillPx), border_color = color.new(cc, 70),
+          bgcolor = color.new(colShort, 92)))
+        bxBuf.push(box.new(fillPinBar, math.max(fillPx, fillTarget), bar_index,
+          math.min(fillPx, fillTarget), border_color = color.new(cc, 70),
+          bgcolor = color.new(colLong, 92)))
+    lbBuf.push(label.new(bar_index, fillPx,
+      (fillShort ? "SHORT " : "LONG ") + str.tostring(rr, "#.#") + "R",
+      xloc = xloc.bar_index, style = label.style_label_left,
+      color = color.new(cc, 20), textcolor = color.white, size = size.normal))
+    prune()
+
+plotshape(fillNow and fillShort, "Entry short", shape.triangledown,
+  location.abovebar, colShort, size = size.small)
+plotshape(fillNow and not fillShort, "Entry long", shape.triangleup,
+  location.belowbar, colLong, size = size.small)
+
+// THE LIVE CANDIDATE. Four objects, created once and repositioned, so watching
+// a setup develop costs nothing against the drawing budget and nothing is left
+// behind when it resolves. This is the moment worth seeing — a setup that never
+// fills still tells you whether the DETECTION was right, which is the only
+// question v1 exists to answer.
+var line liveHi = line.new(na, na, na, na, xloc = xloc.bar_index, width = 1)
+var line liveLo = line.new(na, na, na, na, xloc = xloc.bar_index, width = 1)
+var line liveFc = line.new(na, na, na, na, xloc = xloc.bar_index, width = 1,
+  style = line.style_dashed)
+var label liveLbl = label.new(na, na, "", xloc = xloc.bar_index,
+  style = label.style_label_left, size = size.normal)
+
+if na(pdBar)
+    liveHi.set_color(color(na))
+    liveLo.set_color(color(na))
+    liveFc.set_color(color(na))
+    liveLbl.set_color(color(na))
+    liveLbl.set_textcolor(color(na))
+else
+    color lc = pdShort ? colShort : colLong
+    // The WORKING line carries the direction colour and the Failure line does
+    // not, so which is which is readable without opening the settings.
+    liveHi.set_xy1(pdBar, pdHigh)
+    liveHi.set_xy2(bar_index, pdHigh)
+    liveHi.set_color(pdWorkIsHigh ? lc : colLine)
+    liveLo.set_xy1(pdBar, pdLow)
+    liveLo.set_xy2(bar_index, pdLow)
+    liveLo.set_color(pdWorkIsHigh ? colLine : lc)
+    liveFc.set_xy1(pdBar, pdFocus)
+    liveFc.set_xy2(bar_index, pdFocus)
+    liveFc.set_color(lc)
+    liveLbl.set_xy(bar_index, pdFocus)
+    liveLbl.set_color(color.new(lc, 25))
+    liveLbl.set_textcolor(color.white)
+    liveLbl.set_text((pdArmed ? "ARMED " + (pdOrder == 1 ? "W→F" : "F→W") : (pdWorkOk ? "W✓ F·" : pdFailOk ? "W· F✓" : "W· F·")) + "  " + str.tostring(bar_index - pdBar) + "b")
+
+// Structure, so the bias can be checked by eye rather than trusted.
+plot(showStruct ? msTop : na, "Swing high", color.new(colShort, 40), 4,
+  plot.style_circles, offset = -msLen)
+plot(showStruct ? msBtm : na, "Swing low", color.new(colLong, 40), 4,
+  plot.style_circles, offset = -msLen)
+// On the BAR, not at the top of the pane: location.top puts a CHoCH marker
+// wherever the pane happens to end, which tells you nothing about where the
+// structure turned.
+plotshape(showStruct and msChoch and msOs == 1, "CHoCH up", shape.diamond,
+  location.belowbar, color.new(color.orange, 20), size = size.tiny)
+plotshape(showStruct and msChoch and msOs == 0, "CHoCH down", shape.diamond,
+  location.abovebar, color.new(color.orange, 20), size = size.tiny)
+// BOS, because it is what separates Immature from Running and the panel says
+// which state it thinks it is in.
+plotshape(showStruct and msBosUp, "BOS up", shape.circle, location.belowbar,
+  color.new(color.gray, 45), size = size.tiny)
+plotshape(showStruct and msBosDn, "BOS down", shape.circle, location.abovebar,
+  color.new(color.gray, 45), size = size.tiny)
+
+// Debug: a dot on every pin, and ONE line on hover. Not a paragraph.
+// Rejects get the cheap mark (a plot costs nothing against the object limit);
+// pins that PASSED get the label below, which carries the tooltip.
+plotshape(dbgOn and dbgRejects and pinRaw and not pinOk, "Pin rejected",
+  shape.xcross, location.abovebar, color.new(color.gray, 40), size = size.tiny)
+
+// The tag goes in a TOOLTIP rather than on the chart: a line of text over every
+// candidate is the clutter this indicator exists to avoid. Capped on its own
+// budget, and only for pins that actually passed.
+var array<label> dbgBuf = array.new<label>()
+if dbgOn and pinOk
+    dbgBuf.push(label.new(bar_index, high, "", xloc = xloc.bar_index,
+      style = label.style_circle, size = size.tiny,
+      color = color.new(color.blue, 40), tooltip = pinTag))
+    while dbgBuf.size() > keepN * 4
+        label.delete(dbgBuf.shift())
+
+
+// ═══════════════════════════ 9. THE STATUS PANEL ═════════════════════════════
+// A STATUS panel, not a stats table. It says what the indicator is currently
+// seeing. It scores no outcomes, because v1 has none.
+//
+// The last row is the whole reason it exists: "why was nothing found" is the
+// only question a quiet detector ever raises, and a count alone cannot answer
+// it.
+
+var table pnl = table.new(position.top_right, 2, 8, border_width = 1,
+  frame_width = 1, frame_color = color.new(color.gray, 60))
+
+row(int r, string k, string v, color c) =>
+    table.cell(pnl, 0, r, k, text_color = color.new(color.gray, 20),
+      text_size = size.normal, text_halign = text.align_left)
+    table.cell(pnl, 1, r, v, text_color = c, text_size = size.normal,
+      text_halign = text.align_left)
+
+if barstate.islast
+    color bc = not biasSeen ? color.gray : ending ? color.orange : biasDir > 0 ? colLong : colShort
+    string dir = not biasSeen ? "—" : biasDir > 0 ? "LONG" : "SHORT"
+    row(0, "bias", dir + " · " + biasState, bc)
+    row(1, "pullback", na(pbStartX) ? "—" : str.tostring(bar_index - pbStartX) + " bars", color.gray)
+    row(2, "candidates", str.tostring(nLoc), color.gray)
+    row(3, "armed", str.tostring(nArmed), color.gray)
+    row(4, "entries", str.tostring(nFilled), color.gray)
+    row(5, "live", na(pdBar) ? "—" : pdArmed ? "armed · " + (pdOrder == 1 ? "W→F" : "F→W") : (pdWorkOk ? "W✓ F✗" : pdFailOk ? "W✗ F✓" : "waiting"), color.gray)
+    row(6, "last reject", lastReject, color.new(color.gray, 20))
+    if dbgOn
+        row(7, "pins·bias·col·loc·arm·fill", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·" + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·" + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray)
+    else
+        row(7, "", "", color.gray)
