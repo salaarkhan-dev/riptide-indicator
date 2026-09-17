@@ -544,13 +544,21 @@ def test_htf_gate_only_removes_setups():
 
 def test_price_swing_sources_run_end_to_end():
     cs = walk(3000, seed=57, drift=0.0004)
-    for src, k, km in (("atr", 2.5, 0.8), ("range", 0.40, 0.12)):
+    for src, k, km in ((U.SW_ATR, 2.5, 0.8), (U.SW_RANGE, 0.40, 0.12)):
         a = U.run(cs, U.P(swingSrc=src, swingK=k, swingKMinor=km), "T")
         ok(a.nArmed > 0, f"swingSrc={src!r} produces setups: {a.nArmed}")
         ok(a.nRaw >= a.nPins >= a.nColour >= a.nLoc,
            f"swingSrc={src!r}: the funnel still narrows")
-        print(f"       {src:>5}: {a.nLoc} setups, {a.nArmed} armed, "
+        print(f"       {src:>10}: {a.nLoc} setups, {a.nArmed} armed, "
               f"{len(a.real)} closed, net {a.netR:+.1f}R")
+    # AND AN UNKNOWN NAME MUST RAISE, not quietly run the price-move branch.
+    # The rename of "bar"/"range" to "bar pivot"/"price move" would otherwise
+    # have left three study scripts silently measuring the wrong swing.
+    try:
+        U.run(cs[:400], U.P(swingSrc="range"), "T")
+        ok(False, "a stale swingSrc must raise")
+    except ValueError as e:
+        ok("unknown swingSrc" in str(e), f"stale swingSrc raises: {e}")
 
 
 def main():

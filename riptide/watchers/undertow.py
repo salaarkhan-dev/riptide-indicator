@@ -118,7 +118,7 @@ RECENT_BARS = 6
 # indicators/undertow/port/undertow.py::P is the authority; the two are held
 # together by test_watch_undertow.py.
 MS_SHORT_LEN = 2
-SWING_SRC = "range"
+SWING_SRC = "price move"
 SWING_K = 0.40
 SWING_K_MINOR = 0.12
 SWING_HOURS = 24.0
@@ -347,7 +347,7 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
     # one that behaves the same on 15m as on 30m (0.6 flips a day on both,
     # against the bar pivot's 2.3 and 1.1). It does not make money and
     # UNDERTOW_BIAS_SOURCE.md says so; it makes one setting mean one thing.
-    if SWING_SRC == "range":
+    if SWING_SRC == "price move":
         scale = _range_basis(cs, _bars_per(cs, SWING_HOURS))
         msTop, msBtm = _price_swings(cs, SWING_K, scale)
         msSTop, msSBtm = _price_swings(cs, SWING_K_MINOR, scale)

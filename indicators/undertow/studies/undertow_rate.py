@@ -34,16 +34,18 @@ from indicators.undertow.studies.undertow_sweep import TFS, load   # noqa: E402
 from research.data import SYMBOLS                                  # noqa: E402
 from riptide.config import BAR_SECONDS                             # noqa: E402
 from indicators.undertow.port.undertow import P as _P              # noqa: E402
+from indicators.undertow.port.undertow import SW_BAR as _SW_BAR    # noqa: E402
 from riptide.watchers.undertow import run_setups                   # noqa: E402
 
 STATES = ("both", "running", "immature")
 # The shipped default first -- the row the watcher's RATE tables come from --
 # then two wider settings, so the cost of tightening is visible beside it
 # rather than needing a second run.
-# The bar-pivot lengths only mean anything when swingSrc is "bar". Under the
-# shipped "range" source msLen is unread, so sweeping it would print the same
-# row three times and invite somebody to read a difference into it.
-SWINGS = (_P().msLen,) if _P().swingSrc == "range" else (_P().msLen, 15, 30)
+# The bar-pivot lengths only mean anything when swingSrc is the bar pivot.
+# Under the shipped "price move" source msLen is unread, so sweeping it would
+# print the same row three times and invite somebody to read a difference in.
+SWINGS = ((_P().msLen, 15, 30) if _P().swingSrc == _SW_BAR
+          else (_P().msLen,))
 
 
 def main():

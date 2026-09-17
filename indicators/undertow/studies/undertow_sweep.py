@@ -51,10 +51,10 @@ FEE = 0.0007
 SEED = 20260917
 
 # ── THE GRID, exactly as pre-registered. 4 x 3 x 2 x 2 = 48. ────────────────
-SWINGS = (dict(swingSrc="bar", msLen=15, msShortLen=3),
-          dict(swingSrc="bar", msLen=30, msShortLen=5),
-          dict(swingSrc="range", swingK=0.25, swingKMinor=0.08),
-          dict(swingSrc="range", swingK=0.40, swingKMinor=0.12))
+SWINGS = (dict(swingSrc=U.SW_BAR, msLen=15, msShortLen=3),
+          dict(swingSrc=U.SW_BAR, msLen=30, msShortLen=5),
+          dict(swingSrc=U.SW_RANGE, swingK=0.25, swingKMinor=0.08),
+          dict(swingSrc=U.SW_RANGE, swingK=0.40, swingKMinor=0.12))
 END_MINOR = (U.E_OFF, U.E_FLIP, U.E_OPPOSED)
 HTF = (0, 4)
 RRS = (2.0, 3.0)

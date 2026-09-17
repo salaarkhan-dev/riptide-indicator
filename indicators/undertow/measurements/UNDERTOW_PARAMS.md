@@ -103,6 +103,7 @@ The scale invariance itself is not in doubt; it is measured in
 
 So the answer to *"each works different on different TF"* is: **yes, and
 `swingSrc="range"` fixes it — it just does not pay you for fixing it.** Use it
+(the option was renamed `price move` after this run; same setting)
 because one setting then means one thing on every chart, not because it makes
 money.
 

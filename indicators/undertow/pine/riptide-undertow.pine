@@ -66,7 +66,7 @@ string gShow = "6 · Display"
 string gDbg = "7 · Debug"
 
 biasSrc = input.string("structure", "Bias from", group = gBias,
-  options = ["structure", "EMA cross", "Supertrend", "Slope", "Range position"],
+  options = ["structure", "EMA cross", "Supertrend", "Slope", "Range midpoint"],
   tooltip = "WHERE THE DIRECTION COMES FROM. 'structure' is the CHoCH engine and is the original. The other four exist because a swing pivot measured in BARS means a different span of TIME on every timeframe — the same 6/2 flips the bias 2.3x a day on 15m and 1.1x on 30m. NONE OF THEM IS ENDORSED; they are here to be measured. The four Ending rules below that read minor structure and sweeps only apply to 'structure'; the retrace rule applies to all five.")
 emaFast = input.int(50, "EMA fast", minval = 2, maxval = 400, group = gBias,
   tooltip = "Only for 'EMA cross'. Up when fast is above slow.")
@@ -81,18 +81,18 @@ slopeLen = input.int(50, "Slope bars", minval = 5, maxval = 500, group = gBias,
 slopeMin = input.float(0.05, "… min ATR/bar", minval = 0.0, maxval = 2.0, step = 0.01, group = gBias,
   tooltip = "Only for 'Slope'. The slope must reach this, in ATR per bar, to change the direction — below it the last direction HOLDS, so a flat patch does not manufacture a trend out of noise. ATR per bar rather than price per bar is what makes one number mean the same thing on any symbol.")
 donLen = input.int(50, "Range bars", minval = 5, maxval = 500, group = gBias,
-  tooltip = "Only for 'Range position'. Up when close is above the midpoint of the last N bars' high-low.")
+  tooltip = "Only for 'Range midpoint'. Up when close is above the midpoint of the last N bars' high-low.")
 matureBars = input.int(20, "Mature after bars", minval = 1, maxval = 500, group = gBias,
   tooltip = "For every source EXCEPT 'structure' there is no BOS to count, so 'running' means the direction has held this many bars since it last flipped. Ignored by 'structure', which counts breaks of structure instead.")
-swingSrc = input.string("range", "Swings from", group = gBias,
-  options = ["bar", "range"],
-  tooltip = "HOW A SWING IS DEFINED, and the answer to 'it works differently on every timeframe'. 'bar' is a pivot of N BARS — six bars is ninety minutes on 15m and three hours on 1h, which is why the same setting flips the bias 2.3x a day on one and 1.1x on the other. 'range' is a reversal of k x the last N hours' high-to-low, which is the same question on every chart: 0.6 flips a day on both. IT DOES NOT MAKE MONEY — it beat none of the four alternatives measured in ../measurements/UNDERTOW_BIAS_SOURCE.md. It is the default because one setting that means one thing everywhere is worth having on its own terms.")
+swingSrc = input.string("price move", "… structure swings", group = gBias,
+  options = ["bar pivot", "price move"],
+  tooltip = "ONLY APPLIES WHEN 'Bias from' IS 'structure' — it is how that engine's swings are defined, not a bias source of its own. (Not to be confused with 'Range midpoint' above, which IS a bias source.) 'bar pivot' is a pivot of N BARS — six bars is ninety minutes on 15m and three hours on 1h, which is why the same setting flips the bias 2.3x a day on one and 1.1x on the other. 'price move' is a reversal of k x the last N hours' high-to-low, which is the same question on every chart: 0.6 flips a day on both. IT DOES NOT MAKE MONEY — it beat none of the four alternatives measured in ../measurements/UNDERTOW_BIAS_SOURCE.md. It is the default because one setting that means one thing everywhere is worth having on its own terms.")
 swingK = input.float(0.40, "… major k", minval = 0.05, maxval = 3.0, step = 0.05, group = gBias,
-  tooltip = "Only for 'range'. A swing is confirmed once price retraces this much of the reference range. Higher = fewer, larger swings.")
+  tooltip = "Only for 'price move'. A swing is confirmed once price retraces this much of the reference range. Higher = fewer, larger swings.")
 swingKMinor = input.float(0.12, "… minor k", minval = 0.02, maxval = 2.0, step = 0.02, group = gBias,
-  tooltip = "Only for 'range'. The short swings, which drive the inducement and the minor CHoCH.")
+  tooltip = "Only for 'price move'. The short swings, which drive the inducement and the minor CHoCH.")
 swingHours = input.float(24.0, "… reference hours", minval = 1.0, maxval = 240.0, step = 1.0, group = gBias,
-  tooltip = "Only for 'range'. The span whose high-to-low sets the scale. A day's range is a day's range whichever chart you open it on — that is the whole reason this is timeframe-invariant and a per-bar quantity like ATR is not.")
+  tooltip = "Only for 'price move'. The span whose high-to-low sets the scale. A day's range is a day's range whichever chart you open it on — that is the whole reason this is timeframe-invariant and a per-bar quantity like ATR is not.")
 msLen = input.int(6, "Major swing", minval = 2, maxval = 100, group = gBias,
   tooltip = "Bars either side of a major swing. Higher = fewer, larger trends.")
 msShortLen = input.int(2, "Minor swing", minval = 2, maxval = 50, group = gBias,
@@ -471,7 +471,7 @@ int rbLen = math.max(2, math.round(swingHours * 3600 / timeframe.in_seconds()))
 [pSTop, pSTopX, pSBtm, pSBtmX] = priceSwings(rbLen, swingKMinor)
 [bTop, bTopX, bBtm, bBtmX] = msSwings(msLen)
 [bSTop, bSTopX, bSBtm, bSBtmX] = msSwings(msShortLen)
-bool useRange = swingSrc == "range"
+bool useRange = swingSrc == "price move"
 float msTop  = useRange ? pTop  : bTop
 int   msTopX = useRange ? pTopX : bTopX
 float msBtm  = useRange ? pBtm  : bBtm

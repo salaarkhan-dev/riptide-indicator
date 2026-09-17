@@ -80,7 +80,7 @@ verdict:
 2. **Selecting on a chart is worth about −0.31 R per trade.** Best-of-48 on
    train, then holdout: −0.377, −0.277, −0.286. Three timeframes, same answer.
 3. **A pivot measured in bars really is a different rule on every timeframe,
-   and `swingSrc="range"` fixes it** — a swing as k × the last 24 hours' range
+   and `swingSrc="price move"` fixes it** — a swing as k × the last 24h range
    survives a 4:1 aggregation at ×0.89 against ×0.30 for the bar pivot. It buys
    consistency, not expectancy.
 4. **`maxLive = 4` is not a neutral setting.** It exists for TradingView's

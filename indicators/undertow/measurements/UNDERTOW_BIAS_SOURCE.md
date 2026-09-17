@@ -126,6 +126,21 @@ Two consequences worth knowing, both measured after the switch:
   which is a fact about the fixture and was nearly mistaken for a fact about
   the gate.
 
+## A note on two names, added after the run
+
+Two dropdowns in group 1 read almost the same and they are not the same thing,
+so both were renamed after this study was scored. The numbers above are
+untouched; only the labels moved.
+
+| in this page | on the chart now | what it is |
+|---|---|---|
+| `Range position` | **`Range midpoint`** | a **bias source** — one of the five under `Bias from` |
+| swings `range` | **`price move`** | how the **structure** engine defines a swing, under `… structure swings` |
+| swings `bar` | **`bar pivot`** | the same, as an N-bar pivot |
+
+`Range midpoint` (the 7.3-flips-a-day one) and `price move` (the 0.6-flips-a-day
+one) were previously both called some form of "range" and are unrelated.
+
 ## The open question, unchanged
 
 Six components have now been ablated — candle, location, exit, bias gate, fill,

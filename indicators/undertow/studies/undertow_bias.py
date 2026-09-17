@@ -55,7 +55,7 @@ ARMS = [
     ("S3", "Supertrend 10/3.0", {**MATCH, "biasSrc": U.BS_ST}),
     ("S4", "Slope 50 @ 0.05", {**MATCH, "biasSrc": U.BS_SLOPE}),
     ("S5", "Range position 50", {**MATCH, "biasSrc": U.BS_DON}),
-    ("S6", "structure, range swings", {**MATCH, "swingSrc": "range",
+    ("S6", "structure, range swings", {**MATCH, "swingSrc": U.SW_RANGE,
                                        "swingK": 0.40, "swingKMinor": 0.12}),
 ]
 REFERENCE = {"S0"}          # reported, never a baseline and never chosen

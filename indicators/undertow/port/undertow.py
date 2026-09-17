@@ -80,10 +80,13 @@ BS_STRUCT = "structure"
 BS_EMA = "EMA cross"
 BS_ST = "Supertrend"
 BS_SLOPE = "Slope"
-BS_DON = "Range position"
+BS_DON = "Range midpoint"
 # `swingSrc` — how a swing is DEFINED. Compared by value on both sides.
-SW_BAR = "bar"
-SW_RANGE = "range"
+SW_BAR = "bar pivot"
+SW_RANGE = "price move"
+# Port-only, and kept only because a test pins the measurement that rejected
+# it. Not an option on the chart and it must not become one.
+SW_ATR = "atr"
 # `endMinor`
 E_OFF = "off"
 E_FLIP = "on the flip"
@@ -159,11 +162,11 @@ class P:
     # WHERE THE SWINGS COME FROM. See swings.py -- the choice is the answer to
     # "each works different on different TF", and the three options are not
     # equally good at it. Measured on a 4:1 aggregation, swings per unit time:
-    #     "bar"    the v2 pivot, msLen / msShortLen in BARS       x0.30
-    #     "atr"    k x ATR(14). A per-bar unit, so it is WORSE    x0.22
-    #     "range"  k x the range of `swingHours` of trading       x0.89
-    # "range" is the only one that means the same thing on 15m and on 1h.
-    # "range" IS NOW THE DEFAULT, and not because it makes money -- it does
+    #   "bar pivot"   the v2 pivot, msLen / msShortLen in BARS     x0.30
+    #   "atr"         k x ATR(14). A per-bar unit, so it is WORSE  x0.22
+    #   "price move"  k x the range of `swingHours` of trading     x0.89
+    # "price move" is the only one that means the same thing on 15m and on 1h.
+    # IT IS NOW THE DEFAULT, and not because it makes money -- it does
     # not. UNDERTOW_BIAS_SOURCE.md measured it against four alternatives and it
     # beat none of them. It is the default because it is the only setting in
     # that study that behaves the SAME on 15m as on 30m: 0.6 flips a day on
@@ -203,7 +206,8 @@ class P:
 
     def tag(self) -> str:
         """The settings that a sweep varies, in one short line."""
-        sw = (f"bar {self.msLen}/{self.msShortLen}" if self.swingSrc == "bar"
+        sw = (f"bar {self.msLen}/{self.msShortLen}"
+              if self.swingSrc == SW_BAR
               else f"{self.swingSrc} {self.swingK}/{self.swingKMinor}")
         return (f"{sw} idm{int(self.msBosNeedsIdm)} "
                 f"end[{self.endMinor[:4]}|{int(self.endSweep)}"
@@ -552,10 +556,17 @@ def alt_structure(cs, p):
 
 
 def _swings(cs, p: P, major: bool, atr):
+    # STRICT, and deliberately so. This used to fall through to the price-move
+    # branch for anything it did not recognise, which meant a typo -- or an old
+    # study still passing the pre-rename "bar" -- ran a DIFFERENT swing
+    # definition than it asked for and printed a number that looked fine.
     if p.swingSrc == SW_BAR:
         return bar_swings(cs, p.msLen if major else p.msShortLen)
+    if p.swingSrc not in (SW_RANGE, SW_ATR):
+        raise ValueError(f"unknown swingSrc {p.swingSrc!r}; expected one of "
+                         f"{SW_BAR!r}, {SW_RANGE!r}, {SW_ATR!r}")
     k = p.swingK if major else p.swingKMinor
-    scale = (atr if p.swingSrc == "atr"
+    scale = (atr if p.swingSrc == SW_ATR
              else range_basis(cs, bars_per(cs, p.swingHours)))
     return price_swings(cs, k, scale)
 
