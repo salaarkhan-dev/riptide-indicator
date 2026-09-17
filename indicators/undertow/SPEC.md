@@ -192,6 +192,46 @@ qualify. §2.3's "if the pullback pushes higher, a new pin takes over by itself"
 only covers the case where price extends; it says nothing about the case where
 the extreme bar is simply not a pin, which is the common one.
 
+### 2.3c WHICH candle, and WHERE — measured on SYMBOLS_FRESH5, Min15
+
+Asked directly: "are we finding the candle in a correct place?" Three answers,
+and only the first is yes.
+
+**COLOUR IS CORRECT.** Every bearish setup takes a green candle, every bullish
+one a red candle. 2,675 bearish and 1,563 bullish, no exceptions — the rule is
+mechanical and it works.
+
+**THERE IS NO FAMILY PRIORITY, and there is supposed to be one.**
+
+| bearish (green) | | bullish (red) | |
+|---|---|---|---|
+| hammer — LOWER wick | **49.2%** | shooting star — UPPER wick | **54.3%** |
+| inverted hammer — UPPER wick | **50.8%** | hanging man — LOWER wick | **45.7%** |
+
+The stated intent is hammer first in a bearish trend and shooting star first in
+a bullish one, with the other shape acceptable. What the code does is take
+whichever of the two happens to sit at the extreme — a coin flip. §2.1 has no
+ordering in it and never did.
+
+**THE PULLBACK IS BARELY A PULLBACK.** Depth at the pin, as a fraction of the
+impulse leg the engine already tracks:
+
+| | median | p10 | p90 |
+|---|---|---|---|
+| bearish | **0.14** | 0.04 | 0.39 |
+| bullish | **0.17** | 0.05 | 0.41 |
+
+**A median retracement of 14%.** Nine in ten setups are taken before the
+pullback has given back 40% of the leg. Read with the age numbers above — a
+quarter have NO pullback at all and the median age is one to two bars — the
+picture is consistent: **the pin is taken as the pullback BEGINS, not where it
+turns.**
+
+The mechanism is `pbExt` being a RUNNING extreme. The first counter-trend
+candle at the running extreme qualifies immediately, and every bar that extends
+the pullback qualifies again as a new candidate. Nothing waits for the pullback
+to finish, because at the pin's own close it cannot be known that it has.
+
 **MEASURED — see [`UNDERTOW_PULLBACK.md`](measurements/UNDERTOW_PULLBACK.md).**
 Defect 3 is real and costs setups rather than money: pins 1–2 bars after the
 extreme score within **±0.025 R** of pins at it, and admitting them nearly
