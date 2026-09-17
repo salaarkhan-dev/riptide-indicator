@@ -1,6 +1,6 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED THREE TIMES, all negative. Ships as a watch, OFF by
+**Status: MEASURED SEVEN TIMES, nothing promoted. Ships as a watch, OFF by
 default, saying so in every message.**
 
 | study | result |
@@ -10,7 +10,8 @@ default, saying so in every message.**
 | [`UNDERTOW_EXITS.md`](measurements/UNDERTOW_EXITS.md) | 8–12% of setups really do reach 7R — and a **coin reaches 7R 12.5% of the time** |
 | [`UNDERTOW_BACKUP_FILL.md`](measurements/UNDERTOW_BACKUP_FILL.md) | the OB/FVG backup nets **+0.03 R per armed setup**, positive on 3 of 3 and significant on none — because two large, individually significant halves nearly cancel |
 | [`UNDERTOW_LATE_BACKUP.md`](measurements/UNDERTOW_LATE_BACKUP.md) | waiting for the Focus limit to expire removes the tax **and all the opportunity**: 100% of the +0.6 R trades fill inside the window, median 1–2 bars |
-| [`UNDERTOW_BIAS_SOURCE.md`](measurements/UNDERTOW_BIAS_SOURCE.md) | five direction sources — structure, EMA, Supertrend, Slope, range position — and **none beat the baseline**. EMA swung 0.54 R per trade between two halves of the same universe, which is the clearest "this is noise" in the project |
+| [`UNDERTOW_BIAS_SOURCE.md`](measurements/UNDERTOW_BIAS_SOURCE.md) | five direction sources — structure, EMA, Supertrend, Slope, range midpoint — and **none beat the baseline**. EMA swung 0.54 R per trade between two halves of the same universe, which is the clearest "this is noise" in the project |
+| [`UNDERTOW_SLOPE_DEFAULT.md`](measurements/UNDERTOW_SLOPE_DEFAULT.md) | the bias study's best number, Slope at **+0.198** on Min30, came back **−0.228** on a different stretch of the same symbols. A time-normalised Slope then cleared *every* bar on Min60 at z +3.61 — and lost to a coin at z −2.46 on Min30. **Nothing promoted** |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
@@ -83,7 +84,13 @@ verdict:
    and `swingSrc="price move"` fixes it** — a swing as k × the last 24h range
    survives a 4:1 aggregation at ×0.89 against ×0.30 for the bar pivot. It buys
    consistency, not expectancy.
-4. **`maxLive = 4` is not a neutral setting.** It exists for TradingView's
+4. **The noise floor of this measurement is about ±0.3 R per trade per cell,
+   and it has now been demonstrated twice.** EMA cross swung 0.54 R between two
+   halves of the same universe; Slope swung 0.426 R and inverted its sign
+   between two time periods of the same symbols. Every positive result this
+   project has produced is smaller than that. Any single cell — including
+   Slope-in-hours' +0.310 at z +3.61 on Min60 — has to be read against it.
+5. **`maxLive = 4` is not a neutral setting.** It exists for TradingView's
    drawing budget, and on these populations it refuses more setups than it
    trades — 683 against 811 fills on 15m at the baseline, and seven to nine per
    fill once a gate is removed. It voided the first ablation run. The chart's
