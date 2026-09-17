@@ -864,40 +864,47 @@ row(int r, string k, string v, color c, string tip) =>
 if barstate.islast
     color bc = not biasSeen ? color.gray : ending ? color.orange : biasDir > 0 ? colLong : colShort
     string dir = not biasSeen ? "—" : biasDir > 0 ? "LONG" : "SHORT"
+    int noEntry = nMissBack + nMissStop + nMissGone + nMissBias
+    // Every resolved trade is exactly rr:1 by construction — the target is
+    // recomputed whenever the stop moves — so the net is arithmetic, not a sum
+    // of individual results.
+    float netR = nWon * rr - nLost
     row(0, "bias", dir + " · " + biasState, bc,
-      "marks: HAM/HGM/IH/SS = the setup candle · ▲▼ entry · ✓✕ target/stop · × armed but never filled · ● swing high/low · CHoCH and BOS name themselves")
+      "marks: HAM/HGM/IH/SS = the setup candle · ▲▼ entry · ✓✕ target/stop · × triggered but never entered · ● swing high/low · CHoCH and BOS name themselves")
     row(1, "pullback", (na(pbStartX) ? "—" : str.tostring(bar_index - pbStartX) + "b")
       + " · rt " + str.tostring(math.round(retraced * 100)) + "%"
       + (adxMin > 0 ? " · adx " + str.tostring(adxVal, "#") : ""), color.gray,
       "bars since the pullback began, how much of the impulse it has given back, and ADX if it is switched on")
-    row(2, "candidates", str.tostring(nLoc), color.gray,
-      "pins that passed family, bias, colour and location")
-    row(3, "at cap", str.tostring(nCap), color.gray,
-      "pins turned away because " + str.tostring(maxLive) + " setups were already live")
-    row(4, "armed", str.tostring(nArmed), color.gray,
-      "both confirmations landed and a sane stop existed")
-    row(5, "filled", str.tostring(nFilled), color.gray,
-      "the limit at the Focus line was touched")
-    row(6, "won / lost", str.tostring(nWon) + " / " + str.tostring(nLost)
+    row(2, "setups found", str.tostring(nLoc), color.gray,
+      "candles that passed all four tests: a dominant wick, a tradeable bias, the counter-trend colour, and sitting at the pullback extreme. Nothing has been confirmed yet — these are candidates.")
+    row(3, "triggered", str.tostring(nArmed), color.gray,
+      "of those, the ones where price then closed beyond BOTH the pin's high and its low inside the confirm window, and a sane stop existed. This is where a limit order would go on.")
+    row(4, "entered", str.tostring(nFilled), color.gray,
+      "of those, the ones where price came back and touched the limit at the Focus line.")
+    row(5, "won / lost", str.tostring(nWon) + " / " + str.tostring(nLost)
       + (trades.size() > 0 ? " · " + str.tostring(trades.size()) + " open" : ""),
-      nWon > nLost ? colLong : nLost > nWon ? colShort : color.gray,
-      "IN-SAMPLE AND NOT EVIDENCE. This is whatever settings happen to be loaded, scored on the bars you are looking at, with no pre-registration and no control. A filter picked by watching this number scored +0.089 in sample and -0.082 out of sample elsewhere in this project. Use it to check the DETECTION looks sane, never to choose settings.")
-    row(7, "missed", str.tostring(nMissBack + nMissStop + nMissGone + nMissBias), color.gray,
-      "armed, then lost before the limit filled")
-    row(8, "  no return", str.tostring(nMissBack), color.gray,
-      "THE OB / FVG NUMBER. The setup was valid, the limit was placed, and price simply never came back to it. These are the ones a backup fill would have caught.")
-    row(9, "  stop / gone", str.tostring(nMissStop) + " / " + str.tostring(nMissGone), color.gray,
-      "stop taken before the fill, and target reached before the fill. The second group also had a move available that a backup fill might have caught, at a worse price.")
-    row(10, "live", cands.size() == 0 ? "—" : str.tostring(cands.size()), color.gray,
+      nWon * rr > nLost ? colLong : nLost > nWon * rr ? colShort : color.gray,
+      "entered trades walked forward to their target or their stop, stop first when one bar spans both.")
+    row(6, "net R", (netR >= 0 ? "+" : "") + str.tostring(netR, "#.#"),
+      netR > 0 ? colLong : netR < 0 ? colShort : color.gray,
+      "won x " + str.tostring(rr, "#.#") + " minus lost, GROSS — no fees and no slippage, and both matter at this size. IN-SAMPLE AND NOT EVIDENCE: whatever settings are loaded, on the bars on screen, no pre-registration, no control. A filter picked by watching a number like this scored +0.089 in sample and -0.082 out elsewhere in this project. Read it to check the detection looks sane, never to choose settings.")
+    row(7, "no entry", str.tostring(noEntry), color.gray,
+      "triggered, then lost before the limit filled. The breakdown below is what decides how much work a backup fill is worth.")
+    row(8, "  back·gone·bias·stop",
+      str.tostring(nMissBack) + "·" + str.tostring(nMissGone) + "·"
+      + str.tostring(nMissBias) + "·" + str.tostring(nMissStop), color.gray,
+      "BACK = price never came back to the limit — the OB/FVG number, these are the ones a backup fill would have caught. GONE = the target printed before the fill, so the move was available at a worse price. BIAS = the trend turned Ending while waiting. STOP = price went beyond the planned stop first; this is 0 whenever the stop is set to follow the pullback, because a stop below the running low cannot be run.")
+    row(9, "live", cands.size() == 0 ? "—" : str.tostring(cands.size()), color.gray,
       "candidates currently waiting for their confirmations")
-    row(11, "last reject", lastReject, color.new(color.gray, 20),
-      "why the most recent pin was turned down. Hover any grey × on the chart for that candle's own reason.")
-    // The early stages, which the rows above do not cover. Debug only, so it
-    // costs no width unless it is wanted.
+    row(10, "last reject", lastReject, color.new(color.gray, 20),
+      "why the most recent candle was turned down. Hover any grey × on the chart for that candle's own reason.")
     if dbgOn
-        row(12, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
+        row(11, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
           + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·"
           + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray,
-          "pin shape · bias tradeable · colour · location · armed · filled. The biggest drop between two of these is where the detector is actually selecting.")
+          "pin shape · bias tradeable · colour · location · triggered · entered. The biggest drop between two of these is where the detector is actually selecting.")
+        row(12, "at cap", str.tostring(nCap), color.gray,
+          "setups turned away because " + str.tostring(maxLive) + " were already live. If this is large, raise 'Live setups at once'.")
     else
+        row(11, "", "", color.gray, "")
         row(12, "", "", color.gray, "")
