@@ -111,6 +111,16 @@ class P:
     # a 15m chart is 1h. The bias is computed on the aggregate and a setup may
     # only be taken when the HTF direction agrees with the base direction.
     htfMult: int = 0
+    # ABLATION SWITCHES. Not inputs on the chart, because they are not settings
+    # anyone should trade -- they exist so a study can remove one gate at a
+    # time and attribute the difference. The Pine has no equivalent and must
+    # not grow one; deploy/undertow-port-check.py lists them as port-only.
+    #   useFamily  False -> every bar passes the wick taxonomy. The 1CP layer
+    #                       is gone and only location and colour remain.
+    #   useColour  False -> the counter-trend colour test is gone.
+    # With both off and locTol at 0, the "pin" is just "the pullback extreme".
+    useFamily: bool = True
+    useColour: bool = True
     # Round-trip cost as a fraction of NOTIONAL, subtracted per trade after
     # conversion to R. 0.0007 is a maker-in / taker-out round trip on a major
     # perp. Not a guess at slippage, which is separate and worse.
@@ -741,8 +751,19 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         isGreen = c.c >= c.o
         famHam = dnW - upW >= p.wickEdge
         famStar = upW - dnW >= p.wickEdge
-        famOk = (famHam and p.useHammer) or (famStar and p.useStar)
-        colourOk = isGreen if biasDir < 0 else not isGreen
+        # THE THREE GATES, each independently removable. See `useFamily` and
+        # `useColour` in P: turning one off does not change what the machine
+        # then does with the bar, only whether the bar is admitted -- which is
+        # what makes the difference between two arms attributable to the gate.
+        #
+        # `famHam` still decides which line is Working even when the family
+        # test is OFF, because the machine needs the answer either way. With
+        # the test off it degenerates to "whichever wick is longer", ties going
+        # to the hammer reading. That is a fallback, not a finding.
+        famOk = True if not p.useFamily else (
+            (famHam and p.useHammer) or (famStar and p.useStar))
+        colourOk = True if not p.useColour else (
+            isGreen if biasDir < 0 else not isGreen)
         locOk = (i - pbExtX) <= p.locTol
         # The HTF gate. A base-timeframe setup may only be taken when the
         # higher timeframe agrees on direction AND is itself tradeable. Off

@@ -166,10 +166,18 @@ def main() -> int:
                               "reworded dropdown makes every branch fall "
                               "through in silence"))
 
-    # The other direction. A port-only field is fine when it is one of the
-    # three the Pine cannot have; anything else means the Pine lost an input.
+    # The other direction: a field in P with no Pine input behind it means
+    # either a deliberate port-only feature or an input the Pine has LOST.
+    # Fields the Pine deliberately does not have. The first group is the three
+    # things Pine cannot do (a scale-invariant swing, an HTF bias without
+    # breaking the v2 parity check, and a cost model). The second is the
+    # ablation switches, which are not settings anyone should trade -- they
+    # exist so a study can remove one gate at a time. Adding to this set is how
+    # the check gets quietly widened, so each entry is here in a diff, with a
+    # reason above it.
     PORT_ONLY = {"swingSrc", "swingK", "swingKMinor", "swingHours", "htfMult",
-                 "feeFrac"}
+                 "feeFrac",
+                 "useFamily", "useColour"}
     for name in sorted(fields):
         if name not in pin and name not in PORT_ONLY:
             bad.append((name, "P has this field and the Pine has no such "
