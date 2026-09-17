@@ -1,6 +1,6 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED TEN TIMES, nothing promoted. Ships as a watch, OFF by
+**Status: MEASURED ELEVEN TIMES, nothing promoted. Ships as a watch, OFF by
 default, saying so in every message.**
 
 | study | result |
@@ -15,6 +15,7 @@ default, saying so in every message.**
 | [`UNDERTOW_SLOPE_DEFAULT.md`](measurements/UNDERTOW_SLOPE_DEFAULT.md) | the bias study's best number, Slope at **+0.198** on Min30, came back **−0.228** on a different stretch of the same symbols. A time-normalised Slope then cleared *every* bar on Min60 at z +3.61 — and lost to a coin at z −2.46 on Min30. **Nothing promoted** |
 | [`UNDERTOW_HTF.md`](measurements/UNDERTOW_HTF.md) | the HTF agreement gate, on **45 symbols nothing here had ever seen**, against a **random gate discarding the same count**: worth **+0.032 / +0.010 / −0.029 R** over that control on 22,875 trades. Best-powered null in the project, and the one that cannot be blamed on a spent holdout |
 | [`UNDERTOW_MTF_EMA.md`](measurements/UNDERTOW_MTF_EMA.md) | two timeframes, EMA 20/50, trade only when aligned. **The second timeframe is worth −0.005 to +0.020 R across six panels** — the abstain state fires on 19% of bars and removes 7–9% of trades, because disagreement clusters where nothing was arming anyway |
+| [`UNDERTOW_MTF_DEFAULT.md`](measurements/UNDERTOW_MTF_DEFAULT.md) | MTF as the default against the **shipped** configuration: worse, on 2 of 3. The surprise is the BASELINE — structure as shipped is **+0.063 / +0.016 / −0.067** on an unseen universe, and `endMinor` discards **64%** of trades to get there, uncontrolled. The first number here worth a prereg rather than a shrug |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
@@ -73,7 +74,14 @@ afterwards.
 **Three further things are established**, and they are worth more than the
 verdict:
 
-1. **The bias gate does two jobs and probably only one works.** The ghost
+1. **The bias gate does two jobs and probably only one works — and this is now
+   the top of the queue.** `UNDERTOW_MTF_DEFAULT.md` found the shipped
+   `endMinor` rule discarding **64% of trades** on 15m while the configuration
+   that keeps it scores **+0.063** against **−0.041** for the one that does
+   not. That is uncontrolled: any rule discarding 64% moves the mean. The
+   contrast deserves the random-gate control that every recent study built and
+   this one pointed at the wrong arm. Note it CONTRADICTS the ablation's A5,
+   which removed all the Ending rules and scored better over 11,000 trades. The ghost
    column — setups the gate cancelled, walked forward anyway — says cancelling
    an *already-armed* setup saves 0.40 to 0.61 R each, on all three
    timeframes. But removing the Ending rules entirely (ablation arm A5) is
@@ -170,6 +178,7 @@ and every one was **re-run and compared cell by cell**:
 | `undertow_overlap` | `UNDERTOW_OVERLAP.md` | written after the audit; pinned from the start |
 | `undertow_htf` | `UNDERTOW_HTF.md` | written after the audit; pinned from the start |
 | `undertow_mtf` | `UNDERTOW_MTF_EMA.md` | its M0 reproduces `undertow_htf`'s H0 to the trade, on both shared panels |
+| `undertow_mtf_default` | `UNDERTOW_MTF_DEFAULT.md` | carries a pre-registered impossibility (D1 == D1b) that held on 3 of 3 |
 
 **The exits study is why enumerating fields does not work.** The first pass
 pinned `swingSrc`, `msLen`, `msShortLen` and `rr` — and missed `endSweep` and
@@ -197,6 +206,7 @@ studies/undertow_rate.py       how many alerts a day — the product decision
 studies/undertow_overlap.py    how many of the trades are one idea
 studies/undertow_htf.py        the higher-timeframe gate, on fresh symbols
 studies/undertow_mtf.py        two timeframes of EMA, aligned or stand aside
+studies/undertow_mtf_default.py  the same, against the SHIPPED config
 measurements/                  what they concluded
 
 riptide/watchers/undertow.py   THE LIVE ADAPTER, in the bot tree, off by
