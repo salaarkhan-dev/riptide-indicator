@@ -184,10 +184,24 @@ def panel(tf, pairs, title):
     print(f"    median {pct(mfes, .5):.2f}   p75 {pct(mfes, .75):.2f}   "
           f"p90 {pct(mfes, .90):.2f}   p95 {pct(mfes, .95):.2f}   "
           f"max {max(mfes):.1f}")
+    # THE TABLE THAT DECIDES THIS. A fixed-R exit breaks even at a hit rate of
+    # 1/(1+R) -- which is also exactly what a driftless random walk delivers.
+    # So "reached kR" against 1/(1+k) is the strategy against a coin, with no
+    # control run needed: it is arithmetic.
+    print(f"\n  {'target':>7} {'reached':>9} {'break-even':>11} {'edge':>8}")
     for k in (1, 2, 3, 5, 7):
         share = sum(1 for m in mfes if m >= k) / len(mfes)
-        print(f"    reached {k}R: {share * 100:5.1f}%", end="")
-    print()
+        need = 1.0 / (1.0 + k)
+        print(f"  {k:6}R {share * 100:8.1f}% {need * 100:10.1f}% "
+              f"{(share - need) * 100:+7.1f}pp")
+    # How many trades the 200-bar horizon TRUNCATED. If this is large the
+    # runner arms are being cut off rather than measured, and every number
+    # above understates them.
+    trunc = sum(1 for _, d, _ in rows
+                if abs(d["E3 fixed 7R"] - d["E4 BE then run"]) < 1e-9
+                and abs(d["E3 fixed 7R"]) < 0.999)
+    print(f"  horizon {HORIZON} bars truncated ~{100 * trunc / len(rows):.0f}% "
+          f"of trades (marked to market, not discarded)")
     print(f"\n  {'exit':20} {'mean R':>8} {'+/-':>6} {'z':>6}   vs E1")
     out = {}
     e1 = None
