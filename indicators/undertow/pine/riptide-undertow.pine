@@ -70,8 +70,9 @@ msShortLen = input.int(3, "Minor swing", minval = 2, maxval = 50, group = gBias,
   tooltip = "The short swings. These drive the inducement and the minor CHoCH that ends a trend.")
 msBosNeedsIdm = input.bool(true, "BOS needs inducement", group = gBias,
   tooltip = "The original engine's rule: a break only counts once the inducement was taken. Off labels every break, so far more.")
-endMinor = input.bool(true, "End: minor CHoCH against trend", group = gBias,
-  tooltip = "The short swings turn before the long ones. Earliest honest warning; also the twitchiest.")
+endMinor = input.string("on the flip", "End: minor structure", group = gBias,
+  options = ["off", "on the flip", "while opposed"],
+  tooltip = "The short swings turn before the long ones. 'on the flip' fires the bar the minor structure turns against the trend and can be missed if it turned earlier; 'while opposed' is true the whole time it is against, so it catches far more and leaves far fewer setups.")
 endSweep = input.bool(true, "End: extreme swept", group = gBias,
   tooltip = "A wick through the running extreme that closes back inside — a failed continuation.")
 endStale = input.bool(true, "End: no new extreme", group = gBias,
@@ -299,7 +300,8 @@ if bosNow
 // call Ending while the trend keeps running — that is the right direction to be
 // wrong in, because a false Ending costs a skipped setup and a missed one costs
 // a loss.
-bool endA = endMinor and msMinorChoch and (biasDir > 0 ? msSOs == 0 : msSOs == 1)
+bool minorAgainst = biasDir > 0 ? msSOs == 0 : msSOs == 1
+bool endA = endMinor == "off" ? false : endMinor == "while opposed" ? minorAgainst : (msMinorChoch and minorAgainst)
 bool endB = endSweep and (biasDir > 0 ? msSweepUp : msSweepDn)
 int lastExtX = biasDir > 0 ? msMaxX : msMinX
 bool endC = endStale and not na(lastExtX) and bar_index - lastExtX >= staleBars
@@ -487,10 +489,23 @@ if barOk and not na(pdBar)
     // detector and it costs one comparison to refuse.
     if not gone and pdArmed and bar_index > pdArmBar
         bool stopHit = pdShort ? high >= pdStop : low <= pdStop
+        bool tgtGone = pdShort ? low <= pdTarget : high >= pdTarget
         bool touched = high >= pdFocus and low <= pdFocus
-        // Stop FIRST. When one bar spans both, which came first is unknowable
+        // THE MOVE HAPPENED WITHOUT US. If price reaches the TARGET while the
+        // limit is still unfilled, the whole trade was available and the order
+        // was not on. Filling afterwards enters a spent move at a price that
+        // only looks good — on the chart that produced this check, price ran
+        // from the entry to past the target, came back, filled, and collapsed
+        // through the stop, and a clean "2R" was drawn over it.
+        //
+        // Checked BEFORE the fill, because the bar that returns to the entry
+        // is often the same bar that came back from the target.
+        if tgtGone
+            lastReject := "target reached before the fill"
+            gone := true
+        // Stop next. When one bar spans both, which came first is unknowable
         // intrabar, so the setup is dropped rather than counted as an entry.
-        if stopHit
+        else if stopHit
             lastReject := "stop taken before the fill"
             gone := true
         else if touched
@@ -648,10 +663,13 @@ if dropNow and showUnfilled
       + "\nstop  " + str.tostring(dropStop, format.mintick)))
     prune()
 
-plotshape(fillNow and fillShort, "Entry short", shape.triangledown,
-  location.abovebar, colShort, size = size.small)
-plotshape(fillNow and not fillShort, "Entry long", shape.triangleup,
-  location.belowbar, colLong, size = size.small)
+// AT THE ENTRY PRICE, not above or below the bar. location.belowbar put the
+// long triangle under a tall candle's low — hundreds of points beneath the
+// entry it was marking, which reads as an entry that never happened there.
+plotshape(fillNow and fillShort ? fillPx : na, "Entry short",
+  shape.triangledown, location.absolute, colShort, size = size.small)
+plotshape(fillNow and not fillShort ? fillPx : na, "Entry long",
+  shape.triangleup, location.absolute, colLong, size = size.small)
 
 // THE LIVE CANDIDATE. Four objects, created once and repositioned, so watching
 // a setup develop costs nothing against the drawing budget and nothing is left
@@ -724,7 +742,9 @@ plotshape(showStruct and msBosDn, "BOS down", shape.cross, location.abovebar,
 // setups. Pine's own ceiling is 500 labels and debug is off by default.
 var array<label> dbgBuf = array.new<label>()
 if dbgOn and pinRaw and (pinOk or dbgRejects)
-    dbgBuf.push(label.new(bar_index, pinOk ? high : low, "",
+    // On the pullback side: a short's pin is at a high, a long's at a low.
+    // Fixed to `high` it floated above the candle it was marking on every long.
+    dbgBuf.push(label.new(bar_index, biasDir < 0 ? high : low, "",
       xloc = xloc.bar_index, style = pinOk ? label.style_circle
       : label.style_xcross, size = size.tiny,
       color = pinOk ? color.new(color.blue, 40) : color.new(color.gray, 55),

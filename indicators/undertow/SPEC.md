@@ -45,7 +45,10 @@ Direction `D` is set by the most recent **major CHoCH**.
 **Ending conditions** — three independent toggles, so the chart shows which one
 fires and any that prove too twitchy can be turned off:
 
-1. a **minor CHoCH against `D`** while the major is still `D`
+1. the **minor structure against `D`** while the major is still `D` — either on
+   the bar it flips, or the whole time it is opposed. The flip is an edge and
+   can be missed when the minor turned at an awkward moment; "while opposed" is
+   a level and cannot be, at the cost of far more Ending
 2. a **sweep** of the running extreme that closes back inside
 3. **no new extreme in `D` for `staleBars`** bars
 
@@ -221,7 +224,15 @@ candidate  ->  armed  ->  filled
   `candidates`. Whether "first wins" is the better rule is now an open
   question with evidence behind it.
 - A setup is dropped when: the bias turns Ending · the confirm window runs out ·
-  the fill window runs out · the stop is taken before the fill.
+  the fill window runs out · the stop is taken before the fill · **the target is
+  reached before the fill**.
+
+  That last one was found on a real chart and it matters more than it sounds.
+  Price left the pin, ran past the target, came back, filled the limit, and then
+  collapsed through the stop — and a clean "2R" was drawn over the whole thing.
+  The move was available in full and the order was not on. A limit that fills
+  after its own target has printed is entering a spent move at a price that only
+  looks good.
 - `keepN` caps how many completed setups stay drawn. Pine has a hard object
   limit and a busy chart will hit it.
 
@@ -243,7 +254,7 @@ named in the panel's `marks` row.
 | thing | how |
 |---|---|
 | **The setup candle** | named on the bar the setup was built from — `HAM` · `HGM` · `IH` · `SS` — placed outside the pin so it never covers it. Not a debug mark: which candle a trade came from is part of the setup |
-| **Entry** | triangle, `size.small`, `location.abovebar` / `belowbar` so it never sits on the candle. **Down = short, up = long** — direction carries the meaning, so it reads without colour |
+| **Entry** | triangle at the **entry price**, `size.small`. **Down = short, up = long** — direction carries the meaning, so it reads without colour. It was `location.belowbar` first, which put a long's triangle under a tall candle's low, hundreds of points from the entry it was marking |
 | **Working / Failure** | thin solid lines, from the pin to the trigger bar |
 | **Focus** | dashed, extended to the fill bar or expiry |
 | **Risk zone** | entry→stop, tinted red |
