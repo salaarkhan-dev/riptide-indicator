@@ -66,12 +66,18 @@ string gShow = "6 · Display"
 string gDbg = "7 · Debug"
 
 biasSrc = input.string("structure", "Bias from", group = gBias,
-  options = ["structure", "Supertrend"],
-  tooltip = "WHERE THE DIRECTION COMES FROM. 'structure' is the CHoCH engine and is the original and the default.\n\nEMA cross, Slope and Range midpoint used to be here and were REMOVED FROM THE CHART, not from the record: all five were measured head to head in ../measurements/UNDERTOW_BIAS_SOURCE.md, none beat the baseline, and they cost fifteen inputs in this panel to offer four settings the measurements warn against. They remain in the Python port so those studies still reproduce.\n\nSupertrend is kept because it was asked for, and it is worth knowing what it scored: +0.030 / +0.014 / -0.080 R per trade on the holdout — no better than structure — and it flips 2.4 times a day on 15m against 1.2 on 30m, which is AS TIMEFRAME-DEPENDENT as the bar pivot the whole exercise was meant to fix.\n\nThe four Ending rules below that read minor structure and sweeps only apply to 'structure'; the retrace rule applies to both.")
+  options = ["structure", "Supertrend", "MTF EMA align"],
+  tooltip = "WHERE THE DIRECTION COMES FROM. 'structure' is the CHoCH engine and is the original and the default.\n\nEMA cross, Slope and Range midpoint used to be here and were REMOVED FROM THE CHART, not from the record: all five were measured head to head in ../measurements/UNDERTOW_BIAS_SOURCE.md, none beat the baseline, and they cost fifteen inputs in this panel to offer four settings the measurements warn against. They remain in the Python port so those studies still reproduce.\n\nSupertrend is kept because it was asked for, and it is worth knowing what it scored: +0.030 / +0.014 / -0.080 R per trade on the holdout — no better than structure — and it flips 2.4 times a day on 15m against 1.2 on 30m, which is AS TIMEFRAME-DEPENDENT as the bar pivot the whole exercise was meant to fix.\n\n'MTF EMA align' is the two-timeframe rule, added on request AFTER it was measured and did not clear its promotion rule. ../measurements/UNDERTOW_MTF_EMA.md: the second timeframe is worth between -0.005 and +0.020 R per trade over the one-timeframe cross, across six panels and 47,000 trades. It is the only source here with a THIRD state — when the two timeframes disagree the bias reads 'mixed' and NOTHING is taken, which is a real difference from every other option and is why it is worth looking at even though it did not win.\n\nThe four Ending rules below that read minor structure and sweeps only apply to 'structure'; the retrace rule applies to both.")
 stAtrLen = input.int(10, "Supertrend ATR", minval = 2, maxval = 100, group = gBias,
   tooltip = "Only for 'Supertrend'.")
 stMult = input.float(3.0, "Supertrend mult", minval = 0.5, maxval = 10.0, step = 0.5, group = gBias,
   tooltip = "Only for 'Supertrend'. Higher = wider bands, fewer flips.")
+mtfFast = input.int(20, "MTF EMA fast", minval = 2, maxval = 400, group = gBias,
+  tooltip = "Only for 'MTF EMA align'. The fast EMA, run on BOTH timeframes.")
+mtfSlow = input.int(50, "MTF EMA slow", minval = 3, maxval = 1000, group = gBias,
+  tooltip = "Only for 'MTF EMA align'. The slow EMA, run on both timeframes.")
+mtfMult = input.int(2, "… higher timeframe ×", minval = 2, maxval = 24, group = gBias,
+  tooltip = "Only for 'MTF EMA align'. The second timeframe, as a MULTIPLE of this chart's — 2 on a 15m chart is 30m, which is the pairing the rule was measured at. A multiple rather than a fixed string because a 15m series cannot be built from 1h bars, and because it keeps this chart and the Python port running the same rule.\n\nThe higher-timeframe EMAs are read NON-REPAINTING: request.security(..., expr[1], lookahead = barmerge.lookahead_on), which is the last CLOSED bar and is identical on history and in realtime. The obvious form without [1] shows the FORMING bar live and the closed one historically, so what you trade is not what you review.")
 matureBars = input.int(20, "Mature after bars", minval = 1, maxval = 500, group = gBias,
   tooltip = "For every source EXCEPT 'structure' there is no BOS to count, so 'running' means the direction has held this many bars since it last flipped. Ignored by 'structure', which counts breaks of structure instead.")
 swingSrc = input.string("price move", "… structure swings", group = gBias,
@@ -626,9 +632,37 @@ bool msMinorChoch = msSOs != msSOs[1]
 // dropdown changed.
 [stVal, stDirRaw] = ta.supertrend(stMult, stAtrLen)
 
+// MTF EMA ALIGN. The same EMA pair on this chart and on a chart `mtfMult` times
+// slower, and a direction only when they agree.
+//
+// THE HIGHER TIMEFRAME IS READ NON-REPAINTING, and this is the whole care in
+// these four lines. `request.security(sym, tf, expr)` returns the FORMING
+// higher-timeframe bar on the live bar and the last CLOSED one on history, so
+// the two disagree and what you traded is not what you review. `expr[1]` ALONE
+// does not fix it -- history then lags by two bars and realtime by one, and
+// they still disagree. `expr[1]` WITH lookahead_on does: lookahead_on on its
+// own reads the future by handing you the containing bar's final value, and
+// [1] steps back to the bar BEFORE the one forming now, which is closed, known,
+// and the same on history as in realtime. It costs up to one higher-timeframe
+// bar of lag, and that lag is the part that was being borrowed.
+string mtfTF = timeframe.from_seconds(timeframe.in_seconds() * mtfMult)
+float mtfLocFast = ta.ema(close, mtfFast)
+float mtfLocSlow = ta.ema(close, mtfSlow)
+float mtfHiFast = request.security(syminfo.tickerid, mtfTF,
+  ta.ema(close, mtfFast)[1], lookahead = barmerge.lookahead_on)
+float mtfHiSlow = request.security(syminfo.tickerid, mtfTF,
+  ta.ema(close, mtfSlow)[1], lookahead = barmerge.lookahead_on)
+int mtfBaseDir = mtfLocFast > mtfLocSlow ? 1 : -1
+int mtfHiDir = na(mtfHiFast) or na(mtfHiSlow) ? 0
+  : mtfHiFast > mtfHiSlow ? 1 : -1
+// Before the first closed higher-timeframe bar there is no second opinion, so
+// the pair counts as disagreeing rather than as agreeing by default.
+bool mtfMixed = mtfHiDir == 0 or mtfHiDir != mtfBaseDir
+
 // ta.supertrend returns -1 for an UPTREND. Every other source here returns +1,
 // so it is flipped once, at the source, rather than remembered everywhere.
-int altDir = stDirRaw == -1 ? 1 : -1
+int altDir = biasSrc == "MTF EMA align" ? mtfBaseDir
+  : stDirRaw == -1 ? 1 : -1
 bool useAlt = biasSrc != "structure"
 bool altFlip = useAlt and altDir != nz(altDir[1], altDir)
 
@@ -743,8 +777,18 @@ if biasSeen and (endA or endB or endC or endD or endE)
         endWhy := endA ? "minor" : endB ? "sweep" : endC ? "stale" : endD ? "retrace" : "adx"
     ending := true
 
-string biasState = not biasSeen ? "none" : ending ? "ending" : bosN == 0 ? "immature" : "running"
-bool tradeable = biasSeen and not ending
+// THE STAND-ASIDE STATE, and only 'MTF EMA align' has one. The two timeframes
+// disagree, so there is no direction to take.
+//
+// IT IS NOT LATCHED, unlike the five rules above. They end a trend once and
+// stay ended until the next CHoCH; this one goes away the moment the pair
+// agrees again, which is what MIXED means. Latching it would turn one bar of
+// disagreement into a permanent cancellation and measure something else.
+bool endF = biasSrc == "MTF EMA align" and mtfMixed
+string endWhyNow = endF and not ending ? "mixed" : endWhy
+
+string biasState = not biasSeen ? "none" : ending ? "ending" : endF ? "mixed" : bosN == 0 ? "immature" : "running"
+bool tradeable = biasSeen and not ending and not endF
 
 
 // ═══════════════════════ 6. THE PULLBACK, AND THE PIN ════════════════════════
@@ -945,6 +989,7 @@ var int nEndSweep = 0
 var int nEndStale = 0
 var int nEndRetr = 0
 var int nEndAdx = 0
+var int nEndMixed = 0
 
 // ── every live candidate, oldest first, removed in place when it resolves ────
 if barOk and cands.size() > 0
@@ -957,14 +1002,15 @@ if barOk and cands.size() > 0
         // the last one's reason.
         string why = ""
         if not tradeable and not c.ghost
-            why := "bias turned " + biasState + " · " + endWhy
+            why := "bias turned " + biasState + " · " + endWhyNow
             if c.armed
                 nMissBias := nMissBias + 1
-                nEndMinor := nEndMinor + (endWhy == "minor" ? 1 : 0)
-                nEndSweep := nEndSweep + (endWhy == "sweep" ? 1 : 0)
-                nEndStale := nEndStale + (endWhy == "stale" ? 1 : 0)
-                nEndRetr := nEndRetr + (endWhy == "retrace" ? 1 : 0)
-                nEndAdx := nEndAdx + (endWhy == "adx" ? 1 : 0)
+                nEndMinor := nEndMinor + (endWhyNow == "minor" ? 1 : 0)
+                nEndSweep := nEndSweep + (endWhyNow == "sweep" ? 1 : 0)
+                nEndStale := nEndStale + (endWhyNow == "stale" ? 1 : 0)
+                nEndRetr := nEndRetr + (endWhyNow == "retrace" ? 1 : 0)
+                nEndAdx := nEndAdx + (endWhyNow == "adx" ? 1 : 0)
+                nEndMixed := nEndMixed + (endWhyNow == "mixed" ? 1 : 0)
                 // Counted as a no-entry exactly as before — the real totals do
                 // not change. Then kept, as a ghost, to find out what it would
                 // have done. Drawn once, now, because after this it is invisible.
@@ -1387,11 +1433,11 @@ if barstate.islast
     // WHICH gate cancelled them. On the three charts that prompted this row,
     // BIAS was the largest no-entry bucket on all three — 39 of 62, 25 of 34,
     // 13 of 15 — and the panel could not say which of the five rules did it.
-    row(11, "  minor·swp·stale·rt·adx",
+    row(11, "  minor·swp·stale·rt·adx·mix",
       str.tostring(nEndMinor) + "·" + str.tostring(nEndSweep) + "·"
       + str.tostring(nEndStale) + "·" + str.tostring(nEndRetr) + "·"
-      + str.tostring(nEndAdx), color.gray,
-      "the BIAS number above, split by which Ending rule fired: minor structure · extreme swept · no new extreme · retrace % · ADX. Each is a separate toggle in group 1, so the largest number here names the setting to question first. A rule at 0 is costing nothing and a rule taking most of them is the one deciding this strategy.")
+      + str.tostring(nEndAdx) + "·" + str.tostring(nEndMixed), color.gray,
+      "the BIAS number above, split by which Ending rule fired: minor structure · extreme swept · no new extreme · retrace % · ADX · MIXED. The last one only ever moves under 'MTF EMA align' and is not an Ending rule at all — it is the two timeframes disagreeing, which un-fires the moment they agree again rather than ending the trend. Each is a separate toggle in group 1, so the largest number here names the setting to question first. A rule at 0 is costing nothing and a rule taking most of them is the one deciding this strategy.")
     // THE GHOST COLUMN. See section 7: these are the cancelled setups, walked
     // forward anyway. This is the only row here that tests a RULE rather than
     // reporting a count.

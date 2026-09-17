@@ -93,13 +93,29 @@ running the same machine.
 biasEMA20 = request.security(syminfo.tickerid, biasTF, ta.ema(close, fastLen))
 ```
 
-On the live bar this returns the **forming** higher-timeframe EMA, so the table
-flips intrabar and the historical chart is cleaner than live trading was. The
-fix is to read the completed bar:
+On the live bar this returns the **forming** higher-timeframe EMA while history
+shows the last closed one, so the two disagree and what you traded is not what
+you review.
+
+**`[1]` alone does not fix it**, and this page said it did until the fix was
+actually written. Under the default `lookahead_off` history already lags by one
+higher-timeframe bar; adding `[1]` makes history lag by two and realtime by
+one, and they still disagree. The fix is `[1]` **together with**
+`lookahead_on`:
 
 ```pine
-biasEMA20 = request.security(syminfo.tickerid, biasTF, ta.ema(close, fastLen)[1])
+biasEMA20 = request.security(syminfo.tickerid, biasTF,
+     ta.ema(close, fastLen)[1], lookahead = barmerge.lookahead_on)
 ```
+
+`lookahead_on` on its own genuinely reads the future — it hands you the
+containing bar's final value before it closed. With `[1]` it means "the bar
+before the one forming now", which is closed, known, identical on history and
+in realtime, and leaks nothing. It costs up to one higher-timeframe bar of lag,
+and that lag is the part that was being borrowed.
+
+The corrected standalone script is [`../pine/mtf-bias.pine`](../pine/mtf-bias.pine),
+and `riptide-undertow.pine` uses the same form for its `MTF EMA align` source.
 
 **The port does not reproduce the repaint** — the slower EMA comes from
 aggregated bars whose verdict lands on a base bar only from the bar *after* the
@@ -126,12 +142,34 @@ the chart's own EMA cross.
 
 ## What changes
 
-**Nothing ships.** `biasSrc` stays `structure`. `BS_MTF` stays in the port as a
-dropdown value, off, with the page that says what it scored — the same place
-EMA, Slope and Range midpoint sit.
+**Nothing is promoted.** `biasSrc` stays `structure` in the Pine, the port and
+the watch. The promotion rule required bars 3, 4, 5 and 6 and this cleared none
+of 3, 4 or 6.
 
-**It does not go on the chart.** The promotion rule required bars 3, 4, 5 and
-6; it cleared none of 3, 4 or 6.
+**It IS on the chart, added on request after this page was written**, as the
+third option under `Bias from` beside `structure` and `Supertrend`. This
+paragraph originally read "it does not go on the chart"; it was changed when
+the chart changed, rather than left to contradict what ships.
+
+Being on the chart is not a promotion and the two are worth keeping apart:
+
+* the **default is unchanged**, so nobody gets this by not choosing
+* the dropdown tooltip carries the numbers above, so the chart says what the
+  page says
+* the Pine reads the higher timeframe **non-repainting** —
+  `request.security(..., expr[1], lookahead = barmerge.lookahead_on)` — so what
+  it draws is what the port measured, not the flattering intrabar version
+* it is the only source here with a **third state**: when the timeframes
+  disagree the bias reads `mixed` and nothing is taken. That is a genuine
+  difference from every other option and the reason it is worth having on a
+  chart to look at, whatever the expectancy says. The panel's
+  `minor·swp·stale·rt·adx·mix` row gained a sixth number so the abstain can be
+  counted rather than assumed.
+
+`mixed` is **not latched**, unlike the five Ending rules beside it. It clears
+the moment the two timeframes agree again, which is what MIXED means on the
+script this came from; latching it would turn one bar of disagreement into a
+permanent cancellation and measure something else entirely.
 
 **Three universes now exist**, disjoint, frozen, 45 symbols each beyond the
 original 23. The tenth component has been measured without an effect, and the

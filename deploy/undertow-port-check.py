@@ -188,12 +188,11 @@ def main() -> int:
     # is still on the chart, so stAtrLen/stMult are NOT in here.
     RETIRED = {"emaFast", "emaSlow", "donLen",
                "slopeUnit", "slopeLen", "slopeMin",
-               "slopeHours", "slopeMinPerHr",
-               # BS_MTF's three. Same story one step earlier: measured in the
-               # port first, and it goes on the chart only if its prereg's
-               # promotion rule is met. Putting an unmeasured bias source in
-               # the dropdown is how group 1 got to fifteen inputs.
-               "mtfFast", "mtfSlow", "mtfMult"}
+               "slopeHours", "slopeMinPerHr"}
+    # BS_MTF's three are NO LONGER port-only: 'MTF EMA align' was added to the
+    # chart on request after UNDERTOW_MTF_EMA.md measured it, so mtfFast,
+    # mtfSlow and mtfMult are compared like any other input. Being on the chart
+    # is not a promotion -- biasSrc still defaults to 'structure'.
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,
