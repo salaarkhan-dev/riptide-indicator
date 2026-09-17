@@ -91,6 +91,11 @@ SW_ATR = "atr"
 # in bars (so it means a different thing on every chart) or in time.
 SL_BARS = "bars"
 SL_HOURS = "hours"
+# `htfUnit` — the same question for the higher-timeframe gate. A MULTIPLE of
+# the base bar is a different span of time on every chart; a span of hours is
+# not. The two share SL_BARS/SL_HOURS' spelling on purpose.
+HTF_BARS = "bars"
+HTF_HOURS = "hours"
 # `endMinor`
 E_OFF = "off"
 E_FLIP = "on the flip"
@@ -209,10 +214,28 @@ class P:
     swingK: float = 0.40
     swingKMinor: float = 0.12
     swingHours: float = 24.0
-    # HTF bias. 0 = off. Otherwise the number of BASE bars per HTF bar, so 4 on
-    # a 15m chart is 1h. The bias is computed on the aggregate and a setup may
-    # only be taken when the HTF direction agrees with the base direction.
+    # HTF BIAS. The base bars are aggregated, the SAME structure engine is run
+    # on the aggregate, and a setup may only be taken when the higher
+    # timeframe's direction agrees with the base direction and is itself
+    # tradeable. `htf_dir` writes an HTF bar's verdict onto base bars only from
+    # the bar AFTER the one that closed it, so there is no look-ahead.
+    #
+    # AND IT HAS THE SAME UNIT PROBLEM AS EVERYTHING ELSE HERE. `htfMult` is a
+    # multiple of the BASE bar, so htfMult 4 is 1h on a 15m chart and 4h on a
+    # 1h chart -- one setting, two rules, which is the defect the swings and
+    # then Slope were both rewritten to remove.
+    #
+    #   htfUnit "bars"   htfMult BASE bars per HTF bar. 0 or 1 = the gate is
+    #                    off. This is what the parameter study ran.
+    #   htfUnit "hours"  htfHours of trading per HTF bar, however many base
+    #                    bars that takes. 4.0 is a 4h bias on every chart.
+    #
+    # DEFAULT IS OFF, under either unit, and was never measured on its own --
+    # the parameter study carried htf as one binary dimension of a 48-cell
+    # grid and only ever scored the selected cell.
+    htfUnit: str = HTF_BARS
     htfMult: int = 0
+    htfHours: float = 0.0
     # ABLATION SWITCHES. Not inputs on the chart, because they are not settings
     # anyone should trade -- they exist so a study can remove one gate at a
     # time and attribute the difference. The Pine has no equivalent and must
@@ -245,7 +268,8 @@ class P:
                 f"end[{self.endMinor[:4]}|{int(self.endSweep)}"
                 f"{int(self.endStale)}|rt{self.retraceMax}|adx{self.adxMin}] "
                 f"w{self.wickEdge} loc{self.locTol} rr{self.rr} "
-                f"htf{self.htfMult}")
+                + (f"htf{self.htfHours}h" if self.htfUnit == HTF_HOURS
+                   else f"htf{self.htfMult}"))
 
 
 @dataclass(eq=False)
@@ -813,7 +837,23 @@ def aggregate(cs, mult: int):
     return out, closeX
 
 
-def htf_dir(cs, p: P):
+def htf_mult(cs, p: P) -> int:
+    """BASE bars per HTF bar, or 0 when the gate is off.
+
+    The single place that turns `htfUnit`/`htfMult`/`htfHours` into one number,
+    so the three call sites cannot drift apart. Under "bars" it is exactly the
+    old `p.htfMult if p.htfMult > 1 else 0`, which is what keeps every study
+    that predates `htfUnit` running unchanged.
+    """
+    if p.htfUnit == HTF_HOURS:
+        if p.htfHours <= 0:
+            return 0
+        m = bars_per(cs, p.htfHours)
+        return m if m > 1 else 0
+    return p.htfMult if p.htfMult > 1 else 0
+
+
+def htf_dir(cs, p: P, mult: int = 0):
     """Per BASE bar, the HTF bias direction (+1/-1) and whether it is tradeable.
 
     NO LOOK-AHEAD, and this is the only thing that makes the feature honest: an
@@ -822,7 +862,7 @@ def htf_dir(cs, p: P):
     previous HTF bar's -- exactly what a live scanner would have.
     """
     n = len(cs)
-    hb, closeX = aggregate(cs, p.htfMult)
+    hb, closeX = aggregate(cs, mult or htf_mult(cs, p))
     if not hb:
         return [0] * n, [False] * n
     # Same rules, one timeframe up. msLen stays in BARS on the aggregate, which
@@ -1016,7 +1056,9 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         return res
     st, atr = structure(cs, p)
     dirs, tradeable = bias(cs, st, p)
-    hD, hK = htf_dir(cs, p) if p.htfMult > 1 else ([0] * len(cs), [True] * len(cs))
+    hM = htf_mult(cs, p)
+    hD, hK = (htf_dir(cs, p, hM) if hM
+              else ([0] * len(cs), [True] * len(cs)))
 
     cands: list[_Cand] = []
     live: list[Trade] = []
@@ -1262,9 +1304,9 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         locOk = (i - pbExtX) <= p.locTol
         # The HTF gate. A base-timeframe setup may only be taken when the
         # higher timeframe agrees on direction AND is itself tradeable. Off
-        # when htfMult is 0, and then it is not counted either.
+        # when the gate is off, and then it is not counted either.
         htfOk = True
-        if p.htfMult > 1:
+        if hM:
             htfOk = hK[i] and hD[i] == biasDir
 
         if famOk:

@@ -47,8 +47,15 @@ PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep", "endStale")
 EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # sha256 of P's field defaults, first 16 hex. See the third test for what to do
 # when this fails -- the answer is not to paste the new value.
-DEFAULTS_FINGERPRINT = "0c4fc370d72b4df7"
-DEFAULTS_COUNT = 51
+#
+# 2026-09-17: bumped once, for `htfUnit`/`htfHours`. The procedure was followed:
+# both are additive, the default keeps the HTF gate off and htf_mult() under
+# "bars" is exactly the old expression (asserted by
+# test_htf_hours_is_the_same_gate_in_a_consistent_unit), and undertow_bias
+# Min15 and undertow_slope Min60 were re-run and reproduced their pages to the
+# digit before this line changed.
+DEFAULTS_FINGERPRINT = "8dbb2c7f777fa5cd"
+DEFAULTS_COUNT = 53
 
 good = []
 

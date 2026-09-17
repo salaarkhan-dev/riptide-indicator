@@ -105,12 +105,12 @@ async def _page(sess, sym, tf, bars):
     return [Candle(t, *seen[t]) for t in sorted(seen) if t + step <= now]
 
 
-async def _fetch_all():
+async def _fetch_all(symbols=None):
     import aiohttp
     CACHE.mkdir(parents=True, exist_ok=True)
     async with aiohttp.ClientSession() as sess:
         for tf in TFS:
-            for sym in SYMBOLS:
+            for sym in (symbols or SYMBOLS):
                 f = CACHE / f"{sym}-{tf}.json"
                 try:
                     cs = await _page(sess, sym, tf, BARS)
@@ -126,9 +126,9 @@ async def _fetch_all():
                 print(f"  {sym:14} {tf:6} {len(cs):6} bars  {span:6.1f} days")
 
 
-def load(tf) -> dict:
+def load(tf, symbols=None) -> dict:
     out = {}
-    for sym in SYMBOLS:
+    for sym in (symbols or SYMBOLS):
         f = CACHE / f"{sym}-{tf}.json"
         if f.exists():
             out[sym] = [Candle(*r) for r in json.loads(f.read_text())]
@@ -338,6 +338,17 @@ def main():
               f"timeframes into {CACHE.relative_to(ROOT)}/")
         asyncio.run(_fetch_all())
         argv = [a for a in argv if a != "--fetch"]
+    # THE SECOND UNIVERSE. research/symbols_fresh.py, 45 crypto perps disjoint
+    # from these 23. It is not fetched by --fetch, because nothing in this file
+    # scores it -- it exists so a NEW question gets a holdout that eight
+    # previous studies have not already looked at.
+    if "--fetch-fresh" in argv:
+        from research.symbols_fresh import SYMBOLS_FRESH, assert_disjoint
+        assert_disjoint()
+        print(f"fetching {BARS} bars x {len(SYMBOLS_FRESH)} FRESH symbols x "
+              f"{len(TFS)} timeframes into {CACHE.relative_to(ROOT)}/")
+        asyncio.run(_fetch_all(SYMBOLS_FRESH))
+        argv = [a for a in argv if a != "--fetch-fresh"]
     tfs = [a for a in argv if a in TFS] or list(TFS)
 
     for tf in tfs:

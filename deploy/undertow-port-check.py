@@ -189,7 +189,13 @@ def main() -> int:
     RETIRED = {"emaFast", "emaSlow", "donLen",
                "slopeUnit", "slopeLen", "slopeMin",
                "slopeHours", "slopeMinPerHr"}
-    PORT_ONLY = {"htfMult", "feeFrac",
+    # htfUnit/htfHours join htfMult for the same reason the port's docstring
+    # gives: an honest HTF bias in Pine needs the whole structure slab inside a
+    # function so request.security can evaluate it on higher-timeframe bars,
+    # and that refactor would break undertow-ms-check.py's anchor against v2.
+    # If the gate ever clears its prereg, that refactor is the price of putting
+    # it on the chart.
+    PORT_ONLY = {"htfMult", "htfUnit", "htfHours", "feeFrac",
                  "useFamily", "useColour", "bkMode"} | RETIRED
     for name in sorted(fields):
         if name not in pin and name not in PORT_ONLY:

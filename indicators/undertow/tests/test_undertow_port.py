@@ -611,6 +611,61 @@ def test_slope_in_hours_survives_an_aggregation():
     ok(nl > nt == 0, f"slopeMinPerHr is read: {nl} flips at 0.0, {nt} at 10.0")
 
 
+def test_htf_hours_is_the_same_gate_in_a_consistent_unit():
+    """`htfUnit` was added after eight studies had run, so the FIRST thing it
+    has to prove is that it changed nothing.
+
+    Under the default unit, htf_mult() must be exactly the old expression
+    `p.htfMult if p.htfMult > 1 else 0` — that is what lets undertow_sweep,
+    which pins htfMult and knows nothing about htfUnit, keep reproducing
+    UNDERTOW_PARAMS.md.
+    """
+    cs = walk(2000, seed=44)
+    for m in (0, 1, 2, 4, 16):
+        want = m if m > 1 else 0
+        got = U.htf_mult(cs, U.P(htfMult=m))
+        ok(got == want, f"htfUnit 'bars', htfMult {m} -> {got} (want {want})")
+    ok(U.htf_mult(cs, U.P(htfUnit=U.HTF_HOURS, htfHours=0.0)) == 0,
+       "htfHours 0 leaves the gate off")
+
+    # AND THE POINT OF IT. A multiple of the base bar is a different span of
+    # time on every chart; a span of hours is not. `walk` builds 1-minute bars,
+    # so a 4:1 aggregation is 4-minute bars.
+    hi, _ = U.aggregate(cs, 4)
+    mb_lo = U.htf_mult(cs, U.P(htfMult=60))
+    mb_hi = U.htf_mult(hi, U.P(htfMult=60))
+    mh_lo = U.htf_mult(cs, U.P(htfUnit=U.HTF_HOURS, htfHours=1.0))
+    mh_hi = U.htf_mult(hi, U.P(htfUnit=U.HTF_HOURS, htfHours=1.0))
+    print(f"       htfMult 60   base {mb_lo} bars = {mb_lo} min, "
+          f"4:1 {mb_hi} bars = {mb_hi * 4} min")
+    print(f"       htfHours 1.0 base {mh_lo} bars = {mh_lo} min, "
+          f"4:1 {mh_hi} bars = {mh_hi * 4} min")
+    ok(mb_lo == mb_hi and mb_lo * 1 != mb_hi * 4,
+       "a bar MULTIPLE is the same count and therefore a different duration")
+    ok(mh_lo * 1 == mh_hi * 4 == 60,
+       f"an hour is an hour on both: {mh_lo}x1 and {mh_hi}x4 minutes")
+
+    # THE EQUIVALENCE IS THE REAL ASSERTION. On 1-minute bars an hour IS 60
+    # bars, so the two units must resolve to the same gate and produce
+    # identical runs, bar for bar. That is checkable here; "the gate leaves
+    # trades behind" is NOT, because a random walk has no persistent structure
+    # for a higher timeframe to agree with and the gate refuses everything on
+    # it. That is a fact about the fixture, the same one UNDERTOW_BIAS_SOURCE
+    # records about the Ending gate, and it was nearly read as a defect. On
+    # real ETH 15m candles the two units agree at mult 4 and the gate leaves
+    # 24 trades of 33.
+    w = walk(3000, seed=45, drift=0.0005)
+    a = U.run(w, U.P(maxLive=64, htfMult=60), "T")
+    b = U.run(w, U.P(maxLive=64, htfUnit=U.HTF_HOURS, htfHours=1.0), "T")
+    ok((a.nLoc, a.nHtf, a.nArmed, len(a.real), round(a.netR, 9))
+       == (b.nLoc, b.nHtf, b.nArmed, len(b.real), round(b.netR, 9)),
+       f"60 one-minute bars IS one hour: {a.nArmed}/{len(a.real)} both ways")
+    off = U.run(w, U.P(maxLive=64), "T")
+    ok(b.nArmed <= off.nArmed and b.nHtf > 0,
+       f"and the gate only ever removes: {b.nArmed} <= {off.nArmed}, "
+       f"{b.nHtf} turned away")
+
+
 def main():
     for fn in (test_swings_match_ms_struct, test_structure_matches_ms_struct,
                test_atr_matches_the_bot, test_atr_swings_alternate_and_are_real,
@@ -629,7 +684,8 @@ def main():
                test_htf_bias_cannot_look_ahead,
                test_htf_gate_only_removes_setups,
                test_price_swing_sources_run_end_to_end,
-               test_slope_in_hours_survives_an_aggregation):
+               test_slope_in_hours_survives_an_aggregation,
+               test_htf_hours_is_the_same_gate_in_a_consistent_unit):
         print(f"\n{fn.__name__}")
         fn()
     print(f"\n{'ALL PASS' if all(good) else 'FAILURES'}  "
