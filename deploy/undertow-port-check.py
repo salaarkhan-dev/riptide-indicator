@@ -177,7 +177,7 @@ def main() -> int:
     # reason above it.
     PORT_ONLY = {"swingSrc", "swingK", "swingKMinor", "swingHours", "htfMult",
                  "feeFrac",
-                 "useFamily", "useColour"}
+                 "useFamily", "useColour", "bkMode"}
     for name in sorted(fields):
         if name not in pin and name not in PORT_ONLY:
             bad.append((name, "P has this field and the Pine has no such "

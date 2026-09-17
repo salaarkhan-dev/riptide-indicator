@@ -132,6 +132,14 @@ class P:
     # With both off and locTol at 0, the "pin" is just "the pullback extreme".
     useFamily: bool = True
     useColour: bool = True
+    # THE BACKUP'S CONTROL, and it is the bar that decides whether the zones
+    # mean anything. "zone" is the real thing: the nearest order block or
+    # fair-value gap. "mid" keeps the trigger, the cap and the direction and
+    # throws the zone detection away, entering at the MIDPOINT between the
+    # trigger bar's extreme and the Focus line. If the two score the same, what
+    # is being measured is "enter later into a running move" and the OB/FVG
+    # machinery is decoration.
+    bkMode: str = "zone"
     # Round-trip cost as a fraction of NOTIONAL, subtracted per trade after
     # conversion to R. 0.0007 is a maker-in / taker-out round trip on a major
     # perp. Not a guess at slippage, which is separate and worse.
@@ -788,9 +796,12 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                             else (c.h - cd.focus) / risk0)
                 if ranR >= p.bkTrigger:
                     cd.ran = True
-                    px, why = bk_zone(cs, i, cd.short, cd.focus,
-                                      c.l if cd.short else c.h,
-                                      p.bkLook, p.useOB, p.useFVG)
+                    ext = c.l if cd.short else c.h
+                    if p.bkMode == "mid":
+                        px, why = (ext + cd.focus) / 2.0, "MID"
+                    else:
+                        px, why = bk_zone(cs, i, cd.short, cd.focus, ext,
+                                          p.bkLook, p.useOB, p.useFVG)
                     if px is not None:
                         rk = abs(cd.stop - px)
                         if 0 < rk <= p.bkMaxRisk * risk0:
