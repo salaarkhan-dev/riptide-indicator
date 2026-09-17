@@ -1,6 +1,6 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED SEVEN TIMES, nothing promoted. Ships as a watch, OFF by
+**Status: MEASURED EIGHT TIMES, nothing promoted. Ships as a watch, OFF by
 default, saying so in every message.**
 
 | study | result |
@@ -11,6 +11,7 @@ default, saying so in every message.**
 | [`UNDERTOW_BACKUP_FILL.md`](measurements/UNDERTOW_BACKUP_FILL.md) | the OB/FVG backup nets **+0.03 R per armed setup**, positive on 3 of 3 and significant on none — because two large, individually significant halves nearly cancel |
 | [`UNDERTOW_LATE_BACKUP.md`](measurements/UNDERTOW_LATE_BACKUP.md) | waiting for the Focus limit to expire removes the tax **and all the opportunity**: 100% of the +0.6 R trades fill inside the window, median 1–2 bars |
 | [`UNDERTOW_BIAS_SOURCE.md`](measurements/UNDERTOW_BIAS_SOURCE.md) | five direction sources — structure, EMA, Supertrend, Slope, range midpoint — and **none beat the baseline**. EMA swung 0.54 R per trade between two halves of the same universe, which is the clearest "this is noise" in the project |
+| [`UNDERTOW_OVERLAP.md`](measurements/UNDERTOW_OVERLAP.md) | **74% of 15m trades run alongside another in the same direction**, up to 13 at once, and those groups win or lose together **78%** of the time. Four longs within $10 is one idea at 4x size. Descriptive; the chart now collapses them and the strategy is unchanged |
 | [`UNDERTOW_SLOPE_DEFAULT.md`](measurements/UNDERTOW_SLOPE_DEFAULT.md) | the bias study's best number, Slope at **+0.198** on Min30, came back **−0.228** on a different stretch of the same symbols. A time-normalised Slope then cleared *every* bar on Min60 at z +3.61 — and lost to a coin at z −2.46 on Min30. **Nothing promoted** |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
@@ -148,6 +149,7 @@ and every one was **re-run and compared cell by cell**:
 | `undertow_bias` | `UNDERTOW_BIAS_SOURCE.md` | 7 arms exact |
 | `undertow_slope` | `UNDERTOW_SLOPE_DEFAULT.md` | +0.310 at z +3.61 exact |
 | `undertow_rate` | — | exempt: it is *supposed* to track what ships |
+| `undertow_overlap` | `UNDERTOW_OVERLAP.md` | written after the audit; pinned from the start |
 
 **The exits study is why enumerating fields does not work.** The first pass
 pinned `swingSrc`, `msLen`, `msShortLen` and `rr` — and missed `endSweep` and
@@ -172,6 +174,7 @@ studies/undertow_backup.py     the OB/FVG backup, decomposed
 studies/undertow_late_backup.py  the same backup, placed after the limit dies
 studies/undertow_bias.py       five direction sources, head to head
 studies/undertow_rate.py       how many alerts a day — the product decision
+studies/undertow_overlap.py    how many of the trades are one idea
 measurements/                  what they concluded
 
 riptide/watchers/undertow.py   THE LIVE ADAPTER, in the bot tree, off by

@@ -44,6 +44,7 @@ PORT = ROOT / "indicators/undertow/port/undertow.py"
 # Pine inputs that only ever reach a drawing call. The port has no analogue and
 # must not grow one.
 DISPLAY_ONLY = {"showZones", "showUnfilled", "showStruct", "keepN",
+                "overlapMode",
                 "colLong", "colShort", "colLine", "dbgOn", "dbgRejects"}
 
 # input.color / input.string defaults that are Pine expressions rather than
@@ -178,8 +179,18 @@ def main() -> int:
     # The swing source is NO LONGER port-only: `range` became the default and
     # the chart has to be able to show what the studies measured, so all four
     # of its inputs now exist in the Pine and are compared like any other.
+    # THE THREE RETIRED BIAS SOURCES. EMA cross, Slope and Range midpoint were
+    # on the chart to be measured; UNDERTOW_BIAS_SOURCE.md measured them, none
+    # beat the baseline, and they cost fifteen inputs in group 1 to offer
+    # settings the page warns against. They came OFF THE CHART and stayed in
+    # the port, because undertow_bias.py (S2, S4, S5) and undertow_slope.py
+    # (A1, A2) still run them and those pages must keep reproducing. Supertrend
+    # is still on the chart, so stAtrLen/stMult are NOT in here.
+    RETIRED = {"emaFast", "emaSlow", "donLen",
+               "slopeUnit", "slopeLen", "slopeMin",
+               "slopeHours", "slopeMinPerHr"}
     PORT_ONLY = {"htfMult", "feeFrac",
-                 "useFamily", "useColour", "bkMode"}
+                 "useFamily", "useColour", "bkMode"} | RETIRED
     for name in sorted(fields):
         if name not in pin and name not in PORT_ONLY:
             bad.append((name, "P has this field and the Pine has no such "
