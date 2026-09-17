@@ -188,7 +188,25 @@ class P:
     confirmBars: int = 20
     fillBars: int = 20
     maxLive: int = 4
+    # LOCATION, AND THE THREE DEFECTS SPEC.md 2.3b RECORDS. All three ship at
+    # the value that reproduces current behaviour; none is endorsed and none is
+    # measured yet.
+    #
+    #   locTol      bars AFTER the pullback extreme a pin may still sit. At 0
+    #               the pin must BE the extreme bar, so a doji or a wrong-
+    #               coloured bar there discards the whole pullback and a
+    #               textbook pin one bar later cannot qualify.
+    #   pbMinAge    bars the pullback must have RUN before a pin counts. At 0
+    #               the bar that makes a new trend extreme is immediately its
+    #               own "pullback extreme" -- 25% to 34% of setups are that.
+    #   pbMinDepth  fraction of the impulse leg the pullback must have given
+    #               back. At 0.0 there is no minimum pullback in price at all.
+    #
+    # `locTol` has only ever been measured at 0 and at 50, and 50 is the
+    # ablation's destroy-it arm, not a 1-to-3-bar tolerance.
     locTol: int = 0
+    pbMinAge: int = 0
+    pbMinDepth: float = 0.0
     # 4 · Levels
     stopSrc: str = S_PULL
     stopTrack: bool = True
@@ -1144,6 +1162,7 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
     live: list[Trade] = []
     pbExt = None
     pbExtX = None
+    pbStartX = None
 
     for i, c in enumerate(cs):
         biasDir = dirs[i]
@@ -1159,6 +1178,7 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         if pbReset or pbExt is None:
             pbExt = c.h if biasDir < 0 else c.l
             pbExtX = i
+            pbStartX = i
         elif biasDir < 0 and c.h >= pbExt:
             pbExt, pbExtX = c.h, i
         elif biasDir > 0 and c.l <= pbExt:
@@ -1383,7 +1403,21 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             (famHam and p.useHammer) or (famStar and p.useStar))
         colourOk = True if not p.useColour else (
             isGreen if biasDir < 0 else not isGreen)
-        locOk = (i - pbExtX) <= p.locTol
+        # LOCATION, plus the two minimums. `pbAge` is measured from where the
+        # pullback STARTED, not from the extreme, so extending the pullback
+        # does not reset the clock -- which is the point: a pullback that has
+        # run ten bars and just made a new high is still ten bars old.
+        pbAge = i - pbStartX if pbStartX is not None else 0
+        pbDepth = 0.0
+        if p.pbMinDepth > 0.0:
+            mx, mn = st["msMax"][i], st["msMin"][i]
+            leg = (mx - mn) if (mx is not None and mn is not None) else 0.0
+            if leg > 0:
+                pbDepth = ((pbExt - mn) / leg if biasDir < 0
+                           else (mx - pbExt) / leg)
+        locOk = ((i - pbExtX) <= p.locTol
+                 and pbAge >= p.pbMinAge
+                 and (p.pbMinDepth <= 0.0 or pbDepth >= p.pbMinDepth))
         # The HTF gate. A base-timeframe setup may only be taken when the
         # higher timeframe agrees on direction AND is itself tradeable. Off
         # when the gate is off, and then it is not counted either.

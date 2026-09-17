@@ -158,6 +158,52 @@ Written this way rather than "at the swing high" for two reasons: it is true
 bars later; and if the pullback pushes higher, a new pin takes over by itself,
 which is the newest-wins behaviour we want anyway.
 
+### 2.3b THREE DEFECTS IN 2.3, FOUND BY READING IT AGAINST THE CODE
+
+Measured on `SYMBOLS_FRESH3`, at the full funnel — family **and** colour
+**and** location, so these are real setups and not raw bars:
+
+| | Min15 | Min30 | Min60 |
+|---|---|---|---|
+| pin has a **ZERO-bar pullback** | **25.3%** | **30.8%** | **33.6%** |
+| pullback ≤ 1 bar | 47.3% | 56.0% | 61.4% |
+| pullback ≤ 3 bars | 70.9% | 80.5% | 85.2% |
+| median pullback age | 2 bars | 1 bar | 1 bar |
+
+**DEFECT 1 — the impulse bar can be its own pullback extreme.** `pbReset`
+fires on the bar that makes a new extreme in the trend direction, and the same
+line sets `pbExtX = i`. So on that bar `locOk` is already true and the bar's own
+high (in a downtrend) is treated as "the top of the pullback" when no pullback
+has happened. A quarter to a third of all setups are this. The counter-trend
+colour test removes most of them — before it, 55–65% of location-passing bars
+are zero-age — but not all, because a bar that makes a new low can still close
+green.
+
+**DEFECT 2 — there is no minimum pullback at all**, in bars or in price. §2.3
+says "the pin's high must be the highest high since the pullback began" and
+that is all it says. Nothing requires the pullback to have *happened*. The
+median is one to two bars.
+
+**DEFECT 3 — only ONE bar can ever be the pin.** `locOk` is
+`(i - pbExtX) <= locTol` and `locTol` ships at 0, so the pin must BE the bar
+that made the extreme. If that bar is a doji, or the wrong colour, the entire
+pullback is discarded — a textbook pin on the next bar, one tick lower, cannot
+qualify. §2.3's "if the pullback pushes higher, a new pin takes over by itself"
+only covers the case where price extends; it says nothing about the case where
+the extreme bar is simply not a pin, which is the common one.
+
+**None of these is measured yet.** `locTol` has only ever been tested at 0 and
+at 50 — the ablation's "no location test" arm, which is a destroy-it control,
+not a 1-to-3-bar tolerance. The parameters below exist so the three can be
+measured separately, and **all three default to current behaviour**, so nothing
+changes until a prereg says it should.
+
+| input | ships | what it does |
+|---|---|---|
+| `locTol` | **0** | bars after the extreme a pin may still sit. Defect 3. |
+| `pbMinAge` | **0** | bars the pullback must have run before a pin counts. Defect 1 and 2. |
+| `pbMinDepth` | **0.0** | fraction of the impulse leg the pullback must have retraced. Defect 2. |
+
 ### 2.4 Grade — a label, never a gate
 
 Tagged and shown, gating nothing:

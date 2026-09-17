@@ -116,7 +116,11 @@ fillBars = input.int(20, "Fill within", minval = 1, maxval = 200, group = gSet,
 maxLive = input.int(4, "Live setups at once", minval = 1, maxval = 8, group = gSet,
   tooltip = "A pullback contains several pins and any of them might be the one that works, so they all run independently. This caps how many, for the chart and the drawing budget; pins arriving at the cap are turned away and counted.")
 locTol = input.int(0, "Pullback extreme tolerance", minval = 0, maxval = 10, group = gSet,
-  tooltip = "Bars a pin may sit past the pullback extreme and still count. 0 means it must BE the extreme. Raising it is the single loosest change available here.")
+  tooltip = "Bars a pin may sit PAST the pullback extreme and still count. 0 means it must BE the extreme — so if the extreme bar is a doji or the wrong colour, the whole pullback is discarded and a textbook pin on the next bar, one tick lower, cannot qualify. That is defect 3 in ../SPEC.md 2.3b.\n\nNOT MEASURED at anything between 0 and 50. The ablation tested 50, which is the destroy-it arm, not a 1-to-3-bar tolerance.")
+pbMinAge = input.int(0, "… pullback must have run bars", minval = 0, maxval = 20, group = gSet,
+  tooltip = "How many bars the pullback must have RUN before a pin at its extreme counts. At 0 — what ships — the bar that makes a new trend extreme is immediately its own 'pullback extreme', so a quarter to a third of all setups have NO pullback at all: measured 25.3% / 30.8% / 33.6% on 15m / 30m / 1h. Defects 1 and 2 in ../SPEC.md 2.3b.\n\nThe clock runs from where the pullback STARTED, not from the extreme, so a pullback that has run ten bars and just made a new high is still ten bars old.")
+pbMinDepth = input.float(0.0, "… and retraced ≥ of the impulse", minval = 0.0, maxval = 0.9, step = 0.05, group = gSet,
+  tooltip = "How much of the impulse leg the pullback must have given back before a pin counts, as a fraction. At 0.0 — what ships — there is no minimum pullback IN PRICE at all; §2.3 only ever said the pin must be the highest high since the pullback began, never that the pullback had to have happened.\n\nThe leg is the same msMin-to-msMax the retrace Ending rule already uses, so this and 'End: retraced %' measure the same move from opposite ends: this one refuses a setup for too LITTLE pullback, that one for too much.")
 
 string sPin = "Pin high / low"
 string sPull = "Pullback extreme"
@@ -768,7 +772,13 @@ bool colourOk = biasDir < 0 ? isGreen : not isGreen
 // 3. LOCATION — the pin must BE the pullback extreme as of its own close, or
 //    within `locTol` bars of it. At 0 this rejected roughly 6 in 10 of the
 //    colour-correct pins, which makes it the strictest gate in the chain.
-bool locOk = bar_index - pbExtX <= locTol
+// `pbLeg`/`pbDepth` reuse the same msMin-to-msMax leg the retrace Ending rule
+// reads, measured to the pullback EXTREME rather than to the close, so the two
+// minimums below and the maximum above are all quoting one thing.
+float pbLeg = bMax - bMin
+float pbDepth = pbLeg > 0 ? (biasDir < 0 ? (pbExt - bMin) / pbLeg : (bMax - pbExt) / pbLeg) : 0.0
+int pbAge = na(pbStartX) ? 0 : bar_index - pbStartX
+bool locOk = bar_index - pbExtX <= locTol and pbAge >= pbMinAge and (pbMinDepth <= 0.0 or pbDepth >= pbMinDepth)
 
 bool barOk = barstate.isconfirmed
 bool pinRaw = barOk and famOk
@@ -1134,7 +1144,7 @@ if pinFound
     if not colourOk
         lastReject := "colour · " + (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend")
     else if not locOk
-        lastReject := "location · " + str.tostring(bar_index - pbExtX) + "b past extreme (tol " + str.tostring(locTol) + ")"
+        lastReject := bar_index - pbExtX > locTol ? "location · " + str.tostring(bar_index - pbExtX) + "b past extreme (tol " + str.tostring(locTol) + ")" : pbAge < pbMinAge ? "pullback only " + str.tostring(pbAge) + "b old (min " + str.tostring(pbMinAge) + ")" : "pullback only " + str.tostring(math.round(pbDepth * 100)) + "% deep (min " + str.tostring(math.round(pbMinDepth * 100)) + "%)"
 
 // The cap counts LIVE candidates only. A ghost still sits in `cands` so the one
 // resolution loop can walk it, but it is not a setup any more and must not be

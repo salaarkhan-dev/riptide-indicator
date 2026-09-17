@@ -60,8 +60,13 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # the re-run mattered more than the field count did. undertow_bias Min15 (all
 # seven arms) and undertow_htf Min15 (all five arms plus its random gate) both
 # reproduced to the digit first.
-DEFAULTS_FINGERPRINT = "614dae7aa501fa9a"
-DEFAULTS_COUNT = 56
+#
+# 2026-09-17: bumped a third time, for `pbMinAge`/`pbMinDepth` — the two
+# minimums SPEC.md 2.3b added after reading the pullback rule against the code.
+# Both ship at the value that reproduces current behaviour. undertow_bias Min15
+# and undertow_htf Min15 were re-run and reproduced before this moved.
+DEFAULTS_FINGERPRINT = "d52b65be4bb0794e"
+DEFAULTS_COUNT = 58
 
 good = []
 
