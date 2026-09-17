@@ -108,11 +108,24 @@ contradicted by its own other two panels.
 **All five sources are on the chart** and in the port, selectable from one
 dropdown, so they can be looked at. That is what they earned.
 
-**If you want one recommendation on grounds other than edge:** `range 0.40`
-swings, because it is the only setting in the study that means the same thing
-on 15m as it does on 30m. That makes every future measurement comparable across
-timeframes and stops the "it works differently on each chart" problem at its
-source. It does not make money and this page does not claim it does.
+**`range 0.40` is now the default** — in the Pine, the port and the watch — on
+grounds of consistency and nothing else. It is the only setting in this study
+that means the same thing on 15m as on 30m, which makes every future
+measurement comparable across timeframes and stops the "it works differently on
+each chart" problem at its source. **It beat none of the four alternatives on
+expectancy and this page does not claim it did.**
+
+Two consequences worth knowing, both measured after the switch:
+
+* **The alert rate nearly halved**, from 54 rows a day across 15m+30m to 30,
+  because the direction flips 0.6 times a day instead of 2.3. A side effect,
+  not a reason.
+* **The bias gate still cancels**, which needed checking rather than assuming.
+  On real candles it drops 16% of armed setups on 15m and 24% on 30m, against
+  28% under the bar pivot. On a synthetic random walk it cancels *nothing* —
+  the walk is too smooth for the direction ever to turn inside a setup's life —
+  which is a fact about the fixture and was nearly mistaken for a fact about
+  the gate.
 
 ## The open question, unchanged
 

@@ -607,18 +607,16 @@ EXHAUST_MAX_LINES = int(os.getenv("RIPTIDE_EXHAUST_MAX_LINES", "20"))
 # (rerun it; do not trust this comment) -- rows a day across 23 symbols:
 #
 #     tf      both   running   immature
-#     15m       36        18         17
-#     30m       18         9          9
-#     SHIPPED   54        27         26
+#     15m       20      15          4
+#     30m       10       6          4
+#     SHIPPED   30      21          8
 #
 # 1h is NOT in the shipped set, by request.
 #
-# FIFTY-FOUR A DAY IS THE HIGH END OF READABLE, and it is a consequence of the
-# chart settings this ships with: swing 6/2 with the sweep and stale Ending
-# rules off. At swing 15 with those rules on the same measurement was 16 a day.
-# A shorter swing means a twitchier structure and more CHoCHs; two fewer Ending
-# rules leaves far more bars tradeable. `/undertow running` halves it to 27 and
-# is the first thing to reach for if the digest stops getting read.
+# The swing source nearly halved this: the bar pivot at 6/2 was 54 a day across
+# the same two timeframes, `range` is 30, because it flips the direction 0.6
+# times a day instead of 2.3. `/undertow running` takes it to 21 and is the
+# first thing to reach for if the digest stops getting read.
 UNDERTOW_ALERTS = os.getenv("RIPTIDE_UNDERTOW_ALERTS", "0") == "1"
 UNDERTOW_INTERVALS = tuple(dict.fromkeys(
     i.strip() for i in

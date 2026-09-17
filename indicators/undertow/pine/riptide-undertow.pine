@@ -84,6 +84,15 @@ donLen = input.int(50, "Range bars", minval = 5, maxval = 500, group = gBias,
   tooltip = "Only for 'Range position'. Up when close is above the midpoint of the last N bars' high-low.")
 matureBars = input.int(20, "Mature after bars", minval = 1, maxval = 500, group = gBias,
   tooltip = "For every source EXCEPT 'structure' there is no BOS to count, so 'running' means the direction has held this many bars since it last flipped. Ignored by 'structure', which counts breaks of structure instead.")
+swingSrc = input.string("range", "Swings from", group = gBias,
+  options = ["bar", "range"],
+  tooltip = "HOW A SWING IS DEFINED, and the answer to 'it works differently on every timeframe'. 'bar' is a pivot of N BARS — six bars is ninety minutes on 15m and three hours on 1h, which is why the same setting flips the bias 2.3x a day on one and 1.1x on the other. 'range' is a reversal of k x the last N hours' high-to-low, which is the same question on every chart: 0.6 flips a day on both. IT DOES NOT MAKE MONEY — it beat none of the four alternatives measured in ../measurements/UNDERTOW_BIAS_SOURCE.md. It is the default because one setting that means one thing everywhere is worth having on its own terms.")
+swingK = input.float(0.40, "… major k", minval = 0.05, maxval = 3.0, step = 0.05, group = gBias,
+  tooltip = "Only for 'range'. A swing is confirmed once price retraces this much of the reference range. Higher = fewer, larger swings.")
+swingKMinor = input.float(0.12, "… minor k", minval = 0.02, maxval = 2.0, step = 0.02, group = gBias,
+  tooltip = "Only for 'range'. The short swings, which drive the inducement and the minor CHoCH.")
+swingHours = input.float(24.0, "… reference hours", minval = 1.0, maxval = 240.0, step = 1.0, group = gBias,
+  tooltip = "Only for 'range'. The span whose high-to-low sets the scale. A day's range is a day's range whichever chart you open it on — that is the whole reason this is timeframe-invariant and a per-bar quantity like ATR is not.")
 msLen = input.int(6, "Major swing", minval = 2, maxval = 100, group = gBias,
   tooltip = "Bars either side of a major swing. Higher = fewer, larger trends.")
 msShortLen = input.int(2, "Minor swing", minval = 2, maxval = 50, group = gBias,
@@ -253,6 +262,59 @@ bkZone(bool short, float focus, float lo, int look, bool wantOB, bool wantFVG) =
                     why := "FVG"
     [best, why]
 
+// ── THE PRICE SWING: k x A SPAN OF TIME, not N bars ─────────────────────────
+// Same shape as msSwings — the price on the bar it is CONFIRMED, and the bar it
+// SITS on — so the engine below reads either without knowing which.
+//
+// NO LOOK-AHEAD. Every new high moves the running extreme; the moment price
+// trades `thr` below it, that extreme becomes a confirmed swing high, emitted
+// on the confirming bar and dated back to the bar it sits on. The threshold is
+// read on the CONFIRMING bar because that is the only one a live scanner has.
+//
+// `low` is tested before `high` within a bar: while tracking a high, a bar that
+// makes a new high does not also confirm on its own low. Which came first is
+// unknowable intrabar, so it gets one more bar.
+priceSwings(simple int n, float k) =>
+    var bool up = true
+    var float ext = na
+    var int extX = na
+    var int sTopX = na
+    var int sBtmX = na
+    float thr = k * (ta.highest(high, n) - ta.lowest(low, n))
+    float sTop = na
+    float sBtm = na
+    if na(ext)
+        ext := high
+        extX := bar_index
+    if bar_index >= 20 and thr > 0
+        if up
+            if high > ext
+                ext := high
+                extX := bar_index
+            else if ext - low >= thr
+                sTop := ext
+                sTopX := extX
+                up := false
+                ext := low
+                extX := bar_index
+        else
+            if low < ext
+                ext := low
+                extX := bar_index
+            else if high - ext >= thr
+                sBtm := ext
+                sBtmX := extX
+                up := true
+                ext := high
+                extX := bar_index
+    else if up and high > ext
+        ext := high
+        extX := bar_index
+    else if not up and low < ext
+        ext := low
+        extX := bar_index
+    [sTop, sTopX, sBtm, sBtmX]
+
 // The swing detector, from riptide-indicator-v2.pine section 12. `simple int`
 // because ta.highest needs a compile-time length.
 msSwings(simple int msL) =>
@@ -397,8 +459,27 @@ drawMiss(Cand c, string why) =>
 // msBtmY are re-seeded by every new swing, so a level cannot go stale and the
 // state machine cannot deadlock.
 
-[msTop, msTopX, msBtm, msBtmX] = msSwings(msLen)
-[msSTop, msSTopX, msSBtm, msSBtmX] = msSwings(msShortLen)
+// BOTH DETECTORS RUN EVERY BAR, unconditionally, and one is chosen. A ta.*
+// inside a branch grows a different history, so the unused one is computed and
+// discarded rather than skipped.
+//
+// `simple int` for the reference window: ta.highest needs a compile-time
+// length, and timeframe.in_seconds() supplies one — which is what makes
+// "24 hours" resolve to 96 bars on 15m and 24 on 1h without a second input.
+int rbLen = math.max(2, math.round(swingHours * 3600 / timeframe.in_seconds()))
+[pTop, pTopX, pBtm, pBtmX] = priceSwings(rbLen, swingK)
+[pSTop, pSTopX, pSBtm, pSBtmX] = priceSwings(rbLen, swingKMinor)
+[bTop, bTopX, bBtm, bBtmX] = msSwings(msLen)
+[bSTop, bSTopX, bSBtm, bSBtmX] = msSwings(msShortLen)
+bool useRange = swingSrc == "range"
+float msTop  = useRange ? pTop  : bTop
+int   msTopX = useRange ? pTopX : bTopX
+float msBtm  = useRange ? pBtm  : bBtm
+int   msBtmX = useRange ? pBtmX : bBtmX
+float msSTop  = useRange ? pSTop  : bSTop
+int   msSTopX = useRange ? pSTopX : bSTopX
+float msSBtm  = useRange ? pSBtm  : bSBtm
+int   msSBtmX = useRange ? pSBtmX : bSBtmX
 
 var int msOs = 0
 var bool msTopCrossed = false

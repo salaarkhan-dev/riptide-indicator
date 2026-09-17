@@ -184,6 +184,10 @@ def test_frozen_constants_match_the_port():
     p = U.P()
     for name, live, want in (
             ("msShortLen", W.MS_SHORT_LEN, p.msShortLen),
+            ("swingSrc", W.SWING_SRC, p.swingSrc),
+            ("swingK", W.SWING_K, p.swingK),
+            ("swingKMinor", W.SWING_K_MINOR, p.swingKMinor),
+            ("swingHours", W.SWING_HOURS, p.swingHours),
             ("msBosNeedsIdm", W.BOS_NEEDS_IDM, p.msBosNeedsIdm),
             ("endMinor", W.END_MINOR, p.endMinor),
             ("endSweep", W.END_SWEEP, p.endSweep),

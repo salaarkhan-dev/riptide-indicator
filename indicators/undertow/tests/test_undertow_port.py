@@ -75,10 +75,18 @@ def test_swings_match_ms_struct():
 
 def test_structure_matches_ms_struct():
     """The port's section 3 fires CHoCH, BOS and sweeps on exactly the bars the
-    already-parity-checked engine does. This is link 3 of the chain."""
+    already-parity-checked engine does. This is link 3 of the chain.
+
+    PINNED TO `bar` SWINGS, because ms_struct IS the bar pivot -- it is the
+    transcription of v2 and v2 has no other detector. The shipped default is
+    now `range`, which feeds the same engine from a different source; that path
+    is covered by test_price_swing_sources_run_end_to_end and by the Pine's own
+    parity check, not here. Leaving this on the default would have compared two
+    detectors and called it a drift.
+    """
     for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006)):
         cs = walk(1500, seed=seed, drift=drift)
-        p = U.P()
+        p = U.P(swingSrc=U.SW_BAR, msLen=15, msShortLen=3)
         st, _ = U.structure(cs, p)
         ev, _ = ms_struct.engine(cs, p.msLen, p.msShortLen, p.msBosNeedsIdm)
 
@@ -328,8 +336,17 @@ def test_ghosts_do_not_touch_the_real_numbers():
     """The ghost column must be free. Running with and without it has to leave
     every real counter identical -- if it does not, the measurement changed the
     thing it was measuring."""
+    # BAR SWINGS HERE, not the shipped `range`, and it is a fixture choice
+    # rather than a claim. A random walk under `range` swings produces a bias
+    # so stable that it never turns inside a setup's life, so the gate cancels
+    # nothing and this test would pass vacuously on an empty column. On REAL
+    # candles the gate still cancels 16-24% of armed setups under `range`
+    # (against 28% under the bar pivot) -- checked before changing this, so
+    # that "the gate is inert now" was not quietly assumed.
+    #
+    # What is under test is the ghost ACCOUNTING: that the column is free.
     cs = walk(3000, seed=43, drift=0.0004)
-    a = U.run(cs, U.P(), "T")
+    a = U.run(cs, U.P(swingSrc=U.SW_BAR, msLen=6, msShortLen=2), "T")
     ok(a.nMissBias > 0, f"the bias gate cancelled something: {a.nMissBias}")
     ok(len(a.ghosts) > 0, f"some of those ghosts filled: {len(a.ghosts)}")
     ok(all(not t.ghost for t in a.real) and len(a.real) + len(a.ghosts)

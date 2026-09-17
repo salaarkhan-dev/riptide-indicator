@@ -47,12 +47,23 @@ UT = "indicators/undertow/pine/riptide-undertow.pine"
 
 # The engine slab in each file, anchored on CODE rather than on a banner —
 # banners are prose and get reworded.
+# THE ANCHOR IS `var int msOs = 0`, NOT THE msSwings CALL, and that changed for
+# a reason worth recording. Undertow now offers two swing DEFINITIONS -- the v2
+# bar pivot and a price swing measured in a span of time -- and muxes between
+# them just above the engine. Those mux lines sit where the call used to be, so
+# anchoring there would compare a block v2 does not have.
+#
+# The engine itself is unchanged and is still compared in full. What moved out
+# of the compared slab is only WHICH DETECTOR FEEDS IT, and CALLS below puts
+# that back: both files must still call msSwings at both lengths, so the bar
+# path cannot quietly change shape while the anchor looks at something else.
 SLABS = {
-    V2: ("[msTop, msTopX, msBtm, msBtmX] = msSwings(msLen)",
-         "// ── live extensions"),
-    UT: ("[msTop, msTopX, msBtm, msBtmX] = msSwings(msLen)",
-         "// ══════════════════════ 4. MINOR STRUCTURE"),
+    V2: ("var int msOs = 0", "// ── live extensions"),
+    UT: ("var int msOs = 0", "// ══════════════════════ 4. MINOR STRUCTURE"),
 }
+
+# Call sites that must exist in both, verbatim after whitespace collapse.
+CALLS = ("msSwings(msLen)", "msSwings(msShortLen)")
 
 # Also compare the swing detector itself, which sits in a different place in
 # each file — a helper at the top here, mid-section there.
@@ -159,6 +170,15 @@ def statements(lines: list[str]) -> collections.Counter:
 
 
 def main() -> int:
+    missing = [(f, c) for f in (V2, UT) for c in CALLS
+               if c not in open(f).read()]
+    if missing:
+        print("A CALL SITE IS GONE — the bar detector is no longer wired the "
+              "same way in both files:")
+        for f, c in missing:
+            print(f"    {f}: no {c!r}")
+        return 1
+
     a = statements(slab(V2, *SLABS[V2]) + func(V2))
     b = statements(slab(UT, *SLABS[UT]) + func(UT))
     only_v2 = sorted((a - b).elements())

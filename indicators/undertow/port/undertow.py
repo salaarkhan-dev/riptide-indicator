@@ -81,6 +81,9 @@ BS_EMA = "EMA cross"
 BS_ST = "Supertrend"
 BS_SLOPE = "Slope"
 BS_DON = "Range position"
+# `swingSrc` — how a swing is DEFINED. Compared by value on both sides.
+SW_BAR = "bar"
+SW_RANGE = "range"
 # `endMinor`
 E_OFF = "off"
 E_FLIP = "on the flip"
@@ -160,9 +163,14 @@ class P:
     #     "atr"    k x ATR(14). A per-bar unit, so it is WORSE    x0.22
     #     "range"  k x the range of `swingHours` of trading       x0.89
     # "range" is the only one that means the same thing on 15m and on 1h.
-    # "bar" stays the default because being scale-invariant is not the same as
-    # being profitable, and only a study can say which.
-    swingSrc: str = "bar"
+    # "range" IS NOW THE DEFAULT, and not because it makes money -- it does
+    # not. UNDERTOW_BIAS_SOURCE.md measured it against four alternatives and it
+    # beat none of them. It is the default because it is the only setting in
+    # that study that behaves the SAME on 15m as on 30m: 0.6 flips a day on
+    # both, against the bar pivot's 2.3 and 1.1. One setting that means one
+    # thing on every chart is worth having on its own terms, and it makes every
+    # future measurement comparable across timeframes.
+    swingSrc: str = SW_RANGE
     swingK: float = 0.40
     swingKMinor: float = 0.12
     swingHours: float = 24.0
@@ -544,7 +552,7 @@ def alt_structure(cs, p):
 
 
 def _swings(cs, p: P, major: bool, atr):
-    if p.swingSrc == "bar":
+    if p.swingSrc == SW_BAR:
         return bar_swings(cs, p.msLen if major else p.msShortLen)
     k = p.swingK if major else p.swingKMinor
     scale = (atr if p.swingSrc == "atr"

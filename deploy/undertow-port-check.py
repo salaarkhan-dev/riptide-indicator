@@ -175,8 +175,10 @@ def main() -> int:
     # exist so a study can remove one gate at a time. Adding to this set is how
     # the check gets quietly widened, so each entry is here in a diff, with a
     # reason above it.
-    PORT_ONLY = {"swingSrc", "swingK", "swingKMinor", "swingHours", "htfMult",
-                 "feeFrac",
+    # The swing source is NO LONGER port-only: `range` became the default and
+    # the chart has to be able to show what the studies measured, so all four
+    # of its inputs now exist in the Pine and are compared like any other.
+    PORT_ONLY = {"htfMult", "feeFrac",
                  "useFamily", "useColour", "bkMode"}
     for name in sorted(fields):
         if name not in pin and name not in PORT_ONLY:

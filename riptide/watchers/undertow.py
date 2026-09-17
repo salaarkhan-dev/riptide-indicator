@@ -118,6 +118,10 @@ RECENT_BARS = 6
 # indicators/undertow/port/undertow.py::P is the authority; the two are held
 # together by test_watch_undertow.py.
 MS_SHORT_LEN = 2
+SWING_SRC = "range"
+SWING_K = 0.40
+SWING_K_MINOR = 0.12
+SWING_HOURS = 24.0
 BOS_NEEDS_IDM = True
 END_MINOR = "on the flip"
 END_SWEEP = False
@@ -179,6 +183,77 @@ def _roll(vals, L, cmp):
             dq.popleft()
         out[i] = vals[dq[0]]
     return out
+
+
+def _range_basis(cs, n):
+    """The high-to-low of the last `n` bars, as a price.
+
+    THE TIMEFRAME-INVARIANT UNIT. `n` is a span of TIME expressed in bars, so
+    the number this returns is the same on 15m as on 30m -- a day's range does
+    not depend on how the day is sliced. That is the whole reason the swing
+    threshold below means one thing on every chart, and the reason a per-bar
+    quantity like ATR cannot: ATR is the range of a BAR, and the bar is what
+    changes.
+    """
+    n = max(2, int(n))
+    from collections import deque as _dq
+
+    def roll(v, cmp):
+        out, dq = [0.0] * len(v), _dq()
+        for i, x in enumerate(v):
+            while dq and cmp(v[dq[-1]], x):
+                dq.pop()
+            dq.append(i)
+            while dq[0] <= i - n:
+                dq.popleft()
+            out[i] = v[dq[0]]
+        return out
+    hh = roll([c.h for c in cs], lambda a, b: a <= b)
+    ll = roll([c.l for c in cs], lambda a, b: a >= b)
+    return [a - b for a, b in zip(hh, ll)]
+
+
+def _bars_per(cs, hours):
+    """How many bars cover `hours`, from the candles' own timestamps. The
+    SMALLEST gap is the step: a missing candle only ever makes one larger."""
+    gaps = [b.t - a.t for a, b in zip(cs, cs[1:]) if b.t > a.t]
+    step = min(gaps) if gaps else 0
+    return max(2, round(hours * 3600 / step)) if step > 0 else 2
+
+
+def _price_swings(cs, k, scale, warmup=20):
+    """A swing is a reversal of `k * scale`. No bar window.
+
+    Same four lists as _swings, so the engine reads either without knowing
+    which. The threshold is read on the CONFIRMING bar, which is the only one a
+    live scanner has; `low` is tested before `high` within a bar, so a bar that
+    makes a new high does not also confirm on its own low.
+    """
+    n = len(cs)
+    tops, btms = [None] * n, [None] * n
+    if not n:
+        return tops, btms
+    up, ext = True, cs[0].h
+    for i, c in enumerate(cs):
+        thr = k * (scale[i] or 0.0)
+        if i >= warmup and thr > 0:
+            if up:
+                if c.h > ext:
+                    ext = c.h
+                elif ext - c.l >= thr:
+                    tops[i] = ext
+                    up, ext = False, c.l
+            else:
+                if c.l < ext:
+                    ext = c.l
+                elif c.h - ext >= thr:
+                    btms[i] = ext
+                    up, ext = True, c.h
+        elif up and c.h > ext:
+            ext = c.h
+        elif not up and c.l < ext:
+            ext = c.l
+    return tops, btms
 
 
 def _swings(cs, msL):
@@ -268,8 +343,17 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
     if n < 60:
         return []
     atr = _atr(cs, 14)
-    msTop, msBtm = _swings(cs, ms_len)
-    msSTop, msSBtm = _swings(cs, MS_SHORT_LEN)
+    # WHICH SWING DEFINITION. `range` is the shipped default: it is the only
+    # one that behaves the same on 15m as on 30m (0.6 flips a day on both,
+    # against the bar pivot's 2.3 and 1.1). It does not make money and
+    # UNDERTOW_BIAS_SOURCE.md says so; it makes one setting mean one thing.
+    if SWING_SRC == "range":
+        scale = _range_basis(cs, _bars_per(cs, SWING_HOURS))
+        msTop, msBtm = _price_swings(cs, SWING_K, scale)
+        msSTop, msSBtm = _price_swings(cs, SWING_K_MINOR, scale)
+    else:
+        msTop, msBtm = _swings(cs, ms_len)
+        msSTop, msSBtm = _swings(cs, MS_SHORT_LEN)
 
     msOs = 0
     msTopCrossed = msBtmCrossed = False

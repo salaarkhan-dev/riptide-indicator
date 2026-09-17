@@ -40,7 +40,10 @@ STATES = ("both", "running", "immature")
 # The shipped default first -- the row the watcher's RATE tables come from --
 # then two wider settings, so the cost of tightening is visible beside it
 # rather than needing a second run.
-SWINGS = (_P().msLen, 15, 30)
+# The bar-pivot lengths only mean anything when swingSrc is "bar". Under the
+# shipped "range" source msLen is unread, so sweeping it would print the same
+# row three times and invite somebody to read a difference into it.
+SWINGS = (_P().msLen,) if _P().swingSrc == "range" else (_P().msLen, 15, 30)
 
 
 def main():
