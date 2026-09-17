@@ -365,6 +365,11 @@ bool pinOk = pinFound and colourOk and locOk
 
 // The grade is a LABEL and gates nothing. Free to record, and if partials later
 // behave differently we can already tell them apart.
+// WHY THIS BAR WAS TURNED DOWN, per bar. The panel's "last reject" is one
+// string for the whole chart, which cannot answer "why not THAT candle" — the
+// first question anyone asks of a detector.
+string pinWhy = not famOk ? "no dominant wick (doji, or the family is off)" : not tradeable ? "bias is " + biasState : not colourOk ? (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend") + " — wrong colour" : not locOk ? "not the pullback extreme" : "ok"
+
 string pinGrade = bodyR <= 0.35 ? "normal" : "partial"
 string pinFace = famHam ? (isGreen ? "Hammer" : "Hanging man") : (isGreen ? "Inv hammer" : "Shooting star")
 string pinTag = pinFace + " · " + pinGrade + (math.min(upW, dnW) >= 0.05 ? " +wick" : "")
@@ -400,6 +405,7 @@ var int nRaw = 0
 var int nPins = 0
 var int nColour = 0
 var int nLoc = 0
+var int nSuper = 0
 var int nArmed = 0
 var int nFilled = 0
 var string lastReject = "—"
@@ -524,6 +530,12 @@ if pinFound
         lastReject := "location (not the pullback extreme)"
 
 bool takeNew = pinOk and (na(pdBar) or (newestWins and not pdArmed))
+// Counted separately because it is NOT a rejection: the pullback simply made a
+// new extreme and the newer pin is the better candidate. Folded into
+// "candidates" it looks like 270 setups were found and 14 survived, which is
+// not what happened.
+if takeNew and not na(pdBar)
+    nSuper := nSuper + 1
 if takeNew
     pdBar := bar_index
     pdHigh := high
@@ -673,21 +685,22 @@ plotshape(showStruct and msBosDn, "BOS down", shape.cross, location.abovebar,
   color.new(color.gray, 45), size = size.tiny, text = "BOS",
   textcolor = color.new(color.gray, 35))
 
-// Debug: a dot on every pin, and ONE line on hover. Not a paragraph.
-// Rejects get the cheap mark (a plot costs nothing against the object limit);
-// pins that PASSED get the label below, which carries the tooltip.
-plotshape(dbgOn and dbgRejects and pinRaw and not pinOk, "Pin rejected",
-  shape.xcross, location.abovebar, color.new(color.gray, 40), size = size.tiny)
-
-// The tag goes in a TOOLTIP rather than on the chart: a line of text over every
-// candidate is the clutter this indicator exists to avoid. Capped on its own
-// budget, and only for pins that actually passed.
+// DEBUG: one mark per pin, and hovering it says why. Blue took it, grey did
+// not, and the tooltip carries the reason either way — that is the whole point.
+// A bar with NO mark at all failed the very first test: its wicks were
+// balanced, so it is not a pin shape in the first place.
+//
+// 300, not keepN: this is for scrolling back and interrogating a candle you
+// can see, so the cap has to cover a screen of them rather than the last few
+// setups. Pine's own ceiling is 500 labels and debug is off by default.
 var array<label> dbgBuf = array.new<label>()
-if dbgOn and pinOk
-    dbgBuf.push(label.new(bar_index, high, "", xloc = xloc.bar_index,
-      style = label.style_circle, size = size.tiny,
-      color = color.new(color.blue, 40), tooltip = pinTag))
-    while dbgBuf.size() > keepN * 4
+if dbgOn and pinRaw and (pinOk or dbgRejects)
+    dbgBuf.push(label.new(bar_index, pinOk ? high : low, "",
+      xloc = xloc.bar_index, style = pinOk ? label.style_circle
+      : label.style_xcross, size = size.tiny,
+      color = pinOk ? color.new(color.blue, 40) : color.new(color.gray, 55),
+      tooltip = pinOk ? pinTag + " · taken" : pinTag + "\n" + pinWhy))
+    while dbgBuf.size() > 300
         label.delete(dbgBuf.shift())
 
 
@@ -699,7 +712,7 @@ if dbgOn and pinOk
 // only question a quiet detector ever raises, and a count alone cannot answer
 // it.
 
-var table pnl = table.new(position.top_right, 2, 9, border_width = 1,
+var table pnl = table.new(position.top_right, 2, 10, border_width = 1,
   frame_width = 1, frame_color = color.new(color.gray, 60))
 
 row(int r, string k, string v, color c) =>
@@ -714,14 +727,18 @@ if barstate.islast
     row(0, "bias", dir + " · " + biasState, bc)
     row(1, "pullback", na(pbStartX) ? "—" : str.tostring(bar_index - pbStartX) + " bars", color.gray)
     row(2, "candidates", str.tostring(nLoc), color.gray)
-    row(3, "armed", str.tostring(nArmed), color.gray)
-    row(4, "entries", str.tostring(nFilled), color.gray)
-    row(5, "live", na(pdBar) ? "—" : pdArmed ? "armed · " + (pdOrder == 1 ? "W→F" : "F→W") : (pdWorkOk ? "W✓ F✗" : pdFailOk ? "W✗ F✓" : "waiting"), color.gray)
-    row(6, "last reject", lastReject, color.new(color.gray, 20))
+    // Not a rejection. A pullback that keeps extending replaces its own
+    // candidate, so this is usually the largest number on the panel and the
+    // reason `candidates` and `armed` are so far apart.
+    row(3, "superseded", str.tostring(nSuper) + (newestWins ? "" : " (first wins)"), color.gray)
+    row(4, "armed", str.tostring(nArmed), color.gray)
+    row(5, "entries", str.tostring(nFilled), color.gray)
+    row(6, "live", na(pdBar) ? "—" : pdArmed ? "armed · " + (pdOrder == 1 ? "W→F" : "F→W") : (pdWorkOk ? "W✓ F✗" : pdFailOk ? "W✗ F✓" : "waiting"), color.gray)
+    row(7, "last reject", lastReject, color.new(color.gray, 20))
     // The marks that cannot carry their own text. CHoCH and BOS name
     // themselves on the bar, so they are deliberately not repeated here.
-    row(8, "marks", "● swing hi/lo · ▲▼ entry · × unfilled", color.gray)
+    row(9, "marks", "● swing hi/lo · ▲▼ entry · × unfilled", color.gray)
     if dbgOn
-        row(7, "pins·bias·col·loc·arm·fill", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·" + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·" + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray)
+        row(8, "pin·bias·col·loc·sup·arm·fill", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·" + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·" + str.tostring(nSuper) + "·" + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray)
     else
-        row(7, "", "", color.gray)
+        row(8, "", "", color.gray)

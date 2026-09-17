@@ -207,8 +207,19 @@ candidate  ->  armed  ->  filled
       dropped     expired     (v1 stops here — no outcome is scored)
 ```
 
-- **One live setup per pullback, newest pin wins.** Input flips it to "all" for
-  debugging.
+- **One live setup per pullback, newest pin wins.** Input flips it to "first
+  wins".
+
+  **This is the biggest single effect in the funnel and it is not a rejection.**
+  On a real chart it took 270 candidates down to 14 armed. A pullback that keeps
+  extending replaces its own candidate every time, and worse: in a long bias the
+  bar that closes below the pin's low — one of the two confirmations — is itself
+  a new pullback low, so if it is also a valid pin it destroys the candidate it
+  was confirming. A candidate survives mainly when the confirming bar happens
+  *not* to be a pin, which is a strange thing to be selecting on. The panel
+  counts supersessions on their own row rather than hiding them inside
+  `candidates`. Whether "first wins" is the better rule is now an open
+  question with evidence behind it.
 - A setup is dropped when: the bias turns Ending · the confirm window runs out ·
   the fill window runs out · the stop is taken before the fill.
 - `keepN` caps how many completed setups stay drawn. Pine has a hard object
@@ -324,4 +335,6 @@ backup fill, not the planned one.
   the chart will correct them.
 - **`wickEdge` = 0.05** is a guess for the doji margin, same.
 - Whether a **near-miss on location** (pin one or two bars off the pullback
-  extreme) should count. Currently: no.
+  extreme) should count. Currently: no — and it rejects roughly 6 in 10 of the
+  colour-correct pins, so it is the strictest gate before supersession.
+- **Newest wins vs first wins**, given the supersession effect above.
