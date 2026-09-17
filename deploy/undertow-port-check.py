@@ -188,11 +188,16 @@ def main() -> int:
     # is still on the chart, so stAtrLen/stMult are NOT in here.
     RETIRED = {"emaFast", "emaSlow", "donLen",
                "slopeUnit", "slopeLen", "slopeMin",
-               "slopeHours", "slopeMinPerHr"}
-    # BS_MTF's three are NO LONGER port-only: 'MTF EMA align' was added to the
-    # chart on request after UNDERTOW_MTF_EMA.md measured it, so mtfFast,
-    # mtfSlow and mtfMult are compared like any other input. Being on the chart
-    # is not a promotion -- biasSrc still defaults to 'structure'.
+               "slopeHours", "slopeMinPerHr",
+               # Supertrend and MTF EMA align went the same way, and with them
+               # `matureBars`, which only ever meant anything for a source with
+               # no BOS to count. The CHART NOW OFFERS STRUCTURE AND NOTHING
+               # ELSE: five measured alternatives, none of which beat it, were
+               # costing seven inputs in group 1. They stay in the port because
+               # undertow_bias, undertow_slope and undertow_mtf have to keep
+               # reproducing their pages.
+               "biasSrc", "stAtrLen", "stMult", "matureBars",
+               "mtfFast", "mtfSlow", "mtfMult"}
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,
