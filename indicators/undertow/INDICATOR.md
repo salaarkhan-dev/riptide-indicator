@@ -10,6 +10,7 @@ default, saying so in every message.**
 | [`UNDERTOW_EXITS.md`](measurements/UNDERTOW_EXITS.md) | 8–12% of setups really do reach 7R — and a **coin reaches 7R 12.5% of the time** |
 | [`UNDERTOW_BACKUP_FILL.md`](measurements/UNDERTOW_BACKUP_FILL.md) | the OB/FVG backup nets **+0.03 R per armed setup**, positive on 3 of 3 and significant on none — because two large, individually significant halves nearly cancel |
 | [`UNDERTOW_LATE_BACKUP.md`](measurements/UNDERTOW_LATE_BACKUP.md) | waiting for the Focus limit to expire removes the tax **and all the opportunity**: 100% of the +0.6 R trades fill inside the window, median 1–2 bars |
+| [`UNDERTOW_BIAS_SOURCE.md`](measurements/UNDERTOW_BIAS_SOURCE.md) | five direction sources — structure, EMA, Supertrend, Slope, range position — and **none beat the baseline**. EMA swung 0.54 R per trade between two halves of the same universe, which is the clearest "this is noise" in the project |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
@@ -127,12 +128,13 @@ SPEC.md                        the design; the Pine is built against it
 pine/riptide-undertow.pine     v1 — draws setups and scores them on screen
 port/undertow.py               the Python transcription; three swing sources
 port/swings.py                 bar pivot · k x ATR · k x a fixed span of time
-prereg/                        written before each run — six of them
+prereg/                        written before each run — seven of them
 studies/undertow_sweep.py      the parameter study
 studies/undertow_ablation.py   the six-arm ablation
 studies/undertow_exits.py      eight exits on identical fills
 studies/undertow_backup.py     the OB/FVG backup, decomposed
 studies/undertow_late_backup.py  the same backup, placed after the limit dies
+studies/undertow_bias.py       five direction sources, head to head
 studies/undertow_rate.py       how many alerts a day — the product decision
 measurements/                  what they concluded
 
