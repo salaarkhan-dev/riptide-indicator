@@ -1,4 +1,4 @@
-# Trendpin — v1 specification
+# Riptide Undertow — v1 specification
 
 **Status: SPEC ONLY. No Pine written yet. Nothing here is measured.**
 
@@ -7,8 +7,14 @@ scoring, no win rate, no port. The one thing v1 has to get right is
 **detection** — bias, structure, pullback, pin — because everything later is
 built on it being correct.
 
-The name is provisional. The slug becomes the `/command` and the settings keys
-when this ports, so renaming is free now and expensive later.
+**Riptide Undertow.** An undertow is the current beneath the surface that
+drags you back out, which is the thesis exactly: the pullback is the surface
+move, the trend is the current under it, and the setup fires when the surface
+fails and the undertow takes price back.
+
+    Pine title   Riptide Undertow — Structure Bias & Pin Continuation
+    slug         undertow          /undertow · RIPTIDE_UNDERTOW_ALERTS
+    pine         pine/riptide-undertow.pine
 
 ---
 
@@ -307,7 +313,6 @@ backup fill, not the planned one.
 
 ## 11. Open
 
-- **Name.** `trendpin` is a placeholder.
 - **Confirm and fill windows** default to 20 bars each; both are guesses and
   the chart will correct them.
 - **`wickEdge` = 0.05** is a guess for the doji margin, same.

@@ -1,4 +1,4 @@
-# Trendpin — market-structure bias + a single-candle pin
+# Riptide Undertow — market-structure bias + a single-candle pin
 
 **Status: SPEC ONLY.** No Pine, no measurement, no alerts. Read
 [`SPEC.md`](SPEC.md) — it is the whole design and it is what v1 gets built
