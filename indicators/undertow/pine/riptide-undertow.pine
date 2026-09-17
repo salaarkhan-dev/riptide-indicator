@@ -114,6 +114,10 @@ string sSwing = "Minor swing extreme"
 stopSrc = input.string("Pullback extreme", "Stop", group = gLvl,
   options = ["Pin high / low", "Pullback extreme", "Minor swing extreme"],
   tooltip = "Where the stop sits. Tighter stops mean bigger R and more setups stopped before the fill.")
+stopTrack = input.bool(true, "Stop follows the pullback", group = gLvl,
+  tooltip = "Arming a long REQUIRES a close below the pin's low, so a setup always arms while the pullback is still deepening and its stop is set on an unfinished move. On keeps the stop at the running extreme until the fill. You hold no position yet, so nothing is lost by moving it — but risk grows, the target moves with it, and 'stop taken before the fill' becomes impossible by construction.")
+stopBuf = input.float(0.25, "Stop buffer, ATR", minval = 0.0, maxval = 3.0, step = 0.05, group = gLvl,
+  tooltip = "Beyond the extreme, so a one-tick undercut does not take it. 0.25 is the buffer the CCP entry model used. 0 puts the stop exactly on the extreme.")
 rr = input.float(3.0, "Reward ratio", minval = 0.5, maxval = 20.0, step = 0.5, group = gLvl,
   tooltip = "Target as a multiple of risk. Drawing only — nothing here scores an outcome.")
 
@@ -470,6 +474,10 @@ else if biasDir > 0 and low <= pbExt
     pbExt := low
     pbExtX := bar_index
 
+// The stop buffer, in price. Called here and unconditionally: a ta.* inside a
+// branch grows a different history.
+float atrBuf = stopBuf * ta.atr(14)
+
 // THE PIN. Size is irrelevant, body size is irrelevant. Three tests.
 float rng = high - low
 float upW = rng > 0 ? (high - math.max(open, close)) / rng : 0.0
@@ -609,7 +617,8 @@ if barOk and cands.size() > 0
                 // drawn from a swing confirmed later is a stop that did not
                 // exist when the trade was taken.
                 float sw = c.short ? msSTopY : msSBtmY
-                float st = stopSrc == sPin ? (c.short ? c.hi : c.lo) : stopSrc == sPull ? c.pbExt : stopSrc == sSwing ? sw : na
+                float base = stopSrc == sPin ? (c.short ? c.hi : c.lo) : stopSrc == sPull ? c.pbExt : stopSrc == sSwing ? sw : na
+                float st = c.short ? base + atrBuf : base - atrBuf
                 float risk = math.abs(st - c.focus)
                 bool sane = not na(st) and risk > 0 and (c.short ? st > c.focus : st < c.focus)
                 if sane
@@ -624,6 +633,26 @@ if barOk and cands.size() > 0
             else if bar_index - c.bar >= confirmBars
                 why := "confirm window · no " + (c.workOk ? "F" : "W")
                 gone := true
+        // THE PULLBACK IS OFTEN NOT FINISHED WHEN A SETUP ARMS, and freezing
+        // the stop there sets it on an unfinished move. A long cannot arm
+        // without a close below the pin's low, so this is not an edge case, it
+        // is the normal case: the chart that produced this showed two pins with
+        // the same entry, one stopped at 77,568 and one surviving at 77,432,
+        // and the only difference was which bar they happened to arm on.
+        //
+        // Nothing is lost by moving a stop on an unfilled order — there is no
+        // position. The costs are real but different: risk grows, the target
+        // moves out with it, and "stop taken before the fill" can no longer
+        // happen, because a stop below the running low cannot be run. Only the
+        // pullback source tracks; the other two are fixed levels by definition.
+        if not gone and c.armed and stopTrack and stopSrc == sPull
+            bool deeper = c.short ? high > c.pbExt : low < c.pbExt
+            if deeper
+                c.pbExt := c.short ? high : low
+                c.stop := c.short ? c.pbExt + atrBuf : c.pbExt - atrBuf
+                float rk2 = math.abs(c.stop - c.focus)
+                // Recomputed, or rr would quietly stop meaning rr.
+                c.target := c.short ? c.focus - rr * rk2 : c.focus + rr * rk2
         // bar_index > c.armBar: the limit is only placed once the arming bar
         // has CLOSED, so a fill inside that same bar is look-ahead — the order
         // was not resting while it traded.

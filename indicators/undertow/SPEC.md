@@ -198,7 +198,8 @@ now costs nothing and lets a later measurement split them.
 |---|---|
 | **Entry** | limit at the **Focus line** (the pin's open) |
 | **Fill window** | `fillBars` after the trigger, then the setup expires |
-| **Stop** | dropdown: pin's own high/low · **pullback extreme** (default) · minor swing extreme |
+| **Stop** | dropdown: pin's own high/low · **pullback extreme** (default) · minor swing extreme, plus an **ATR buffer** (0.25, as the CCP entry model used) so a one-tick undercut does not take it |
+| **Stop follows the pullback** | on. A long cannot arm without a close below the pin's low, so **every** setup arms while the pullback is still deepening and freezing the stop there sets it on an unfinished move. Two pins with the same entry were seen stopping at 77,568 and surviving at 77,432 purely on which bar they armed. Nothing is lost by moving the stop on an unfilled order — there is no position — but risk grows, the target moves with it, and *stop taken before the fill* becomes impossible by construction |
 | **Target** | `rr` × risk from entry, default **3.0** |
 
 Verified against the worked example on BTCUSDT.P 15m:
