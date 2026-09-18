@@ -1,5 +1,30 @@
 # PRE-REGISTRATION — which pin, when a pullback offers several
 
+> ## RETIRED UNRUN, AND ITS UNIVERSE IS RELEASED
+>
+> **This study cannot run as written.** `pinNewest` and `famPriority` both
+> SHIPPED — as corrections, on the footing W→F went out on: the author's stated
+> rule goes on the chart, and measurement decides only the defaults it has an
+> opinion about. `P0` below is labelled *"what ships today"* and is now the
+> configuration with both switches OFF, which is nothing that ships. Its
+> baseline is false and every bar measured against it would be measuring the
+> wrong distance.
+>
+> **It is retired rather than rewritten.** Rewriting it would be asking the
+> same question with the answer already applied to the chart, and the honest
+> record is that the pair was decided by argument, not by measurement. The
+> argument is in [`../SPEC.md`](../SPEC.md) §2.3 and it is not a result.
+>
+> **`SYMBOLS_FRESH7` IS RELEASED** to
+> [`PREREG_undertow_strict.md`](PREREG_undertow_strict.md). No number was ever
+> computed on it — the candles were fetched and nothing was scored — and a set
+> is spent when somebody has seen a result from it, not when it has been named.
+> The machinery below, particularly `random_gate`, is the direct ancestor of
+> that study: same shape of rule, same subset property, same control.
+>
+> Kept in full because a retired prereg is a record, and because the reasoning
+> under *"THE CONTROL IS A RANDOM GATE"* is the part that outlived it.
+
 Committed before the first number. Run by
 `indicators/undertow/studies/undertow_pin.py`.
 
