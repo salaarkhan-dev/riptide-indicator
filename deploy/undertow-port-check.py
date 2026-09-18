@@ -46,6 +46,26 @@ PORT = ROOT / "indicators/undertow/port/undertow.py"
 DISPLAY_ONLY = {"showZones", "showUnfilled", "showStruct", "keepN",
                 "overlapMode", "showStats", "showBias", "showOB", "colOBBull",
                 "colOBBear", "showFVG", "fvgExtend", "zoneAuto",
+                # HOW MANY ZONES SURVIVE, AND WHAT KILLS THEM. All three
+                # reach only box.new and box.delete.
+                #
+                # `zoneMitig` looks like a rule and is not, but the reason is
+                # worth writing down. The port DOES find order blocks and fair
+                # value gaps -- bk_zone() -- and it finds them by a completely
+                # different algorithm: a demand scan over the last `bkLook`
+                # bars for the last opposite-coloured candle that got
+                # displaced, with no persistent zone list and so no mitigation
+                # state to mitigate. The chart's zones are LuxAlgo's, anchored
+                # to a structure break, kept in an array and deleted when price
+                # goes through. Two different objects that share a name.
+                #
+                # They are allowed to differ because bk_zone is reached ONLY by
+                # the backup fill, which is off by default, is not on the chart
+                # at all, and was measured twice -- UNDERTOW_BACKUP_FILL.md and
+                # UNDERTOW_LATE_BACKUP.md. If the backup fill ever comes back,
+                # that divergence is the first thing to settle and these three
+                # stop being display-only.
+                "obCount", "fvgCount", "zoneMitig",
                 "colLong", "colShort", "colLine", "dbgOn", "dbgRejects"}
 
 # input.color / input.string defaults that are Pine expressions rather than

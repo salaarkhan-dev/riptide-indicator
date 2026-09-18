@@ -204,6 +204,12 @@ fvgExtend = input.int(5, "… extend zones by", minval = 0, maxval = 50, group =
   tooltip = "How many bars past the gap the box is drawn. Cosmetic.")
 zoneAuto = input.bool(false, "… auto threshold", group = gShow,
   tooltip = "Filter out small gaps using the average bar range. OFF by default because a filter nothing has measured is a filter nobody should trust — and every zone filter measured in this project has failed.")
+obCount = input.int(5, "… order blocks kept", minval = 1, maxval = 20, group = gShow,
+  tooltip = "HOW MANY UNMITIGATED ORDER BLOCKS STAY ON THE CHART, newest first. LuxAlgo's Smart Money Concepts ships 5 internal order blocks and that is the default here.\n\nThese were hardcoded until now, on the argument in ../SETTINGS.md that a dial nobody can judge from a chart should not be offered. Asked for, so it is here — and unlike a threshold this one is judgeable: you can see how many boxes are on your screen and decide if it is too many.\n\nMITIGATED BLOCKS DO NOT COUNT. A block is gone the moment price trades through it, so this is a cap on what SURVIVES, not on how many are found.")
+fvgCount = input.int(20, "… gaps kept", minval = 1, maxval = 60, group = gShow,
+  tooltip = "How many unfilled fair value gaps stay on the chart, newest first. Higher than the order-block count because gaps are small, numerous and fill quickly.\n\nTradingView caps a script at 500 boxes in total and every gap costs TWO of them — it is drawn as two half-boxes so the midpoint shows. At 60 gaps that is 120 boxes before a single setup is drawn, which is why the maximum is where it is.")
+zoneMitig = input.string("wick", "… mitigated by", options = ["wick", "close"], group = gShow,
+  tooltip = "WHAT COUNTS AS PRICE TRADING THROUGH A ZONE.\n\n'wick' — any trade past the far edge kills it. The strict reading, and the default: a zone that has been touched at all is no longer untouched.\n\n'close' — the zone survives a wick and dies only on a CLOSE past its far edge. The forgiving reading, and the one that matches how most people talk about a level 'holding'.\n\nApplies to order blocks and fair value gaps alike. It is a DRAWING choice and changes no number on the panel: nothing in this indicator enters on a zone, and the two attempts to are in ../measurements/UNDERTOW_BACKUP_FILL.md and UNDERTOW_LATE_BACKUP.md.")
 keepN = input.int(45, "Keep last N setups", minval = 1, maxval = 60, group = gShow,
   tooltip = "How far back setups stay drawn. TradingView caps total drawings at 500, so a high value on a busy chart silently loses the oldest.")
 colLong = input.color(color.new(#089981, 0), "Long", group = gShow, inline = "c1")
@@ -1402,11 +1408,16 @@ type Zone
 var array<Zone> obZones = array.new<Zone>()
 var array<Zone> fvgZones = array.new<Zone>()
 
-// How many of each survive on the chart. Not inputs: LuxAlgo ships 5 order
-// blocks and ../SETTINGS.md is the argument against offering a dial for a
-// number nobody can judge from a chart.
-int OB_KEEP = 5
-int FVG_KEEP = 20
+// How many of each survive on the chart. These are `obCount` and `fvgCount`
+// now, in the Display group, defaulting to LuxAlgo's 5 order blocks and to 20
+// gaps. They were hardcoded on the ../SETTINGS.md argument against a dial
+// nobody can judge from a chart, and that argument is weaker here than it was
+// for a threshold: the reader can SEE how many boxes are on the screen.
+//
+// THE OLD CONSTANT TRIMMED TO `OB_KEEP * 2` AND SO KEPT TEN, not the five it
+// announced. Nothing chose that — the FVG list next to it trimmed to its
+// count exactly, so the two lists were capped by different rules and only one
+// of them matched its own comment. The cap is the count now, both times.
 
 // ta.* unconditionally — a ta.* inside a branch grows a different history.
 float atr200 = ta.atr(200)
@@ -1424,19 +1435,31 @@ zoneDrop(array<Zone> arr, int idx) =>
     box.delete(z.bx2)
     arr.remove(idx)
 
-// MITIGATION. A bearish block dies when price trades above its high, a bullish
-// one when price trades below its low — the wick, not the close, which is
-// LuxAlgo's "High/Low" setting and the stricter of its two.
+// MITIGATION. A bullish zone dies when price trades below its low, a bearish
+// one when price trades above its high — through the FAR edge, the side the
+// zone is supposed to hold.
+//
+// `zoneMitig` picks what "trades through" means. On "wick" any trade past the
+// edge kills it, which is the strict reading and the default; on "close" the
+// zone survives a wick and dies only on a close past the edge. Both are drawn
+// the same and neither feeds a number: nothing here enters on a zone.
+//
+// ONE RULE FOR BOTH LISTS. An order block and a fair value gap are different
+// objects but "has price been through it" is the same question, and two
+// spellings of it would be two things to keep in step.
+zoneGone(Zone z) =>
+    float dn = zoneMitig == "close" ? close : low
+    float up = zoneMitig == "close" ? close : high
+    z.bull ? dn < z.btm : up > z.top
+
 if barOk and obZones.size() > 0
     for k = obZones.size() - 1 to 0
-        Zone z = obZones.get(k)
-        if (z.bull and low < z.btm) or (not z.bull and high > z.top)
+        if zoneGone(obZones.get(k))
             zoneDrop(obZones, k)
 
 if barOk and fvgZones.size() > 0
     for k = fvgZones.size() - 1 to 0
-        Zone z = fvgZones.get(k)
-        if (z.bull and low < z.btm) or (not z.bull and high > z.top)
+        if zoneGone(fvgZones.get(k))
             zoneDrop(fvgZones, k)
 
 // THE SCAN. Walk back `span` bars and return the offset of the most extreme
@@ -1465,7 +1488,7 @@ obPush(int span, bool bull) =>
       xloc = xloc.bar_index, extend = extend.right, border_color = color(na),
       bgcolor = c), na, obPH[off], obPL[off], bull)
     obZones.unshift(z)
-    while obZones.size() > OB_KEEP * 2
+    while obZones.size() > obCount
         zoneDrop(obZones, obZones.size() - 1)
 
 
@@ -1508,13 +1531,21 @@ fvgPush(float top, float btm, bool bull) =>
     color edge = color.new(base, 40)
     float mid = math.avg(top, btm)
     int r = bar_index + fvgExtend
-    box b1 = box.new(bar_index, top, r, mid, xloc = xloc.bar_index,
+    // IT STARTS TWO BARS BACK, WHERE THE GAP IS. A fair value gap is the space
+    // between bar[2]'s extreme and this bar's, so it came into existence at
+    // bar[2] and the three bars that made it are the ones worth looking at.
+    // These boxes started at `bar_index`, which drew the gap beginning at its
+    // right-hand edge and hid the candles that formed it — the order blocks
+    // beside them have always been drawn from `bar_index - off`, so the two
+    // zone types disagreed about where a zone starts.
+    int l = bar_index - 2
+    box b1 = box.new(l, top, r, mid, xloc = xloc.bar_index,
       border_color = edge, bgcolor = fill)
-    box b2 = box.new(bar_index, mid, r, btm, xloc = xloc.bar_index,
+    box b2 = box.new(l, mid, r, btm, xloc = xloc.bar_index,
       border_color = edge, bgcolor = fill)
     Zone z = Zone.new(b1, b2, top, btm, bull)
     fvgZones.unshift(z)
-    while fvgZones.size() > FVG_KEEP
+    while fvgZones.size() > fvgCount
         zoneDrop(fvgZones, fvgZones.size() - 1)
 
 if barOk and showFVG
