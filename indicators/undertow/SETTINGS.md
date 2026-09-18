@@ -3,6 +3,18 @@
 You asked me to revisit the parameters. This is the audit, not a retune — the
 last section says why those are different things.
 
+> **WHAT THIS AUDIT CHANGED.** The chart went from **56 inputs to 40**, and of
+> those 40 only 23 decide anything — the rest are display and debug. The rule
+> applied, and it is the only rule this file argues for:
+>
+> **an input earns its place only if the strategy's definition needs it, a
+> study showed the choice matters, or it is display.**
+>
+> Sixteen failed all three. They are listed in §6 and every one of them is
+> still in the port, because that is where an unmeasured option belongs: the
+> port can express it, the chart does not offer it, and the studies that name
+> it keep reproducing unchanged. No strategy default was touched.
+
 **65 settings. 17 have a pre-registered study behind them. 15 are values that
 came off your chart or out of the Pine's first draft and have never been
 measured at the value they ship at. 28 are inert. 4 are definitions, not
@@ -21,8 +33,9 @@ today changes nothing on your chart.
 | the backup fill | `bkTrigger` `bkMaxRisk` `useOB` `useFVG` `bkLook` `bkWhen` `bkLateBars` `bkMode` | `useBackup` is off — [+0.03 R per armed setup, significant on none](measurements/UNDERTOW_BACKUP_FILL.md) |
 | off-switch operands | `staleBars` (needs `endStale`) · `htfUnit` `htfHours` (need `htfMult`) · `adxMin` at 0 is its own off switch | the gates they belong to are off |
 
-**Nothing here needs your attention.** They exist so a study can switch a
-feature on without a code change.
+**Nothing here needs your attention, and most of it is no longer on the chart
+at all** — see §6. They exist so a study can switch a feature on without a code
+change.
 
 ---
 
@@ -107,7 +120,7 @@ large on your chart, the chart is a stricter rule than any page here describes.
 
 ---
 
-## 5 · THE ONE THAT WAS WRONG, fixed in this commit
+## 5 · THE ONE THAT WAS WRONG, and is fixed
 
 **`feeFrac` shipped at 0.** Every study passed 7bp explicitly, so no
 measurement moves — but the **chart and the watcher read the default**, so both
@@ -130,7 +143,28 @@ same 7bp every study used. Set it to 0 to read the panel gross.
 
 ---
 
-## What I am NOT going to do, and why
+## 6 · THE SIXTEEN THAT CAME OFF THE CHART
+
+Removed from the Pine, kept in the port. None was a default change — every one
+of them was already at the value it is now fixed at.
+
+| what went | why |
+|---|---|
+| **the backup fill** — `useBackup` `bkTrigger` `bkMaxRisk` `useOB` `useFVG` `bkLook` `bkWhen` `bkLateBars` | measured **twice** and worthless: [+0.03 R per armed setup, significant on none](measurements/UNDERTOW_BACKUP_FILL.md), and [waiting for the limit to expire removes the tax and all the opportunity](measurements/UNDERTOW_LATE_BACKUP.md) |
+| **three Ending rules** — `endSweep` `endStale` `staleBars` `adxMin` | all shipped **off**, none ever measured **on**. ADX had already failed as a filter [elsewhere in this project](../ccp/measurements/CCP_CONTEXT_FILTERS.md) |
+| **two pullback minimums** — `pbMinAge` `pbMinDepth` | [measured: the setups they remove are not systematically worse](measurements/UNDERTOW_PULLBACK.md) |
+| **two confirmation tests** — `workTest` `failTest` | three unmeasured variants each of something the strategy defines as *a close beyond* |
+
+**Two of the backup fill's eight inputs were never wired up at all.** `bkWhen`
+and `bkLateBars` were declared, given tooltips, and never read by a single line
+of the indicator — the "after the limit expires" mode exists in the port and
+was measured there, and the chart silently never had it. That is what an input
+panel nobody prunes looks like from the inside.
+
+The Ending panel row was five counters wide, `minor·swp·stale·rt·adx`, three of
+which could never be anything but zero. It is now `minor · retrace`.
+
+
 
 **I am not going to pick better values for the 15.** Not because it would be
 hard — it would be easy, and that is the problem.

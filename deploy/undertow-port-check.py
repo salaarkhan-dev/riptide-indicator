@@ -216,7 +216,37 @@ def main() -> int:
                # default. `pinAt` is now compared like any other input.
                # `famPriority` stays here -- it was measured in the same study
                # and did nothing recoverable, so it has no claim on an input.
-               "famPriority"}
+               "famPriority",
+               # SIXTEEN INPUTS CAME OFF THE CHART IN ONE PASS, and the rule
+               # applied was the one ../indicators/undertow/SETTINGS.md
+               # arrives at: an input earns its place only if the strategy's
+               # definition needs it, a study showed the choice matters, or it
+               # is display. Everything below failed all three, and every one
+               # is still HERE, in the port, because that is where an
+               # unmeasured option belongs -- the studies that name them keep
+               # reproducing their pages unchanged.
+               #
+               # THE BACKUP FILL, eight inputs, measured twice and worthless:
+               # +0.03 R per armed setup significant on none
+               # (UNDERTOW_BACKUP_FILL.md), and waiting for the limit to
+               # expire removes the tax and all the opportunity
+               # (UNDERTOW_LATE_BACKUP.md). Two of the eight -- bkWhen and
+               # bkLateBars -- were never even WIRED UP in the Pine: declared,
+               # never read. That is what an input panel nobody prunes looks
+               # like.
+               "useBackup", "bkTrigger", "bkMaxRisk", "useOB", "useFVG",
+               "bkLook", "bkWhen", "bkLateBars",
+               # THREE ENDING RULES AND THE ADX GATE. All shipped off, none
+               # was ever measured switched on, and ADX failed as a filter
+               # elsewhere in this project (CCP_CONTEXT_FILTERS.md).
+               "endSweep", "endStale", "staleBars", "adxMin",
+               # THE TWO PULLBACK MINIMUMS. Measured: the setups they remove
+               # are not systematically worse (UNDERTOW_PULLBACK.md).
+               "pbMinAge", "pbMinDepth",
+               # THE TWO CONFIRMATION TESTS. "A close beyond" is the rule, and
+               # three unmeasured variants each is not a setting, it is an
+               # invitation to tune something nobody can judge.
+               "workTest", "failTest"}
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,

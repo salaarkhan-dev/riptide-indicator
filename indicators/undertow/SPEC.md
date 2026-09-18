@@ -49,8 +49,10 @@ fires and any that prove too twitchy can be turned off:
    the bar it flips, or the whole time it is opposed. The flip is an edge and
    can be missed when the minor turned at an awkward moment; "while opposed" is
    a level and cannot be, at the cost of far more Ending
-2. a **sweep** of the running extreme that closes back inside
-3. **no new extreme in `D` for `staleBars`** bars
+2. ~~a **sweep** of the running extreme that closes back inside~~ — **off the
+   chart.** Shipped off, never measured on, port-only now
+3. ~~**no new extreme in `D` for `staleBars`** bars~~ — **off the chart**, same
+   reason
 4. **retraced ≥ `retraceMax`% of the impulse** (default 70). The strongest chop
    guard here and it needs no extra indicator: the impulse is the leg the engine
    already tracks from the CHoCH, `msMin` to `msMax`. This exists because the
@@ -58,12 +60,17 @@ fires and any that prove too twitchy can be turned off:
    3,000-point impulse in full — the major structure was not wrong, it simply
    had not broken its last swing low yet, and by then it was useless as a trade
    bias
-5. **ADX(14) below `adxMin`** — **off by default**. ADX was measured as a filter
-   in this project and failed: it improved seeded random entries *more* than
-   real ones (`indicators/ccp/measurements/CCP_CONTEXT_FILTERS.md`). As a
-   *regime* gate rather than an entry filter it is a different question, and an
-   untested one. It is here because it was asked for, switched off because
-   nothing supports it yet
+5. ~~**ADX(14) below `adxMin`**~~ — **off the chart.** ADX was measured as a
+   filter in this project and failed: it improved seeded random entries *more*
+   than real ones (`indicators/ccp/measurements/CCP_CONTEXT_FILTERS.md`). It
+   was on the chart switched off, because it had been asked for and nothing
+   supported it; that is not a good enough reason for an input, so it is
+   port-only now
+
+**So two Ending rules ship, not five** — minor structure and retrace. The other
+three were toggles offering settings no measurement supports, which is what
+[`SETTINGS.md`](SETTINGS.md) exists to stop. The port still has all five and
+the studies that name them still reproduce.
 
 Every one is decidable at a bar close and none of them repaint. They will
 sometimes call Ending while the trend keeps running — that is the right
@@ -95,7 +102,7 @@ reports two things it could not before:
 
 | row | what it answers |
 |---|---|
-| `minor·swp·stale·rt·adx` | **which of the five** rules did the cancelling |
+| `minor · retrace` | **which** rule did the cancelling |
 | `gate cost` | what the cancelled setups **would have done**: `saved NR` if they were losers, `cost NR` if the gate is throwing trades away |
 
 `saved` means the gate is earning its place. `cost` is its price, in R, on the
@@ -543,16 +550,31 @@ number that follows a lie.
 
 ---
 
-## 9. Inputs — grouped, ~25 total
+## 9. Inputs — 40, of which 23 decide anything
+
+Sixteen came off in one pass. The rule, from
+[`SETTINGS.md`](SETTINGS.md): **an input earns its place only if the strategy's
+definition needs it, a study showed the choice matters, or it is display.**
 
 | group | inputs |
 |---|---|
-| **Bias** | HTF on/off · HTF timeframe · major swing len · minor swing len · ending: minor CHoCH / sweep / stale · stale bars |
-| **Candle** | wick edge · hammer family on/off · star family on/off |
-| **Setup** | Working test · Failure test · confirm bars · fill bars · one per pullback |
-| **Levels** | stop source · reward ratio |
-| **Display** | zones on/off · keep N · 4 colours |
-| **Debug** | debug on/off · show rejects |
+| **1 · Bias** | swings from · major k · minor k · reference hours · major swing · minor swing · BOS needs inducement · End: minor structure · End: retraced % |
+| **2 · Candle** | wick edge · hammer family · star family |
+| **3 · Setup** | confirmations (W→F) · confirm within · fill within · live setups at once · anchor the pin at · anchor tolerance |
+| **4 · Levels** | stop · stop follows the pullback · stop buffer · reward ratio · round-trip fee |
+| **5 · Display** | overlapping setups · RR zones · unfilled setups · market structure · stats table · order blocks + colour · fair value gaps + colour · extend zones · auto threshold · keep last N · 3 colours |
+| **6 · Debug** | debug marks · show rejected pins |
+
+**What went, and why:** the backup fill's eight (measured twice, worthless —
+and two of the eight were never wired up at all), `endSweep` / `endStale` /
+`staleBars` / `adxMin` (all shipped off, never measured on), `pbMinAge` /
+`pbMinDepth` (measured; the setups they remove are not worse), and
+`workTest` / `failTest` (three unmeasured variants each of something §4 defines
+as *a close beyond*).
+
+**All sixteen are still in the port**, where the studies that name them keep
+reproducing their pages. That is the standing arrangement for an option nobody
+has measured: the port can express it, the chart does not offer it.
 
 Compact tooltips. One sentence each, saying what the setting *does to the
 count*, because on a detector that is the only thing any of them decides.

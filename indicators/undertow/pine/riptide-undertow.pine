@@ -61,9 +61,8 @@ string gBias = "1 · Bias"
 string gPin = "2 · Candle"
 string gSet = "3 · Setup"
 string gLvl = "4 · Levels"
-string gFill = "5 · Backup fill"
-string gShow = "6 · Display"
-string gDbg = "7 · Debug"
+string gShow = "5 · Display"
+string gDbg = "6 · Debug"
 
 swingSrc = input.string("price move", "Swings from", group = gBias,
   options = ["bar pivot", "price move"],
@@ -83,16 +82,14 @@ msBosNeedsIdm = input.bool(true, "BOS needs inducement", group = gBias,
 endMinor = input.string("on the flip", "End: minor structure", group = gBias,
   options = ["off", "on the flip", "while opposed"],
   tooltip = "The short swings turn before the long ones. 'on the flip' fires the bar the minor structure turns against the trend and can be missed if it turned earlier; 'while opposed' is true the whole time it is against, so it catches far more and leaves far fewer setups.")
-endSweep = input.bool(false, "End: extreme swept", group = gBias,
-  tooltip = "A wick through the running extreme that closes back inside — a failed continuation.")
-endStale = input.bool(false, "End: no new extreme", group = gBias,
-  tooltip = "The trend stopped extending. Catches drift into a range.")
-staleBars = input.int(30, "… within bars", minval = 3, maxval = 300, group = gBias,
-  tooltip = "How long without a new extreme counts as stalled. Lower = more Ending, fewer setups.")
 retraceMax = input.int(70, "End: retraced % of the impulse", minval = 0, maxval = 100, group = gBias,
   tooltip = "Give back this much of the move since the CHoCH and the trend is over in any practical sense. 0 turns it off. THE STRONGEST CHOP GUARD HERE and it needs no extra indicator.")
-adxMin = input.int(0, "End: ADX(14) below", minval = 0, maxval = 60, group = gBias,
-  tooltip = "0 = off. A regime gate for ranging markets. OFF BY DEFAULT ON PURPOSE: ADX was measured as a filter in this project and failed — it improved random entries MORE than real ones. Using it as a regime gate is a different question, and an untested one.")
+// THREE ENDING RULES CAME OFF THE CHART. `endSweep`, `endStale` with its
+// `staleBars`, and the ADX gate `adxMin` all shipped OFF, none was ever
+// measured switched ON, and four inputs offering settings nothing supports is
+// the habit ../SETTINGS.md was written to stop. They stay in the port because
+// undertow_v2 and undertow_mtf_default name them, and the port is where an
+// unmeasured option belongs until it is measured.
 
 wickEdge = input.float(0.05, "Wick edge", minval = 0.0, maxval = 0.5, step = 0.01, group = gPin,
   tooltip = "How much the dominant wick must beat the other, as a fraction of the bar's range. THIS IS THE DOJI FILTER. 0 accepts near-balanced bars.")
@@ -103,12 +100,12 @@ useStar = input.bool(true, "Star family (upper wick)", group = gPin,
 
 string tTouch = "close at or beyond"
 string tBody = "whole body beyond"
-workTest = input.string("close beyond", "Working test", group = gSet,
-  options = ["close beyond", "close at or beyond", "whole body beyond"],
-  tooltip = "How hard price must clear the Working line. Stricter = fewer setups.")
-failTest = input.string("close beyond", "Failure test", group = gSet,
-  options = ["close beyond", "close at or beyond", "whole body beyond"],
-  tooltip = "Same for the Failure line. While both match, which line is which changes nothing.")
+// "A CLOSE BEYOND" IS THE RULE, not a preference, so it is no longer two
+// dropdowns. `workTest` and `failTest` offered three variants each; nobody can
+// judge "close at or beyond" against "whole body beyond" from a chart and no
+// study has ever varied them. They stay in the port, unmeasured, where an
+// unmeasured option belongs.
+string kTest = "close beyond"
 confirmOrder = input.string("working then failure", "Confirmations", group = gSet,
   options = ["working then failure", "either order"],
   tooltip = "THE ORDER THE TWO CONFIRMATIONS MUST ARRIVE IN, and the default is a CORRECTION rather than a preference.\n\n'working then failure' is the strategy: the pin is a counter-trend candle, W is it appearing to WORK as a reversal, F is that reversal FAILING, and the limit goes at the Focus line on the failure. So the attempt has to happen first.\n\n    W → F          arms\n    F → W → F      arms, on the second F\n    F → W          does NOT arm — waits for an F\n\n'either order' is what v1 did and it is a different event: it admits bars where the reversal never worked at all and only the same two lines were touched. Every measurement page in ../measurements was produced under it.\n\nA bar that spans BOTH lines does not arm either way — intrabar order is unknowable and this indicator resolves that against the trade everywhere else.")
@@ -125,13 +122,16 @@ string sAnchPull = "pullback extreme"
 string sAnchTrend = "trend extreme"
 pinAt = input.string("pullback extreme", "Anchor the pin at", group = gSet,
   options = ["pullback extreme", "trend extreme"],
-  tooltip = "WHERE THE COUNTER-TREND CANDLE IS LOOKED FOR, and the two options are different readings of the same rule — see ../SPEC.md 2.3d.\n\n'pullback extreme' is what v1 and v2 do and what every measurement page was produced under: the pin is the highest high of the rally away from the leg low.\n\n'trend extreme' is the strategy as its author states it: the pin is the BOUNCE ATTEMPT at the leg low itself. The stated priority shape in a downtrend is the hammer, which has a long LOWER wick, and a long lower wick at the TOP of a rally is not a rejection of anything.\n\nIT IS NOT THE DEFAULT AND IT IS NOT PROMOTED. ../measurements/UNDERTOW_V3.md measured it on 45 unseen symbols: +0.023 / +0.023 / +0.054 R per trade against v1, positive on 3 of 3 and inside one standard error on 3 of 3. Not actively harmful, not an edge — which is exactly why it is selectable rather than on.\n\nAt this anchor the two pullback minimums below do NOT apply, because at the leg low the pullback has not started yet.")
+  tooltip = "WHERE THE COUNTER-TREND CANDLE IS LOOKED FOR, and the two options are different readings of the same rule — see ../SPEC.md 2.3d.\n\n'pullback extreme' is what v1 and v2 do and what every measurement page was produced under: the pin is the highest high of the rally away from the leg low.\n\n'trend extreme' is the strategy as its author states it: the pin is the BOUNCE ATTEMPT at the leg low itself. The stated priority shape in a downtrend is the hammer, which has a long LOWER wick, and a long lower wick at the TOP of a rally is not a rejection of anything.\n\nIT IS NOT THE DEFAULT AND IT IS NOT PROMOTED. ../measurements/UNDERTOW_V3.md measured it on 45 unseen symbols: +0.023 / +0.023 / +0.054 R per trade against v1, positive on 3 of 3 and inside one standard error on 3 of 3. Not actively harmful, not an edge — which is exactly why it is selectable rather than on.")
 locTol = input.int(0, "Anchor tolerance", minval = 0, maxval = 10, group = gSet,
   tooltip = "Bars a pin may sit PAST the anchor above and still count. 0 means it must BE the anchor bar — so if that bar is a doji or the wrong colour, the whole pullback is discarded and a textbook pin on the next bar, one tick lower, cannot qualify. That is defect 3 in ../SPEC.md 2.3b.\n\nIT MATTERS MOST ON THE OTHER ANCHOR. At 'trend extreme' with tolerance 0 the pinned bar IS the bar that made the leg low, so 75.6% of pins are the priority shape — a green bar whose own low is the low of the leg is a hammer by construction. One bar of tolerance takes that to 53.2% and two takes it to 51.5%, which is what an unfiltered mix looks like. ../measurements/UNDERTOW_V3.md has the table; the share is a description of the anchor, not a result.\n\nMEASURED at 0 and at 2 (../measurements/UNDERTOW_PULLBACK.md: the 2nd and 3rd candle score within ±0.025 R of the 1st) and at 50, which is the ablation's destroy-it arm rather than a tolerance.")
-pbMinAge = input.int(0, "… pullback must have run bars", minval = 0, maxval = 20, group = gSet,
-  tooltip = "How many bars the pullback must have RUN before a pin at its extreme counts. At 0 — what ships — the bar that makes a new trend extreme is immediately its own 'pullback extreme', so a quarter to a third of all setups have NO pullback at all: measured 25.3% / 30.8% / 33.6% on 15m / 30m / 1h. Defects 1 and 2 in ../SPEC.md 2.3b.\n\nThe clock runs from where the pullback STARTED, not from the extreme, so a pullback that has run ten bars and just made a new high is still ten bars old.")
-pbMinDepth = input.float(0.0, "… and retraced ≥ of the impulse", minval = 0.0, maxval = 0.9, step = 0.05, group = gSet,
-  tooltip = "How much of the impulse leg the pullback must have given back before a pin counts, as a fraction. At 0.0 — what ships — there is no minimum pullback IN PRICE at all; §2.3 only ever said the pin must be the highest high since the pullback began, never that the pullback had to have happened.\n\nThe leg is the same msMin-to-msMax the retrace Ending rule already uses, so this and 'End: retraced %' measure the same move from opposite ends: this one refuses a setup for too LITTLE pullback, that one for too much.")
+// THE TWO PULLBACK MINIMUMS CAME OFF THE CHART. `pbMinAge` and `pbMinDepth`
+// were added to fix defects 1 and 2 in ../SPEC.md 2.3b, then measured:
+// ../measurements/UNDERTOW_PULLBACK.md found the setups they remove are NOT
+// systematically worse (+0.055 / -0.015 / -0.065) and that `pbMinAge` keeps a
+// different share of setups on every timeframe. Both shipped at 0, meaning
+// off, and two inputs that only ever remove trades that are no worse are two
+// inputs nobody should be turning up. Still in the port for the study.
 
 string sPin = "Pin high / low"
 string sPull = "Pullback extreme"
@@ -148,33 +148,21 @@ rr = input.float(3.5, "Reward ratio", minval = 0.5, maxval = 20.0, step = 0.5, g
 feeFrac = input.float(0.0007, "Round-trip fee", minval = 0.0, maxval = 0.01, step = 0.0001, group = gLvl,
   tooltip = "Round-trip cost as a fraction of NOTIONAL — 0.0007 is a maker-in / taker-out round trip on a major perp, and it is what every study in ../measurements used. It is not a guess at slippage, which is separate and worse.\n\nIT CHANGES THE PANEL, NOT THE STRATEGY. No level, entry or exit moves; what moves is `net R` and the break-even line beside the win rate.\n\nAND THE LINE MOVES MORE THAN IT LOOKS. The fee is charged in PRICE and the trade is scored in R, so the drag per trade is fee ÷ (risk as a fraction of entry). Risk runs about 1.3% of entry on 15m and 2.4% on 1h, so the same 7bp costs 0.055R there and 0.029R here, and break-even at 3.5R is 23.5% rather than 22.2%. ../measurements/UNDERTOW_V3.md found this by measuring a rule whose win rate sat above 22.2% on all three timeframes and was still making nothing.\n\nSet it to 0 to read the panel gross. That is what this indicator did until now, and a 23.0% win rate showed green.")
 
-// ── THE BACKUP FILL ─────────────────────────────────────────────────────────
-// "if we miss we can fill the order as a backup on any OB or FVG." The limit at
-// the Focus line is missed roughly half the time, and a large share of those
-// are setups where the move HAPPENED and the order was not on.
+// THE BACKUP FILL CAME OFF THE CHART, eight inputs for a feature two studies
+// found worthless. "if we miss we can fill the order as a backup on any OB or
+// FVG" was a real idea and it was measured twice:
 //
-// IT IS NOT A BETTER PRICE, IT IS A WORSE ONE, and that is the whole shape of
-// it. For a short the backup sits BELOW the Focus, so it is FURTHER from the
-// stop: bigger risk, further target, worse R on the same move. What it buys is
-// a trade instead of no trade. Whether that trade is worth taking is a
-// measurement, not a setting — see ../measurements/.
-useBackup = input.bool(false, "Backup fill at an OB / FVG", group = gFill,
-  tooltip = "OFF BY DEFAULT AND UNMEASURED. When the limit at the Focus line is missed, enter instead on the first retrace into an order block or fair-value gap between price and the Focus. The entry is WORSE than the Focus by construction, so R is smaller.")
-bkTrigger = input.float(1.0, "… after price runs R", minval = 0.0, maxval = 5.0, step = 0.25, group = gFill,
-  tooltip = "How far the move has to go without you before the backup arms, in multiples of the original risk. 0 arms it immediately, which makes it the primary entry rather than a backup — the zone is nearer than the Focus, so it would fill first almost every time.")
-bkMaxRisk = input.float(2.0, "… up to risk x", minval = 1.0, maxval = 6.0, step = 0.25, group = gFill,
-  tooltip = "Refuse a backup whose stop distance exceeds this multiple of the original. This is the chase limit: past it you are taking a different trade with the same story.")
-useOB = input.bool(true, "Order blocks", group = gFill,
-  tooltip = "The last opposite-colour candle before a displacement that closed beyond it. Entry at the near edge on first touch.")
-useFVG = input.bool(true, "Fair value gaps", group = gFill,
-  tooltip = "A three-bar imbalance in the trade's direction. Entry at the near edge on first touch.")
-bkLook = input.int(30, "… zones within bars", minval = 3, maxval = 200, group = gFill,
-  tooltip = "How far back from the arming bar to look for a zone. Higher finds more backups and older, staler ones.")
-bkWhen = input.string("live", "Place it", group = gFill,
-  options = ["live", "after the limit expires"],
-  tooltip = "LIVE puts the backup on beside the Focus limit, so the nearer level fills first — which converts misses into trades and also takes a worse price on trades that were going to fill anyway. AFTER THE LIMIT EXPIRES waits for the Focus window to close unfilled, so nothing can be pre-empted — at the cost of every zone touch that happened inside the window. Measured in ../measurements/.")
-bkLateBars = input.int(20, "… then wait bars", minval = 1, maxval = 200, group = gFill,
-  tooltip = "Only for 'after the limit expires': how long the backup rests before the setup is finally dropped.")
+//   UNDERTOW_BACKUP_FILL.md   +0.03 R per armed setup, positive on 3 of 3 and
+//                             significant on NONE -- two large, individually
+//                             significant halves that nearly cancel
+//   UNDERTOW_LATE_BACKUP.md   waiting for the Focus limit to expire removes
+//                             the tax AND all the opportunity: 100% of the
+//                             +0.6 R trades fill inside the window
+//
+// It shipped OFF and stayed off. The machinery is still in the port, where
+// undertow_backup.py and undertow_late_backup.py keep reproducing their pages.
+// The chart draws OB and FVG ZONES under Display -- that is separate, and it
+// stays.
 
 overlapMode = input.string("collapse", "Overlapping setups", group = gShow,
   options = ["collapse", "draw every one"],
@@ -187,10 +175,10 @@ showStruct = input.bool(true, "Market structure", group = gShow,
 showStats = input.bool(true, "Stats table", group = gShow,
   tooltip = "The panel top-right. Its first row is the BIAS — direction and state — so turning the rest off still leaves that if you re-enable it. Off draws nothing and costs nothing.")
 showOB = input.bool(false, "Order blocks", group = gShow, inline = "z1",
-  tooltip = "The last unmitigated order block either side, drawn as a box to the right edge. This is the SAME detector the backup fill uses — see group 5 — so what you see is what that would trade, not a second opinion.\n\nOff by default: UNDERTOW_BACKUP_FILL.md measured the backup at +0.03 R per armed setup, positive on 3 of 3 and significant on none.")
+  tooltip = "The last unmitigated order block either side, drawn as a box to the right edge. DRAWING ONLY — nothing here enters on one.\n\nOff by default, and the backup fill that used to enter on these is gone from the chart entirely: ../measurements/UNDERTOW_BACKUP_FILL.md measured it at +0.03 R per armed setup, positive on 3 of 3 and significant on none.")
 colOB = input.color(color.new(#2157f3, 80), "", group = gShow, inline = "z1")
 showFVG = input.bool(false, "Fair value gaps", group = gShow, inline = "z2",
-  tooltip = "Three-bar gaps, drawn as boxes. Same detector as the backup fill.")
+  tooltip = "Three-bar gaps, drawn as boxes. Drawing only.")
 colFVG = input.color(color.new(#878b94, 80), "", group = gShow, inline = "z2")
 fvgExtend = input.int(5, "… extend zones by", minval = 0, maxval = 50, group = gShow,
   tooltip = "How many bars past the gap the box is drawn. Cosmetic.")
@@ -221,59 +209,6 @@ beyondUp(float lvl, string mode) =>
 beyondDn(float lvl, string mode) =>
     mode == tTouch ? close <= lvl : mode == tBody ? math.max(open, close) < lvl : close < lvl
 
-// ── THE BACKUP ZONES: order blocks and fair value gaps ──────────────────────
-// Scans back `look` bars for the NEAREST zone that price would retrace into,
-// and returns its near edge. na when there is none.
-//
-// THE NEAR EDGE, ON FIRST TOUCH. A short retracing upward touches the BOTTOM of
-// a zone above it, so that is the fill. It is also the worse of the two edges
-// for a short, which makes it the conservative reading: the better price
-// (the far edge) needs a deeper retrace that may never come, and assuming it
-// would be assuming a fill that did not happen.
-//
-// ORDER BLOCK, for a short: the most recent UP candle that was then DISPLACED —
-// some later bar closed below its low. The "close below", rather than a wick
-// through, is the fix for the loose OB detection this project already has:
-// a wick through an up-candle is noise, a close beyond it is a decision.
-//
-// FAIR VALUE GAP, for a short: a three-bar imbalance where high[i+1] < low[i-1],
-// still unfilled — price has not closed back above the gap since.
-//
-// `lo` bounds the search: a zone must sit between the current price and the
-// Focus line, because a zone BEYOND the Focus is a better price than the limit
-// that was already missed, and filling there would be inventing a fill.
-bkZone(bool short, float focus, float lo, int look, bool wantOB, bool wantFVG) =>
-    float best = na
-    string why = ""
-    int first = math.max(1, bar_index - look)
-    for k = bar_index - 1 to first
-        int b = bar_index - k
-        if wantOB
-            bool isOpp = short ? close[b] > open[b] : close[b] < open[b]
-            if isOpp
-                // displaced: some bar since closed beyond it
-                bool disp = false
-                for j = b - 1 to 0
-                    if (short ? close[j] < low[b] : close[j] > high[b])
-                        disp := true
-                        break
-                if disp
-                    float edge = short ? low[b] : high[b]
-                    bool inRange = short ? (edge > lo and edge < focus) : (edge < lo and edge > focus)
-                    if inRange and (na(best) or (short ? edge < best : edge > best))
-                        best := edge
-                        why := "OB"
-        if wantFVG and b >= 1 and b + 1 <= bar_index
-            float g = short ? high[b - 1] : low[b - 1]
-            float f = short ? low[b + 1] : high[b + 1]
-            bool gap = short ? g < f : g > f
-            if gap
-                float edge = g
-                bool inRange = short ? (edge > lo and edge < focus) : (edge < lo and edge > focus)
-                if inRange and (na(best) or (short ? edge < best : edge > best))
-                    best := edge
-                    why := "FVG"
-    [best, why]
 
 // ── THE PRICE SWING: k x A SPAN OF TIME, not N bars ─────────────────────────
 // Same shape as msSwings — the price on the bar it is CONFIRMED, and the bar it
@@ -376,12 +311,6 @@ type Cand
     // never touches the real totals — it exists only to answer whether the
     // gate that killed it was right to. See section 7.
     bool   ghost  = false
-    // THE BACKUP FILL. `bkPx` is the zone edge a missed limit would be filled
-    // at, na until the setup has actually missed. `bkWhy` names the zone, so a
-    // backup entry on the chart can never be mistaken for the Focus line.
-    float  bkPx   = na
-    string bkWhy  = ""
-    bool   ran    = false
 
 // ── the drawing buffers, and the two calls section 7 makes ───────────────────
 var array<line> lnBuf = array.new<line>()
@@ -416,7 +345,7 @@ drawLine(int x1, int x2, float y, color c, string st) =>
 // lets the marker sit at the entry PRICE and carry a hover.
 drawFill(Cand c, int openN) =>
     color cc = c.short ? colShort : colLong
-    string info = c.tag + "\nbias at the pin: " + c.state + (c.bkWhy != "" ? "\nBACKUP FILL at an " + c.bkWhy + " — the Focus limit was missed and this entry is WORSE" : "") + "\nentry " + str.tostring(c.focus, format.mintick) + "\nstop  " + str.tostring(c.stop, format.mintick) + "\ntgt   " + str.tostring(c.target, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin · " + (c.order == 1 ? "W→F" : "F→W")
+    string info = c.tag + "\nbias at the pin: " + c.state + "\nentry " + str.tostring(c.focus, format.mintick) + "\nstop  " + str.tostring(c.stop, format.mintick) + "\ntgt   " + str.tostring(c.target, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin · " + (c.order == 1 ? "W→F" : "F→W")
     if openN > 0
         // A FOLLOWER: its entry line, faint, and a small badge carrying the
         // size of the group it just joined. No box and no price label, which
@@ -698,16 +627,15 @@ if bosNow
     // so it clears a previous Ending rather than leaving it latched forever.
     ending := false
 
-// The three ending conditions, each its own toggle so the chart shows which one
-// fires and any that prove too twitchy can be turned off. They will sometimes
-// call Ending while the trend keeps running — that is the right direction to be
-// wrong in, because a false Ending costs a skipped setup and a missed one costs
-// a loss.
+// TWO ending conditions, from four. `endSweep`, `endStale` and the ADX gate
+// came off the chart: all three shipped OFF, none was ever measured switched
+// ON, and the panel's own Ending row never had cause to name them. They are
+// still in the port for the studies that set them.
+// They will sometimes call Ending while the trend keeps running — that is the
+// right direction to be wrong in, because a false Ending costs a skipped setup
+// and a missed one costs a loss.
 bool minorAgainst = biasDir > 0 ? bSOs == 0 : bSOs == 1
 bool endA = endMinor == "off" ? false : endMinor == "while opposed" ? minorAgainst : (bMinorChoch and minorAgainst)
-bool endB = endSweep and (biasDir > 0 ? bSweepUp : bSweepDn)
-int lastExtX = biasDir > 0 ? bMaxX : bMinX
-bool endC = endStale and not na(lastExtX) and bar_index - lastExtX >= staleBars
 
 // RETRACE DEPTH — the strongest chop guard available, and it needs no extra
 // indicator. The impulse is the leg the engine has already tracked since the
@@ -723,24 +651,14 @@ float msLeg = bMax - bMin
 float retraced = msLeg > 0 ? (biasDir > 0 ? (bMax - close) / msLeg : (close - bMin) / msLeg) : 0.0
 bool endD = retraceMax > 0 and retraced >= retraceMax / 100.0
 
-// ADX, and it is OFF BY DEFAULT for a reason worth stating where the code is.
-// research in this project measured ADX as a filter and it FAILED — it improved
-// seeded random entries more than real ones (see
-// indicators/ccp/measurements/CCP_CONTEXT_FILTERS.md). Using it as a REGIME
-// gate rather than an entry filter is a genuinely different question, and an
-// untested one. Called unconditionally: a ta.* inside a branch grows a
-// different history.
-[diPlus, diMinus, adxVal] = ta.dmi(14, 14)
-bool endE = adxMin > 0 and adxVal < adxMin
-
 // WHICH gate ended it, latched at the moment it latches. The panel used to say
 // only that the bias killed a setup, and on three charts that was the single
 // largest bucket — larger than the entries. "Which of the five" is the whole
 // question, and one string answers it.
 var string endWhy = "—"
-if biasSeen and (endA or endB or endC or endD or endE)
+if biasSeen and (endA or endD)
     if not ending
-        endWhy := endA ? "minor" : endB ? "sweep" : endC ? "stale" : endD ? "retrace" : "adx"
+        endWhy := endA ? "minor" : "retrace"
     ending := true
 
 string biasState = not biasSeen ? "none" : ending ? "ending" : bosN == 0 ? "immature" : "running"
@@ -798,22 +716,12 @@ bool colourOk = biasDir < 0 ? isGreen : not isGreen
 // 3. LOCATION — the pin must BE the pullback extreme as of its own close, or
 //    within `locTol` bars of it. At 0 this rejected roughly 6 in 10 of the
 //    colour-correct pins, which makes it the strictest gate in the chain.
-// `pbLeg`/`pbDepth` reuse the same msMin-to-msMax leg the retrace Ending rule
-// reads, measured to the pullback EXTREME rather than to the close, so the two
-// minimums below and the maximum above are all quoting one thing.
-float pbLeg = bMax - bMin
-float pbDepth = pbLeg > 0 ? (biasDir < 0 ? (pbExt - bMin) / pbLeg : (bMax - pbExt) / pbLeg) : 0.0
-int pbAge = na(pbStartX) ? 0 : bar_index - pbStartX
 // THE ANCHOR. Under "trend extreme" the pin is looked for at the running
 // extreme in the TREND's own direction — the leg low in a downtrend — which
 // the bias block already tracks as bMinX / bMaxX.
 int anchorRaw = pinAt == sAnchTrend ? (biasDir < 0 ? bMinX : bMaxX) : pbExtX
 int anchorX = na(anchorRaw) ? bar_index : anchorRaw
-// `pbMinAge` and `pbMinDepth` measure how far a PULLBACK has run, which is
-// meaningless at the trend extreme: there the pullback has not started. They
-// apply to the pullback anchor only, rather than silently refusing every
-// setup on the other one.
-bool locOk = bar_index - anchorX <= locTol and (pinAt != sAnchPull or (pbAge >= pbMinAge and (pbMinDepth <= 0.0 or pbDepth >= pbMinDepth)))
+bool locOk = bar_index - anchorX <= locTol
 
 bool barOk = barstate.isconfirmed
 bool pinRaw = barOk and famOk
@@ -918,9 +826,6 @@ var int nMissBack = 0
 var int nMissStop = 0
 var int nMissGone = 0
 var int nMissBias = 0
-// Fills that came from a backup zone rather than from the Focus line. Counted
-// apart so the panel can never imply the limit worked when it did not.
-var int nBackup = 0
 // The scoreboard. See the tooltip on its panel row: this is in-sample, on
 // whatever settings happen to be loaded, and it is not evidence of anything.
 var int nWon = 0
@@ -961,10 +866,7 @@ var int gOpen = 0
 // …and WHICH gate did the cancelling, since they are five different rules with
 // one shared symptom.
 var int nEndMinor = 0
-var int nEndSweep = 0
-var int nEndStale = 0
 var int nEndRetr = 0
-var int nEndAdx = 0
 
 // ── every live candidate, oldest first, removed in place when it resolves ────
 if barOk and cands.size() > 0
@@ -981,10 +883,7 @@ if barOk and cands.size() > 0
             if c.armed
                 nMissBias := nMissBias + 1
                 nEndMinor := nEndMinor + (endWhy == "minor" ? 1 : 0)
-                nEndSweep := nEndSweep + (endWhy == "sweep" ? 1 : 0)
-                nEndStale := nEndStale + (endWhy == "stale" ? 1 : 0)
                 nEndRetr := nEndRetr + (endWhy == "retrace" ? 1 : 0)
-                nEndAdx := nEndAdx + (endWhy == "adx" ? 1 : 0)
                 // Counted as a no-entry exactly as before — the real totals do
                 // not change. Then kept, as a ghost, to find out what it would
                 // have done. Drawn once, now, because after this it is invisible.
@@ -1006,8 +905,8 @@ if barOk and cands.size() > 0
                 c.pbExt := high
             if not c.short and low < c.pbExt
                 c.pbExt := low
-            bool wHit = c.workHi ? beyondUp(c.hi, workTest) : beyondDn(c.lo, workTest)
-            bool fHit = c.workHi ? beyondDn(c.lo, failTest) : beyondUp(c.hi, failTest)
+            bool wHit = c.workHi ? beyondUp(c.hi, kTest) : beyondDn(c.lo, kTest)
+            bool fHit = c.workHi ? beyondDn(c.lo, kTest) : beyondUp(c.hi, kTest)
             if wHit and not c.workOk
                 c.workOk := true
                 c.workBar := bar_index
@@ -1071,33 +970,9 @@ if barOk and cands.size() > 0
         // bar_index > c.armBar: the limit is only placed once the arming bar
         // has CLOSED, so a fill inside that same bar is look-ahead — the order
         // was not resting while it traded.
-        // ── THE BACKUP FILL ARMS ────────────────────────────────────────────
-        // Once the move has gone `bkTrigger` x risk WITHOUT US, look once for
-        // the nearest zone between here and the Focus line. Once, not every
-        // bar: a zone re-scanned as price moves would keep finding a nearer
-        // one and would converge on "enter at the current price", which is not
-        // a backup, it is chasing with extra steps.
-        if useBackup and not gone and c.armed and na(c.bkPx) and not c.ran
-            float risk0 = math.abs(c.stop - c.focus)
-            float ranR = risk0 > 0 ? (c.short ? (c.focus - low) / risk0 : (high - c.focus) / risk0) : 0.0
-            if ranR >= bkTrigger
-                c.ran := true
-                [px, why] = bkZone(c.short, c.focus, c.short ? low : high, bkLook, useOB, useFVG)
-                if not na(px)
-                    float rk = math.abs(c.stop - px)
-                    // The chase limit. Past it the stop distance is a different
-                    // trade wearing the same story.
-                    if rk > 0 and rk <= bkMaxRisk * risk0
-                        c.bkPx := px
-                        c.bkWhy := why
         if not gone and c.armed and bar_index > c.armBar
             bool tgtGone = c.short ? low <= c.target : high >= c.target
             bool stopHit = c.short ? high >= c.stop : low <= c.stop
-            // The backup is the NEARER level, so price reaches it first, and
-            // for a short it is the worse price. Checked before the Focus for
-            // both reasons: it is what would actually fill, and when one bar
-            // spans both it is the conservative reading.
-            bool bkHit = not na(c.bkPx) and high >= c.bkPx and low <= c.bkPx
             bool touched = high >= c.focus and low <= c.focus
             // THE MOVE HAPPENED WITHOUT US. If price reaches the TARGET while
             // the limit is unfilled, the whole trade was available and the
@@ -1115,21 +990,6 @@ if barOk and cands.size() > 0
             else if stopHit
                 why := "stop taken before the fill"
                 nMissStop := nMissStop + (c.ghost ? 0 : 1)
-                gone := true
-            else if bkHit
-                // Re-based onto the zone. From here the candidate IS a trade
-                // at that price: same stop, a bigger risk, and a target
-                // recomputed from it — or `rr` would quietly stop meaning rr.
-                c.focus := c.bkPx
-                float rk3 = math.abs(c.stop - c.focus)
-                c.target := c.short ? c.focus - rr * rk3 : c.focus + rr * rk3
-                nBackup := nBackup + (c.ghost ? 0 : 1)
-                nFilled := nFilled + (c.ghost ? 0 : 1)
-                gOpen := gOpen + (c.ghost ? 1 : 0)
-                filled := true
-                if not c.ghost
-                    drawFill(c, openSameDir(c.short))
-                trades.push(c)
                 gone := true
             else if touched
                 nFilled := nFilled + (c.ghost ? 0 : 1)
@@ -1201,7 +1061,7 @@ if pinFound
     if not colourOk
         lastReject := "colour · " + (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend")
     else if not locOk
-        lastReject := bar_index - anchorX > locTol ? "location · " + str.tostring(bar_index - anchorX) + "b past " + (pinAt == sAnchTrend ? "the leg extreme" : "extreme") + " (tol " + str.tostring(locTol) + ")" : pbAge < pbMinAge ? "pullback only " + str.tostring(pbAge) + "b old (min " + str.tostring(pbMinAge) + ")" : "pullback only " + str.tostring(math.round(pbDepth * 100)) + "% deep (min " + str.tostring(math.round(pbMinDepth * 100)) + "%)"
+        lastReject := bar_index - anchorX > locTol ? "location · " + str.tostring(bar_index - anchorX) + "b past " + (pinAt == sAnchTrend ? "the leg extreme" : "extreme") + " (tol " + str.tostring(locTol) + ")" : "location"
 
 // The cap counts LIVE candidates only. A ghost still sits in `cands` so the one
 // resolution loop can walk it, but it is not a setup any more and must not be
@@ -1325,16 +1185,16 @@ if dbgOn and pinRaw and (pinOk or dbgRejects)
       : label.style_xcross, size = size.tiny,
       color = pinOk ? color.new(color.blue, 40) : color.new(color.gray, 55),
       tooltip = (pinOk ? pinTag + " · taken" : pinTag + "\n" + pinWhy)
-      + "\nbias " + (biasDir > 0 ? "LONG" : "SHORT") + " · " + biasState
-      + (adxMin > 0 ? "\nADX " + str.tostring(adxVal, "#.#") : "")))
+      + "\nbias " + (biasDir > 0 ? "LONG" : "SHORT") + " · " + biasState))
     while dbgBuf.size() > 300
         label.delete(dbgBuf.shift())
 
 
 // ════════════════ 8b. ORDER BLOCKS AND FAIR VALUE GAPS ══════════════════════
-// DRAWN FROM THE SAME DEFINITIONS bkZone() USES, deliberately. A second
-// detector would be a second opinion, and the point of putting these on the
-// chart is to see what the backup fill in group 5 would actually take.
+// THE SAME DEFINITIONS THE BACKUP FILL USED, kept when that came off the
+// chart. Drawing a zone costs nothing and shows where the structure engine
+// thinks the imbalances are; ENTERING on one is what two studies measured and
+// found worthless, and that is the part that went.
 //
 // Both are as loose as they look, which is why they are OFF by default:
 // UNDERTOW_BACKUP_FILL.md measured the thing they feed at +0.03 R per armed
@@ -1400,17 +1260,14 @@ if barstate.islast and showStats
     row(0, "bias", dir + " · " + biasState, bc,
       "marks: HAM/HGM/IH/SS = the setup candle · ▲▼ entry · ✓✕ target/stop · × triggered but never entered · ● swing high/low · CHoCH and BOS name themselves")
     row(1, "pullback", (na(pbStartX) ? "—" : str.tostring(bar_index - pbStartX) + "b")
-      + " · rt " + str.tostring(math.round(retraced * 100)) + "%"
-      + (adxMin > 0 ? " · adx " + str.tostring(adxVal, "#") : ""), color.gray,
-      "bars since the pullback began, how much of the impulse it has given back, and ADX if it is switched on")
+      + " · rt " + str.tostring(math.round(retraced * 100)) + "%", color.gray,
+      "bars since the pullback began and how much of the impulse it has given back")
     row(2, "setups found", str.tostring(nLoc), color.gray,
       "candles that passed all four tests: a dominant wick, a tradeable bias, the counter-trend colour, and sitting at the pullback extreme. Nothing has been confirmed yet — these are candidates.")
     row(3, "triggered", str.tostring(nArmed), color.gray,
       "of those, the ones where price then closed beyond BOTH the pin's high and its low inside the confirm window, and a sane stop existed. This is where a limit order would go on.")
-    row(4, "entered", str.tostring(nFilled)
-      + (nBackup > 0 ? "  (" + str.tostring(nBackup) + " backup)" : ""),
-      color.gray,
-      "of those, the ones where price came back and touched the limit at the Focus line. A BACKUP count means that many of them filled at an order block or fair-value gap instead, after the Focus limit was missed — a worse entry, a bigger risk, and unmeasured. Hover the ▲▼ to see which.")
+    row(4, "entered", str.tostring(nFilled), color.gray,
+      "of those, the ones where price came back and touched the limit at the Focus line.")
     // `trades` HOLDS GHOSTS TOO, and counting them here was a real bug: the
     // panel read "28 / 58 · 1 open" while `entered` read 86, because the one
     // open trade was a GHOST — a setup the bias gate cancelled, already
@@ -1426,7 +1283,7 @@ if barstate.islast and showStats
     // at rr 3.5 a coin clears 22.2%, and a 30% win rate reads like a losing
     // strategy until you know that. The break-even rides in the LABEL rather
     // than the value because the label column is already the width of
-    // "minor·swp·stale·rt·adx" — it costs nothing there, and unlike a tooltip
+    // "minor · retrace" — it costs nothing there, and unlike a tooltip
     // it survives a screenshot.
     int nRun = nWonRun + nLostRun
     int nImm = nWonImm + nLostImm
@@ -1471,12 +1328,10 @@ if barstate.islast and showStats
       "BACK = price never came back to the limit — the OB/FVG number, these are the ones a backup fill would have caught. GONE = the target printed before the fill, so the move was available at a worse price. BIAS = the trend turned Ending while waiting. STOP = price went beyond the planned stop first; this is 0 whenever the stop is set to follow the pullback, because a stop below the running low cannot be run.")
     // WHICH gate cancelled them. On the three charts that prompted this row,
     // BIAS was the largest no-entry bucket on all three — 39 of 62, 25 of 34,
-    // 13 of 15 — and the panel could not say which of the five rules did it.
-    row(11, "  minor·swp·stale·rt·adx",
-      str.tostring(nEndMinor) + "·" + str.tostring(nEndSweep) + "·"
-      + str.tostring(nEndStale) + "·" + str.tostring(nEndRetr) + "·"
-      + str.tostring(nEndAdx), color.gray,
-      "the BIAS number above, split by which Ending rule fired: minor structure · extreme swept · no new extreme · retrace % · ADX. Each is a separate toggle in group 1, so the largest number here names the setting to question first. A rule at 0 is costing nothing and a rule taking most of them is the one deciding this strategy.")
+    // 13 of 15 — and the panel could not say which rule did it.
+    row(11, "  minor · retrace",
+      str.tostring(nEndMinor) + " · " + str.tostring(nEndRetr), color.gray,
+      "the BIAS number above, split by which Ending rule fired: minor structure · retrace %. It used to be five rules; the other three shipped off, were never measured on, and came off the chart — see ../SETTINGS.md. The larger number here names the setting to question first, and between them these two decide this strategy.")
     // THE GHOST COLUMN. See section 7: these are the cancelled setups, walked
     // forward anyway. This is the only row here that tests a RULE rather than
     // reporting a count.

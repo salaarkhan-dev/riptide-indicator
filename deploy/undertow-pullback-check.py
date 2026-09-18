@@ -52,20 +52,12 @@ TERMS = [
     ("pinAt — the pullback extreme, or the TREND extreme",
      r"pinAt == sAnchTrend \? \(biasDir < 0 \? bMinX : bMaxX\)",
      r"p\.pinAt == PIN_TREND"),
-    ("… and the pullback minimums apply to the pullback anchor only",
-     r"pinAt != sAnchPull or \(pbAge >= pbMinAge",
-     r"p\.pinAt == PIN_PULL:\n\s+locOk = \(locOk and pbAge >= p\.pbMinAge"),
-    ("pbMinAge — bars the pullback must have run",
-     r"pbAge >= pbMinAge", r"pbAge >= p\.pbMinAge"),
-    ("pbMinDepth — fraction of the impulse given back",
-     r"pbDepth >= pbMinDepth", r"pbDepth >= p\.pbMinDepth"),
-    ("… measured to the pullback extreme, not the close",
-     r"\(pbExt - bMin\) / pbLeg", r"\(pbExt - mn\) / leg"),
 ]
 
 # `pbStartX` must be assigned on the RESET branch and nowhere else. If it were
 # also set where pbExtX is updated, the age would restart every time the
-# pullback made a new extreme and `pbMinAge` would silently mean nothing.
+# pullback made a new extreme and `pbMinAge` -- port-only now -- would silently
+# mean nothing. The Pine still records the start for the panel's pullback row.
 ONCE = [("pine", PINE, r"pbStartX :="), ("port", PORT, r"pbStartX = i\b")]
 
 # `pinAt` WAS HERE AND IS NOW IN TERMS ABOVE -- UNDERTOW_V3.md measured the
@@ -76,6 +68,14 @@ ONCE = [("pine", PINE, r"pbStartX :="), ("port", PORT, r"pbStartX = i\b")]
 PORT_ONLY_TERMS = [
     ("famPriority — hammer first in bearish, star first in bullish",
      r"p\.famPriority and not isPriority"),
+    # THE TWO PULLBACK MINIMUMS ARE PORT-ONLY NOW. They came off the chart
+    # after UNDERTOW_PULLBACK.md measured them: the setups they remove are not
+    # systematically worse, and both shipped at 0. The port still applies them
+    # under PIN_PULL only, which is the branch these two patterns hold.
+    ("pbMinAge — bars the pullback must have run",
+     r"pbAge >= p\.pbMinAge"),
+    ("pbMinDepth — fraction of the impulse given back",
+     r"pbDepth >= p\.pbMinDepth"),
 ]
 
 
