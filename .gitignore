@@ -13,3 +13,10 @@ __pycache__/
 
 # deep candle cache for research/studies (gigabytes of fetched klines)
 .cache/
+
+# Labelling sheets and their answer keys — generated, large, and the labels
+# are one person's judgement on one run rather than a repository artefact.
+# indicators/undertow/label_setups.py rebuilds any of them in a minute.
+setups.html
+setups.html.key.json
+labels.json
