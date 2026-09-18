@@ -406,8 +406,38 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # would make twenty declare a setting they never touch.
 #
 # 74 -> 75 fields.
-DEFAULTS_FINGERPRINT = "c99d1c9ff2fbacd6"
-DEFAULTS_COUNT = 75
+# 2026-09-18: `biasGate` and `locAtr` added, both at the value that reproduces
+# current behaviour. THE CAPABILITY ONLY -- no default moves here.
+#
+# `locAtr` IS THE KNIFE EDGE FIXED. `locTol` counts BARS since the pullback
+# extreme and ships at 0, so the pin must BE the extreme bar: a doji there
+# discards the whole pullback, and a pin seven bars later at nearly the same
+# price is refused for being LATE rather than for being FAR. At > 0 the test
+# becomes a price distance in ATR, which is the question the rule was always
+# trying to ask.
+#
+# `biasGate` at "direction only" keeps the bias's DIRECTION and drops its
+# veto -- the chart owner's "we don't reject based on the bias, we just trade
+# the bias direction".
+#
+# AND THE MEASUREMENT SAYS SOMETHING NEITHER OF US EXPECTED. On the spent 23,
+# shorts, R per armed setup:
+#
+#   direction only   271 -> 271 armed on Min15, 255 -> 257 on Min30. The bias
+#                    veto admits far more PINS when dropped (138 -> 273 located
+#                    on BTC alone) and almost no extra ARMS. Confirmation is
+#                    the binding constraint, not the bias.
+#   locAtr 0.5/1/2   armed 271 -> 317 -> 353 -> 416 on Min15, and R goes
+#                    -0.057 -> -0.204 -> -0.192 -> -0.242. Mixed on Min30 and
+#                    Min60. No value is clearly better and 15m is clearly
+#                    worse.
+#
+# So the knife edge is now fixable and the data does not ask for it to be
+# widened. Both stay off until that is decided deliberately.
+#
+# 75 -> 77 fields. undertow_anchor re-ran BIT-IDENTICAL.
+DEFAULTS_FINGERPRINT = "d862ee4bd8f4ed09"
+DEFAULTS_COUNT = 77
 
 good = []
 

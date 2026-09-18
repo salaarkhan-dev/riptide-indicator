@@ -56,6 +56,11 @@ T_TOUCH = "close at or beyond"
 T_BODY = "whole body beyond"
 # `stopSrc`
 S_PIN = "Pin high / low"
+# `biasGate` -- WHAT THE BIAS IS FOR. Module level, not class level, because
+# deploy/undertow-port-check.py and the three-way check resolve a field default
+# only through a module-level CONSTANT and silently skip anything else.
+BG_TRADEABLE = "tradeable"
+BG_DIRECTION = "direction only"
 S_PULL = "Pullback extreme"
 S_SWING = "Minor swing extreme"
 # `bkWhen` — the two strings the Pine's dropdown offers, compared by value on
@@ -400,6 +405,29 @@ class P:
     # The other Ending rules are EVENTS -- a minor CHoCH against the trend, a
     # sweep -- and latching an event is defensible. This flag is deliberately
     # narrow and touches endD only.
+    # WHAT THE BIAS IS FOR. "tradeable" is what has always happened: a setup is
+    # refused unless the bias is Immature or Running, so Ending and None kill
+    # it outright. "direction" uses the bias for its DIRECTION ONLY -- trade
+    # with it, never reject on its state.
+    #
+    # THE COST IS NOT SMALL AND IS NOT HIDDEN. The bias is tradeable 24% of the
+    # time at the shipped lengths, so "direction" admits roughly four times the
+    # population. It also removes the guard that the retrace rule exists to be:
+    # setups will be taken into a leg that has already given itself back.
+    # `biasSeen` is still required -- before the first CHoCH there is no
+    # direction to trade, only the initial value of `os`.
+    biasGate: str = BG_TRADEABLE
+    # LOCATION IN ATR RATHER THAN IN BARS, and this is the knife edge fixed.
+    # `locTol` counts BARS since the pullback extreme and ships at 0, so the
+    # pin must BE the extreme bar -- a doji or a wrong-coloured bar there
+    # discards the whole pullback, and a pin seven bars later at nearly the
+    # same price is refused for being late rather than for being far.
+    #
+    # At > 0 the test becomes a PRICE distance: the candle's own extreme must
+    # sit within `locAtr` x ATR of the pullback's extreme, and `locTol` is not
+    # consulted. Continuous, scale-free, and it asks the question the rule was
+    # always trying to ask.
+    locAtr: float = 0.0
     retraceLatch: bool = True
     pinLag: int = 0
     # Take only shorts. The chart owner asked for the bearish leg on its own
@@ -2079,7 +2107,18 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         # meaningless at the trend extreme -- there the pullback has not
         # started. They apply to PIN_PULL only, rather than silently refusing
         # every setup.
-        locOk = (i - anchorX) <= p.locTol
+        # LOCATION. In BARS by default, in ATR when `locAtr` is set -- the
+        # knife edge and its fix. The ATR form asks how FAR the candle's own
+        # extreme is from the pullback's, which is the question; the bar form
+        # asks how LATE it is, which is a proxy that throws away a pullback
+        # whose highest bar happened to be a doji.
+        if p.locAtr > 0.0:
+            a14 = atr[i] if atr[i] else 0.0
+            here = c.h if biasDir < 0 else c.l
+            gap = (pbExt - here) if biasDir < 0 else (here - pbExt)
+            locOk = a14 > 0 and gap <= p.locAtr * a14
+        else:
+            locOk = (i - anchorX) <= p.locTol
         if p.pinAt == PIN_PULL:
             locOk = (locOk and pbAge >= p.pbMinAge
                      and (p.pbMinDepth <= 0.0 or pbDepth >= p.pbMinDepth))
@@ -2094,11 +2133,20 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         # makes the pullback a pullback FROM something.
         bosOk = (not p.needBos) or st["biasState"][i] == "running"
 
+        # THE BIAS GATE. `tradeable` refuses a setup while the bias is Ending
+        # or None; `direction only` keeps the direction and drops the refusal,
+        # which is what the strategy's author asked for -- "we don't reject
+        # based on the bias, we just trade the bias direction". `biasSeen` is
+        # still required either way, and that is what `st["biasState"] != none`
+        # tests: before the first CHoCH there is no direction, only the initial
+        # value of `os`.
+        biasOk = (tradeable[i] if p.biasGate == BG_TRADEABLE
+                  else st["biasState"][i] != "none")
         if trace:
             res.trace.append(dict(
                 i=i, t=getattr(c, "t", None), o=c.o, h=c.h, l=c.l, c=c.c,
                 dir=biasDir, state=st["biasState"][i],
-                tradeable=bool(tradeable[i]),
+                tradeable=bool(biasOk),
                 upW=round(upW, 3), dnW=round(dnW, 3), green=isGreen,
                 famHam=famHam, famStar=famStar,
                 famOk=famOk, colourOk=colourOk, locOk=locOk,
@@ -2106,11 +2154,11 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
                 pbExt=pbExt, pbExtX=pbExtX, pbStartX=pbStartX,
                 anchorX=anchorX, barsFromAnchor=i - anchorX,
                 pbAge=pbAge,
-                admitted=bool(famOk and tradeable[i] and colourOk and locOk
+                admitted=bool(famOk and biasOk and colourOk and locOk
                               and htfOk and bosOk)))
         if famOk:
             res.nRaw += 1
-        if famOk and tradeable[i]:
+        if famOk and biasOk:
             res.nPins += 1
             if colourOk:
                 res.nColour += 1
@@ -2124,7 +2172,7 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         # changed by longs that were never traded.
         if p.shortsOnly and biasDir > 0:
             famOk = False
-        if famOk and tradeable[i] and colourOk and locOk and htfOk and bosOk:
+        if famOk and biasOk and colourOk and locOk and htfOk and bosOk:
             # THE NEWEST COUNTER-TREND CANDLE SUPERSEDES THE ONES BEFORE IT,
             # across families. A hammer then an inverted hammer uses the
             # inverted hammer; an inverted hammer then a hammer uses the

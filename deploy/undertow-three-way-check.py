@@ -125,6 +125,8 @@ ABSENT = {
     # without a line of code changing anywhere.
     "pinLag": (0, "the watcher trades the newest qualifying candle"),
     "retraceLatch": (True, "the watcher latches Ending like the chart"),
+    "biasGate": ("tradeable", "the watcher refuses a setup while Ending"),
+    "locAtr": (0.0, "the watcher's location test counts bars"),
     "shortsOnly": (False, "the watcher alerts both directions"),
     # the nine bias sources the watcher does not run. Guarded by biasSrc,
     # which is MIRRORED, so a switch away from SMC is caught there.
