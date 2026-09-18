@@ -19,14 +19,21 @@ choose which:
 qualifying candle supersedes the earlier unarmed ones, so what arms is the
 newest. Only B needed coding, as `pinLag=1`.
 
-THE COMPARISON IS PAIRED AND THAT IS THE WHOLE DESIGN. 82% of pullbacks offer
-exactly ONE qualifying candle, so the two rules agree on them by construction.
-Comparing two whole populations that share 82% of their trades is how a study
-produces a null that means nothing -- roughly 80 differing trades inside a
-sample whose noise is ten times the effect anyone expects. So this pairs them:
-only pullbacks where A and B pick DIFFERENT candles, A's outcome against B's
-outcome on the same pullback, clustered by symbol. The shared 82% cancels
-instead of drowning it.
+THE QUALIFYING CANDLES ARE SCATTERED, NOT ADJACENT. An earlier version of this
+counted them by grouping armed setups within twelve bars of each other and
+reported that 82% of pullbacks offer only one. Counted properly, from the
+pullback each candle actually belongs to, it is 64% under the strict shape gate
+and 38% under the whole hammer family -- so a choice exists on 36% and 62% of
+pullbacks respectively, not 18%. BOTH GATES ARE RUN BELOW, because "hammer and
+its types" reads either way and the family is where the rule has real
+frequency.
+
+THE COMPARISON IS PAIRED AND THAT IS THE WHOLE DESIGN. Where only one candle
+qualifies the two rules agree by construction, and most qualifying candles
+never confirm, so the pullbacks where BOTH rules produce a trade are a small
+fraction of those that offer a choice. Comparing whole populations would drown
+the difference; this compares A against B ON THE SAME PULLBACK, only where they
+pick different candles, clustered by symbol.
 
 SHORTS ONLY, as asked -- "first legs just measure the shorts and bearish
 whether this work or not" -- and filtered at the pin rather than on the trade
@@ -62,21 +69,24 @@ BASE = dict(
     maxLive=64, feeFrac=FEE, rr=3.5, shortsOnly=True)
 
 
-def arms(tf, syms):
+def arms(tf, syms, strict):
     """Both rules on the same data, keyed by (symbol, pullback)."""
     d = load(tf, syms)
     out = {0: {}, 1: {}}
-    counts = {0: [0, 0, 0], 1: [0, 0, 0]}
+    counts = {0: [0, 0, 0, 0], 1: [0, 0, 0, 0]}
     short = 0
     for s in syms:
         cs = d.get(s)
         if not cs or len(cs) < 11000:
             continue
         for lag in (0, 1):
-            r = U.run(cs, U.P(pinLag=lag, **BASE), s)
+            r = U.run(cs, U.P(pinLag=lag,
+                              **{**BASE, 'famStrict': strict}), s)
             by = {(t.symbol, t.armBar): t for t in r.real}
             counts[lag][0] += len(r.armed)
             counts[lag][1] += len(r.real)
+            counts[lag][3] += sum(
+                1 for v in _per_pullback(r.pins).values() if v >= 2)
             if lag == 1:
                 short += r.nLagShort
             for a in r.armed:
@@ -95,16 +105,25 @@ def arms(tf, syms):
     return out, counts, short
 
 
-def run_tf(tf, syms):
-    out, counts, short = arms(tf, syms)
+def _per_pullback(pins):
+    d = {}
+    for bar, short, pb in pins:
+        d[(short, pb)] = d.get((short, pb), 0) + 1
+    return d
+
+
+def run_tf(tf, syms, strict):
+    out, counts, short = arms(tf, syms, strict)
     a, b = out[0], out[1]
     both = sorted(set(a) & set(b))
     diff = [k for k in both if a[k][0] != b[k][0]]
-    print(f"\n{'-' * 78}\n{tf}\n{'-' * 78}")
+    gate = "STRICT — only the hammer" if strict else "FAMILY — hammer + hanging man"
+    print(f"\n{'-' * 78}\n{tf}  ·  {gate}\n{'-' * 78}")
     for lag, tag in ((0, "A  newest  (SHIPS)"), (1, "B  second newest")):
-        n, f, multi = counts[lag]
+        n, f, multi, choice = counts[lag]
         print(f"  {tag:22} armed {n:5}  filled {f:5}  "
-              f"pullbacks arming twice {multi:4}")
+              f"arming twice {multi:3}"
+              + (f"   pullbacks offering a CHOICE {choice:4}" if lag == 0 else ""))
     print(f"  pullbacks B gave up for want of a second candle: {short}")
     print(f"  pullbacks BOTH traded: {len(both)}   "
           f"of which they chose a DIFFERENT candle: {len(diff)}")
@@ -129,6 +148,26 @@ def run_tf(tf, syms):
     z = d / se if se else 0
     print(f"    B - A              {d:+.3f} +/- {se:.3f}  z {z:+.2f}  "
           f"({len(means)} symbols)")
+    # ROBUSTNESS, BECAUSE THE ONE LOUD CELL TURNED OUT TO REST ON SINGLE
+    # PULLBACKS. Clustering by symbol gives a symbol with ONE pair the same
+    # weight as a symbol with seven, so on a 43-pair cell spread over sixteen
+    # symbols a single lucky trade carries a sixteenth of the answer -- ETH
+    # contributed +3.478 R from one pullback to a headline of +0.870.
+    #
+    # Three lines that would have said so without being asked:
+    #   how many symbols agree, which magnitude cannot fake
+    #   the worst leave-one-out, which a single symbol cannot survive
+    #   the PAIR-weighted difference, where a symbol counts for what it brought
+    pos = sum(1 for m in means if m > 0)
+    loo = min(statistics.mean([x for j, x in enumerate(means) if j != i])
+              for i in range(len(means))) if len(means) > 1 else d
+    flat = [y - x for x, y in zip(da, db)]
+    fw = statistics.mean(flat)
+    thin = sum(1 for v in per.values() if len(v) <= 2)
+    print(f"      symbols agreeing {pos}/{len(means)}   "
+          f"worst leave-one-out {loo:+.3f}   pair-weighted {fw:+.3f}")
+    print(f"      symbols contributing <=2 pullbacks: {thin}/{len(means)}"
+          + ("   <- the estimate rests on them" if thin > len(means) / 2 else ""))
     return d, se, z, len(diff)
 
 
@@ -136,15 +175,17 @@ if __name__ == "__main__":
     print(__doc__.split("\n\n")[0])
     print("DESCRIPTIVE — spent 23-symbol set, no holdout, nothing promoted.")
     rows = {}
-    for tf in TFS:
-        rows[tf] = run_tf(tf, SYMBOLS)
+    for strict in (True, False):
+        for tf in TFS:
+            rows[(strict, tf)] = run_tf(tf, SYMBOLS, strict)
     print(f"\n{'=' * 78}\nSUMMARY\n{'=' * 78}")
-    print(f"  {'tf':8} {'B - A':>8} {'+/-':>7} {'z':>6} {'pairs':>7}")
-    for tf, r in rows.items():
+    print(f"  {'gate':8} {'tf':8} {'B - A':>8} {'+/-':>7} {'z':>6} {'pairs':>7}")
+    for (strict, tf), r in rows.items():
+        g = "strict" if strict else "family"
         if r is None:
-            print(f"  {tf:8} {'not reported — too few pairs':>30}")
+            print(f"  {g:8} {tf:8} {'not reported — too few pairs':>32}")
             continue
-        print(f"  {tf:8} {r[0]:+8.3f} {r[1]:7.3f} {r[2]:+6.2f} {r[3]:7}")
+        print(f"  {g:8} {tf:8} {r[0]:+8.3f} {r[1]:7.3f} {r[2]:+6.2f} {r[3]:7}")
     live = [r for r in rows.values() if r]
     # THE BAR IS A CONSISTENT SIGN, not a big number somewhere. The first
     # version of this asked for |z| >= 1 on any timeframe, which would have

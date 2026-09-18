@@ -364,13 +364,23 @@ class P:
     # n-2, take n-1" -- which is the chart owner's own description of what his
     # eye does and has never been coded.
     #
-    # IT BITES ON A MINORITY BY CONSTRUCTION. 82% of pullbacks offer exactly
-    # ONE qualifying candle under the strict shape gate (78% under the whole
-    # hammer family), so lag 1 can only differ on the remaining 18%, and the
-    # three-candle case it was described with is 2%. A study that compares two
-    # whole populations sharing 82% of their trades is measuring noise; the
-    # comparison that can answer this is PAIRED, on the pullbacks where the two
-    # rules pick different candles.
+    # HOW OFTEN IT BITES, counted from `Result.pins` per pullback: 36% of
+    # pullbacks offer two or more qualifying candles under the strict shape
+    # gate, and 62% under the whole hammer family. So lag 1 is a minority rule
+    # under strict and a MAJORITY rule under the family.
+    #
+    # THE FIRST VERSION OF THIS COMMENT SAID 18% AND 22%, and it was wrong.
+    # Those came from grouping ARMED setups that fell within twelve bars of
+    # each other, which both merges separate pullbacks and counts only the
+    # candidates that happened to confirm. The qualifying candles are scattered
+    # through the pullback, not adjacent -- which is exactly what the chart
+    # owner said when correcting it -- and `pins` was added so the question is
+    # answered from the pullback identity instead of from a proximity guess.
+    #
+    # The comparison is still PAIRED, on the pullbacks where the two rules pick
+    # different candles: most qualifying candles never confirm, so the number
+    # of pullbacks where BOTH rules produce a trade is far smaller than the
+    # number that offer a choice.
     #
     # A pullback with fewer qualifying candles than the lag needs produces NO
     # setup. That is a real cost of the rule rather than an implementation
@@ -692,6 +702,12 @@ class Result:
     # thing the live watcher alerts on, and indicators/undertow/tests/
     # test_watch_undertow.py asserts the bot's own copy of the machine
     # reproduces this list exactly.
+    # EVERY QUALIFYING CANDLE, armed or not, as (bar, short, pbStart). The
+    # armed list cannot answer "how many candidates did this pullback offer?"
+    # because most never confirm -- and that question is what decides whether a
+    # rule like `pinLag` bites on a majority or a rump. Counting it from armed
+    # setups grouped by proximity got it wrong once already.
+    pins: list = field(default_factory=list)
     armed: list = field(default_factory=list)
     # THE MOMENT THE LIMIT ACTUALLY FILLED — you are in the trade. Separate
     # from `armed` because roughly half of armed setups never reach it, and
@@ -724,6 +740,7 @@ class Result:
                 setattr(self, k, getattr(self, k) + v)
         self.bars += o.bars
         self.trades += o.trades
+        self.pins += o.pins
         self.armed += o.armed
         self.fills += o.fills
         return self
@@ -2083,6 +2100,8 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             if len([x for x in cands if not x.ghost]) >= p.maxLive:
                 res.nCap += 1
             else:
+                res.pins.append((i, biasDir < 0,
+                                 pbStartX if pbStartX is not None else i))
                 cands.append(_Cand(
                     bar=i, hi=c.h, lo=c.l, focus=c.o, workHi=famHam,
                     short=biasDir < 0, pbExt=pbExt, pinIdx=idx,

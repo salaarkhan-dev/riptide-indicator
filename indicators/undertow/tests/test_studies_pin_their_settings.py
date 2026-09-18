@@ -398,6 +398,33 @@ def test_every_study_pins_or_opts_out():
            + ("" if not missing else f" — MISSING {', '.join(missing)}"))
 
 
+def _spread(node, dicts):
+    """Keys reachable through a ** argument.
+
+    A bare Name is the easy case. `{**BASE, "famStrict": strict}` is the one
+    that bit: a study varying ONE setting across arms writes exactly that, and
+    reading only the Name form made undertow_pinlag look like a baseline with a
+    single setting and fifteen missing.
+    """
+    import ast as _ast
+    if isinstance(node, _ast.Name):
+        return set(dicts.get(node.id, set()))
+    if isinstance(node, _ast.Dict):
+        out = set()
+        for k, v in zip(node.keys, node.values):
+            if k is None:                       # nested ** inside the literal
+                out |= _spread(v, dicts)
+            elif isinstance(k, _ast.Constant):
+                out.add(k.value)
+        return out
+    if isinstance(node, _ast.Call) and getattr(node.func, "id", None) == "dict":
+        out = {kw.arg for kw in node.keywords if kw.arg}
+        for a in node.args:
+            out |= _spread(a, dicts)
+        return out
+    return set()
+
+
 def test_the_baseline_pins_them_not_merely_the_file():
     """THE TEST ABOVE PROVES A NAME APPEARS. That is not the same thing.
 
@@ -487,8 +514,8 @@ def test_the_baseline_pins_them_not_merely_the_file():
                 continue
             names = {k.arg for k in node.keywords if k.arg}
             for k in node.keywords:                      # **SPREAD
-                if k.arg is None and isinstance(k.value, ast.Name):
-                    names |= dicts.get(k.value.id, set())
+                if k.arg is None:
+                    names |= _spread(k.value, dicts)
             calls.append(names)
         if not calls:
             continue
