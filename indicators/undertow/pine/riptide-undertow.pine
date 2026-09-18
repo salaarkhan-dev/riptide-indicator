@@ -64,33 +64,16 @@ string gLvl = "4 · Levels"
 string gShow = "5 · Display"
 string gDbg = "6 · Debug"
 
-swingSrc = input.string("price move", "Swings from", group = gBias,
-  options = ["bar pivot", "price move"],
-  tooltip = "HOW A SWING IS DEFINED for the structure engine. 'bar pivot' is a pivot of N BARS — six bars is ninety minutes on 15m and three hours on 1h, which is why the same setting flips the bias 2.3x a day on one and 1.1x on the other. 'price move' is a reversal of k x the last N hours' high-to-low, which is the same question on every chart: 0.6 flips a day on both. IT DOES NOT MAKE MONEY — it beat none of the four alternatives measured in ../measurements/UNDERTOW_BIAS_SOURCE.md. It is the default because one setting that means one thing everywhere is worth having on its own terms.")
-// "PRICE MOVE" NO LONGER HAS THREE DIALS, and of everything taken off this
-// panel these three had the strongest case for going. `swingK` 0.40 and
-// `swingKMinor` 0.12 are the Min30 TRAINING winner from
-// ../measurements/UNDERTOW_PARAMS.md -- the study whose headline is that
-// picking the best of 48 configurations bought +0.31 R per trade of pure
-// illusion. They became defaults because they were already on the chart when
-// the sweep agreed with them. An input is an invitation to search again, and
-// the last search is the reason not to.
-//
-// Fixed at the values EVERY page in ../measurements was produced under, so the
-// chart and the studies keep describing the same detector. `swingHours` 24 is
-// the span whose high-to-low sets the scale: a day's range is a day's range
-// whichever chart you open, which is the whole reason this source is
-// timeframe-invariant where a per-bar quantity like ATR is not. It was never
-// varied by anything.
-float swingK = 0.40
-float swingKMinor = 0.12
-float swingHours = 24.0
-msLen = input.int(6, "Major swing", minval = 2, maxval = 100, group = gBias,
-  tooltip = "Bars either side of a major swing. Higher = fewer, larger trends.")
-msShortLen = input.int(2, "Minor swing", minval = 2, maxval = 50, group = gBias,
-  tooltip = "The short swings. These drive the inducement and the minor CHoCH that ends a trend.")
-msBosNeedsIdm = input.bool(true, "BOS needs inducement", group = gBias,
-  tooltip = "The original engine's rule: a break only counts once the inducement was taken. Off labels every break, so far more.")
+// TWO LENGTHS, WHICH IS THE WHOLE STRUCTURE PANEL NOW. It was seven inputs: a
+// swing-source dropdown, three "price move" dials, two bar-pivot lengths and
+// an inducement toggle. The engine underneath is LuxAlgo's Smart Money
+// Concepts (section 3), which has one detector and two scales.
+smcSwingLen = input.int(50, "Swing structure", minval = 10, maxval = 200,
+  group = gBias,
+  tooltip = "THE MAJOR TIER, and the bias every setup is taken with. A pivot confirmed by this many bars either side — LuxAlgo's own default is 50, which on 15m is twelve and a half hours.\n\nIT IS THE LARGEST SINGLE LEVER ON THIS CHART. The old engine ran 6 here. At 50 the bias flips far less often and there are far fewer setups, which is the change you asked for and not a side effect.\n\nNOT MEASURED AT THIS VALUE. Every page in ../measurements was produced on the previous engine at 6/2. ../measurements/UNDERTOW_V2.md scored the ENGINE swap at +0.002 / +0.065 / +0.006 R per trade — the detector is the same expression either way — but it did not score this chart's configuration.")
+smcInternalLen = input.int(5, "Internal structure", minval = 2, maxval = 50,
+  group = gBias,
+  tooltip = "THE MINOR TIER, same engine at a shorter length. It drives the inducement, the minor CHoCH that ends a trend, and the 'minor swing' stop source.\n\nLuxAlgo's default is 5; the old engine used 2.")
 endMinor = input.string("on the flip", "End: minor structure", group = gBias,
   options = ["off", "on the flip", "while opposed"],
   tooltip = "The short swings turn before the long ones. 'on the flip' fires the bar the minor structure turns against the trend and can be missed if it turned earlier; 'while opposed' is true the whole time it is against, so it catches far more and leaves far fewer setups.")
@@ -222,320 +205,156 @@ beyondDn(float lvl, string mode) =>
     mode == tTouch ? close <= lvl : mode == tBody ? math.max(open, close) < lvl : close < lvl
 
 
-// ── THE PRICE SWING: k x A SPAN OF TIME, not N bars ─────────────────────────
-// Same shape as msSwings — the price on the bar it is CONFIRMED, and the bar it
-// SITS on — so the engine below reads either without knowing which.
+// THE TWO SWING DETECTORS THAT USED TO LIVE HERE ARE GONE. `priceSwings` — a
+// reversal of k x the last N hours' range — and `msSwings`, the N-bar pivot
+// copied from riptide-indicator-v2. Section 3 now runs LuxAlgo's `leg()`,
+// which ../port/smc.py proved is the SAME EXPRESSION as msSwings, so nothing
+// was lost in detection; what went is a second and third way of spelling it.
 //
-// NO LOOK-AHEAD. Every new high moves the running extreme; the moment price
-// trades `thr` below it, that extreme becomes a confirmed swing high, emitted
-// on the confirming bar and dated back to the bar it sits on. The threshold is
-// read on the CONFIRMING bar because that is the only one a live scanner has.
+// Both are still in the Python port, because ../measurements/UNDERTOW_PARAMS.md
+// and UNDERTOW_BIAS_SOURCE.md were produced on them and have to keep
+// reproducing.
+
+// ═══════ 3. MARKET STRUCTURE — LuxAlgo Smart Money Concepts ══════════════════
+// Transcribed from LuxAlgo's "Smart Money Concepts", CC BY-NC-SA 4.0,
+// https://creativecommons.org/licenses/by-nc-sa/4.0/ — the same source
+// ../port/smc.py transcribes for the Python side.
 //
-// `low` is tested before `high` within a bar: while tracking a high, a bar that
-// makes a new high does not also confirm on its own low. Which came first is
-// unknowable intrabar, so it gets one more bar.
-priceSwings(simple int n, float k) =>
-    var bool up = true
-    var float ext = na
-    var int extX = na
-    var int sTopX = na
-    var int sBtmX = na
-    float thr = k * (ta.highest(high, n) - ta.lowest(low, n))
-    float sTop = na
-    float sBtm = na
-    if na(ext)
-        ext := high
-        extX := bar_index
-    if bar_index >= 20 and thr > 0
-        if up
-            if high > ext
-                ext := high
-                extX := bar_index
-            else if ext - low >= thr
-                sTop := ext
-                sTopX := extX
-                up := false
-                ext := low
-                extX := bar_index
+// IT REPLACES THE COPY OF riptide-indicator-v2's ENGINE that used to be here,
+// by decision rather than by measurement, and the honest version of what that
+// buys is in ../port/smc.py's own header: compared on real candles, the two
+// engines' SWING DETECTOR and CHoCH are already IDENTICAL —
+//
+//     LuxAlgo   high[size] > ta.highest(size)
+//     riptide   highs[i-msL] > max(highs[i-msL+1 .. i])
+//
+// the same expression, pivot for pivot at sizes 5, 6, 15 and 50, and CHoCH bar
+// for CHoCH bar. ../measurements/UNDERTOW_V2.md then scored the swap at
+// +0.002 / +0.065 / +0.006 R per trade. So this is not a better detector.
+//
+// WHAT IT ACTUALLY CHANGES, and all three are real:
+//
+//   1. THE SCALE. 50 and 5, LuxAlgo's own lengths, against 6 and 2. A 50-bar
+//      pivot on 15m is twelve and a half hours. The bias will flip far less
+//      often and there will be far fewer setups.
+//   2. WHAT A BOS IS. riptide's BOS was a close beyond the running extreme
+//      since the CHoCH, gated on an inducement sweep. LuxAlgo's is a close
+//      beyond the last PIVOT in the trend's own direction, with no inducement
+//      anywhere in it. `msBosNeedsIdm` has no counterpart and is gone.
+//   3. TWO TIERS BY CONSTRUCTION. Swing structure at 50 is the major bias;
+//      internal structure at 5 is the minor. Undertow already split major from
+//      minor, so the mapping is exact and nothing downstream moved.
+//
+// deploy/undertow-ms-check.py, which anchored the old copy to v2.pine, no
+// longer has anything to compare and is retired from preflight for this file.
+
+// @type    a pivot level, its predecessor, and whether price has taken it out
+type Piv
+    float cur     = na
+    float last    = na
+    bool  crossed = false
+    int   bx      = na
+
+var Piv pvHi = Piv.new()
+var Piv pvLo = Piv.new()
+var Piv inHi = Piv.new()
+var Piv inLo = Piv.new()
+
+// LuxAlgo's leg(): 0 is a bearish leg, 1 a bullish one. A change of leg IS a
+// pivot, and the pivot sits `size` bars back — which is what makes it
+// confirmed rather than predicted.
+//
+// CALLED FROM TWO PLACES ON PURPOSE. Pine gives each call site its own copy of
+// a function's `var` state and its own ta.* history, so one definition serves
+// both the swing tier and the internal tier without them sharing a leg.
+lgCapture(simple int size, Piv ph, Piv pl) =>
+    var int lg = 0
+    bool nh = high[size] > ta.highest(size)
+    bool nl = low[size] < ta.lowest(size)
+    int was = lg
+    if nh
+        lg := 0
+    else if nl
+        lg := 1
+    if lg != was
+        if lg == 1
+            pl.last := pl.cur
+            pl.cur := low[size]
+            pl.crossed := false
+            pl.bx := bar_index[size]
         else
-            if low < ext
-                ext := low
-                extX := bar_index
-            else if high - ext >= thr
-                sBtm := ext
-                sBtmX := extX
-                up := true
-                ext := high
-                extX := bar_index
-    else if up and high > ext
-        ext := high
-        extX := bar_index
-    else if not up and low < ext
-        ext := low
-        extX := bar_index
-    [sTop, sTopX, sBtm, sBtmX]
+            ph.last := ph.cur
+            ph.cur := high[size]
+            ph.crossed := false
+            ph.bx := bar_index[size]
+    lg != was
 
-// The swing detector, from riptide-indicator-v2.pine section 12. `simple int`
-// because ta.highest needs a compile-time length.
-msSwings(simple int msL) =>
-    var int sOs = 0
-    var int sTopX = na
-    var int sBtmX = na
-    int was = nz(sOs[1], 0)
-    float hh = ta.highest(msL)
-    float ll = ta.lowest(msL)
-    sOs := high[msL] > hh ? 0 : low[msL] < ll ? 1 : was
-    float sTop = sOs == 0 and was != 0 ? high[msL] : na
-    sTopX := sOs == 0 and was != 0 ? bar_index[msL] : sTopX
-    float sBtm = sOs == 1 and was != 1 ? low[msL] : na
-    sBtmX := sOs == 1 and was != 1 ? bar_index[msL] : sBtmX
-    [sTop, sTopX, sBtm, sBtmX]
+// THE BREAK. `crossed` is one-shot per pivot: a level is taken out once, and
+// until a new pivot replaces it the same level cannot fire again. ta.crossover
+// compares against the PREVIOUS bar's level, which ../port/smc.py records as
+// one of the two details that have to be transcribed exactly rather than
+// tidied.
+lgCross(Piv ph, Piv pl) =>
+    bool xu = ta.crossover(close, ph.cur)
+    bool xd = ta.crossunder(close, pl.cur)
+    bool up = xu and not ph.crossed
+    bool dn = xd and not pl.crossed
+    if up
+        ph.crossed := true
+    if dn
+        pl.crossed := true
+    [up, dn]
 
-// ── one live candidate ───────────────────────────────────────────────────────
-// A type, not a dozen parallel arrays: section 7 runs several of these at once
-// and parallel arrays drift the moment one push is missed.
-//
-// `state` is THE BIAS AT THE PIN. The bias moves, and a setup has to be judged
-// against the trend it was actually taken in — reading today's state off the
-// panel and applying it to a setup from two hundred bars ago is how a chart
-// lies to you.
-type Cand
-    int    bar    = na
-    float  hi     = na
-    float  lo     = na
-    float  focus  = na
-    bool   workHi = false
-    bool   workOk = false
-    bool   failOk = false
-    int    workBar = -1
-    bool   armed  = false
-    int    armBar = na
-    bool   short  = false
-    float  stop   = na
-    float  target = na
-    float  pbExt  = na
-    int    order  = 0
-    string tag    = ""
-    string code   = ""
-    string state  = ""
-    // GHOST. An armed setup the bias gate cancelled, kept running anyway and
-    // scored into its own column. It draws nothing, takes no live slot and
-    // never touches the real totals — it exists only to answer whether the
-    // gate that killed it was right to. See section 7.
-    bool   ghost  = false
+lgCapture(smcSwingLen, pvHi, pvLo)
+lgCapture(smcInternalLen, inHi, inLo)
+[swUp, swDn] = lgCross(pvHi, pvLo)
+[inUp, inDn] = lgCross(inHi, inLo)
 
-// ── the drawing buffers, and the two calls section 7 makes ───────────────────
-var array<line> lnBuf = array.new<line>()
-var array<box> bxBuf = array.new<box>()
-var array<label> lbBuf = array.new<label>()
-
-prune() =>
-    while lnBuf.size() > keepN * 3
-        line.delete(lnBuf.shift())
-    while bxBuf.size() > keepN * 2
-        box.delete(bxBuf.shift())
-    while lbBuf.size() > keepN * 2
-        label.delete(lbBuf.shift())
-
-drawLine(int x1, int x2, float y, color c, string st) =>
-    lnBuf.push(line.new(x1, y, x2, y, xloc = xloc.bar_index, color = c, style = st, width = 1))
-
-// THE OVERLAP. A chart of ETH on 15m showed four LONGs inside ten dollars,
-// boxes and labels piled on each other. That is not a drawing accident, it is
-// what the strategy does: measured across 23 symbols, 74% of filled trades on
-// 15m are open at the same time as another in the SAME DIRECTION, up to 13 at
-// once, and those groups resolve the same way 78% of the time.
-//
-// So the first of a group draws in full and the rest draw small. `openN` and
-// `compact` are counted AT THE CALL SITES in section 7 — the live-trade array
-// is declared there, Pine will not let a function here reach forward to it,
-// and a function may not assign to a global either, so no state is kept
-// between calls. NOTHING HERE TOUCHES A COUNTER: the panel counts every fill.
-
-// A FILLED setup. The entry marker is a LABEL rather than a plotshape because
-// two candidates can fill on the same bar and a plotshape draws one; it also
-// lets the marker sit at the entry PRICE and carry a hover.
-drawFill(Cand c, int openN) =>
-    color cc = c.short ? colShort : colLong
-    string info = c.tag + "\nbias at the pin: " + c.state + "\nentry " + str.tostring(c.focus, format.mintick) + "\nstop  " + str.tostring(c.stop, format.mintick) + "\ntgt   " + str.tostring(c.target, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin · " + (c.order == 1 ? "W→F" : "F→W")
-    if openN > 0
-        // A FOLLOWER: its entry line, faint, and a small badge carrying the
-        // size of the group it just joined. No box and no price label, which
-        // is what was piling up. The badge counts rather than a lead label
-        // being edited later, because a function may not write to a global and
-        // a retained label id goes stale the moment prune() reaches it.
-        drawLine(c.bar, bar_index, c.focus, color.new(cc, 50),
-          line.style_dashed)
-        lbBuf.push(label.new(bar_index, c.focus,
-          (c.short ? "▼" : "▲") + " ×" + str.tostring(openN + 1),
-          xloc = xloc.bar_index, style = label.style_label_left,
-          color = color.new(cc, 55), textcolor = color.white,
-          size = size.tiny,
-          tooltip = str.tostring(openN + 1) + " SETUPS IN THIS DIRECTION ARE OPEN AT ONCE, and this is the newest. Every one is counted on the panel; they are drawn small so they do not bury the first.\n\nThey are not independent bets. Measured across 23 symbols, overlapping groups resolve THE SAME WAY 78% of the time on 15m — one idea at " + str.tostring(openN + 1) + "x the size, not " + str.tostring(openN + 1) + " trades.\n\n" + info))
-        prune()
-    else
-        drawLine(c.bar, bar_index, c.focus, cc, line.style_dashed)
-        drawLine(c.bar, bar_index, c.stop, colLine, line.style_dotted)
-        drawLine(c.bar, bar_index, c.target, colLine, line.style_dotted)
-        if showZones
-            // math.max/min rather than positional: on a LONG the stop is BELOW
-            // the entry, and a fixed order draws the box inverted.
-            bxBuf.push(box.new(c.bar, math.max(c.stop, c.focus), bar_index,
-              math.min(c.stop, c.focus), border_color = color.new(cc, 70),
-              bgcolor = color.new(colShort, 92)))
-            bxBuf.push(box.new(c.bar, math.max(c.focus, c.target), bar_index,
-              math.min(c.focus, c.target), border_color = color.new(cc, 70),
-              bgcolor = color.new(colLong, 92)))
-        // THE CANDLE THE TRADE WAS BUILT FROM, named on the bar itself and
-        // placed outside the pin so it never covers what it points at.
-        lbBuf.push(label.new(c.bar, c.short ? c.hi : c.lo, c.code,
-          xloc = xloc.bar_index, style = c.short ? label.style_label_down
-          : label.style_label_up, color = color.new(cc, 35),
-          textcolor = color.white, size = size.normal,
-          tooltip = "the setup candle\n" + info))
-        // "▲ LONG 3.5R" WAS A CHART THAT LIED. `rr` is the configured reward
-        // ratio, drawn at the moment of FILL — it is a plan, not a result —
-        // and it sat in a green label over trades that stopped out on the next
-        // bar. The ✓ / ✕ from drawResult is the outcome and it is the only
-        // thing here that may carry a number. This label says what it is: an
-        // entry, and where.
-        lbBuf.push(label.new(bar_index, c.focus,
-          (c.short ? "▼ SHORT " : "▲ LONG ")
-          + str.tostring(c.focus, format.mintick),
-          xloc = xloc.bar_index, style = label.style_label_left,
-          color = color.new(cc, 20), textcolor = color.white,
-          size = size.normal, tooltip = info))
-        prune()
-
-// WHERE A FILLED TRADE ENDED. A tick or a cross on the bar that resolved it, so
-// the won/lost counts on the panel can be audited against the chart rather than
-// trusted. One label per filled setup.
-// `compact` while OTHER trades in the same direction are still open. Four
-// ✓ +3.5R at the same target within a few bars is four labels in one place, and
-// a crowded group nearly always resolves together — 78% of the time, measured.
-// So the one that empties the group gets the full label and the rest a bare
-// glyph that still hovers. The panel's won / lost counts all of them.
-drawResult(Cand c, bool won, bool compact) =>
-    string tip = (won ? "target" : "stop") + " · " + c.code + " " + (c.short ? "short" : "long") + "\nentry " + str.tostring(c.focus, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin" + (compact ? "\n\nDrawn small because other trades in the same direction were still open when this one resolved. Every one is counted on the panel." : "")
-    lbBuf.push(label.new(bar_index, won ? c.target : c.stop,
-      compact ? (won ? "✓" : "✕")
-      : (won ? "✓ +" + str.tostring(rr, "#.#") + "R" : "✕ −1R"),
-      xloc = xloc.bar_index, style = label.style_label_left,
-      color = color.new(won ? colLong : colShort, compact ? 70 : 45),
-      textcolor = color.white, size = compact ? size.tiny : size.normal,
-      tooltip = tip))
-    prune()
-
-// ARMED and then gone. Muted and dashed, so a setup that did not happen can
-// never be mistaken at a glance for one that did.
-drawMiss(Cand c, string why) =>
-    string info = c.tag + "\nbias at the pin: " + c.state + "\n" + why + "\nentry " + str.tostring(c.focus, format.mintick) + "\nstop  " + str.tostring(c.stop, format.mintick)
-    drawLine(c.bar, bar_index, c.focus, color.new(color.gray, 55), line.style_dashed)
-    lbBuf.push(label.new(c.bar, c.short ? c.hi : c.lo, c.code,
-      xloc = xloc.bar_index, style = c.short ? label.style_label_down
-      : label.style_label_up, color = color.new(color.gray, 75),
-      textcolor = color.new(color.gray, 10), size = size.normal,
-      tooltip = "setup candle, never filled\n" + info))
-    lbBuf.push(label.new(bar_index, c.focus, "×", xloc = xloc.bar_index,
-      style = label.style_label_left, color = color.new(color.gray, 75),
-      textcolor = color.new(color.gray, 10), size = size.normal,
-      tooltip = info))
-    prune()
-
-
-// ═══════════════════ 3. MARKET STRUCTURE — COPIED ENGINE ═════════════════════
-// Section 12 of riptide-indicator-v2.pine with the DRAWING removed. The engine
-// statements are unchanged; deploy/undertow-ms-check.py holds them to that.
-//
-// One property worth knowing: this engine's boundaries MIGRATE. msTopY and
-// msBtmY are re-seeded by every new swing, so a level cannot go stale and the
-// state machine cannot deadlock.
-
-// BOTH DETECTORS RUN EVERY BAR, unconditionally, and one is chosen. A ta.*
-// inside a branch grows a different history, so the unused one is computed and
-// discarded rather than skipped.
-//
-// `simple int` for the reference window: ta.highest needs a compile-time
-// length, and timeframe.in_seconds() supplies one — which is what makes
-// "24 hours" resolve to 96 bars on 15m and 24 on 1h without a second input.
-int rbLen = math.max(2, math.round(swingHours * 3600 / timeframe.in_seconds()))
-[pTop, pTopX, pBtm, pBtmX] = priceSwings(rbLen, swingK)
-[pSTop, pSTopX, pSBtm, pSBtmX] = priceSwings(rbLen, swingKMinor)
-[bTop, bTopX, bBtm, bBtmX] = msSwings(msLen)
-[bSTop, bSTopX, bSBtm, bSBtmX] = msSwings(msShortLen)
-bool useRange = swingSrc == "price move"
-float msTop  = useRange ? pTop  : bTop
-int   msTopX = useRange ? pTopX : bTopX
-float msBtm  = useRange ? pBtm  : bBtm
-int   msBtmX = useRange ? pBtmX : bBtmX
-float msSTop  = useRange ? pSTop  : bSTop
-int   msSTopX = useRange ? pSTopX : bSTopX
-float msSBtm  = useRange ? pSBtm  : bSBtm
-int   msSBtmX = useRange ? pSBtmX : bSBtmX
-
+// SWING STRUCTURE — the major bias.
 var int msOs = 0
-var bool msTopCrossed = false
-var bool msBtmCrossed = false
+var bool msSeen = false
+bool msChoch = false
+bool msBosUp = false
+bool msBosDn = false
+if swUp
+    msChoch := msSeen and msOs != 1
+    msBosUp := not msChoch
+    msOs := 1
+    msSeen := true
+if swDn
+    msChoch := msSeen and msOs != 0
+    msBosDn := not msChoch
+    msOs := 0
+    msSeen := true
+
+// The levels the rest of the file reads, under the names it already used.
+float msTopY = pvHi.cur
+float msBtmY = pvLo.cur
+int   msTopX = pvHi.bx
+int   msBtmX = pvLo.bx
+float msSTopY = inHi.cur
+float msSBtmY = inLo.cur
+
+// RUNNING EXTREMES SINCE THE CHoCH, and these stay Undertow's own. The
+// pullback rule anchors on them and deploy/undertow-pullback-check.py holds
+// the two copies of that rule together by term, so replacing the structure
+// engine must not disturb them.
 var float msMax = na
 var float msMin = na
 var int msMaxX = na
 var int msMinX = na
-var float msTopY = na
-var float msBtmY = na
-var bool msSTopCrossed = false
-var bool msSBtmCrossed = false
-
-if not na(msTop)
-    msTopY := msTop
-    msTopCrossed := false
-if not na(msBtm)
-    msBtmY := msBtm
-    msBtmCrossed := false
-
-if close > msTopY and not msTopCrossed
-    msOs := 1
-    msTopCrossed := true
-if close < msBtmY and not msBtmCrossed
-    msOs := 0
-    msBtmCrossed := true
-
-bool msChoch = msOs != msOs[1]
-
-if msChoch
+if msChoch or na(msMax)
     msMax := high
     msMin := low
     msMaxX := bar_index
     msMinX := bar_index
-    msSTopCrossed := false
-    msSBtmCrossed := false
 
-float msSTopY = fixnan(msSTop)
-float msSBtmY = fixnan(msSBtm)
+// NO SWEEP CONCEPT IN THIS ENGINE, and that is stated rather than faked.
+// riptide's engine had one and the `endSweep` rule read it; LuxAlgo's does
+// not, ../port/smc.py says so in as many words, and inventing one here to
+// keep a retired Ending rule company would make the two look comparable while
+// not being.
 
-// ── bullish ──────────────────────────────────────────────────────────────────
-bool msIdmUp = low < msSBtmY and not msSBtmCrossed and msOs == 1 and msSBtmY != msBtmY
-if msIdmUp
-    msSBtmCrossed := true
-
-bool msBosUp = close > msMax and (not msBosNeedsIdm or msSBtmCrossed) and msOs == 1
-if msBosUp
-    msSBtmCrossed := false
-
-// ── bearish ──────────────────────────────────────────────────────────────────
-bool msIdmDn = high > msSTopY and not msSTopCrossed and msOs == 0 and msSTopY != msTopY
-if msIdmDn
-    msSTopCrossed := true
-
-bool msBosDn = close < msMin and (not msBosNeedsIdm or msSTopCrossed) and msOs == 0
-if msBosDn
-    msSTopCrossed := false
-
-// ── sweeps ───────────────────────────────────────────────────────────────────
-bool msSweepUp = high > msMax and close < msMax and msOs == 1 and bar_index - msMaxX > 1
-bool msSweepDn = low < msMin and close > msMin and msOs == 0 and bar_index - msMinX > 1
-
-// Trailing extremes, AFTER the tests above read them. Order matters: the BOS
-// and sweep tests are meant to see the previous bar's running extreme.
 msMax := math.max(high, msMax)
 msMin := math.min(low, msMin)
 if msMax > msMax[1]
@@ -544,31 +363,17 @@ if msMin < msMin[1]
     msMinX := bar_index
 
 
-// ══════════════════════ 4. MINOR STRUCTURE — NOT A COPY ══════════════════════
-// The same crossing state machine as above, run on the SHORT swings, so a minor
-// trend flip can be read the same way a major one is. v2 has no equivalent —
-// it uses the short swings only for the inducement — so this is Undertow's own
-// code and the parity check does not cover it.
-
+// ═══════════ 4. INTERNAL STRUCTURE — THE MINOR TIER, SAME ENGINE ═════════════
+// LuxAlgo runs the identical state machine at length 5 and calls it internal
+// structure. Undertow's minor tier used to be its own code because v2 had no
+// equivalent; now both tiers come from one transcription, which is the part of
+// this swap that is unambiguously an improvement — one engine, two lengths,
+// no second implementation to drift.
 var int msSOs = 0
-var bool msSTopXd = false
-var bool msSBtmXd = false
-var float msSTopLvl = na
-var float msSBtmLvl = na
-
-if not na(msSTop)
-    msSTopLvl := msSTop
-    msSTopXd := false
-if not na(msSBtm)
-    msSBtmLvl := msSBtm
-    msSBtmXd := false
-
-if close > msSTopLvl and not msSTopXd
+if inUp
     msSOs := 1
-    msSTopXd := true
-if close < msSBtmLvl and not msSBtmXd
+if inDn
     msSOs := 0
-    msSBtmXd := true
 
 bool msMinorChoch = msSOs != msSOs[1]
 
@@ -603,8 +408,6 @@ int   bOs         = msOs
 bool  bChoch      = msChoch
 bool  bBosUp      = msBosUp
 bool  bBosDn      = msBosDn
-bool  bSweepUp    = msSweepUp
-bool  bSweepDn    = msSweepDn
 int   bSOs        = msSOs
 bool  bMinorChoch = msMinorChoch
 float bMax        = msMax
@@ -1158,24 +961,20 @@ if cands.size() > 0
             lb.set_text(c.code + " " + (c.armed ? "ARMED " + (c.order == 1 ? "W→F" : "F→W→F") : c.workOk ? "W✓ F·" : c.failOk ? "W· F✓" : "W· F·") + " " + str.tostring(bar_index - c.bar) + "b")
             slot := slot + 1
 
-// Structure, so the bias can be checked by eye rather than trusted.
-plot(showStruct ? msTop : na, "Swing high", color.new(colShort, 40), 4,
-  plot.style_circles, offset = -msLen)
-plot(showStruct ? msBtm : na, "Swing low", color.new(colLong, 40), 4,
-  plot.style_circles, offset = -msLen)
+// THE SWING DOTS ARE GONE. They marked every confirmed pivot with a circle,
+// which at length 50 would be a handful of dots saying less than the CHoCH and
+// BOS lines below already say. LuxAlgo ships its own swing points OFF for the
+// same reason.
 // THE BREAKS, and each one names the pivot it broke so the scan has a span.
-// A CHoCH broke the latched swing level; a BOS broke the running extreme,
-// which the engine had finished updating on the PREVIOUS bar — hence the [1].
-var float dTopY = na
-var int   dTopX = na
-var float dBtmY = na
-var int   dBtmX = na
-if not na(msTop)
-    dTopY := msTop
-    dTopX := msTopX
-if not na(msBtm)
-    dBtmY := msBtm
-    dBtmX := msBtmX
+// A CHoCH broke the swing pivot the engine is holding; a BOS broke the running
+// extreme, which the engine had finished updating on the PREVIOUS bar — hence
+// the [1]. The Piv objects carry their own bar index, so nothing has to be
+// latched here any more: under the old engine `msTop` was an na-except-at-a-
+// pivot series and needed catching as it went past.
+float dTopY = pvHi.cur
+int   dTopX = pvHi.bx
+float dBtmY = pvLo.cur
+int   dBtmX = pvLo.bx
 
 bool brkUp = msChoch and msOs == 1
 bool brkDn = msChoch and msOs == 0

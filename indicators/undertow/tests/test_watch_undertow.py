@@ -183,12 +183,14 @@ def test_frozen_constants_match_the_port():
     """
     p = U.P()
     for name, live, want in (
-            ("msShortLen", W.MS_SHORT_LEN, p.msShortLen),
-            ("swingSrc", W.SWING_SRC, p.swingSrc),
-            ("swingK", W.SWING_K, p.swingK),
-            ("swingKMinor", W.SWING_K_MINOR, p.swingKMinor),
-            ("swingHours", W.SWING_HOURS, p.swingHours),
-            ("msBosNeedsIdm", W.BOS_NEEDS_IDM, p.msBosNeedsIdm),
+            # THE STRUCTURE ENGINE IS LuxAlgo's NOW, in all three copies.
+            # msShortLen, swingSrc, swingK, swingKMinor, swingHours and
+            # msBosNeedsIdm belonged to riptide's engine; they are still in the
+            # port, because every page in measurements/ was produced on them,
+            # and the watcher no longer has them because it no longer runs it.
+            ("biasSrc", W.BIAS_SRC, p.biasSrc),
+            ("smcSwingLen", W.SMC_SWING_LEN, p.smcSwingLen),
+            ("smcInternalLen", W.SMC_INTERNAL_LEN, p.smcInternalLen),
             ("endMinor", W.END_MINOR, p.endMinor),
             ("endSweep", W.END_SWEEP, p.endSweep),
             ("endStale", W.END_STALE, p.endStale),

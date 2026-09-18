@@ -87,7 +87,11 @@ def test_structure_matches_ms_struct():
     """
     for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006)):
         cs = walk(1500, seed=seed, drift=drift)
-        p = U.P(swingSrc=U.SW_BAR, msLen=15, msShortLen=3)
+        # biasSrc PINNED TOO, for the same reason swingSrc is: the default is
+        # now LuxAlgo's engine, and comparing that against ms_struct would be
+        # comparing two different algorithms and calling it a drift.
+        p = U.P(biasSrc=U.BS_STRUCT, swingSrc=U.SW_BAR, msLen=15,
+                msShortLen=3)
         st, _ = U.structure(cs, p)
         ev, _ = ms_struct.engine(cs, p.msLen, p.msShortLen, p.msBosNeedsIdm)
 
@@ -550,7 +554,8 @@ def test_htf_gate_only_removes_setups():
 def test_price_swing_sources_run_end_to_end():
     cs = walk(3000, seed=57, drift=0.0004)
     for src, k, km in ((U.SW_ATR, 2.5, 0.8), (U.SW_RANGE, 0.40, 0.12)):
-        a = U.run(cs, U.P(swingSrc=src, swingK=k, swingKMinor=km), "T")
+        a = U.run(cs, U.P(biasSrc=U.BS_STRUCT, swingSrc=src, swingK=k,
+                          swingKMinor=km), "T")
         ok(a.nArmed > 0, f"swingSrc={src!r} produces setups: {a.nArmed}")
         ok(a.nRaw >= a.nPins >= a.nColour >= a.nLoc,
            f"swingSrc={src!r}: the funnel still narrows")
@@ -559,8 +564,12 @@ def test_price_swing_sources_run_end_to_end():
     # AND AN UNKNOWN NAME MUST RAISE, not quietly run the price-move branch.
     # The rename of "bar"/"range" to "bar pivot"/"price move" would otherwise
     # have left three study scripts silently measuring the wrong swing.
+    # biasSrc PINNED: the shipped engine is LuxAlgo's now and it reads its
+    # pivots straight from bar_swings, so `swingSrc` is never dispatched on and
+    # a stale name there is inert rather than wrong. The guard is about the
+    # riptide engine, which is the only thing that reads it.
     try:
-        U.run(cs[:400], U.P(swingSrc="range"), "T")
+        U.run(cs[:400], U.P(biasSrc=U.BS_STRUCT, swingSrc="range"), "T")
         ok(False, "a stale swingSrc must raise")
     except ValueError as e:
         ok("unknown swingSrc" in str(e), f"stale swingSrc raises: {e}")
@@ -710,8 +719,8 @@ def test_smc_is_the_same_swings_and_the_same_choch():
     # And the CHoCH, against the engine Undertow already had.
     for size in (6, 15):
         lux = smc.structure(cs, size)
-        mine = U.structure(cs, U.P(swingSrc=U.SW_BAR, msLen=size,
-                                   msShortLen=2))[0]
+        mine = U.structure(cs, U.P(biasSrc=U.BS_STRUCT, swingSrc=U.SW_BAR,
+                                   msLen=size, msShortLen=2))[0]
         a = [i for i, v in enumerate(lux["choch"]) if v]
         b = [i for i, v in enumerate(mine["choch"]) if v]
         ok(a == b, f"size {size}: the CHoCH bars are the same list "

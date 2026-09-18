@@ -96,7 +96,18 @@ PINE_CHECKS = [
         PINE.format("riptide_ms", "riptide-indicator-v2.pine"),
         "indicators/riptide_ms/port/ms_struct.py"]),
     ("ccp-grab-check", "ccp", []),
-    ("undertow-ms-check", "undertow", []),
+    # undertow-ms-check IS RETIRED, and this line is its headstone rather than
+    # a deletion. It held riptide-undertow.pine's section 3 to
+    # riptide-indicator-v2.pine's section 12, statement for statement, because
+    # the engine was a COPY and a copy without a check is how two charts start
+    # disagreeing. Section 3 is now a transcription of LuxAlgo's Smart Money
+    # Concepts instead, so there is no longer a second copy of v2's engine to
+    # hold it to — the check would be comparing two different algorithms and
+    # failing for the right reason at every run.
+    #
+    # v2's engine is still checked against its own port by ms-py-parity above,
+    # and Undertow's structure is still checked against ../port/smc.py by
+    # test_undertow_port.py. Nothing lost its guard; one guard lost its subject.
     ("undertow-port-check", "undertow", []),
     # Sections 5-7 have no v2 counterpart, so the parity chain does not
     # reach the pullback rule and the Pine is in none of the behaviour

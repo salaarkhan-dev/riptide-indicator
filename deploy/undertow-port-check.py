@@ -44,8 +44,8 @@ PORT = ROOT / "indicators/undertow/port/undertow.py"
 # Pine inputs that only ever reach a drawing call. The port has no analogue and
 # must not grow one.
 DISPLAY_ONLY = {"showZones", "showUnfilled", "showStruct", "keepN",
-                "overlapMode", "showStats", "showOB", "colOB",
-                "showFVG", "colFVG", "fvgExtend", "zoneAuto",
+                "overlapMode", "showStats", "showOB", "colOBBull",
+                "colOBBear", "showFVG", "fvgExtend", "zoneAuto",
                 "colLong", "colShort", "colLine", "dbgOn", "dbgRejects"}
 
 # input.color / input.string defaults that are Pine expressions rather than
@@ -259,7 +259,21 @@ def main() -> int:
                # was produced under, so the chart and the studies still
                # describe the same detector -- and still adjustable here, where
                # the study that finally tests them will need them.
-               "swingK", "swingKMinor", "swingHours"}
+               "swingK", "swingKMinor", "swingHours",
+               # THE OLD STRUCTURE ENGINE'S INPUTS. Section 3 of the Pine is
+               # now a transcription of LuxAlgo's Smart Money Concepts instead
+               # of a copy of riptide-indicator-v2's engine, so the chart has
+               # one detector at two lengths -- smcSwingLen and smcInternalLen,
+               # compared above like any other input -- and no longer has a
+               # source to choose between, bar-pivot lengths to set, or an
+               # inducement rule to gate a BOS on. LuxAlgo's BOS has no
+               # inducement anywhere in it.
+               #
+               # All four stay in the port because UNDERTOW_PARAMS.md,
+               # UNDERTOW_BIAS_SOURCE.md and ten other pages were produced on
+               # that engine and have to keep reproducing. The port can still
+               # run it; the chart no longer offers it.
+               "swingSrc", "msLen", "msShortLen", "msBosNeedsIdm"}
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,

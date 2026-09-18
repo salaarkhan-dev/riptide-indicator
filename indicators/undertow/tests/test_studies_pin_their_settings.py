@@ -42,7 +42,7 @@ STUDIES = pathlib.Path(__file__).resolve().parents[1] / "studies"
 # this list when you move another one -- that is cheaper than the alternative,
 # which is finding out from a table that silently disagrees with its page.
 PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
-          "endStale", "confirmOrder")
+          "endStale", "confirmOrder", "biasSrc")
 # A study whose whole job is to describe what currently ships puts this on the
 # line that reads the default. It is a deliberate, visible opt-out.
 EXEMPT = "TRACKS THE CURRENT DEFAULT"
@@ -98,7 +98,28 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # whole point: both reported gross R and a gross break-even line, and
 # UNDERTOW_V3.md showed that the gap between 22.2% and 23.5% is exactly the
 # difference between "this rule makes money" and "this rule is the fee".
-DEFAULTS_FINGERPRINT = "9b5793dbde158edf"
+#
+# 2026-09-18: `biasSrc` 'structure' → 'SMC structure', by decision rather than
+# by measurement, because the chart's structure engine is now a transcription
+# of LuxAlgo's Smart Money Concepts and the port has to run what the chart
+# runs. THE PROCEDURE WAS FOLLOWED IN THE ONLY ORDER THAT WORKS:
+#
+#   1. `biasSrc` went into PINNED above. It was NOT there, and TEN studies read
+#      it from the default — undertow_ablation, _backup, _exits, _htf,
+#      _late_backup, _overlap, _pin, _pullback, _sweep and _v3. Moving the
+#      default first would have silently re-pointed all ten, which is the exact
+#      failure this file exists to catch and has already caught twice.
+#   2. All ten now pass biasSrc=U.BS_STRUCT explicitly, so every published page
+#      keeps describing the engine it was produced on.
+#   3. Only then did the default move.
+#
+# WHAT IT COSTS, STATED PLAINLY: every measurement page in ../measurements
+# describes riptide's engine at 6/2, and the shipped bias is now LuxAlgo's at
+# 50/5. UNDERTOW_V2.md scored the ENGINE swap at +0.002 / +0.065 / +0.006 R per
+# trade — ../port/smc.py shows the two detectors are the same expression — but
+# nothing has scored the LENGTH, and 50 against 6 is the larger change of the
+# two by a distance.
+DEFAULTS_FINGERPRINT = "5fb0559e472c6336"
 DEFAULTS_COUNT = 65
 
 good = []

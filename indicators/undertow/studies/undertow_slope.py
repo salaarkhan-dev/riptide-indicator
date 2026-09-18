@@ -45,7 +45,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # one that would bite here: every R on the page is quoted at 3.5, and A1 and A2
 # read no swing setting at all (Slope is not the structure engine), so the swing
 # pins matter only to A0, which names its own.
-BASE = U.P(confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
+BASE = U.P(biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
            swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,
            endSweep=False, endStale=False)
 # Retrace-only Ending: the only rule that exists for a slope.

@@ -41,7 +41,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # is W→F here because that IS what ships now; every other study pins C_EITHER
 # because that is what its page was produced under. The difference is
 # deliberate and it is the reason the field is in the PINNED list.
-BASE = U.P(confirmOrder=U.C_WF, maxLive=64, feeFrac=FEE, rr=3.5,
+BASE = U.P(biasSrc=U.BS_STRUCT, confirmOrder=U.C_WF, maxLive=64, feeFrac=FEE, rr=3.5,
            swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,
            endMinor=U.E_FLIP, endSweep=False, endStale=False, retraceMax=70)
 

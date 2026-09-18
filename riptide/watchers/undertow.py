@@ -117,18 +117,29 @@ RECENT_BARS = 6
 # tuning against a live stream, which is the worst possible place to tune.
 # indicators/undertow/port/undertow.py::P is the authority; the two are held
 # together by test_watch_undertow.py.
-MS_SHORT_LEN = 2
+# THE STRUCTURE ENGINE IS LuxAlgo's Smart Money Concepts, transcribed, and it
+# replaced the copy of riptide-indicator-v2's engine that used to be here. See
+# indicators/undertow/pine/riptide-undertow.pine section 3 for what that buys
+# and what it costs: the DETECTOR is the same expression either way
+# (indicators/undertow/port/smc.py proves it pivot for pivot), so the real
+# changes are the SCALE -- 50 and 5 against 6 and 2 -- and a BOS that is a
+# close beyond the last pivot rather than beyond the running extreme with an
+# inducement swept. There is no inducement anywhere in LuxAlgo's structure, so
+# `BOS_NEEDS_IDM` is gone with it.
+# Named so test_watch_undertow.py can assert the watcher and the port agree on
+# WHICH ENGINE, not just on its lengths. Nothing here branches on it — the
+# watcher runs one engine — but a port default that drifted back to riptide's
+# structure while this file kept running LuxAlgo's is exactly the silent
+# divergence the rest of that test exists to catch.
+BIAS_SRC = "SMC structure"
+SMC_SWING_LEN = 50
+SMC_INTERNAL_LEN = 5
 # THE CONFIRMATION ORDER, and it matches the port's default and the chart's.
 # v1 armed on "both lines, in either order", which was a misreading of the
 # strategy — see indicators/undertow/SPEC.md section 8. Every measurement page
 # in indicators/undertow/measurements was produced under the old rule and each
 # study now pins it; the WATCH trades the corrected one.
 CONFIRM_ORDER = "working then failure"
-SWING_SRC = "price move"
-SWING_K = 0.40
-SWING_K_MINOR = 0.12
-SWING_HOURS = 24.0
-BOS_NEEDS_IDM = True
 END_MINOR = "on the flip"
 END_SWEEP = False
 END_STALE = False
@@ -297,6 +308,63 @@ def _rma(values, length):
     return out
 
 
+def _smc_structure(cs, size, ref=None):
+    """One LuxAlgo structure pass — the THIRD copy of this rule, and the only
+    one a live scanner imports.
+
+    A transcription of indicators/undertow/port/smc.py::structure, held to it
+    by indicators/undertow/tests/test_watch_undertow.py. Two details are
+    transcribed rather than tidied and both are load-bearing:
+
+      * THE CROSS COMPARES AGAINST THE PREVIOUS BAR'S LEVEL. `ta.crossover`
+        is `close > level and close[1] <= level[1]`, and `level[1]` is what
+        the level WAS last bar. Using the current one fires a break on the bar
+        a pivot is confirmed, a bar early, consistently — so it would not look
+        like a bug, it would look like a slightly better strategy.
+      * `crossed` IS ONE-SHOT PER PIVOT. A level that has been broken does not
+        break again until a new pivot replaces it. Without it a close
+        oscillating around an old swing high prints a BOS every bar.
+
+    `ref` is the swing pass's levels when running the internal pass: an
+    internal break sitting exactly on a swing level IS the swing break, not a
+    second event.
+    """
+    n = len(cs)
+    tops, btms = _swings(cs, size)
+    hiLvl = loLvl = hiPrev = loPrev = None
+    hiCrossed = loCrossed = True
+    bias = 0
+    out = dict(dir=[0] * n, choch=[False] * n, bos=[False] * n,
+               up=[False] * n, dn=[False] * n,
+               hiLvl=[None] * n, loLvl=[None] * n)
+    for i in range(n):
+        if tops[i] is not None:
+            hiLvl, hiCrossed = tops[i], False
+        if btms[i] is not None:
+            loLvl, loCrossed = btms[i], False
+        c = cs[i]
+        if i > 0:
+            okHi = ref is None or ref["hiLvl"][i] != hiLvl
+            okLo = ref is None or ref["loLvl"][i] != loLvl
+            if (hiLvl is not None and hiPrev is not None and not hiCrossed
+                    and okHi and c.c > hiLvl and cs[i - 1].c <= hiPrev):
+                out["choch"][i] = bias == -1
+                out["bos"][i] = bias != -1
+                out["up"][i] = True
+                hiCrossed, bias = True, 1
+            if (loLvl is not None and loPrev is not None and not loCrossed
+                    and okLo and c.c < loLvl and cs[i - 1].c >= loPrev):
+                out["choch"][i] = bias == 1
+                out["bos"][i] = bias != 1
+                out["dn"][i] = True
+                loCrossed, bias = True, -1
+        hiPrev, loPrev = hiLvl, loLvl
+        out["dir"][i] = bias
+        out["hiLvl"][i] = hiLvl
+        out["loLvl"][i] = loLvl
+    return out
+
+
 def _atr(cs, length=14):
     tr = []
     for i, c in enumerate(cs):
@@ -357,27 +425,16 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
     if n < 60:
         return []
     atr = _atr(cs, 14)
-    # WHICH SWING DEFINITION. `range` is the shipped default: it is the only
-    # one that behaves the same on 15m as on 30m (0.6 flips a day on both,
-    # against the bar pivot's 2.3 and 1.1). It does not make money and
-    # UNDERTOW_BIAS_SOURCE.md says so; it makes one setting mean one thing.
-    if SWING_SRC == "price move":
-        scale = _range_basis(cs, _bars_per(cs, SWING_HOURS))
-        msTop, msBtm = _price_swings(cs, SWING_K, scale)
-        msSTop, msSBtm = _price_swings(cs, SWING_K_MINOR, scale)
-    else:
-        msTop, msBtm = _swings(cs, ms_len)
-        msSTop, msSBtm = _swings(cs, MS_SHORT_LEN)
+    # TWO PASSES OF ONE ENGINE. The major tier is the bias, the internal tier
+    # is the minor structure the Ending rule and the stop read. Both are
+    # computed up front rather than inside the bar loop, exactly as
+    # indicators/undertow/port/smc.py::state does, so the two copies can be
+    # compared pass for pass.
+    maj = _smc_structure(cs, SMC_SWING_LEN)
+    mnr = _smc_structure(cs, SMC_INTERNAL_LEN, ref=maj)
 
-    msOs = 0
-    msTopCrossed = msBtmCrossed = False
     msMax = msMin = msMaxX = msMinX = None
-    msTopY = msBtmY = None
-    msSTopCrossed = msSBtmCrossed = False
-    msSTopY = msSBtmY = None
-    msSOs = 0
-    msSTopXd = msSBtmXd = False
-    msSTopLvl = msSBtmLvl = None
+    dirs: list = []
 
     biasSeen = False
     ending = False
@@ -395,68 +452,37 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
 
     for i in range(n):
         c = cs[i]
-        msOsPrev = msOs
-        msMaxPrev, msMinPrev = msMax, msMin
         prevMaxX, prevMinX = msMaxX, msMinX
 
-        if msTop[i] is not None:
-            msTopY, msTopCrossed = msTop[i], False
-        if msBtm[i] is not None:
-            msBtmY, msBtmCrossed = msBtm[i], False
-        if gt(c.c, msTopY) and not msTopCrossed:
-            msOs, msTopCrossed = 1, True
-        if lt(c.c, msBtmY) and not msBtmCrossed:
-            msOs, msBtmCrossed = 0, True
+        # Every structure event is READ from the two passes rather than
+        # recomputed, so there is one state machine and not two.
+        msChoch = maj["choch"][i]
+        msBosUp = maj["bos"][i] and maj["up"][i]
+        msBosDn = maj["bos"][i] and maj["dn"][i]
+        msOs = 1 if (maj["dir"][i] or 1) > 0 else 0
+        msSOs = 1 if (mnr["dir"][i] or 1) > 0 else 0
+        msMinorChoch = mnr["choch"][i]
+        msSTopY = mnr["hiLvl"][i]
+        msSBtmY = mnr["loLvl"][i]
+        # NO SWEEP IN THIS ENGINE, stated rather than faked. `endSweep` is off
+        # and a fabricated sweep would make it look comparable while not being.
+        msSweepUp = msSweepDn = False
 
-        msChoch = msOs != msOsPrev
-        if msChoch:
+        # RUNNING EXTREMES SINCE THE LAST DIRECTION CHANGE, and the update runs
+        # BEFORE anything reads them — which is the opposite of the old engine,
+        # where the BOS and sweep tests had to see the previous bar's extreme.
+        # Here the BOS comes from the structure pass, so nothing is left that
+        # needs the stale value, and smc.py::state orders it this way.
+        dirs.append(1 if msOs == 1 else -1)
+        flip = i > 0 and maj["dir"][i] != maj["dir"][i - 1]
+        if flip or msMax is None:
             msMax, msMin = c.h, c.l
             msMaxX = msMinX = i
-            msSTopCrossed = msSBtmCrossed = False
-
-        if msSTop[i] is not None:
-            msSTopY = msSTop[i]
-        if msSBtm[i] is not None:
-            msSBtmY = msSBtm[i]
-
-        if (lt(c.l, msSBtmY) and not msSBtmCrossed and msOs == 1
-                and msSBtmY != msBtmY):
-            msSBtmCrossed = True
-        msBosUp = (gt(c.c, msMax) and (not BOS_NEEDS_IDM or msSBtmCrossed)
-                   and msOs == 1)
-        if msBosUp:
-            msSBtmCrossed = False
-        if (gt(c.h, msSTopY) and not msSTopCrossed and msOs == 0
-                and msSTopY != msTopY):
-            msSTopCrossed = True
-        msBosDn = (lt(c.c, msMin) and (not BOS_NEEDS_IDM or msSTopCrossed)
-                   and msOs == 0)
-        if msBosDn:
-            msSTopCrossed = False
-
-        msSweepUp = (gt(c.h, msMax) and lt(c.c, msMax) and msOs == 1
-                     and msMaxX is not None and i - msMaxX > 1)
-        msSweepDn = (lt(c.l, msMin) and gt(c.c, msMin) and msOs == 0
-                     and msMinX is not None and i - msMinX > 1)
-
-        msSOsPrev = msSOs
-        if msSTop[i] is not None:
-            msSTopLvl, msSTopXd = msSTop[i], False
-        if msSBtm[i] is not None:
-            msSBtmLvl, msSBtmXd = msSBtm[i], False
-        if gt(c.c, msSTopLvl) and not msSTopXd:
-            msSOs, msSTopXd = 1, True
-        if lt(c.c, msSBtmLvl) and not msSBtmXd:
-            msSOs, msSBtmXd = 0, True
-        msMinorChoch = msSOs != msSOsPrev
-
-        # Trailing extremes, AFTER the tests above read them.
-        msMax = c.h if msMax is None else max(c.h, msMax)
-        msMin = c.l if msMin is None else min(c.l, msMin)
-        if msMaxPrev is None or msMax > msMaxPrev:
-            msMaxX = i
-        if msMinPrev is None or msMin < msMinPrev:
-            msMinX = i
+        else:
+            if c.h > msMax:
+                msMax, msMaxX = c.h, i
+            if c.l < msMin:
+                msMin, msMinX = c.l, i
 
         # ── bias ────────────────────────────────────────────────────────────
         if msChoch:
@@ -485,7 +511,12 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
                  else "immature" if bosN == 0 else "running")
 
         # ── the pullback ────────────────────────────────────────────────────
-        pbReset = (biasDir != (1 if msOsPrev == 1 else -1)
+        # The PREVIOUS BAR'S direction, which is what the port compares
+        # against — `prevDir = dirs[i-1] if i else biasDir`. It used to come
+        # from `msOsPrev`, a local of the structure machine that now lives in
+        # the two passes above.
+        prevDir = dirs[i - 1] if i else biasDir
+        pbReset = (biasDir != prevDir
                    or (biasDir < 0 and msMinX != prevMinX)
                    or (biasDir > 0 and msMaxX != prevMaxX))
         if pbReset or pbExt is None:

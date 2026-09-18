@@ -50,7 +50,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # the bar pivot to "price move" after this ran, so without these lines the
 # script would print different numbers under the same page's name. A study that
 # cannot reproduce its own measurement is not a record of anything.
-BASE = U.P(confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
+BASE = U.P(biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
            swingSrc=U.SW_BAR, msLen=6, msShortLen=2,
            endSweep=False, endStale=False)
 # Retrace-only Ending: the only rule that exists for every source.

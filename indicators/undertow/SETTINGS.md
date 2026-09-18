@@ -3,19 +3,19 @@
 You asked me to revisit the parameters. This is the audit, not a retune — the
 last section says why those are different things.
 
-> **WHAT THIS AUDIT CHANGED.** The chart went from **56 inputs to 37**, and of
-> those 37 only 20 decide anything — the rest are display and debug. The rule
+> **WHAT THIS AUDIT CHANGED.** The chart went from **56 inputs to 35**, and of
+> those 35 only 18 decide anything — the rest are display and debug. The rule
 > applied, and it is the only rule this file argues for:
 >
 > **an input earns its place only if the strategy's definition needs it, a
 > study showed the choice matters, or it is display.**
 >
-> Nineteen failed all three. They are listed in §6 and every one of them is
+> Twenty-one failed all three. They are listed in §6 and every one of them is
 > still in the port, because that is where an unmeasured option belongs: the
 > port can express it, the chart does not offer it, and the studies that name
 > it keep reproducing unchanged. No strategy default was touched.
 
-**65 settings. 17 have a pre-registered study behind them. 15 are values that
+**65 settings. 16 have a pre-registered study behind them. 15 are values that
 came off your chart or out of the Pine's first draft and have never been
 measured at the value they ship at. 28 are inert. 4 are definitions, not
 numbers. 1 was wrong and is fixed.**
@@ -29,7 +29,8 @@ today changes nothing on your chart.
 
 | group | settings | why inert |
 |---|---|---|
-| retired bias sources | `emaFast` `emaSlow` `stAtrLen` `stMult` `slopeUnit` `slopeLen` `slopeMin` `slopeHours` `slopeMinPerHr` `donLen` `mtfFast` `mtfSlow` `mtfMult` `smcSwingLen` `smcInternalLen` `matureBars` | `biasSrc` is `structure`. Five alternatives were measured; [none beat it](measurements/UNDERTOW_BIAS_SOURCE.md) |
+| retired bias sources | `emaFast` `emaSlow` `stAtrLen` `stMult` `slopeUnit` `slopeLen` `slopeMin` `slopeHours` `slopeMinPerHr` `donLen` `mtfFast` `mtfSlow` `mtfMult` `matureBars` | `biasSrc` is `SMC structure`. Six alternatives were measured; [none beat the baseline](measurements/UNDERTOW_BIAS_SOURCE.md) |
+| the OLD structure engine | `swingSrc` `swingK` `swingKMinor` `swingHours` `msLen` `msShortLen` `msBosNeedsIdm` | riptide's engine. Read only under `biasSrc = structure`, which every measurement page pins and the chart no longer offers |
 | the backup fill | `bkTrigger` `bkMaxRisk` `useOB` `useFVG` `bkLook` `bkWhen` `bkLateBars` `bkMode` | `useBackup` is off — [+0.03 R per armed setup, significant on none](measurements/UNDERTOW_BACKUP_FILL.md) |
 | off-switch operands | `staleBars` (needs `endStale`) · `htfUnit` `htfHours` (need `htfMult`) · `adxMin` at 0 is its own off switch | the gates they belong to are off |
 
@@ -39,16 +40,15 @@ change.
 
 ---
 
-## 2 · MEASURED — 17 settings a study actually tested
+## 2 · MEASURED — 16 settings a study actually tested
 
 A pre-registered study compared the shipped value against alternatives, on
 symbols it had never seen, against a control.
 
 | setting | ships | what the study found |
 |---|---|---|
-| `biasSrc` | structure | five sources measured, [none beat it](measurements/UNDERTOW_BIAS_SOURCE.md); SMC structure [scored the same](measurements/UNDERTOW_V2.md) |
+| `biasSrc` | **SMC structure** | five sources measured, [none beat structure](measurements/UNDERTOW_BIAS_SOURCE.md); SMC [scored the same as it](measurements/UNDERTOW_V2.md) and is now the default **by decision, not by measurement** — the detectors are the same expression, the 50/5 scale is not and is unmeasured |
 | `endMinor` | on the flip | swept in [PARAMS](measurements/UNDERTOW_PARAMS.md); [discards 64% of trades](measurements/UNDERTOW_MTF_DEFAULT.md) and that cost is uncontrolled |
-| `swingSrc` | price move | the [holdout's chosen source](measurements/UNDERTOW_PARAMS.md) — see §4, this is a weaker claim than it sounds |
 | `useHammer` `useStar` `useFamily` `useColour` | on | [the taxonomy adds nothing](measurements/UNDERTOW_PIN_VALUE.md) — removing it scored **higher** on 2 of 3. Kept on because it is the strategy's definition, not because it earned it |
 | `confirmOrder` | working then failure | your correction; [measured in v2](measurements/UNDERTOW_V2.md) and it did not pay. Ships anyway as a correction, not a promotion |
 | `needBos` | off | [removing it improved v2](measurements/UNDERTOW_V2.md) on 3 of 3 |
@@ -90,17 +90,15 @@ value it ships at.
 | setting | ships | where the value came from |
 |---|---|---|
 | `rr` | 3.5 | **your chart.** [The sweep used 3.0](measurements/UNDERTOW_PARAMS.md); 3.5 is what your TradingView layout had |
-| `msLen` `msShortLen` | 6 / 2 | your chart |
+| `smcSwingLen` `smcInternalLen` | 50 / 5 | LuxAlgo's own defaults. **The largest unmeasured lever on the chart** — every page was produced at 6 / 2 |
 | `endSweep` `endStale` | off / off | your chart |
 | `retraceMax` | 70 | the Pine's first draft |
 | `stopBuf` | 0.25 ATR | the Pine's first draft. [The median gap is exactly the buffer](measurements/UNDERTOW_V3.md), so it is load-bearing |
-| `swingK` `swingKMinor` | 0.40 / 0.12 | **worse than unmeasured — see below.** No longer adjustable on the chart |
-| `swingHours` | 24.0 | the window the swing threshold is a fraction OF. Never varied, no longer adjustable |
+| `swingK` `swingKMinor` `swingHours` | 0.40 / 0.12 / 24.0 | **worse than unmeasured — see below.** Off the chart entirely now: they belong to the old engine |
 | `maxLive` | 4 | **see below** |
 | `wickEdge` | 0.05 | the doji exclusion. The margin that decides hammer vs. nothing. Never varied |
 | `confirmBars` | 20 | how long a pin waits for its two confirmations |
 | `fillBars` | 20 | how long the limit rests. [What happens AFTER it expires was measured](measurements/UNDERTOW_LATE_BACKUP.md); the 20 was not |
-| `msBosNeedsIdm` | on | inherited from the v2 structure indicator |
 
 ### Two of these are worse than merely unmeasured
 
@@ -151,7 +149,7 @@ same 7bp every study used. Set it to 0 to read the panel gross.
 
 ---
 
-## 6 · THE NINETEEN THAT CAME OFF THE CHART
+## 6 · THE TWENTY-ONE THAT CAME OFF THE CHART
 
 Removed from the Pine, kept in the port. None was a default change — every one
 of them was already at the value it is now fixed at.
@@ -163,6 +161,7 @@ of them was already at the value it is now fixed at.
 | **two pullback minimums** — `pbMinAge` `pbMinDepth` | [measured: the setups they remove are not systematically worse](measurements/UNDERTOW_PULLBACK.md) |
 | **two confirmation tests** — `workTest` `failTest` | three unmeasured variants each of something the strategy defines as *a close beyond* |
 | **three "price move" dials** — `swingK` `swingKMinor` `swingHours` | two of them are a [failed holdout's training winner](measurements/UNDERTOW_PARAMS.md), the third was never varied. Fixed in the Pine at the measured values, still adjustable in the port |
+| **the old engine's four** — `swingSrc` `msLen` `msShortLen` `msBosNeedsIdm` | the structure engine is LuxAlgo's now, which has one detector at two lengths and no inducement. Replaced by `smcSwingLen` and `smcInternalLen` |
 
 **Two of the backup fill's eight inputs were never wired up at all.** `bkWhen`
 and `bkLateBars` were declared, given tooltips, and never read by a single line

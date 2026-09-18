@@ -169,7 +169,17 @@ class P:
     staleBars: int = 30
     retraceMax: int = 70
     adxMin: int = 0
-    biasSrc: str = BS_STRUCT
+    # THE CHART'S ENGINE IS LuxAlgo's NOW, so the port's default follows it —
+    # a port default that differs from the chart's is the one failure
+    # deploy/undertow-port-check.py exists to catch, and `biasSrc` is port-only
+    # there, so nothing would have caught this one.
+    #
+    # BS_STRUCT is still here and still runs riptide's engine: every page in
+    # ../measurements was produced on it, and all ten studies that used to read
+    # this default now pin BS_STRUCT explicitly so they keep reproducing. See
+    # test_studies_pin_their_settings.py, where the order of operations is
+    # written out.
+    biasSrc: str = BS_SMC
     emaFast: int = 50
     emaSlow: int = 200
     stAtrLen: int = 10

@@ -20,9 +20,31 @@ fails and the undertow takes price back.
 
 ## 1. Bias — from market structure
 
-Ported from section 12 of `indicators/riptide_ms/pine/riptide-indicator-v2.pine`,
-which already emits CHoCH from long swings, BOS from the running extreme, and
-IDM/CHoCH from short swings.
+> **THE ENGINE IS LuxAlgo's "Smart Money Concepts" NOW** (CC BY-NC-SA 4.0),
+> transcribed in the Pine's section 3, in [`port/smc.py`](port/smc.py) and in
+> the watcher. It replaced the copy of v2's engine described below, by decision
+> rather than by measurement, and the honest accounting is:
+>
+> * **the DETECTOR is the same expression either way** — `smc.py` proves
+>   `leg()` and `bar_swings()` are pivot-for-pivot identical, and the CHoCH
+>   bars are the same list
+> * **the SCALE is not** — 50 and 5 against 6 and 2
+> * **the BOS is not** — LuxAlgo's is a close beyond the last pivot in the
+>   trend's direction; riptide's was a close beyond the running extreme with an
+>   inducement swept. `msBosNeedsIdm` has no counterpart and is gone
+> * there is **no sweep** in LuxAlgo's structure, so `endSweep` has nothing to
+>   read; that is stated rather than faked
+>
+> [`UNDERTOW_V2.md`](measurements/UNDERTOW_V2.md) scored the engine swap at
+> **+0.002 / +0.065 / +0.006 R per trade**. Nothing has scored the LENGTH, and
+> 50 against 6 is much the larger change. Every page in `measurements/` was
+> produced on the engine below, and all twelve studies now pin
+> `biasSrc=BS_STRUCT` so they keep reproducing.
+
+The text below describes the engine that WAS here — ported from section 12 of
+`indicators/riptide_ms/pine/riptide-indicator-v2.pine`, which emits CHoCH from
+long swings, BOS from the running extreme, and IDM/CHoCH from short swings. It
+is kept because the port can still run it and every measurement page does.
 
 **The engine is COPIED, and that is a risk this repo has seen before.** Pine
 files cannot import, so the structure engine will exist in two files and is
@@ -550,15 +572,15 @@ number that follows a lie.
 
 ---
 
-## 9. Inputs — 37, of which 20 decide anything
+## 9. Inputs — 35, of which 18 decide anything
 
-Nineteen came off. The rule, from
+Twenty-one came off. The rule, from
 [`SETTINGS.md`](SETTINGS.md): **an input earns its place only if the strategy's
 definition needs it, a study showed the choice matters, or it is display.**
 
 | group | inputs |
 |---|---|
-| **1 · Bias** | swings from · major swing · minor swing · BOS needs inducement · End: minor structure · End: retraced % |
+| **1 · Bias** | swing structure · internal structure · End: minor structure · End: retraced % |
 | **2 · Candle** | wick edge · hammer family · star family |
 | **3 · Setup** | confirmations (W→F) · confirm within · fill within · live setups at once · anchor the pin at · anchor tolerance |
 | **4 · Levels** | stop · stop follows the pullback · stop buffer · reward ratio · round-trip fee |
