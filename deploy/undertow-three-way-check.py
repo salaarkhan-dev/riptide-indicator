@@ -160,7 +160,18 @@ ABSENT = {
     "adxMin": (0, "no ADX gate in the watcher; must stay off"),
     # the backup fill. Off by default, unmeasured, and the watcher stops at
     # the arming bar -- see the module docstring.
-    "useBackup": (False, "the watcher has no backup fill; must stay off"),
+    # NO REQUIRED VALUE, and the reason is an invariant rather than an
+    # opinion: the backup is entirely POST-ARMING. It re-prices where an
+    # already-armed setup fills and cannot create, remove or move an arm, so
+    # the watcher -- which stops at the arming bar and alerts nothing else --
+    # sends exactly what the chart draws whether it is on or off.
+    #
+    # THAT CLAIM IS CHECKED, not asserted here. test_watch_undertow.py runs
+    # the port with useBackup on and off and requires the ARMED lists to be
+    # identical bar for bar and level for level. If the backup ever grows a
+    # path that touches arming, that test fails and this waiver is void.
+    "useBackup": (None, "post-arming only; the watcher stops at the arm, and "
+                        "test_watch_undertow asserts arming is unaffected"),
     "bkTrigger": (None, "backup fill"), "bkMaxRisk": (None, "backup fill"),
     "useOB": (None, "backup fill"), "useFVG": (None, "backup fill"),
     "bkLook": (None, "backup fill"), "bkWhen": (None, "backup fill"),

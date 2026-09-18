@@ -42,7 +42,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # the SHIPPED configuration, which is the whole point: endMinor on the flip,
 # endSweep and endStale off, retrace 70. undertow_mtf.py's BASE differs by
 # endMinor alone, deliberately, and that difference is what this study is for.
-BASE = U.P(pinNewest=False, famPriority=False, failTest=U.T_CLOSE, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
+BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, biasTier=U.TIER_SWING, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
            swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,
            endMinor=U.E_FLIP, endSweep=False, endStale=False, retraceMax=70)
 RETRACE_ONLY = dict(endMinor=U.E_OFF, endSweep=False, endStale=False)

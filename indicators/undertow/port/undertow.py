@@ -488,7 +488,7 @@ class P:
     # short the zone sits BELOW the Focus, so it is further from the stop --
     # bigger risk, further target, worse R on the same move. What it buys is a
     # trade instead of no trade.
-    useBackup: bool = False
+    useBackup: bool = True
     bkTrigger: float = 1.0
     bkMaxRisk: float = 2.0
     useOB: bool = True

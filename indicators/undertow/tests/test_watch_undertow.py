@@ -120,6 +120,39 @@ def test_copies_agree():
     ok(total > 40, f"the comparison is not vacuous: {total} setups compared")
 
 
+def test_the_backup_fill_cannot_touch_arming():
+    """THE INVARIANT THAT LETS THE BOT SKIP THE BACKUP ENTIRELY.
+
+    The chart fills on an order block or fair value gap when the limit never
+    comes back; the watcher has no such rule and deliberately never will --
+    the zone only exists once the move has run without you, which is minutes
+    to hours after the alert, so acting on it would be a second message about
+    the same setup.
+
+    That is only safe while the backup is POST-ARMING. It re-prices where an
+    armed setup fills; it must not create, remove or move an arm. If it ever
+    does, the bot starts alerting a different strategy from the chart and
+    nothing else in this repository would notice -- deploy/undertow-three-way
+    -check.py waives `useBackup` on the strength of exactly this test.
+    """
+    def key(r):
+        return [(t["bar"], t["short"], t["entry"], t["stop"], t["target"],
+                 t["code"]) for t in r]
+
+    total = 0
+    for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006), (14, 0.0002)):
+        cs = walk(4000, seed=seed, drift=drift)
+        off = key(U.run(cs, U.P(maxLive=64, useBackup=False), "T").armed)
+        on = key(U.run(cs, U.P(maxLive=64, useBackup=True), "T").armed)
+        total += len(off)
+        ok(off == on, f"seed {seed}: {len(off)} arms, identical either way")
+    # NON-VACUITY ON THE TOTAL, not per seed. One of these walks arms nothing
+    # at the shipped configuration and a per-seed guard failed on it -- the
+    # claim is about every arm across the fixture, not about each walk
+    # separately containing one.
+    ok(total > 40, f"the comparison is not vacuous: {total} arms compared")
+
+
 def test_fills_agree():
     """The SECOND event the bot alerts on, held to the port the same way.
 
@@ -132,7 +165,13 @@ def test_fills_agree():
     total = 0
     for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006)):
         cs = walk(4000, seed=seed, drift=drift)
-        want = U.run(cs, U.P(maxLive=64), "T").fills
+        # useBackup PINNED OFF. The chart ships it ON and the watcher has no
+        # backup by design, so the two copies' FILLS legitimately differ --
+        # what must not differ is the ARM, which the test above holds. Pinning
+        # it here keeps this test measuring the stop-tracking and fill-order
+        # behaviour it was written for rather than a divergence that is a
+        # documented design decision.
+        want = U.run(cs, U.P(maxLive=64, useBackup=False), "T").fills
         got = W.run_setups(cs, max_live=64)[1]
         total += len(want)
         ok(len(want) == len(got),
@@ -413,7 +452,8 @@ def test_no_trading_path():
 
 
 def main():
-    for fn in (test_copies_agree, test_agree_on_real_candles,
+    for fn in (test_copies_agree,
+               test_the_backup_fill_cannot_touch_arming, test_agree_on_real_candles,
                test_fills_agree,
                test_frozen_constants_match_the_port, test_ships_off,
                test_digest_fits_a_phone,

@@ -43,7 +43,15 @@ STUDIES = pathlib.Path(__file__).resolve().parents[1] / "studies"
 # which is finding out from a table that silently disagrees with its page.
 PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
           "endStale", "confirmOrder", "biasSrc", "pinNewest", "famPriority",
-          "failTest")
+          "failTest",
+          # FIVE DEFAULTS MOVED IN ONE DAY AND FOUR OF THEM WERE NOT IN HERE.
+          # `stopSrc` went pullback -> minor swing at the chart owner's
+          # request and silently re-pointed NINETEEN studies: undertow_strict's
+          # S0 read -0.124 against the -0.026 on its own page until it was
+          # pinned back, which is this file's entire subject happening again.
+          # famStrict, armWins and biasTier were the same exposure and had not
+          # yet bitten. useBackup was caught before it moved.
+          "useBackup", "famStrict", "armWins", "stopSrc", "biasTier")
 # A SETTING THAT ONLY ONE SOURCE READS DOES NOT BELONG IN PINNED, because
 # PINNED makes EVERY study name it. `emaFast`/`emaSlow` moved 50/200 -> 9/21
 # when the EMA cross went on the chart, and putting them above made twelve
@@ -286,7 +294,31 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # probe sat inside its own window (zero swings, zero setups), and the port
 # building the internal pass WITHOUT the swing pass as its reference, which
 # moved sOs on 351 bars of a 4,000-bar walk.
-DEFAULTS_FINGERPRINT = "ec45908cfb858d1d"
+#
+# 2026-09-18: `useBackup` False -> True, the backup fill on the chart. And the
+# procedure caught something much worse than the change it was run for.
+#
+# EIGHTEEN STUDIES READ useBackup FROM THE DEFAULT, so it went into PINNED and
+# every one of them now names it -- step 1 and 2 before step 3, as this file
+# says. Then the reproduction in step 4 FAILED: undertow_strict's S0 came back
+# -0.124 against the -0.026 on its own published page.
+#
+# THE CAUSE WAS NOT THIS CHANGE. It was `stopSrc`, moved pullback -> minor
+# swing EARLIER THE SAME DAY at the chart owner's request, with no check of
+# which studies read it. Nineteen did. Pinning it back reproduced the page bit
+# for bit, both arms. famStrict, armWins and biasTier all moved the same day
+# with the same exposure and had not yet been noticed.
+#
+# ALL FIVE ARE IN PINNED NOW and all twenty studies name them at the values
+# their pages were produced under -- famStrict False, armWins False, stopSrc
+# the pullback extreme, biasTier the swing tier, useBackup off. The one
+# exemption is undertow_rate.py, which is supposed to track whatever ships.
+#
+# The lesson is not new, which is the uncomfortable part: this file's own
+# docstring describes exactly this happening twice before. What was missing is
+# that a default moved BY REQUEST gets the same procedure as one moved on a
+# whim, and four went through in a day without it.
+DEFAULTS_FINGERPRINT = "c33c798be1a3acac"
 DEFAULTS_COUNT = 73
 
 good = []

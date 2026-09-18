@@ -56,7 +56,7 @@ HORIZON = 200
 # the bar pivot to "price move" after this ran, so without these lines the
 # script would print different numbers under the same page's name. A study that
 # cannot reproduce its own measurement is not a record of anything.
-BASE = U.P(pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, rr=3.0, feeFrac=FEE, maxLive=64,
+BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, biasTier=U.TIER_SWING, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, rr=3.0, feeFrac=FEE, maxLive=64,
            swingSrc=U.SW_BAR, msLen=15, msShortLen=3,
            endSweep=True, endStale=True)
 
