@@ -1,4 +1,4 @@
-# Three setups the chart owner took and the chart did not
+# Setups the chart owner took, and what the chart did with them
 
 Diagnosed with `run(trace=True)` and [`why.py`](why.py). Each was located in the
 cached candles by its levels rather than its timestamp — the OHLC in a
@@ -165,3 +165,59 @@ the next, which is the whole argument for shipping them singly.
 Roughly a third each. The state rides on every armed setup and every alert, so
 the three are scoreable apart whenever that is asked for — which is the reason
 for taking all three rather than a claim that Ending is as good as Running.
+
+---
+
+## Case 4 — Min15, bar 10481, 2026-09-01 13:30. THE FIRST ONE THAT LOSES.
+
+The first setup that needed no fix: on what ships now it is **already
+detected** — bias SHORT, immature, ARMED, no gate refused it. His observation
+was exactly right and the code agrees with it: **the Focus limit never
+filled.** Price left without coming back.
+
+| backup setting | outcome |
+|---|---|
+| backup OFF — Focus limit only | armed, never filled → **R 0** |
+| **OB + FVG — ships** | filled via **OB** at 77,392 → **R −1.05** |
+| FVG only — what he proposed | armed, never filled → **R 0** |
+
+**The machinery he asked for is already there, and it fired via an ORDER BLOCK,
+not an FVG** — there was no FVG to catch it. Restricting to FVG-only would have
+skipped this trade, which on this instance is better (0 beats −1.05) and across
+the 15m series is worse:
+
+| | armed | filled | via backup | mean R |
+|---|---|---|---|---|
+| backup OFF | 52 | 39 | 0 | −0.127 |
+| **OB + FVG — ships** | 52 | **47** | 17 | **−0.090** |
+| FVG only | 52 | 44 | 11 | −0.135 |
+
+The order blocks are doing the useful half.
+
+**WHY THIS CASE IS WORTH MORE THAN THE THREE WINNERS.** Cases 1–3 were trades
+that worked and were missed, so they can only ever say what the code fails to
+find. This one says the code is not merely missing winners: it found a setup,
+took it, and lost. Remembered setups are a biased sample and four is not a
+sample at all, but a losing case is the only kind that can push back.
+
+It is consistent with the re-run backup measurement — +0.011 / +0.030 / +0.035
+R per armed setup, positive on all three timeframes and not established, with
+ADDED trades worth +0.65 to +0.96 R each against PRE-EMPTED at −0.26 to −0.28.
+This is an ADDED trade that went the wrong way.
+
+## Where this stands, and what is still unmeasured
+
+Four cases in, the score is: two real mechanism defects found and fixed
+(`retraceLatch`, the pullback anchor), one shipped default corrected (`msLen`),
+one shipped default corrected in the wrong direction for one case out of two,
+one threshold deliberately left alone (`wickEdge`), and one case that needed
+nothing.
+
+**No edge has been demonstrated by any of it.** `PIN_LOCAL` finds the right
+pullbacks and earns the same per setup. `msLen 14` reads the trend better and
+the population says it is no better paid. Detection has improved and
+expectancy has not moved, which narrows the remaining candidates to two:
+**which setups he takes** — still entirely unmeasured, and what
+[`label_setups.py`](label_setups.py) exists for — and **how long he holds**,
+where his 10.73R and 10.11R sit in the top 6% of a distribution the fixed 3.5R
+target caps off.
