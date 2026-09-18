@@ -247,7 +247,29 @@ class P:
     # `BS_SMC`. LuxAlgo's own defaults, 50 and 5, because the pivot LENGTH is
     # the real difference between that engine and this one and running it at
     # Undertow's 6/2 would test the wrong thing.
-    smcSwingLen: int = 50
+    # 14, NOT LuxAlgo's 50, and the reason is coverage rather than accuracy.
+    # UNDERTOW_SCALE.md measured 50/5 against 6/2 and found R identical across
+    # the whole range -- the scale buys a quieter chart, not better trades. So
+    # the choice is purely how often the thing speaks, and 50 speaks rarely:
+    # the bias flips 0.34 times a day on 15m and is tradeable 16% of the time,
+    # in dead stretches with a median of 109 bars.
+    #
+    # THE INTERNAL LENGTH MATTERS MORE THAN THE SWING LENGTH FOR COVERAGE, and
+    # that was the surprise. Measured on FRESH6 Min15, at the SAME 1.10 flips a
+    # day:
+    #
+    #     14/2   0.36 trades a day   29.6% tradeable
+    #     14/5   0.75 trades a day   41.1% tradeable
+    #
+    # Double the trades from the internal length alone. At 2 the minor tier is
+    # twitchy, `endMinor` fires on noise and latches `ending`; at 5 the same
+    # major bias comes with far fewer spurious Endings. 14/5 is the best
+    # coverage-per-flip on the table.
+    #
+    # THIS IS A PREFERENCE, NOT A PROMOTION, on the same footing 50/5 had. R is
+    # flat across 6/2 to 50/5, so nothing here was earned by measurement --
+    # what the measurement did was establish that the choice is free.
+    smcSwingLen: int = 14
     smcInternalLen: int = 5
     matureBars: int = 20
     # 2 · Candle

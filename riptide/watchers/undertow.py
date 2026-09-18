@@ -132,7 +132,7 @@ RECENT_BARS = 6
 # structure while this file kept running LuxAlgo's is exactly the silent
 # divergence the rest of that test exists to catch.
 BIAS_SRC = "SMC structure"
-SMC_SWING_LEN = 50
+SMC_SWING_LEN = 14
 SMC_INTERNAL_LEN = 5
 # THE CONFIRMATION ORDER, and it matches the port's default and the chart's.
 # v1 armed on "both lines, in either order", which was a misreading of the

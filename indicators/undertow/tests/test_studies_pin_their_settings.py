@@ -119,7 +119,17 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # trade — ../port/smc.py shows the two detectors are the same expression — but
 # nothing has scored the LENGTH, and 50 against 6 is the larger change of the
 # two by a distance.
-DEFAULTS_FINGERPRINT = "5fb0559e472c6336"
+#
+# 2026-09-18: `smcSwingLen` 50 → 14. A PREFERENCE, and the measurement is what
+# made it a free one: UNDERTOW_SCALE.md found R identical from 6/2 to 50/5, so
+# the only thing a length buys is how often the bias speaks. 50 spoke rarely —
+# tradeable 16% of the time, dead stretches with a median of 109 bars.
+#
+# NO STUDY MOVES. Every study that runs BS_SMC sets both lengths explicitly
+# (undertow_v2's SMC dict, undertow_scale's arms), checked rather than assumed,
+# and no study reads these from the default. The pinning test's own rule is
+# what made that cheap to verify.
+DEFAULTS_FINGERPRINT = "bdc05ec8da4e59af"
 DEFAULTS_COUNT = 65
 
 good = []
