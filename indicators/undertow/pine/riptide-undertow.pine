@@ -164,6 +164,8 @@ fillBars = input.int(20, "Fill within", minval = 1, maxval = 200, group = gSet,
   tooltip = "Bars for the limit to fill before the setup expires unfilled.")
 armWins = input.bool(true, "First to confirm wins", group = gSet,
   tooltip = "WHEN ONE CANDIDATE COMPLETES ITS W→F, DROP THE OTHERS in the same direction that have not.\n\nA pullback offers several counter-trend candles. 'Newest wins' already thins them as new ones appear, but once one has actually completed the pattern the rest are still sitting there waiting to arm on their own levels — which is how four limit orders end up resting inside one pullback, with their lines on top of each other.\n\nIT IS A BETTER SELECTOR THAN THE LIVE CAP because it selects on an EVENT rather than on age. The cap keeps the oldest four and turns away everything after; this keeps the one that completed the pattern. Measured on a spent universe at the cap of 4, it cuts cap-refusals from 511 to 364.\n\nAn already-ARMED setup is never dropped: it has levels and an order behind it.\n\nOFF AND UNMEASURED. It costs about 10% of armed setups — small, but still a change to which trades exist, and ../measurements/UNDERTOW_ANCHOR.md is what set the standard that those get a prereg rather than shipping because they are clearly stated.")
+useBackup = input.bool(false, "Backup fill on a zone", group = gSet,
+  tooltip = "IF THE LIMIT NEVER FILLS, TAKE THE FIRST ORDER BLOCK OR FAIR VALUE GAP INSTEAD. Placed while the setup is LIVE, not after the window expires — that distinction is the whole of whether it works.\n\nONCE PRICE HAS RUN 1R AWAY from the Focus line, the span behind it is scanned for the NEAREST unmitigated zone sitting between price and the Focus. If one is there and the stop is still within 2x the original risk, the order moves to it. The stop does not move; the target is recomputed from the new entry, or the reward ratio would quietly stop meaning what it says. The scan runs ONCE — re-scanning every bar keeps finding a nearer zone and converges on 'enter at the current price', which is not a backup.\n\nWAITING FOR THE LIMIT TO EXPIRE DOES NOT WORK, and it is the obvious version of this idea. ../measurements/UNDERTOW_LATE_BACKUP.md found the reason is structural rather than statistical: 100% of the trades this rule adds fill INSIDE the 20-bar window, median one to two bars after arming. By the time the limit expires there is nothing left to catch. Measured again on the current chart: the late variant recovers 22-33 no-entries and scores WORSE than no backup on all three timeframes.\n\nWHAT THE LIVE VERSION DOES, on the spent 23-symbol set at the shipped configuration: +83 / +76 / +94 fills on 15m / 30m / 1h out of 514 armed, with R per trade going +0.117 to +0.168, -0.058 to +0.029, and -0.072 to +0.055.\n\nREAD THAT WITH THE CAVEAT IT DESERVES. It is a spent universe and a best-of-four. On a FRESH one ../measurements/UNDERTOW_BACKUP_FILL.md measured this same rule at +0.03 R per armed setup, positive on 3 of 3 and SIGNIFICANT ON NONE — and there is no fresh universe left to settle it with. Off by default for that reason.")
 maxLive = input.int(4, "Live setups at once", minval = 1, maxval = 8, group = gSet,
   tooltip = "A pullback contains several pins and any of them might be the one that works, so they all run independently. This caps how many, for the chart and the drawing budget; pins arriving at the cap are turned away and counted.")
 // The two anchors, named once. Both spellings are the PORT's constants
@@ -306,6 +308,60 @@ type Cand
     // never touches the real totals — it exists only to answer whether the
     // gate that killed it was right to. See section 7.
     bool   ghost  = false
+    // THE BACKUP FILL. `bkRan` is the once-only latch on the scan, `bkPx` the
+    // zone edge the order moved to, `bkWhy` which kind it was. An empty
+    // `bkWhy` means no backup is placed, which is what the fill test reads.
+    bool   bkRan  = false
+    float  bkPx   = na
+    string bkWhy  = ""
+
+// ── the backup fill's zone scan ──────────────────────────────────────────────
+// The nearest order block or fair-value gap edge between `lo` and `focus`, or
+// na. Transcribed from ../port/undertow.py::bk_zone, which names itself after
+// this function: it WAS here, came off the chart with the rest of the backup
+// when that was measured, and is back because the rule was asked for again.
+//
+// THE NEAR EDGE, ON FIRST TOUCH. A short retracing upward touches the BOTTOM
+// of a zone above it, so that is the fill -- the worse of the two edges for a
+// short. The better price needs a deeper retrace that may never come, and
+// assuming it would be assuming a fill that did not happen.
+//
+// AN ORDER BLOCK NEEDS A CLOSE BEYOND IT, not a wick through: a wick through
+// an up-candle is noise, a close beyond it is a decision.
+//
+// THE THREE SETTINGS ARE FIXED at P's values -- 30 bars back, both zone kinds,
+// the near edge. They were three of the eight inputs the backup used to cost,
+// and ../SETTINGS.md is the argument for one toggle instead of eight.
+bkZone(bool short, float focus, float lo) =>
+    float best = na
+    string why = ""
+    int look = math.min(30, math.max(1, bar_index - 1))
+    for b = 1 to look
+        bool isOpp = short ? close[b] > open[b] : close[b] < open[b]
+        if isOpp
+            bool disp = false
+            for j = 0 to b - 1
+                disp := disp or (short ? close[j] < low[b] : close[j] > high[b])
+            if disp
+                float e = short ? low[b] : high[b]
+                bool ok = short ? (lo < e and e < focus) : (focus < e and e < lo)
+                if ok and (na(best) or (short ? e < best : e > best))
+                    best := e
+                    why := "OB"
+        // PINE INDICES RUN BACKWARDS AND THIS IS WHERE THAT BITES. [b - 1] is
+        // the bar AFTER b and [b + 1] the one before. The port's copy carries
+        // a comment about getting it inverted and finding ZERO gaps while
+        // reporting the feature as on -- the quietest possible failure,
+        // because the backup still worked on order blocks alone.
+        if b < look
+            float e = short ? high[b - 1] : low[b - 1]
+            float far = short ? low[b + 1] : high[b + 1]
+            if short ? e < far : e > far
+                bool ok = short ? (lo < e and e < focus) : (focus < e and e < lo)
+                if ok and (na(best) or (short ? e < best : e > best))
+                    best := e
+                    why := "FVG"
+    [best, why]
 
 // ── the drawing buffers, and the two calls section 7 makes ───────────────────
 var array<line> lnBuf = array.new<line>()
@@ -1128,6 +1184,7 @@ var int nCap = 0
 // "setups found 139 · triggered 13" left the reader with nowhere to look. The
 // panel has had a whole section for why an ARMED setup did not ENTER since v1
 // and nothing at all for the much bigger drop before it.
+var int nBackup = 0
 var int nSuper = 0
 var int nBiasDrop = 0
 var int nNoWork = 0
@@ -1339,6 +1396,27 @@ if barOk and cands.size() > 0
                 float rk2 = math.abs(c.stop - c.focus)
                 // Recomputed, or rr would quietly stop meaning rr.
                 c.target := c.short ? c.focus - rr * rk2 : c.focus + rr * rk2
+        // ── the backup arms, ONCE ───────────────────────────────────────────
+        // Re-scanning every bar keeps finding a nearer zone and converges on
+        // "enter at the current price", which is not a backup. The latch is
+        // `bkRan`, and the trigger is price having run 1R AWAY from the Focus:
+        // until then the limit is still the better order and there is nothing
+        // to back up.
+        if useBackup and not gone and c.armed and not c.bkRan
+            float risk0 = math.abs(c.stop - c.focus)
+            float ranR = risk0 > 0 ? (c.short ? (c.focus - low) / risk0 : (high - c.focus) / risk0) : 0.0
+            if ranR >= 1.0
+                c.bkRan := true
+                float ext = c.short ? low : high
+                [px, why2] = bkZone(c.short, c.focus, ext)
+                if not na(px)
+                    float rk = math.abs(c.stop - px)
+                    // The stop does not move, so a zone further from it is a
+                    // bigger risk. 2x the original is where it stops being the
+                    // same trade.
+                    if rk > 0 and rk <= 2.0 * risk0
+                        c.bkPx := px
+                        c.bkWhy := why2
         // bar_index > c.armBar: the limit is only placed once the arming bar
         // has CLOSED, so a fill inside that same bar is look-ahead — the order
         // was not resting while it traded.
@@ -1346,6 +1424,9 @@ if barOk and cands.size() > 0
             bool tgtGone = c.short ? low <= c.target : high >= c.target
             bool stopHit = c.short ? high >= c.stop : low <= c.stop
             bool touched = high >= c.focus and low <= c.focus
+            // THE NEARER LEVEL, so price reaches it first, and for a short the
+            // WORSE price. Checked before the Focus for both reasons.
+            bool bkHit = useBackup and c.bkWhy != "" and high >= c.bkPx and low <= c.bkPx
             // THE MOVE HAPPENED WITHOUT US. If price reaches the TARGET while
             // the limit is unfilled, the whole trade was available and the
             // order was not on. Found on a real chart: price ran from the entry
@@ -1363,7 +1444,15 @@ if barOk and cands.size() > 0
                 why := "stop taken before the fill"
                 nMissStop := nMissStop + (c.ghost ? 0 : 1)
                 gone := true
-            else if touched
+            else if bkHit or touched
+                if bkHit
+                    // Re-based onto the zone: SAME STOP, bigger risk, and a
+                    // target recomputed from the new entry — or rr would
+                    // quietly stop meaning rr.
+                    c.focus := c.bkPx
+                    float rk3 = math.abs(c.stop - c.focus)
+                    c.target := c.short ? c.focus - rr * rk3 : c.focus + rr * rk3
+                    nBackup := nBackup + (c.ghost ? 0 : 1)
                 nFilled := nFilled + (c.ghost ? 0 : 1)
                 gOpen := gOpen + (c.ghost ? 1 : 0)
                 filled := true
@@ -2026,13 +2115,13 @@ if barstate.islast and showBias
       text_color = color.white, bgcolor = color.new(bbc, 10),
       text_size = size.normal)
 
-// 22 ROWS, AND THE COUNT HAS TO MATCH. table.cell past the declared height is
+// 23 ROWS, AND THE COUNT HAS TO MATCH. table.cell past the declared height is
 // a Pine RUNTIME error, which takes the whole indicator down -- the same class
 // as the max_bars_back bug this chart already shipped once. Three funnel rows
 // were added here at 17 and the panel would have died on the first bar.
 // deploy/pine-static-check.py now compares the declared height against the
 // highest row index used.
-var table pnl = table.new(position.top_right, 2, 22, border_width = 1,
+var table pnl = table.new(position.top_right, 2, 23, border_width = 1,
   frame_width = 1, frame_color = color.new(color.gray, 60))
 
 // `tip` rather than a wider cell: the caveats belong ON the number they
@@ -2071,7 +2160,9 @@ if barstate.islast and showStats
       "OF THE SETUPS FOUND, the ones that ran out the confirm window. 5.6% and 6.9% at the same measurement, so together barely an eighth of the drop — WIDENING THE WINDOW IS NOT THE LEVER it looks like. At confirmBars 60 instead of 20 the arming rate goes from 12.7% to 15.6%.\n\nTWO DIFFERENT THINGS. 'no W' never broke its Working line: the reversal attempt never happened and the candle was just a shape. 'W no F' worked and never failed — the strategy was right about the candle and wrong about what came next, which is the more interesting of the two.")
     row(6, "triggered", str.tostring(nArmed), color.gray,
       "of those, the ones where price then closed beyond BOTH the pin's high and its low inside the confirm window, and a sane stop existed. This is where a limit order would go on.\n\nMEASURED AT 12.7% OF SETUPS FOUND across 23 symbols at 30m, so a ratio like 139 to 13 is the shipped behaviour rather than a fault. The three rows above say where the rest went.")
-    row(7, "entered", str.tostring(nFilled), color.gray,
+    row(7, "  on a backup zone", str.tostring(nBackup), color.gray,
+      "OF THE ENTRIES, the ones filled on an order block or fair value gap instead of at the Focus line, because price ran 1R away and never came back. Zero unless 'Backup fill on a zone' is on.\n\nThey are counted in 'entered' and in every number below it — the backup is a different PRICE for the same setup, not a second setup. The stop is unchanged and the target was recomputed from the new entry, so the reward ratio still means what it says.")
+    row(8, "entered", str.tostring(nFilled), color.gray,
       "of those, the ones where price came back and touched the limit at the Focus line.")
     // `trades` HOLDS GHOSTS TOO, and counting them here was a real bug: the
     // panel read "28 / 58 · 1 open" while `entered` read 86, because the one
@@ -2106,59 +2197,59 @@ if barstate.islast and showStats
     float beRate = 100.0 * (1.0 + feeR) / (1.0 + rr)
     // The colour is the same comparison as the number: net R above zero after
     // costs is exactly a win rate above this line.
-    row(8, "won / lost · be " + str.tostring(beRate, "#.#") + "%",
+    row(9, "won / lost · be " + str.tostring(beRate, "#.#") + "%",
       nRes == 0 ? "—" : str.tostring(nWon) + " / " + str.tostring(nLost)
       + " · " + str.tostring(100.0 * nWon / nRes, "#.#") + "%"
       + (openReal > 0 ? " · " + str.tostring(openReal) + " open" : ""),
       netR > 0 ? colLong : netR < 0 ? colShort : color.gray,
       "entered trades walked forward to their target or their stop, stop first when one bar spans both, and the share of them that won.\n\nBREAK-EVEN AT " + str.tostring(rr, "#.#") + "R IS " + str.tostring(beRate, "#.#") + "%, AFTER THE ROUND-TRIP FEE. Before it the line would be " + str.tostring(100.0 / (1.0 + rr), "#.#") + "%, which is also what a driftless random walk returns — but the fee is charged in price and the trade is scored in R, so it costs " + str.tostring(feeR, "#.###") + "R on the trades taken here and the line moves up by that much. This percentage is only information relative to the line, and the colour is that comparison. Green is above it, red below.\n\nSet the round-trip fee to 0 under Levels to read it gross.\n\n`open` counts REAL trades only — a ghost still running is on the gate-cost row, not here, and won + lost + open always equals `entered`. IN-SAMPLE: same caveat as net R.")
-    row(9, "  running", nRun == 0 ? "—" : str.tostring(nWonRun) + " / "
+    row(10, "  running", nRun == 0 ? "—" : str.tostring(nWonRun) + " / "
       + str.tostring(nLostRun) + " · "
       + str.tostring(100.0 * nWonRun / nRun, "#.#") + "%",
       nRun == 0 ? color.gray : 100.0 * nWonRun / nRun > beRate ? colLong : colShort,
       "trades taken while the bias had already broken structure at least once since its CHoCH. The state is the one at the PIN, not now. Coloured against break-even for this reward ratio, which is " + str.tostring(beRate, "#.#") + "% at " + str.tostring(rr, "#.#") + "R — a win rate below that loses money however healthy it looks.")
-    row(10, "  immature", nImm == 0 ? "—" : str.tostring(nWonImm) + " / "
+    row(11, "  immature", nImm == 0 ? "—" : str.tostring(nWonImm) + " / "
       + str.tostring(nLostImm) + " · "
       + str.tostring(100.0 * nWonImm / nImm, "#.#") + "%",
       nImm == 0 ? color.gray : 100.0 * nWonImm / nImm > beRate ? colLong : colShort,
       "trades taken on a fresh CHoCH, before any break of structure in the new direction. Same break-even line: " + str.tostring(beRate, "#.#") + "%. If these two rows differ by much on a few hundred trades it is worth a study, not a setting change — 'immature' and 'running' were never measured apart.")
-    row(11, "net R", (netR >= 0 ? "+" : "") + str.tostring(netR, "#.#"),
+    row(12, "net R", (netR >= 0 ? "+" : "") + str.tostring(netR, "#.#"),
       netR > 0 ? colLong : netR < 0 ? colShort : color.gray,
       "won x " + str.tostring(rr, "#.#") + " minus lost, GROSS — no fees and no slippage, and both matter at this size. IN-SAMPLE AND NOT EVIDENCE: whatever settings are loaded, on the bars on screen, no pre-registration, no control. A filter picked by watching a number like this scored +0.089 in sample and -0.082 out elsewhere in this project. Read it to check the detection looks sane, never to choose settings.")
-    row(12, "no entry", str.tostring(noEntry), color.gray,
+    row(13, "no entry", str.tostring(noEntry), color.gray,
       "triggered, then lost before the limit filled. The breakdown below is what decides how much work a backup fill is worth.")
-    row(13, "  back·gone·bias·stop",
+    row(14, "  back·gone·bias·stop",
       str.tostring(nMissBack) + "·" + str.tostring(nMissGone) + "·"
       + str.tostring(nMissBias) + "·" + str.tostring(nMissStop), color.gray,
       "BACK = price never came back to the limit — the OB/FVG number, these are the ones a backup fill would have caught. GONE = the target printed before the fill, so the move was available at a worse price. BIAS = the trend turned Ending while waiting. STOP = price went beyond the planned stop first; this is 0 whenever the stop is set to follow the pullback, because a stop below the running low cannot be run.")
     // WHICH gate cancelled them. On the three charts that prompted this row,
     // BIAS was the largest no-entry bucket on all three — 39 of 62, 25 of 34,
     // 13 of 15 — and the panel could not say which rule did it.
-    row(14, "  minor · retrace",
+    row(15, "  minor · retrace",
       str.tostring(nEndMinor) + " · " + str.tostring(nEndRetr), color.gray,
       "the BIAS number above, split by which Ending rule fired: minor structure · retrace %. It used to be five rules; the other three shipped off, were never measured on, and came off the chart — see ../SETTINGS.md. The larger number here names the setting to question first, and between them these two decide this strategy.")
     // THE GHOST COLUMN. See section 7: these are the cancelled setups, walked
     // forward anyway. This is the only row here that tests a RULE rather than
     // reporting a count.
     float gNetR = gWon * rr - gLost
-    row(15, "  gate cost",
+    row(16, "  gate cost",
       nMissBias == 0 ? "—" : str.tostring(gWon) + " / " + str.tostring(gLost)
       + " · " + (gNetR > 0 ? "cost " + str.tostring(gNetR, "#.#")
       : "saved " + str.tostring(-gNetR, "#.#")) + "R"
       + (gOpen > 0 ? " · " + str.tostring(gOpen) + " open" : ""),
       nMissBias == 0 ? color.gray : gNetR > 0 ? colShort : colLong,
       "what the setups the bias gate CANCELLED would have done if it had been allowed to let them run: filled at the same limit, then walked to the same target or the same stop. They are in no number above and they never draw on the chart.\n\nSAVED means the gate is earning its place — the setups it killed were losers.\nCOST means the gate is throwing trades away, and this is how much.\n\nSame caveat as net R, doubled: in-sample, on whatever settings happen to be loaded, no control and no pre-registration. It is a reason to run a study, never a result.")
-    row(16, "live", slot == 0 ? "—" : str.tostring(slot), color.gray,
+    row(17, "live", slot == 0 ? "—" : str.tostring(slot), color.gray,
       "candidates currently waiting for their confirmations. Ghosts are excluded — they hold no slot.")
-    row(17, "last reject", lastReject, color.new(color.gray, 20),
+    row(18, "last reject", lastReject, color.new(color.gray, 20),
       "why the most recent candle was turned down. Hover any grey × on the chart for that candle's own reason.")
     if dbgOn
-        row(18, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
+        row(19, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
           + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·"
           + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray,
           "pin shape · bias tradeable · colour · location · triggered · entered. The biggest drop between two of these is where the detector is actually selecting.")
-        row(19, "at cap", str.tostring(nCap), color.gray,
+        row(20, "at cap", str.tostring(nCap), color.gray,
           "setups turned away because " + str.tostring(maxLive) + " were already live. If this is large, raise 'Live setups at once'.")
     else
-        row(20, "", "", color.gray, "")
         row(21, "", "", color.gray, "")
+        row(22, "", "", color.gray, "")

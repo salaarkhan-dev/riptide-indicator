@@ -290,6 +290,17 @@ def main() -> int:
         # constant is the silent-fallthrough failure this file's docstring
         # warns about, one step removed.
         "workTest": ("close beyond", "the literal kWork"),
+        # The backup's seven fixed settings, each a literal in the trigger or
+        # in bkZone. A dial for "how far price must run before the backup
+        # arms" is the kind of thing SETTINGS.md exists to keep off the panel.
+        "bkTrigger": (1.0, "the literal 1.0 in the ranR test"),
+        "bkMaxRisk": (2.0, "the literal 2.0 in the risk cap"),
+        "useOB": (True, "bkZone always scans order blocks"),
+        "useFVG": (True, "and always scans fair value gaps"),
+        "bkLook": (30, "the literal in bkZone's lookback"),
+        "bkWhen": ("live", "the chart places it while the setup is LIVE, and "
+                           "only that -- the late variant is not offered"),
+        "bkMode": ("zone", "bkZone returns an edge, never a midpoint"),
         # THE FOUR SWING DIALS MOVED BUCKETS WHEN THE v2 ENGINE WENT BACK ON
         # THE CHART, and the old entry for them was wrong in a way worth
         # recording: it claimed they were "FIXED IN THE PINE at the values
@@ -348,11 +359,14 @@ def main() -> int:
         # `useBackup` CARRIES A REQUIRED VALUE and the rest do not. The chart
         # cannot fill on a zone, so a port that could would be scoring trades
         # the chart never shows.
-        "useBackup": (False, "the chart has no backup fill; must stay off"),
-        "bkTrigger": (None, "backup fill"), "bkMaxRisk": (None, "backup fill"),
-        "useOB": (None, "backup fill"), "useFVG": (None, "backup fill"),
-        "bkLook": (None, "backup fill"), "bkWhen": (None, "backup fill"),
-        "bkLateBars": (None, "backup fill"), "bkMode": (None, "backup fill"),
+        # THE BACKUP FILL IS BACK, as ONE input rather than the eight it used
+        # to cost, so `useBackup` is compared above and its seven sub-settings
+        # are HARDCODED below at P's values. The chart offers the rule; it does
+        # not offer a search over the rule, which is ../SETTINGS.md's line and
+        # the reason the eight came off in the first place.
+        "bkLateBars": (None, "the late variant, which the chart does not "
+                             "offer: UNDERTOW_LATE_BACKUP.md found 100% of "
+                             "this rule's added fills land INSIDE the window"),
         # THREE ENDING RULES AND THE ADX GATE, all shipped off, none ever
         # measured switched on, and ADX failed as a filter elsewhere in this
         # project (CCP_CONTEXT_FILTERS.md). Each carries its off value: an
