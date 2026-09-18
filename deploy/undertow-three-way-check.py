@@ -124,6 +124,7 @@ ABSENT = {
     # moving would put the live alerts on a different candle from the chart
     # without a line of code changing anywhere.
     "pinLag": (0, "the watcher trades the newest qualifying candle"),
+    "retraceLatch": (True, "the watcher latches Ending like the chart"),
     "shortsOnly": (False, "the watcher alerts both directions"),
     # the nine bias sources the watcher does not run. Guarded by biasSrc,
     # which is MIRRORED, so a switch away from SMC is caught there.

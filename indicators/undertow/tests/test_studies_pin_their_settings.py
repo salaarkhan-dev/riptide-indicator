@@ -385,8 +385,29 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 #
 # NO STUDY MOVES: `stopSrc` is in PINNED and all twenty name it. undertow_
 # anchor re-ran BIT-IDENTICAL before this line changed.
-DEFAULTS_FINGERPRINT = "eba7d28cf76b8564"
-DEFAULTS_COUNT = 74
+# 2026-09-18: `retraceLatch` added, True -- which is what has always happened.
+#
+# FOUND BY DIAGNOSING A TRADE THE CHART OWNER TOOK AND THE CHART DID NOT. At
+# his bar the bias read `ending` with endWhy `retrace`, while the impulse was
+# 46% given back against a threshold of 70. The condition that killed the bias
+# was NO LONGER TRUE and the state had not noticed: `ending` latches and clears
+# only on a CHoCH or a with-trend BOS, which at msLen 50 are rare. It had been
+# untradeable for 66 bars -- 33 hours.
+#
+# Retrace is a CONTINUOUS, RECOVERABLE condition and bias() already argues, for
+# `mixed`, that latching such a thing "would turn one bar of disagreement into
+# a permanent cancellation". The flag makes that choice available to endD and
+# touches nothing else; the other Ending rules are events and latching an event
+# is defensible.
+#
+# ADDITIVE -- True reproduces current behaviour exactly, undertow_anchor re-ran
+# BIT-IDENTICAL, and it is declared to the port check and the three-way check
+# on that value. Not in PINNED: one study will read it and putting it above
+# would make twenty declare a setting they never touch.
+#
+# 74 -> 75 fields.
+DEFAULTS_FINGERPRINT = "c99d1c9ff2fbacd6"
+DEFAULTS_COUNT = 75
 
 good = []
 

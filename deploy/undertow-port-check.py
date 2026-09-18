@@ -334,6 +334,8 @@ def main() -> int:
         # account of his eye -- "if three qualified, n, n-1 and n-2, take n-1".
         # Nothing is on the chart until that measures something.
         "pinLag": (0, "pin selection, research only"),
+        # The Pine latches Ending unconditionally, which is this field's True.
+        "retraceLatch": (True, "the Pine's Ending latch is unconditional"),
         "shortsOnly": (False, "pin selection, research only"),
         # THE RETIRED BIAS SOURCES. EMA cross, Slope, Donchian midpoint,
         # Supertrend and MTF EMA align were all on the chart to be measured;

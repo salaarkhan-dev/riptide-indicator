@@ -385,6 +385,22 @@ class P:
     # A pullback with fewer qualifying candles than the lag needs produces NO
     # setup. That is a real cost of the rule rather than an implementation
     # detail, and `nLagShort` counts it so no page can quietly omit it.
+    # DOES THE RETRACE RULE LATCH? It always has, and that is the defect the
+    # chart owner's own 1:8 short exposed: at his bar the bias read `ending`
+    # with endWhy `retrace`, while the impulse was 46% retraced against a
+    # threshold of 70. The condition that killed the bias was no longer true
+    # and the state had not noticed -- it had been untradeable for 66 bars.
+    #
+    # Retrace is a CONTINUOUS, RECOVERABLE condition: price gives back 75% of
+    # the leg and then takes it back to 40%. `mixed` is the same kind of
+    # condition and bias() already refuses to latch it, in as many words --
+    # "latching it would turn one bar of disagreement into a permanent
+    # cancellation". This makes that choice available to the retrace rule.
+    #
+    # The other Ending rules are EVENTS -- a minor CHoCH against the trend, a
+    # sweep -- and latching an event is defensible. This flag is deliberately
+    # narrow and touches endD only.
+    retraceLatch: bool = True
     pinLag: int = 0
     # Take only shorts. The chart owner asked for the bearish leg on its own
     # first -- "just measure the shorts and bearish whether this work or not"
@@ -720,6 +736,13 @@ class Result:
     # because most never confirm -- and that question is what decides whether a
     # rule like `pinLag` bites on a majority or a rump. Counting it from armed
     # setups grouped by proximity got it wrong once already.
+    # PER-BAR GATE STATE, only when run(trace=True). Nothing in the machine
+    # could say WHY a bar was refused -- the funnel counters say how many died
+    # at each stage and never which bar or which gate. Diagnosing "I took this
+    # setup and the chart did not" needed that, and reconstructing it by
+    # re-deriving the gates outside run() would be a second implementation to
+    # keep in step.
+    trace: list = field(default_factory=list)
     pins: list = field(default_factory=list)
     armed: list = field(default_factory=list)
     # THE MOMENT THE LIMIT ACTUALLY FILLED — you are in the trade. Separate
@@ -1487,16 +1510,25 @@ def bias(cs, st, p: P):
         # would turn one bar of disagreement into a permanent cancellation.
         endF = mixedSeries[i]
 
-        if biasSeen and (endA or endB or endC or endD or endE):
+        # THE LATCHING SET, and endD leaves it when `retraceLatch` is off.
+        latching = endA or endB or endC or endE
+        if biasSeen and (latching or (endD and p.retraceLatch)):
             if not ending:
                 endWhy = ("minor" if endA else "sweep" if endB else
                           "stale" if endC else "retrace" if endD else "adx")
             ending = True
+        # NON-LATCHING RETRACE. The bias is untradeable WHILE the leg is given
+        # back past the threshold and recovers the moment it is not, exactly
+        # as `mixed` does below. It cannot clear a latch set by one of the
+        # event rules, which is why `ending` itself is untouched here.
+        softEnd = endD and not p.retraceLatch
 
         dirs.append(biasDir)
-        ok.append(biasSeen and not ending and not endF)
-        whys.append("mixed" if (endF and not ending) else endWhy)
+        ok.append(biasSeen and not ending and not endF and not softEnd)
+        whys.append("retrace" if (softEnd and not ending)
+                    else "mixed" if (endF and not ending) else endWhy)
         states.append("none" if not biasSeen else "ending" if ending
+                      else "ending" if softEnd
                       else "mixed" if endF
                       else "immature" if bosN == 0 else "running")
     st["endWhy"] = whys
@@ -1620,7 +1652,7 @@ class _Cand:
     pbStart: int = -1
 
 
-def run(cs, p: P = P(), symbol: str = "") -> Result:
+def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
     """Sections 6 and 7, and the scoring the Pine's panel does.
 
     One pass over the bars. The loop below is the Pine's loop in the Pine's
@@ -2062,6 +2094,20 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         # makes the pullback a pullback FROM something.
         bosOk = (not p.needBos) or st["biasState"][i] == "running"
 
+        if trace:
+            res.trace.append(dict(
+                i=i, t=getattr(c, "t", None), o=c.o, h=c.h, l=c.l, c=c.c,
+                dir=biasDir, state=st["biasState"][i],
+                tradeable=bool(tradeable[i]),
+                upW=round(upW, 3), dnW=round(dnW, 3), green=isGreen,
+                famHam=famHam, famStar=famStar,
+                famOk=famOk, colourOk=colourOk, locOk=locOk,
+                htfOk=htfOk, bosOk=bosOk,
+                pbExt=pbExt, pbExtX=pbExtX, pbStartX=pbStartX,
+                anchorX=anchorX, barsFromAnchor=i - anchorX,
+                pbAge=pbAge,
+                admitted=bool(famOk and tradeable[i] and colourOk and locOk
+                              and htfOk and bosOk)))
         if famOk:
             res.nRaw += 1
         if famOk and tradeable[i]:
