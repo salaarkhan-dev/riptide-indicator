@@ -34,23 +34,22 @@ from indicators.undertow.studies.undertow_sweep import TFS, load   # noqa: E402
 from research.data import SYMBOLS                                  # noqa: E402
 from riptide.config import BAR_SECONDS                             # noqa: E402
 from indicators.undertow.port.undertow import P as _P              # noqa: E402
-from indicators.undertow.port.undertow import SW_BAR as _SW_BAR    # noqa: E402
 from riptide.watchers.undertow import run_setups                   # noqa: E402
 
 STATES = ("both", "running", "immature")
-# The shipped default first -- the row the watcher's RATE tables come from --
-# then two wider settings, so the cost of tightening is visible beside it
-# rather than needing a second run.
+# ONE ROW PER TIMEFRAME, because there is one configuration. This used to sweep
+# three swing lengths beside the shipped one, so the cost of tightening was
+# visible without a second run. The watcher runs LuxAlgo's SMC at a frozen 14/5
+# and takes no swing argument at all -- the one it used to take reached
+# run_setups() and was never read, which is how `/undertow swing N` came to
+# answer as though it had worked. A sweep of a parameter nothing reads prints
+# the same row three times and invites somebody to read a difference in.
+#
 # TRACKS THE CURRENT DEFAULT, deliberately: this file's tables describe what
 # the LIVE WATCHER will actually alert on, so reading P's shipped values is the
 # whole point and pinning them would make it describe a watcher nobody runs.
 # Every other study pins instead — see test_studies_pin_their_settings.py.
-#
-# The bar-pivot lengths only mean anything when swingSrc is the bar pivot.
-# Under the shipped "price move" source msLen is unread, so sweeping it would
-# print the same row three times and invite somebody to read a difference in.
-SWINGS = ((_P().msLen, 15, 30) if _P().swingSrc == _SW_BAR
-          else (_P().msLen,))
+SWINGS = (f"{_P().smcSwingLen}/{_P().smcInternalLen}",)
 
 
 def main():
@@ -58,8 +57,9 @@ def main():
     tfs = argv or list(TFS)
     print("UNDERTOW ALERT RATE — armed setups a day across the universe")
     print(f"{len(SYMBOLS)} symbols, cached 12,000-bar history per symbol")
-    print(f"shipped config: swing {SWINGS[0]}/{_P().msShortLen}, endSweep {_P().endSweep}, endStale {_P().endStale}\n")
-    print(f"  {'tf':7} {'days':>6} {'swing':>6} "
+    print(f"shipped config: SMC {SWINGS[0]}, cap {_P().maxLive}, "
+          f"endSweep {_P().endSweep}, endStale {_P().endStale}\n")
+    print(f"  {'tf':7} {'days':>6} {'SMC':>6} "
           + " ".join(f"{s:>10}" for s in STATES)
           + "   | " + " ".join(f"{'f-' + s[:6]:>8}" for s in STATES))
     table, ftable = {}, {}
@@ -77,7 +77,7 @@ def main():
                 if len(cs) < 500:
                     continue
                 days += len(cs) * step / 86400.0
-                armed, filled = run_setups(cs, ms_len=swing)
+                armed, filled = run_setups(cs)
                 for a in armed:
                     tot["both"] += 1
                     tot[a["state"]] = tot.get(a["state"], 0) + 1

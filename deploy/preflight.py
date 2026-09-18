@@ -113,6 +113,13 @@ PINE_CHECKS = [
     # reach the pullback rule and the Pine is in none of the behaviour
     # tests. This holds the two copies of that rule together by term.
     ("undertow-pullback-check", "undertow", []),
+    # THE THIRD COPY, which the two checks above do not look at. The one
+    # above compares the Pine's inputs to the port's defaults; the parity
+    # TEST compares the watcher's output to the port's at settings the test
+    # chooses. Neither can see a setting the live watcher simply holds at a
+    # different value — which is how the bot ran a live cap of 64 against a
+    # chart shipping 4, and alerted setups the chart had refused.
+    ("undertow-three-way-check", "undertow", []),
 ]
 
 

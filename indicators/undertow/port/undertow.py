@@ -335,6 +335,24 @@ class P:
     # bullish one, with the other shape acceptable when the priority one is
     # absent. v1 had no ordering at all and took whichever sat at the extreme.
     famPriority: bool = True
+    # THE PRIORITY SHAPE AND NOTHING ELSE. `famPriority` above is a RANKING:
+    # the second-choice shape still trades when the priority one is absent.
+    # This makes it a GATE -- in a bullish trend only the red shooting star
+    # arms, in a bearish trend only the green hammer, and the hanging man and
+    # the inverted hammer stop being setups at all.
+    #
+    # Note what the pair of gates leaves. `colourOk` already fixes the colour,
+    # so strict + colour is exactly ONE code per direction: SS in a bull trend,
+    # HAM in a bear trend. The four-code taxonomy collapses to two.
+    #
+    # OFF AND UNMEASURED, and it is the second-largest single cut in P after
+    # the anchor. UNDERTOW_ANCHOR.md set the standard that a rule removing a
+    # large share of the setups gets a pre-registration rather than shipping
+    # because it is clearly stated -- and that study is also the reason to be
+    # careful here specifically, because the leg anchor delivered its stated
+    # mechanism at 86-88% and traded WORSE. A shape filter is the same kind of
+    # claim.
+    famStrict: bool = False
     # FIRST TO ARM WINS, and the rest of the pullback's candidates are dropped.
     #
     # "Which one wins first we should remove the other -- by win I mean W→F."
@@ -1611,6 +1629,14 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         # to the hammer reading. That is a fallback, not a finding.
         famOk = True if not p.useFamily else (
             (famHam and p.useHammer) or (famStar and p.useStar))
+        # STRICT: only the priority shape is admitted at all. Folded in here
+        # rather than added as a sixth gate because it IS a family test --
+        # `useHammer` and `useStar` are the same question asked without
+        # reference to the bias. Doing it here also keeps the funnel honest:
+        # a bar the strict rule refuses never counted as a pin, which is what
+        # `nRaw` is supposed to mean.
+        if p.famStrict and not (famHam if biasDir < 0 else famStar):
+            famOk = False
         colourOk = True if not p.useColour else (
             isGreen if biasDir < 0 else not isGreen)
         # LOCATION, plus the two minimums. `pbAge` is measured from where the

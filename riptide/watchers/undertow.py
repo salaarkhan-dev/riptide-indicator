@@ -17,7 +17,9 @@ one watch in the repository that prints prices:
 That is the arming bar. Nothing has filled, nothing is a position, and the
 setup can still die four ways before it does — the bias can turn, price can
 reach the target without you, price can take the stop first, or it can simply
-never come back. Historically about HALF of armed setups never fill at all.
+never come back. About a THIRD of armed setups never fill at all -- 57-67% of
+them reach the limit, by timeframe, measured by
+indicators/undertow/studies/undertow_rate.py at the engine that ships.
 
 ──────────────────────────────────────────────────────────────────────────────
 WHY IT PRINTS ENTRY, STOP AND TARGET, when registry.py says a watch may not
@@ -106,7 +108,7 @@ from collections import deque
 
 from ..config import (BAR_SECONDS, UNDERTOW_ALERTS, UNDERTOW_CONFIRM_BARS,
                       UNDERTOW_FILL_BARS, UNDERTOW_FRESH_BARS,
-                      UNDERTOW_INTERVALS, UNDERTOW_MAX_LINES, UNDERTOW_MS_LEN,
+                      UNDERTOW_INTERVALS, UNDERTOW_MAX_LINES,
                       UNDERTOW_STATES)
 from .registry import Hit, Indicator, Option, register
 
@@ -122,7 +124,7 @@ RECENT_BARS = 6
 # indicators/undertow/pine/riptide-undertow.pine section 3 for what that buys
 # and what it costs: the DETECTOR is the same expression either way
 # (indicators/undertow/port/smc.py proves it pivot for pivot), so the real
-# changes are the SCALE -- 50 and 5 against 6 and 2 -- and a BOS that is a
+# changes are the SCALE -- 14 and 5 against 6 and 2 -- and a BOS that is a
 # close beyond the last pivot rather than beyond the running extreme with an
 # inducement swept. There is no inducement anywhere in LuxAlgo's structure, so
 # `BOS_NEEDS_IDM` is gone with it.
@@ -146,6 +148,17 @@ CONFIRM_ORDER = "working then failure"
 FAIL_TEST = "close at or beyond"
 PIN_NEWEST = True
 FAM_PRIORITY = True
+# THE PRIORITY SHAPE AND NOTHING ELSE -- only the shooting star in a bull trend
+# and only the hammer in a bear trend, with the hanging man and the inverted
+# hammer no longer setups at all. A chart TOGGLE, off on both sides, and it
+# costs 42-46% of the armed setups, so it is not a free correction: it gets a
+# pre-registration before it becomes the default, on the standard
+# ../../indicators/undertow/measurements/UNDERTOW_ANCHOR.md set.
+#
+# The watcher carries it as a constant rather than leaving it out because the
+# chart owner can turn it on, and a chart running strict against a bot that is
+# not is the divergence this whole audit was about.
+FAM_STRICT = False
 END_MINOR = "on the flip"
 END_SWEEP = False
 END_STALE = False
@@ -397,7 +410,7 @@ class _Cand:
         self.workBar = kw.get("workBar", -1)
 
 
-def run_setups(cs, ms_len: int = 6, max_live: int = 64):
+def run_setups(cs, max_live: int = 4):
     """The two moments worth alerting on: ARMED, and FILLED.
 
     Sections 3-7 of riptide-undertow.pine. The structure engine, the minor
@@ -421,7 +434,9 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
     fills are still computed because two other things need them: the parity
     test holds this copy to the port past the arming bar, which is where the
     stop tracking lives and where a drift would otherwise be invisible, and
-    undertow_rate.py reports what fraction of armed setups reach a fill (58%).
+    undertow_rate.py reports what fraction of armed setups reach a fill --
+    57-67% by timeframe at the shipped engine, where the old note here said 58%
+    on the bar-pivot one.
     Neither sends a message.
 
     The backup fill is deliberately absent: it is off by default, unmeasured,
@@ -636,8 +651,18 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
         famHam = dnW - upW >= WICK_EDGE
         famStar = upW - dnW >= WICK_EDGE
         colourOk = isGreen if biasDir < 0 else not isGreen
-        if ((famHam or famStar) and tradeable and colourOk
-                and (i - pbExtX) <= LOC_TOL and len(cands) < max_live):
+        famOk = famHam or famStar
+        if FAM_STRICT and not (famHam if biasDir < 0 else famStar):
+            famOk = False
+        # THE CAP IS TESTED AFTER THE SUPERSEDE, NOT IN THIS GUARD, and the
+        # order is not cosmetic. A new pin usually DROPS its unarmed rivals, so
+        # counting the pool before that runs turns a pin away because of
+        # candidates it was about to delete. This copy had the cap in the guard
+        # and the port has always had it after; at max_live 64 the pool never
+        # reaches the cap and the two agree, which is why the parity test --
+        # which ran only at 64 -- never saw it.
+        if (famOk and tradeable and colourOk
+                and (i - pbExtX) <= LOC_TOL):
             # THE NEWEST PIN SUPERSEDES, AND THE PRIORITY SHAPE OUTRANKS
             # RECENCY. Hammer in a bearish trend, shooting star in a bullish
             # one; the other shape is usable and second choice. A non-priority
@@ -656,18 +681,19 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
                     rivals = [] if held else rivals
                 for x in rivals:
                     cands.remove(x)
-            cands.append(_Cand(
-                bar=i, hi=c.h, lo=c.l, focus=c.o, workHi=famHam,
-                short=biasDir < 0, pbExt=pbExt, state=state,
-                code=("HAM" if isGreen else "HGM") if famHam
-                else ("IH" if isGreen else "SS")))
+            if len(cands) < max_live:
+                cands.append(_Cand(
+                    bar=i, hi=c.h, lo=c.l, focus=c.o, workHi=famHam,
+                    short=biasDir < 0, pbExt=pbExt, state=state,
+                    code=("HAM" if isGreen else "HGM") if famHam
+                    else ("IH" if isGreen else "SS")))
     return armed, filled
 
 
-def armed_setups(cs, ms_len: int = 6, max_live: int = 64) -> list:
+def armed_setups(cs, max_live: int = 4) -> list:
     """Just the arming events. Kept because the rate study and the detectors
     read one list at a time, and one machine must produce both."""
-    return run_setups(cs, ms_len, max_live)[0]
+    return run_setups(cs, max_live)[0]
 
 
 # ───────────────────────────────────────────────────────── the indicator ──
@@ -681,11 +707,10 @@ def detect(cs, symbol: str, tf: str, opts: dict) -> tuple:
     loop never woke". Both look like silence from the chat.
     """
     want = opts.get("states", UNDERTOW_STATES)
-    ms_len = int(opts.get("swing", UNDERTOW_MS_LEN))
     step = BAR_SECONDS[tf]
     cut = len(cs) - RECENT_BARS
     out, dropped = [], 0
-    for a in armed_setups(cs, ms_len=ms_len):
+    for a in armed_setups(cs):
         if a["bar"] < cut:
             continue
         if want != "both" and a["state"] != want:
@@ -795,27 +820,30 @@ def rate(db, tfs=None, **over):
     return sum(per.get(t, 0) for t in (tfs or UNDERTOW_INTERVALS))
 
 
-# Armed setups a day across 23 symbols, from undertow_rate.py over 125 / 250
-# symbol-days, AT THE SHIPPED CONFIG -- swing 6/2 with the sweep and stale
-# Ending rules off.
+# Armed setups a day across 23 symbols, over 125 / 250 / 492 calendar days,
+# RE-MEASURED AT THE CONFIG THAT ACTUALLY SHIPS: LuxAlgo SMC at 14/5, W→F, the
+# priority pairing on, the inclusive failure test, live cap 4.
 #
-# THAT CONFIG TRIPLES THE RATE. The same measurement at swing 15 with those two
-# rules on was 11 and 5; a shorter swing means a twitchier structure and more
-# CHoCHs, and turning off two of the five Ending rules leaves far more bars
-# tradeable. 15m + 30m together is 54 rows a day, which is the point at which a
-# digest starts not getting read.
+# THE OLD TABLE SAID 36 / 18 / 9 AND IT WAS 2.6x TOO HIGH. Those numbers were
+# measured on the bar-pivot engine at swing 6/2, which this watcher stopped
+# running when the structure moved to LuxAlgo's; a 14-bar SMC swing is far less
+# twitchy than a 6-bar pivot and produces far fewer CHoCHs. Nothing failed when
+# the engine changed -- the table just went on describing the old one, which is
+# the exact failure the paragraph below already warned about, in this file,
+# about a different watch. Reading your own warning is apparently the hard part.
 #
-#     swing   15m both   15m running   30m both   30m running
-#       6         36          18           18          9
-#      15         22          16           10          7
-#      30         16          13            8          6
+#            both   running   immature
+#     15m      14        9          4
+#     30m       7        5          3
+#      1h       3        2          1
 #
-# `/undertow running` halves it to 27 and is the first thing to reach for.
+# 15m + 30m together is 21 rows a day rather than 54, so the digest-length
+# worry the old table raised is not a worry at this engine.
 # 1h is not shipped: it is not in the default intervals.
-RATE_BOTH = {"Min15": 36, "Min30": 18, "Min60": 9}
+RATE_BOTH = {"Min15": 14, "Min30": 7, "Min60": 3}
 RATE_ONE = {
-    "running": {"Min15": 18, "Min30": 9, "Min60": 5},
-    "immature": {"Min15": 17, "Min30": 9, "Min60": 4},
+    "running": {"Min15": 9, "Min30": 5, "Min60": 2},
+    "immature": {"Min15": 4, "Min30": 3, "Min60": 1},
 }
 
 
@@ -869,12 +897,19 @@ SPEC = register(Indicator(
                "already broken structure at least once and is the quieter "
                "half; 'immature' is the fresh CHoCH",
                choices=("both", "running", "immature")),
-        Option("swing", "number", UNDERTOW_MS_LEN,
-               "the major swing length in BARS. Higher = fewer, larger "
-               "trends and far fewer setups. Note this means a different "
-               "span of TIME on every timeframe — that is a known flaw, "
-               "measured in indicators/undertow/port/swings.py",
-               lo=2, hi=100),
+        # THERE WAS A `swing` OPTION HERE AND IT DID NOTHING. It set the major
+        # swing length of the BAR-PIVOT engine, which this watcher stopped
+        # running when the structure moved to LuxAlgo's SMC: the value was
+        # threaded from the chat through detect() into run_setups() and never
+        # read. `/undertow swing 30` answered as though it had worked and
+        # changed not one setup. deploy/undertow-three-way-check.py now fails
+        # on any parameter the watcher accepts and ignores, which is how it was
+        # found and what stops the next one.
+        #
+        # It is not re-wired to SMC_SWING_LEN on purpose. The comment above the
+        # constants says why: these were measured at no edge, and a knob that
+        # retunes the structure against a live stream is tuning in the worst
+        # possible place. The chart draws 14/5 and the bot trades 14/5.
     ),
     tf_counted=("Min15", "Min30", "Min60"),
     rate=rate,
@@ -887,7 +922,7 @@ SPEC = register(Indicator(
            "message matches what you saw on the chart.</i>\n\n"
            "<i>The numbers are the pin's open (your limit), the stop a "
            "quarter ATR past the pullback extreme, and the target at the "
-           "configured reward ratio. Nothing has filled yet — about 42% "
+           "configured reward ratio. Nothing has filled yet — about a third "
            "never do, and nothing alerts when one does — by then "
            "the order is resting and the decision is made.</i>"),
     evidence=("<b>Three pre-registered studies, all negative.</b> On a holdout "
@@ -907,6 +942,5 @@ SPEC = register(Indicator(
     examples=("<code>/undertow on</code> — start them\n"
               "<code>/undertow 30m,1h</code> — which timeframes\n"
               "<code>/undertow running</code> — skip the fresh-CHoCH ones\n"
-              "<code>/undertow swing 30</code> — far fewer, larger trends\n"
               "<code>/undertow off</code> — stop them"),
 ))

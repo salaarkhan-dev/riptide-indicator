@@ -68,17 +68,36 @@ def walk(n=4000, seed=7, drift=0.0):
 # ──────────────────────────────────────────── 1. the two copies agree ──
 
 
+# The cap is run at TWO values and both are load-bearing.
+#
+#   64  the studies' value. The cap refuses almost nothing, so the comparison
+#       sees the whole population and a divergence cannot hide behind a
+#       refusal. This is the setting that gives the test its power.
+#   P's default  what the CHART ships. The bot's job is to alert what the
+#       chart draws, so the shipped cap has to be compared too.
+#
+# IT USED TO RUN ONLY AT 64, on a comment that said the cap was "the Pine's
+# DRAWING cap and the bot does not draw". That was wrong about the Pine.
+# riptide-undertow.pine:1117 tests it BEFORE the candidate is created --
+# `if nLive >= maxLive` increments nCap and the pin is turned away -- so a
+# refused pin never becomes a setup, never draws AND never arms. The live
+# watcher was left defaulting to 64 against a chart at 4, and 4.0 / 4.3 / 5.7%
+# of the arms it produced on 15m / 30m / 1h were setups the chart had refused:
+# alerts for something not on the chart, which is exactly what was reported.
+CAPS = (64, None)
+
+
 def test_copies_agree():
     """THE POINT OF THE FILE. Element for element, not a count."""
     total = 0
-    for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006), (14, 0.0002)):
+    cases = [(s, d, cap) for s, d in
+             ((11, 0.0), (12, 0.0006), (13, -0.0006), (14, 0.0002))
+             for cap in CAPS]
+    for seed, drift, cap in cases:
         cs = walk(4000, seed=seed, drift=drift)
-        # maxLive 64 on both sides: the port's default of 4 is the Pine's
-        # DRAWING cap and the bot does not draw, so the live copy must not
-        # inherit a limit that silently refuses setups. That was the confound
-        # that voided an entire study; see UNDERTOW_PIN_VALUE.md.
-        want = U.run(cs, U.P(maxLive=64), "T").armed
-        got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
+        cap = U.P().maxLive if cap is None else cap
+        want = U.run(cs, U.P(maxLive=cap), "T").armed
+        got = W.armed_setups(cs, max_live=cap)
         total += len(want)
         ok(len(want) == len(got),
            f"seed {seed}: {len(want)} armed setups, bot copy found {len(got)}")
@@ -114,7 +133,7 @@ def test_fills_agree():
     for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006)):
         cs = walk(4000, seed=seed, drift=drift)
         want = U.run(cs, U.P(maxLive=64), "T").fills
-        got = W.run_setups(cs, ms_len=U.P().msLen, max_live=64)[1]
+        got = W.run_setups(cs, max_live=64)[1]
         total += len(want)
         ok(len(want) == len(got),
            f"seed {seed}: {len(want)} fills, bot copy found {len(got)}")
@@ -133,7 +152,7 @@ def test_fills_agree():
     ok(total > 30, f"the comparison is not vacuous: {total} fills compared")
     # And the thing that makes this test necessary: the stop really does move.
     cs = walk(4000, seed=12, drift=0.0006)
-    a, f = W.run_setups(cs, ms_len=U.P().msLen, max_live=64)
+    a, f = W.run_setups(cs, max_live=64)
     by_arm = {x["bar"]: x for x in a}
     moved = sum(1 for x in f if x["armBar"] in by_arm
                 and abs(by_arm[x["armBar"]]["stop"] - x["stop"]) > 1e-9)
@@ -159,7 +178,7 @@ def test_agree_on_real_candles():
     for sym in sorted(data)[:6]:
         cs = data[sym]
         want = U.run(cs, U.P(maxLive=64), sym).armed
-        got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
+        got = W.armed_setups(cs, max_live=64)
         same = (len(want) == len(got)
                 and all(w["bar"] == g["bar"] and w["short"] == g["short"]
                         and abs(w["entry"] - g["entry"]) < 1e-9
@@ -256,7 +275,7 @@ def test_hit_is_dated_to_the_close():
     the bar has CLOSED, so the moment it became real is t + step — which is
     what the freshness gate and the 'Nm ago' row both measure from."""
     cs = walk(4000, seed=12, drift=0.0006)
-    got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
+    got = W.armed_setups(cs, max_live=64)
     ok(got, "the fixture produces setups at all")
     last = max(g["bar"] for g in got)
     # Trim so the newest setup lands inside the recent window.
@@ -291,7 +310,7 @@ def test_digest_fits_a_phone():
     import re
     from riptide import watch
     cs = walk(4000, seed=12, drift=0.0006)
-    got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
+    got = W.armed_setups(cs, max_live=64)
     hits = []
     for a in got[-6:]:
         hits += W.detect(cs[:a["bar"] + 2], "BTC_USDT", "Min15", {})[0]
@@ -336,7 +355,7 @@ def test_detect_reports_its_drops():
     """'6 setups, all immature' and 'the loop never woke' look identical from
     the chat. The second number is what tells them apart in /status."""
     cs = walk(4000, seed=12, drift=0.0006)
-    got = W.armed_setups(cs, ms_len=U.P().msLen, max_live=64)
+    got = W.armed_setups(cs, max_live=64)
     last = max(g["bar"] for g in got)
     trimmed = cs[:last + 2]
     _, dropped = W.detect(trimmed, "T_USDT", "Min30", {"states": "running"})

@@ -629,10 +629,15 @@ if UNDERTOW_STATES not in ("both", "running", "immature"):
     log.warning("RIPTIDE_UNDERTOW_STATES=%r is not both/running/immature, "
                 "using both", UNDERTOW_STATES)
     UNDERTOW_STATES = "both"
-# The major swing, in BARS -- and note that means a different span of TIME on
-# every timeframe. That is a known flaw of the rule, measured in
-# indicators/undertow/port/swings.py, not a bug in this file.
-UNDERTOW_MS_LEN = int(os.getenv("RIPTIDE_UNDERTOW_MS_LEN", "6"))
+# RIPTIDE_UNDERTOW_MS_LEN IS GONE and setting it now does nothing, which is
+# what it already did. It carried the major swing of the BAR-PIVOT engine the
+# undertow watch stopped running when its structure moved to LuxAlgo's SMC; the
+# value reached run_setups() and was never read, so the env var and the
+# `/undertow swing N` command both answered as though they had worked. The
+# swing lengths that do run are SMC_SWING_LEN and SMC_INTERNAL_LEN in
+# riptide/watchers/undertow.py, frozen at the chart's 14 and 5 and deliberately
+# not exposed: they were measured at no edge, and a knob that retunes the
+# structure against a live stream is tuning in the worst possible place.
 # Bars for BOTH confirmations to land. Without a bound the rule is eventually
 # true for almost any candle.
 UNDERTOW_CONFIRM_BARS = int(os.getenv("RIPTIDE_UNDERTOW_CONFIRM_BARS", "20"))

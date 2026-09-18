@@ -150,8 +150,20 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # because it changes which trades exist (about 10% of armed setups) and
 # UNDERTOW_ANCHOR.md is what set the standard that those get a prereg rather
 # than shipping on the strength of being clearly stated.
-DEFAULTS_FINGERPRINT = "a24421b7e23a0f16"
-DEFAULTS_COUNT = 66
+#
+# 2026-09-18: `famStrict` added, OFF. The priority RANKING becomes a GATE --
+# only the shooting star in a bull trend, only the hammer in a bear trend, and
+# the hanging man and the inverted hammer stop being setups at all. Purely
+# additive: no existing default moves and no study's arms change, so nothing
+# needed re-running. It is off because it cuts 42-46% of the armed setups
+# (measured on the spent 23-symbol set, where the two surviving codes are
+# untouched -- 474 shooting stars become 475), and that is the second-largest
+# single cut in P after the anchor. UNDERTOW_ANCHOR.md is also the specific
+# warning here: it took the author's stated anchor, confirmed the mechanism
+# fired 86-88% of the time, and the trades were worse. A shape filter is the
+# same kind of claim and gets the same treatment.
+DEFAULTS_FINGERPRINT = "f65fc02f96bed9ce"
+DEFAULTS_COUNT = 67
 
 good = []
 

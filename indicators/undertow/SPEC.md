@@ -28,7 +28,13 @@ fails and the undertow takes price back.
 > * **the DETECTOR is the same expression either way** — `smc.py` proves
 >   `leg()` and `bar_swings()` are pivot-for-pivot identical, and the CHoCH
 >   bars are the same list
-> * **the SCALE is not** — 50 and 5 against 6 and 2
+> * **the SCALE is not** — **14 and 5** against 6 and 2. It shipped at 50/5,
+>   LuxAlgo's own default, and moved to 14/5 by preference after
+>   [`UNDERTOW_SCALE.md`](measurements/UNDERTOW_SCALE.md) measured 50/5 against
+>   6/2 and found nothing to separate them. A null there meant the preference
+>   was free, which is not what a null means everywhere — compare
+>   [`UNDERTOW_ANCHOR.md`](measurements/UNDERTOW_ANCHOR.md), where it meant a
+>   stated rule cost half the setups for no gain
 > * **the BOS is not** — LuxAlgo's is a close beyond the last pivot in the
 >   trend's direction; riptide's was a close beyond the running extreme with an
 >   inducement swept. `msBosNeedsIdm` has no counterpart and is gone
@@ -326,6 +332,33 @@ the two bars that matter and was not actively harmful, so it is **on the chart
 as an input, off by default**. `famPriority` did nothing recoverable (−0.05 to
 +0.10 R on 354–490 trades) and stays port-only.
 
+> **AMENDED. `famPriority` AND `pinNewest` BOTH SHIP ON, IN ALL THREE COPIES.**
+> The paragraph above is the state after V3 and it is no longer current. The
+> pair went out as a CORRECTION on the footing W→F went out on: the author's
+> stated rule goes on the chart, and measurement decides only the defaults it
+> has an opinion about. V3 measured the pair at nothing, so it has none.
+>
+> **THE ANCHOR WAS THEN MEASURED PROPERLY AND IS STILL OFF.**
+> [`UNDERTOW_ANCHOR.md`](measurements/UNDERTOW_ANCHOR.md) is the study V3's
+> anchor arm was reaching for and missed: `pinAt = leg extreme` is the running
+> extreme since the last INTERNAL break, which is the per-leg object the
+> diagram shows, where V3's `trend extreme` was one stale point per trend. It
+> delivered the mechanism — **86–88% of its pins were the priority shape**,
+> against 53% for the shipped anchor — and the trades were **worse on 3 of 3**.
+> That is the cleanest negative in the project, because it is the one that
+> cannot be read as "the rule never detected what it claimed".
+>
+> **`famStrict` MAKES THE RANKING A GATE, and is OFF.** Only the shooting star
+> in a bull trend, only the hammer in a bear trend; the hanging man and the
+> inverted hammer stop being setups. With the colour rule that leaves exactly
+> one code per direction and the four-code taxonomy of §2.1 collapses to two.
+> It cuts **42–46%** of the armed setups, measured on the spent 23-symbol set,
+> and the two surviving codes are untouched — 474 shooting stars become 475 —
+> so the cut is entirely the other two leaving. A rule that removes that much
+> gets a pre-registration before it becomes a default, which is the standard
+> the anchor study set, and the anchor study is also why: a stated rule that
+> demonstrably finds its intended candle can still trade worse.
+
 **MEASURED — see [`UNDERTOW_PULLBACK.md`](measurements/UNDERTOW_PULLBACK.md).**
 Defect 3 is real and costs setups rather than money: pins 1–2 bars after the
 extreme score within **±0.025 R** of pins at it, and admitting them nearly
@@ -457,6 +490,22 @@ were.
 
 - **Every qualifying pin becomes its own candidate**, up to `maxLive` (4).
   There is no newest-wins / first-wins choice, and removing it is the point.
+
+  > **AMENDED TWICE.** `pinNewest` came back — see the amendment in §2.3 — so
+  > there IS a newest-wins rule again, ranked by the priority shape. The table
+  > below is v1's measurement of the choice this section removed.
+  >
+  > **AND THE CAP'S ORDER WAS WRONG IN TWO OF THE THREE COPIES.** The Pine and
+  > the watcher counted the live candidates BEFORE the supersede ran; the port
+  > has always counted after. Counting first turns a pin away because of rivals
+  > it was about to delete, so the chart drew nothing where the port — every
+  > measurement page, and the reference the parity test calls truth — armed the
+  > setup. **5.4 / 5.4 / 7.3% of setups differed** on 15m / 30m / 1h at the
+  > shipped cap of 4. All three now count after.
+  >
+  > It survived because the parity test ran only at `maxLive 64`, where the
+  > pool never reaches the cap and the two orders agree. A test that pins the
+  > shipped value is the fix, and it now runs at both.
 
   A pullback does not contain one pin, it contains several. Keeping exactly one
   forced a choice with no good answer, and the chart measured both:
