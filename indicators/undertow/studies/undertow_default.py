@@ -63,7 +63,7 @@ OLD = dict(NEW, biasSrc=U.BS_SMC, smcSwingLen=14, msLen=6, msShortLen=2,
            swingSrc=U.SW_RANGE, famStrict=False, armWins=False,
            stopSrc=U.S_PULL)
 
-BASE = U.P(biasTier=U.TIER_SWING, useBackup=False, **NEW)
+BASE = U.P(useBackup=False, **NEW)
 ARMS = [
     ("D0", "what the chart shipped YESTERDAY", OLD),
     ("D1", "what the chart ships TODAY", {}),

@@ -117,19 +117,17 @@ BS_MTF = "MTF EMA align"
 # pivot length and the BOS rule are not.
 BS_SMC = "SMC structure"
 BS_RSI = "RSI bias"
-# `biasTier` -- WHICH of the SMC engine's two passes is the direction.
+# `biasTier`, `TIER_SWING` and `TIER_INTERNAL` WERE HERE. The field chose which
+# of the SMC engine's two passes was the direction, so it was read only on the
+# BS_SMC path -- and the shipped `biasSrc` is BS_STRUCT, whose direction is the
+# v2 engine's `os` and never goes through smc.state() at all. Both settings
+# produced bit-identical output on 23 symbols at all three timeframes.
 #
-# LITERALS, not aliases of smc.py's. Both deploy/undertow-port-check.py and
-# deploy/undertow-three-way-check.py read this file with the AST and resolve a
-# field default only through a module-level CONSTANT; `smc.TIER_SWING` is an
-# attribute lookup and comes back unresolved, which silently turns a compared
-# setting into an uncompared one. The guard below is what stops the two copies
-# drifting instead.
-TIER_SWING = "swing"
-TIER_INTERNAL = "internal"
-assert (TIER_SWING, TIER_INTERNAL) == (smc.TIER_SWING, smc.TIER_INTERNAL), (
-    "the two copies of the bias-tier names have drifted; smc.py::state "
-    "compares by value and would fall through to the swing tier in silence")
+# It was removed rather than documented, for the reason UNDERTOW_DEFAULT.md
+# gives about `armWins`: a switch that cannot change an outcome is one fewer
+# thing to reason about. Nineteen studies pinned it and every one pinned the
+# swing tier, so removing it moves no published number -- asserted by
+# re-running them, not by this comment.
 # `swingSrc` — how a swing is DEFINED. Compared by value on both sides.
 SW_BAR = "bar pivot"
 SW_RANGE = "price move"
@@ -322,13 +320,6 @@ class P:
     # what the measurement did was establish that the choice is free.
     smcSwingLen: int = 14
     smcInternalLen: int = 5
-    # WHICH TIER IS THE BIAS. "swing" is what ships and what every measurement
-    # page was produced under: the major character says which way, the internal
-    # one says where the pullback is turning. "internal" swaps them, which is a
-    # much twitchier direction and many more setups -- and it puts the
-    # minor-structure Ending rule out of action, because there is no third
-    # shorter pass for it to read. See port/smc.py::state.
-    biasTier: str = TIER_SWING
     matureBars: int = 20
     # 2 · Candle
     wickEdge: float = 0.05

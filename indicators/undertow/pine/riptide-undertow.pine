@@ -90,8 +90,22 @@ smcSwingLen = input.int(14, "Swing structure", minval = 10, maxval = 200,
 smcInternalLen = input.int(5, "Internal structure", minval = 2, maxval = 50,
   group = gBias,
   tooltip = "THE MINOR TIER, same engine at a shorter length. It drives the inducement, the minor CHoCH that ends a trend, and the 'minor swing' stop source.\n\nLuxAlgo's default is 5; the old engine used 2.")
-biasTier = input.string("swing", "Bias tier", options = ["swing", "internal"], group = gBias,
-  tooltip = "WHICH OF THE TWO SMC PASSES IS THE DIRECTION.\n\n'swing' is what ships and what every page in ../measurements was produced under: the major character says which way, the internal one says where the pullback is turning. That is the arrangement LuxAlgo draws.\n\n'internal' swaps them, so the SHORTER pass is the bias. A far twitchier direction and many more setups — 1.6x on all three timeframes, measured on the spent 23-symbol set, and the R column came out BETTER on all three rather than worse. That is a design input on a universe read many times over, not a study, and it is the whole reason it is an option rather than the default.\n\nTHE MINOR-STRUCTURE ENDING RULE GOES INERT WHEN YOU DO THIS. There is no third, shorter pass for it to read, so the minor tier becomes the same series as the bias, nothing is ever 'against' it, and 'End: minor structure' stops firing whatever it is set to. The panel's Ending row will only ever say 'retrace'. Stated rather than faked — inventing a still shorter pivot would make the two tiers look comparable while quietly being a different engine.\n\nInert under the 'EMA slope + cross' source, which has no tiers.")
+// `biasTier` WAS HERE AND IT COULD NOT DO ANYTHING. It chose between the two
+// SMC passes, so it was read only when `biasSrc` was "SMC structure" — and the
+// shipped source is "market structure + inducement", whose direction comes from
+// `v2Os` and never touches either pass. The port gave bit-identical output on
+// both settings, checked rather than argued.
+//
+// Its tooltip meanwhile advertised 'internal' as 1.6x the setups at better R
+// on all three timeframes. That was measured back when the SMC engine WAS the
+// bias; after the engine swap the switch reached nothing, and the tooltip went
+// on promising an effect the chart could no longer produce.
+//
+// Removed rather than documented, which is what UNDERTOW_DEFAULT.md concluded
+// about `armWins` for the same reason: a switch that cannot change an outcome
+// is one fewer thing to reason about. Nineteen studies pinned it and none of
+// them could be affected — every one pinned the swing tier, which is now the
+// only behaviour.
 endMinor = input.string("on the flip", "End: minor structure", group = gBias,
   options = ["off", "on the flip", "while opposed"],
   tooltip = "The short swings turn before the long ones. 'on the flip' fires the bar the minor structure turns against the trend and can be missed if it turned earlier; 'while opposed' is true the whole time it is against, so it catches far more and leaves far fewer setups.")
@@ -847,23 +861,22 @@ if v2Min < v2Min[1]
 
 
 // ── WHICH SMC PASS IS THE BIAS ──────────────────────────────────────────────
-// `biasTier` swaps the roles of the two passes. On "internal" the shorter one
-// becomes the direction and the minor tier has no third pass to read, so it
-// reads the same series as the bias and `endMinor` goes inert. That is the
-// honest consequence and ../port/smc.py::state does exactly the same thing.
-// The internal pass already publishes everything the major one does: its own
-// CHoCH and BOS in section 4, and `legMax`/`legMin` are its running extremes
-// since its last turn -- the same object `msMax`/`msMin` are for the major
-// tier, which is what the retrace rule and the pullback both need.
-bool  tierInt     = biasTier == "internal"
-int   ldOs        = tierInt ? msSOs : msOs
-bool  ldChoch     = tierInt ? msMinorChoch : msChoch
-bool  ldBosUp     = tierInt ? inBosUp : msBosUp
-bool  ldBosDn     = tierInt ? inBosDn : msBosDn
-float ldMax       = tierInt ? legMax : msMax
-float ldMin       = tierInt ? legMin : msMin
-int   ldMaxX      = tierInt ? legMaxX : msMaxX
-int   ldMinX      = tierInt ? legMinX : msMinX
+// THE MAJOR ONE, always. `biasTier` used to choose and is gone -- see the note
+// where its input was, in section 1. The internal pass is still read, just not
+// for the direction: it is the minor tier, which is what `endMinor` and the
+// minor-swing stop want, and section 4 still publishes its CHoCH and BOS.
+//
+// The `ld*` names are kept because the mux below reads them and they say
+// "whatever the SMC engine leads with", which is the role rather than the
+// pass.
+int   ldOs        = msOs
+bool  ldChoch     = msChoch
+bool  ldBosUp     = msBosUp
+bool  ldBosDn     = msBosDn
+float ldMax       = msMax
+float ldMin       = msMin
+int   ldMaxX      = msMaxX
+int   ldMinX      = msMinX
 
 // ── THE TWO ALTERNATIVE SOURCES ─────────────────────────────────────────────
 // A direction dressed as the state below, which is what ../port/undertow.py's

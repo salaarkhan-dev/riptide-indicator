@@ -136,14 +136,10 @@ RECENT_BARS = 6
 BIAS_SRC = "market structure + inducement"
 SMC_SWING_LEN = 14
 SMC_INTERNAL_LEN = 5
-# WHICH OF THE TWO PASSES IS THE BIAS. "swing" is what the chart ships and what
-# every page in ../../indicators/undertow/measurements was produced under.
-# "internal" makes the SHORTER pass the direction -- 1.6x the setups on all
-# three timeframes, measured on the spent 23-symbol set -- and takes the
-# minor-structure Ending rule out of action, because there is then no third
-# shorter pass for it to read. deploy/undertow-three-way-check.py holds this to
-# P's default, so if the chart's default moves this file has to move with it.
-BIAS_TIER = "swing"
+# `BIAS_TIER` WAS HERE. It chose which SMC pass led, and the line in
+# `run_setups` that read it said the quiet part out loud: the v2 branch came
+# first, so under the shipped BIAS_SRC the tier was never consulted. Removed
+# from all three copies together.
 # THE EXTERNAL CHARACTER, and it is a PAIR with the line above rather than an
 # alternative to it. The major tier is LuxAlgo's "Market Structure with
 # Inducements & Sweeps" at a 50-bar pivot, with a 3-bar pivot supplying the
@@ -624,7 +620,7 @@ def run_setups(cs, max_live: int = 4):
     # not the same as swapping the lengths. port/smc.py::state does exactly
     # this and the parity test holds the two together.
     lead = (_ms_structure(cs) if BIAS_SRC == "market structure + inducement"
-            else mnr if BIAS_TIER == "internal" else maj)
+            else maj)
 
     msMax = msMin = msMaxX = msMinX = None
     dirs: list = []

@@ -69,7 +69,6 @@ MIRRORED = {
     "biasSrc": ("const", "BIAS_SRC"),
     "smcSwingLen": ("const", "SMC_SWING_LEN"),
     "smcInternalLen": ("const", "SMC_INTERNAL_LEN"),
-    "biasTier": ("const", "BIAS_TIER"),
     "confirmOrder": ("const", "CONFIRM_ORDER"),
     "failTest": ("const", "FAIL_TEST"),
     "pinNewest": ("const", "PIN_NEWEST"),

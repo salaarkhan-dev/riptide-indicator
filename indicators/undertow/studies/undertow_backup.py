@@ -50,11 +50,23 @@ from research.data import SYMBOLS                                # noqa: E402
 # the bar pivot to "price move" after this ran, so without these lines the
 # script would print different numbers under the same page's name. A study that
 # cannot reproduce its own measurement is not a record of anything.
-BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, biasTier=U.TIER_SWING, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
+BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
            swingSrc=U.SW_BAR, msLen=6, msShortLen=2,
            endSweep=False, endStale=False)
 
 ARMS = [
+    # B0 IS EMPTY AND BASE NOW PINS `useBackup=False`, which is the whole
+    # repair. It used to be empty while BASE said nothing, so when the default
+    # went False -> True the BASELINE THIS PAGE IS A DIFFERENCE AGAINST became
+    # a second copy of B3. It printed a full table -- B3 - B0 = +0.000 on all
+    # three timeframes, 0 trades added, every pre-empted fill worth +0.000 --
+    # and a VERDICT saying the backup does nothing. Every one of those numbers
+    # was the arm subtracted from itself.
+    #
+    # BASE carried a docstring explaining exactly this hazard and the ARMS list
+    # underneath it walked into it anyway, because the pinning test was
+    # satisfied by `useBackup` appearing on the five lines below. It now checks
+    # the baseline.
     ("B0", "backup off", {}),
     ("B1", "order blocks only", dict(useBackup=True, useFVG=False)),
     ("B2", "fair value gaps only", dict(useBackup=True, useOB=False)),

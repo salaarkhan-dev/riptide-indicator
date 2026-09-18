@@ -49,9 +49,18 @@ PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
           # request and silently re-pointed NINETEEN studies: undertow_strict's
           # S0 read -0.124 against the -0.026 on its own page until it was
           # pinned back, which is this file's entire subject happening again.
-          # famStrict, armWins and biasTier were the same exposure and had not
-          # yet bitten. useBackup was caught before it moved.
-          "useBackup", "famStrict", "armWins", "stopSrc", "biasTier")
+          # famStrict and armWins were the same exposure and had not yet
+          # bitten. `useBackup` was recorded here as "caught before it moved",
+          # AND THAT WAS WRONG -- it had already moved to True, and
+          # undertow_backup's B0 arm was `("B0", "backup off", {})`, so the
+          # baseline of the page became a copy of the primary. The study
+          # printed +0.000 on all three timeframes and a verdict to match.
+          # It passed THIS TEST the whole time, for the reason the next
+          # function exists.
+          #
+          # `biasTier` was in here and is gone with the field: it could only
+          # ever be read on the BS_SMC path and the shipped source bypasses it.
+          "useBackup", "famStrict", "armWins", "stopSrc")
 # A SETTING THAT ONLY ONE SOURCE READS DOES NOT BELONG IN PINNED, because
 # PINNED makes EVERY study name it. `emaFast`/`emaSlow` moved 50/200 -> 9/21
 # when the EMA cross went on the chart, and putting them above made twelve
@@ -318,8 +327,30 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # docstring describes exactly this happening twice before. What was missing is
 # that a default moved BY REQUEST gets the same procedure as one moved on a
 # whim, and four went through in a day without it.
-DEFAULTS_FINGERPRINT = "c33c798be1a3acac"
-DEFAULTS_COUNT = 73
+# 2026-09-18: `biasTier` REMOVED — the field, its two constants, the Pine
+# input, the watcher constant and the pin in twenty studies.
+#
+# IT COULD NOT AFFECT THE SHIPPED CHART. It chose which of the SMC engine's
+# two passes was the direction, so `smc.state()` was the only reader — and the
+# shipped `biasSrc` is BS_STRUCT, whose direction is the v2 engine's `os` and
+# never goes through `state()` at all. The port produced BIT-IDENTICAL output
+# on "swing" and "internal", 23 symbols, three timeframes. The watcher said the
+# quiet part in code: `_ms_structure(cs) if BIAS_SRC == ... else mnr if
+# BIAS_TIER == "internal" else maj` — the v2 branch came first.
+#
+# Its Pine tooltip meanwhile still advertised "internal" as 1.6x the setups at
+# better R on all three timeframes. True when it was written, unreachable
+# after the engine swap, and left on the chart promising an effect the switch
+# could no longer produce.
+#
+# THE PROCEDURE, and this is the cheapest case it will ever see: every study
+# pinned TIER_SWING, which is now the only behaviour, so removal is a no-op by
+# construction. Asserted anyway — undertow_anchor, _htf and _slope re-run
+# bit-identical against their pre-removal output before this line moved.
+#
+# 73 -> 72 fields.
+DEFAULTS_FINGERPRINT = "a0470f1043d0e13d"
+DEFAULTS_COUNT = 72
 
 good = []
 
@@ -350,6 +381,113 @@ def test_every_study_pins_or_opts_out():
         missing = [f for f in PINNED if not re.search(rf"\b{f}\s*=", src)]
         ok(not missing,
            f"{p.name} pins its settings"
+           + ("" if not missing else f" — MISSING {', '.join(missing)}"))
+
+
+def test_the_baseline_pins_them_not_merely_the_file():
+    """THE TEST ABOVE PROVES A NAME APPEARS. That is not the same thing.
+
+    This weakness was written down in the header of this file on 2026-09-18 --
+    "it proves a name appears, not that the baseline names it" -- and left
+    unfixed. It then cost a whole page. `undertow_backup`'s BASE pinned
+    everything and carried a docstring explaining why; its ARMS list right
+    underneath had `("B0", "backup off", {})`, leaning on `useBackup` still
+    defaulting to False. The grep above was satisfied by the five arms that DO
+    say `useBackup=True`, so a baseline that had silently become a copy of the
+    primary sailed through, and UNDERTOW_BACKUP_FILL.md's entire verdict was an
+    arm subtracted from itself.
+
+    So: parse the file, find the P(...) call that builds the BASELINE, and
+    require the pinned names INSIDE THOSE PARENTHESES. A `**SPREAD` of a
+    module-level dict counts -- undertow_default.py builds its baseline that
+    way and it is the pattern the rest should move to -- so the dict's own keys
+    are resolved and folded in.
+    """
+    import ast
+
+    for p in sorted(STUDIES.glob("*.py")):
+        src = p.read_text()
+        if EXEMPT in src:
+            continue
+        tree = ast.parse(src)
+        # Module-level dicts, so `U.P(**NEW)` can be resolved to NEW's keys.
+        # BOTH SPELLINGS, because the first version of this only understood the
+        # `{...}` literal and undertow_default.py -- the one study already
+        # doing this the right way -- writes `NEW = dict(...)`. It came back as
+        # a baseline with ONE setting and fourteen names missing, which is a
+        # test calling its own best example the worst offender.
+        dicts: dict = {}
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            keys, v = set(), node.value
+            if isinstance(v, ast.Dict):
+                keys = {k.value for k in v.keys if isinstance(k, ast.Constant)}
+            elif isinstance(v, ast.Call) and getattr(v.func, "id", None) == "dict":
+                keys = {k.arg for k in v.keywords if k.arg}
+                # `OLD = dict(NEW, stopSrc=...)` inherits NEW's keys.
+                for a in v.args:
+                    if isinstance(a, ast.Name):
+                        keys |= dicts.get(a.id, set())
+            else:
+                continue
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    dicts[t.id] = keys
+        # A COLLECTION OF CONFIGS, and `for sw in SWINGS: P(**sw)`. undertow_
+        # sweep.py is the real case and it is not an oversight: it SWEEPS
+        # swingSrc/msLen/msShortLen, so those fields are the study's subject
+        # rather than something it forgot. The union across the collection is
+        # what is credited -- entries 3 and 4 of SWINGS set `swingK` instead of
+        # `msLen`, correctly, because a price-move swing has no bar count, and
+        # an intersection would fail a study for being right.
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            v = node.value
+            if not isinstance(v, (ast.Tuple, ast.List)):
+                continue
+            keys = set()
+            for e in v.elts:
+                if isinstance(e, ast.Dict):
+                    keys |= {k.value for k in e.keys if isinstance(k, ast.Constant)}
+                elif isinstance(e, ast.Call) and getattr(e.func, "id", None) == "dict":
+                    keys |= {k.arg for k in e.keywords if k.arg}
+            if keys:
+                for t in node.targets:
+                    if isinstance(t, ast.Name):
+                        dicts[t.id] = keys
+        # `for sw in SWINGS` -- bind the loop target to the collection's keys.
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.For) and isinstance(node.target, ast.Name)
+                    and isinstance(node.iter, ast.Name)
+                    and node.iter.id in dicts):
+                dicts[node.target.id] = dicts[node.iter.id]
+        calls = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            f = node.func
+            nm = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
+            if nm not in ("P", "_P"):
+                continue
+            names = {k.arg for k in node.keywords if k.arg}
+            for k in node.keywords:                      # **SPREAD
+                if k.arg is None and isinstance(k.value, ast.Name):
+                    names |= dicts.get(k.value.id, set())
+            calls.append(names)
+        if not calls:
+            continue
+        # THE BASELINE IS THE RICHEST P(...) IN THE FILE. Every study here
+        # builds one and derives its arms from it with dataclasses.replace, so
+        # the call carrying the most settings is it. A study that grew a second,
+        # equally specified baseline would need this rule revisited -- which is
+        # why the count is printed rather than hidden.
+        base = max(calls, key=len)
+        missing = [f for f in PINNED if f not in base]
+        ok(not missing,
+           f"{p.name} pins its settings ON THE BASELINE "
+           f"({len(base)} settings, {len(calls)} P() calls)"
            + ("" if not missing else f" — MISSING {', '.join(missing)}"))
 
 
@@ -433,6 +571,7 @@ def test_the_defaults_have_not_moved_unnoticed():
 
 def main():
     for fn in (test_every_study_pins_or_opts_out,
+               test_the_baseline_pins_them_not_merely_the_file,
                test_a_source_arm_names_its_own_lengths,
                test_the_marker_is_not_a_blank_cheque,
                test_the_defaults_have_not_moved_unnoticed):

@@ -46,7 +46,7 @@ from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
 from research.symbols_fresh import SYMBOLS_FRESH, assert_disjoint  # noqa: E402
 
 # AS PUBLISHED, PINNED — see test_studies_pin_their_settings.py.
-BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, biasTier=U.TIER_SWING, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
+BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
            swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,
            endMinor=U.E_OFF, endSweep=False, endStale=False)
 

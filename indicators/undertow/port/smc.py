@@ -64,11 +64,12 @@ from __future__ import annotations
 
 from indicators.undertow.port.swings import bar_swings
 
-# WHICH of the two passes is the BIAS. Here rather than in undertow.py
-# because undertow.py imports this module and not the other way round, and
-# because the branch that reads them is `state()` below.
-TIER_SWING = "swing"
-TIER_INTERNAL = "internal"
+# `TIER_SWING` / `TIER_INTERNAL` WERE HERE and the switch that read them is
+# gone. It chose which of the two passes below is the direction, so it was
+# live only while `biasSrc` was "SMC structure"; the shipped source takes its
+# direction from the v2 engine and never calls `state()` for it, which made
+# the switch unreachable in the configuration that ships. See undertow.py's
+# `biasSrc` block and the note in the Pine's section 1.
 
 BULLISH = 1
 BEARISH = -1
@@ -160,22 +161,12 @@ def state(cs, p):
     n = len(cs)
     maj = structure(cs, p.smcSwingLen)
     mnr = structure(cs, p.smcInternalLen, ref=maj)
-    # WHICH TIER IS THE BIAS. The major one by default -- the swing character
-    # says which way and the internal one says where the pullback is turning,
-    # which is the arrangement LuxAlgo draws and every page in ../measurements
-    # was produced under.
-    #
-    # On "internal" the two swap roles and the SHORTER pass becomes the
-    # direction. That is a far twitchier bias and therefore many more setups,
-    # which is the reason it was asked for.
-    #
-    # AND THE MINOR-STRUCTURE ENDING RULE GOES INERT WHEN IT DOES, because
-    # there is no third, shorter pass for it to read. `sOs` is then the same
-    # series as `os`, so `minorAgainst` is false on every bar and `endMinor`
-    # never fires whatever it is set to. Stated rather than faked: fabricating
-    # a minor tier out of a still shorter pivot would make the two tiers look
-    # comparable while quietly being a different engine.
-    lead = mnr if p.biasTier == TIER_INTERNAL else maj
+    # THE MAJOR PASS IS THE BIAS, always. The swing character says which way
+    # and the internal one says where the pullback is turning, which is the
+    # arrangement LuxAlgo draws and every page in ../measurements was produced
+    # under. `biasTier` used to make this a choice; it is gone, and the note at
+    # the top of this file says why.
+    lead = maj
 
     out = dict(os=[], choch=[], bosUp=[], bosDn=[], sweepUp=[], sweepDn=[],
                msMax=[], msMin=[], msMaxX=[], msMinX=[], sOs=[],

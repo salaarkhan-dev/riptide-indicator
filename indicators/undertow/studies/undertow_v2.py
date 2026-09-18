@@ -39,7 +39,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 
 # AS PUBLISHED, PINNED — see test_studies_pin_their_settings.py. V0 IS v1
 # EXACTLY AS SHIPPED, which is what makes it the baseline worth beating.
-BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, biasTier=U.TIER_SWING, useBackup=False, famPriority=False, failTest=U.T_CLOSE,
+BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_STRUCT, famPriority=False, failTest=U.T_CLOSE,
            pinNewest=False, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE,
            rr=3.5,
            swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,
