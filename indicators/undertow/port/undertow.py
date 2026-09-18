@@ -373,8 +373,16 @@ class P:
     # that was the ~14% coincidence its own page predicted is to run it on a
     # universe nobody has seen.
     #
-    # NO CHART INPUT UNTIL IT EARNS ONE. An input is for a rule somebody wants
-    # to trade; this is a rule being tested. See
+    # IT DID NOT REPLICATE -- ../measurements/UNDERTOW_COMPLEMENT.md, on a
+    # universe frozen for it with the primary timeframe named in advance. The
+    # sign held and the size halved: +0.258 became +0.117 +/- 0.114, z 1.03,
+    # which is what the winner's curse does to a cell selected as the largest
+    # of three. And the close is sharper than "no effect": detecting +0.117 at
+    # |z| >= 2 needs about 110 symbols carrying 500 days of 1h, and 75 unused
+    # contracts remain on the venue. No further study can settle it.
+    #
+    # NO CHART INPUT. An input is for a rule somebody wants to trade; this is a
+    # rule that was tested and did not clear its bars. See
     # ../prereg/PREREG_undertow_complement.md, which also says why the study's
     # PRIMARY arm is a slice of the baseline rather than this flag: with the
     # gate inverted the priority shapes never enter the pool, so famPriority's

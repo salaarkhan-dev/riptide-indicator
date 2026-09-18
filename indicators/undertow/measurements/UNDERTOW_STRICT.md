@@ -55,7 +55,20 @@ examined. The chance that at least one of three independent cells crosses
 −0.36 — squarely nothing. A single cell at −2.46 out of three, with no support
 from its neighbours, is what noise looks like when you look at three things.
 
-**What it IS: the best-supported candidate this project has produced for its
+> ## IT GOT ITS PRE-REGISTRATION, AND IT DID NOT REPLICATE
+>
+> [`UNDERTOW_COMPLEMENT.md`](UNDERTOW_COMPLEMENT.md), on `SYMBOLS_FRESH11`,
+> with Min60 named as the primary before the run. **The sign held and the size
+> halved: +0.258 became +0.117 ± 0.114, z 1.03.** That is the textbook shape of
+> a cell selected as the largest of three, and the ~14% below is the estimate
+> that stood up.
+>
+> The close is not "no effect" but something more useful: **an effect this size
+> at this timeframe is below the resolution of the venue.** Detecting +0.117 at
+> |z| ≥ 2 needs about four times the trades — roughly 110 symbols carrying 500
+> days of 1h — and 75 unused contracts remain. No further study can settle it.
+
+**What it WAS: the best-supported candidate this project had produced for its
 own pre-registration.** Every other lever came from a diagram or an opinion.
 This one came from a measurement on a universe that had never been read, in a
 slice that was pre-registered as descriptive before the number existed. That

@@ -1,5 +1,15 @@
 # PRE-REGISTRATION — the complement, and whether the 1h cell replicates
 
+> **RUN, AND THE RESULT IS
+> [`UNDERTOW_COMPLEMENT.md`](../measurements/UNDERTOW_COMPLEMENT.md).** NULL on
+> the pre-registered primary: I1 − I2 = +0.117 ± 0.114 on Min60, z 1.03,
+> against the +0.258 ± 0.105 that FRESH7 found. Bars 3, 4 and 5 fail; bars 1,
+> 2 and 6 pass. All five impossibilities held. `famInvert` stays port-only.
+>
+> The bar that mattered was the compound one — "+0.10 R **at |z| ≥ 2**". The
+> effect cleared the size half and missed the significance half, which is
+> precisely why both halves were written down before the number existed.
+
 Committed before the first number. Run by
 `indicators/undertow/studies/undertow_complement.py`.
 
