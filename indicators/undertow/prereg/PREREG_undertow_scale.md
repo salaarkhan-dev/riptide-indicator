@@ -1,7 +1,12 @@
 # PRE-REGISTRATION — the swing scale, 50/5 against 6/2
 
-Committed before the first number. Run by
-`indicators/undertow/studies/undertow_scale.py`.
+Committed before the first number — in `17ce67f`, whose message is about a
+Pine drawing fix, because a `git add -A` swept this file in with it. The
+discipline that matters holds and git can prove it: this prereg was pushed
+before the study had been run once. The bookkeeping did not, and saying so
+here is cheaper than a commit message that quietly overstates itself.
+
+Run by `indicators/undertow/studies/undertow_scale.py`.
 
 ## The question, and why it is owed
 
