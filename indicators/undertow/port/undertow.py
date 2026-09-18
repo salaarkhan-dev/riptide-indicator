@@ -126,6 +126,23 @@ SW_ATR = "atr"
 # its low), and the limit sells the retrace back to its open.
 PIN_PULL = "pullback extreme"
 PIN_TREND = "trend extreme"
+# THE THIRD ANCHOR, and it is the one the strategy's author drew. PIN_TREND
+# anchors on the running extreme since the MAJOR CHoCH -- one point per trend.
+# At the 6/2 scale that updated every few bars and looked right; at 50/5 it is
+# a single stale point and the priority-shape pin sits a MEDIAN OF 47 BARS
+# past it, so `locTol 0` keeps 3.9% of them and the option is unusable.
+#
+# The author's diagram shows one anchor PER MINOR LEG -- four circles in one
+# trend, each at a local turn. That is this: the running extreme since the last
+# INTERNAL structure break. Median distance 8 bars, and `locTol 2` keeps 26.7%
+# against PIN_TREND's 9.2%.
+#
+# IT IS ALSO THE ONLY ONE OF THE THREE THAT IS BOTH PER-LEG AND LAG-FREE.
+# Anchoring on the confirmed internal SWING would also be per-leg, but a pivot
+# of length N is confirmed N bars late, so nothing can ever sit within N bars
+# of it -- measured, 0% at any tolerance below 5. SPEC 2.3 avoided swings for
+# exactly this reason and the same reason applies here.
+PIN_LEG = "leg extreme"
 # `slopeUnit` — whether the Slope source measures its window and its threshold
 # in bars (so it means a different thing on every chart) or in time.
 SL_BARS = "bars"
@@ -1261,6 +1278,9 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
     pbExt = None
     pbExtX = None
     pbStartX = None
+    # The per-leg running extreme, for PIN_LEG. See the constant's note.
+    legMax = legMin = None
+    legMaxX = legMinX = 0
 
     for i, c in enumerate(cs):
         biasDir = dirs[i]
@@ -1492,6 +1512,16 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
 
         # ── a new pin, section 6 tests ──────────────────────────────────────
         rng = c.h - c.l
+        # THE PER-LEG RUNNING EXTREME, reset whenever the INTERNAL direction
+        # turns. Read off `sOs`, which both engines supply, so this is one
+        # expression rather than a branch per bias source.
+        if legMax is None or (i > 0 and st["sOs"][i] != st["sOs"][i - 1]):
+            legMax, legMin, legMaxX, legMinX = c.h, c.l, i, i
+        else:
+            if c.h > legMax:
+                legMax, legMaxX = c.h, i
+            if c.l < legMin:
+                legMin, legMinX = c.l, i
         upW = (c.h - max(c.o, c.c)) / rng if rng > 0 else 0.0
         dnW = (min(c.o, c.c) - c.l) / rng if rng > 0 else 0.0
         isGreen = c.c >= c.o
@@ -1514,14 +1544,17 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         # pullback STARTED, not from the extreme, so extending the pullback
         # does not reset the clock -- which is the point: a pullback that has
         # run ten bars and just made a new high is still ten bars old.
-        # THE ANCHOR. Under PIN_TREND the counter-trend candle sits at the
-        # running extreme in the TREND's own direction -- the leg low in a
-        # downtrend -- which the structure engine already tracks as msMinX.
+        # THE ANCHOR, one of three. PIN_TREND uses the running extreme since
+        # the major CHoCH; PIN_LEG uses the running extreme since the last
+        # INTERNAL break, which is the per-leg object the author's diagram
+        # shows. See the constants at the top for why the third exists.
         anchorX = pbExtX
         if p.pinAt == PIN_TREND:
             anchorX = (st["msMinX"][i] if biasDir < 0 else st["msMaxX"][i])
             if anchorX is None:
                 anchorX = i
+        elif p.pinAt == PIN_LEG:
+            anchorX = legMinX if biasDir < 0 else legMaxX
         pbAge = i - pbStartX if pbStartX is not None else 0
         pbDepth = 0.0
         if p.pbMinDepth > 0.0:

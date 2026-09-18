@@ -123,9 +123,10 @@ maxLive = input.int(4, "Live setups at once", minval = 1, maxval = 8, group = gS
 // reworded option makes every branch behind it fall through in silence.
 string sAnchPull = "pullback extreme"
 string sAnchTrend = "trend extreme"
+string sAnchLeg = "leg extreme"
 pinAt = input.string("pullback extreme", "Anchor the pin at", group = gSet,
-  options = ["pullback extreme", "trend extreme"],
-  tooltip = "WHERE THE COUNTER-TREND CANDLE IS LOOKED FOR, and the two options are different readings of the same rule — see ../SPEC.md 2.3d.\n\n'pullback extreme' is what v1 and v2 do and what every measurement page was produced under: the pin is the highest high of the rally away from the leg low.\n\n'trend extreme' is the strategy as its author states it: the pin is the BOUNCE ATTEMPT at the leg low itself. The stated priority shape in a downtrend is the hammer, which has a long LOWER wick, and a long lower wick at the TOP of a rally is not a rejection of anything.\n\nIT IS NOT THE DEFAULT AND IT IS NOT PROMOTED. ../measurements/UNDERTOW_V3.md measured it on 45 unseen symbols: +0.023 / +0.023 / +0.054 R per trade against v1, positive on 3 of 3 and inside one standard error on 3 of 3. Not actively harmful, not an edge — which is exactly why it is selectable rather than on.")
+  options = ["pullback extreme", "trend extreme", "leg extreme"],
+  tooltip = "WHERE THE COUNTER-TREND CANDLE IS LOOKED FOR, and the two options are different readings of the same rule — see ../SPEC.md 2.3d.\n\n'pullback extreme' is what v1 and v2 do and what every measurement page was produced under: the pin is the highest high of the rally away from the leg low.\n\n'trend extreme' is the strategy as its author states it: the pin is the BOUNCE ATTEMPT at the leg low itself. The stated priority shape in a downtrend is the hammer, which has a long LOWER wick, and a long lower wick at the TOP of a rally is not a rejection of anything.\n\n'leg extreme' is the same idea attached to the RIGHT OBJECT. 'trend extreme' anchors on the running extreme since the major CHoCH — ONE point per trend — and at a 50-bar swing the pin sits a median of 47 bars past it, so tolerance 0 keeps 3.9% of them. 'leg extreme' resets on every INTERNAL turn, so there is one anchor per minor leg, which is what the strategy's diagram shows: median 8 bars.\n\nIT IS NOT THE DEFAULT AND IT IS NOT PROMOTED. ../measurements/UNDERTOW_V3.md measured it on 45 unseen symbols: +0.023 / +0.023 / +0.054 R per trade against v1, positive on 3 of 3 and inside one standard error on 3 of 3. Not actively harmful, not an edge — which is exactly why it is selectable rather than on.")
 locTol = input.int(0, "Anchor tolerance", minval = 0, maxval = 10, group = gSet,
   tooltip = "Bars a pin may sit PAST the anchor above and still count. 0 means it must BE the anchor bar — so if that bar is a doji or the wrong colour, the whole pullback is discarded and a textbook pin on the next bar, one tick lower, cannot qualify. That is defect 3 in ../SPEC.md 2.3b.\n\nIT MATTERS MOST ON THE OTHER ANCHOR. At 'trend extreme' with tolerance 0 the pinned bar IS the bar that made the leg low, so 75.6% of pins are the priority shape — a green bar whose own low is the low of the leg is a hammer by construction. One bar of tolerance takes that to 53.2% and two takes it to 51.5%, which is what an unfiltered mix looks like. ../measurements/UNDERTOW_V3.md has the table; the share is a description of the anchor, not a result.\n\nMEASURED at 0 and at 2 (../measurements/UNDERTOW_PULLBACK.md: the 2nd and 3rd candle score within ±0.025 R of the 1st) and at 50, which is the ablation's destroy-it arm rather than a tolerance.")
 // THE TWO PULLBACK MINIMUMS CAME OFF THE CHART. `pbMinAge` and `pbMinDepth`
@@ -547,6 +548,27 @@ if inDn
 
 bool msMinorChoch = msSOs != msSOs[1]
 
+// THE PER-LEG RUNNING EXTREME, for the "leg extreme" anchor. Reset on every
+// turn of the INTERNAL direction, so there is one of these per minor leg
+// rather than one per trend — and unlike a confirmed swing it is known at the
+// bar's own close, with no pivot-confirmation lag.
+var float legMax = na
+var float legMin = na
+var int legMaxX = 0
+var int legMinX = 0
+if na(legMax) or msSOs != msSOs[1]
+    legMax := high
+    legMin := low
+    legMaxX := bar_index
+    legMinX := bar_index
+else
+    if high > legMax
+        legMax := high
+        legMaxX := bar_index
+    if low < legMin
+        legMin := low
+        legMinX := bar_index
+
 
 // ═══════════════ 4b. THE BIAS SOURCE — STRUCTURE, AND ONLY STRUCTURE ═════════
 // There used to be five alternatives behind a dropdown here: EMA cross,
@@ -704,7 +726,8 @@ bool colourOk = biasDir < 0 ? isGreen : not isGreen
 // THE ANCHOR. Under "trend extreme" the pin is looked for at the running
 // extreme in the TREND's own direction — the leg low in a downtrend — which
 // the bias block already tracks as bMinX / bMaxX.
-int anchorRaw = pinAt == sAnchTrend ? (biasDir < 0 ? bMinX : bMaxX) : pbExtX
+int anchorRaw = pinAt == sAnchTrend ? (biasDir < 0 ? bMinX : bMaxX)
+  : pinAt == sAnchLeg ? (biasDir < 0 ? legMinX : legMaxX) : pbExtX
 int anchorX = na(anchorRaw) ? bar_index : anchorRaw
 bool locOk = bar_index - anchorX <= locTol
 
