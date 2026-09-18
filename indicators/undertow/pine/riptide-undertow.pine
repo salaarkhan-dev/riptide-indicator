@@ -182,7 +182,7 @@ showOB = input.bool(false, "Order blocks", group = gShow, inline = "z1",
 colOBBull = input.color(color.new(#3179f5, 80), "", group = gShow, inline = "z1")
 colOBBear = input.color(color.new(#f77c80, 80), "", group = gShow, inline = "z1")
 showFVG = input.bool(false, "Fair value gaps", group = gShow,
-  tooltip = "Three-bar imbalances, drawn as two half-boxes split at the midpoint and removed when price fills them — the same shape LuxAlgo's Smart Money Concepts draws.\n\nTHE COLOURS COME FROM THE ORDER BLOCK COLOURS ABOVE, lightened. A gap and a block in the same direction are the same idea at different scales, so giving them independent colour pickers was two inputs buying nothing.\n\nDrawing only.")
+  tooltip = "Three-bar imbalances, drawn as two half-boxes split at the midpoint and removed when price fills them — the same shape LuxAlgo's Smart Money Concepts draws.\n\nTHE MIDPOINT IS DRAWN, as the border where the two halves meet. It is the level worth seeing: a gap filled halfway is the one deciding whether it holds.\n\nCOLOURS ARE LuxAlgo's OWN green and red, fixed rather than offered as inputs — a gap and an order block are different objects and telling them apart at a glance is worth more than a matching palette.\n\nDrawing only.")
 fvgExtend = input.int(5, "… extend zones by", minval = 0, maxval = 50, group = gShow,
   tooltip = "How many bars past the gap the box is drawn. Cosmetic.")
 zoneAuto = input.bool(false, "… auto threshold", group = gShow,
@@ -1361,14 +1361,27 @@ if barOk and showOB
 float fvgDelta = (close[1] - open[1]) / (open[1] * 100)
 float fvgThr = zoneAuto ? ta.cum(math.abs(fvgDelta)) / bar_index * 2 : 0.0
 
+// LuxAlgo's OWN FVG COLOURS, verbatim, not a tint of the order block's. A gap
+// and a block are different objects and telling them apart at a glance is
+// worth more than a tidy palette — which is presumably why LuxAlgo ships them
+// as their own green and red rather than deriving them from anything.
+color FVG_BULL = #00ff68
+color FVG_BEAR = #ff0008
+
 fvgPush(float top, float btm, bool bull) =>
-    color c = color.new(bull ? colOBBull : colOBBear, 70)
+    color base = bull ? FVG_BULL : FVG_BEAR
+    color fill = color.new(base, 70)
+    // THE BORDER IS WHAT DRAWS THE MID LINE. The gap is two half-boxes meeting
+    // at its midpoint, so bordering both puts a line across the middle for
+    // free — and the midpoint is the level worth seeing, because a gap that
+    // has been filled halfway is the one deciding whether it holds.
+    color edge = color.new(base, 40)
     float mid = math.avg(top, btm)
     int r = bar_index + fvgExtend
     box b1 = box.new(bar_index, top, r, mid, xloc = xloc.bar_index,
-      border_color = color(na), bgcolor = c)
+      border_color = edge, bgcolor = fill)
     box b2 = box.new(bar_index, mid, r, btm, xloc = xloc.bar_index,
-      border_color = color(na), bgcolor = c)
+      border_color = edge, bgcolor = fill)
     Zone z = Zone.new(b1, b2, top, btm, bull)
     fvgZones.unshift(z)
     while fvgZones.size() > FVG_KEEP
