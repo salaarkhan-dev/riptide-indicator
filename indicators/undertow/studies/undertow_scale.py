@@ -33,7 +33,7 @@ from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
     FEE, LOADED, TFS, clustered, load)
 from indicators.undertow.studies.undertow_v2 import (            # noqa: E402
     control_full)
-from research.symbols_fresh import (SYMBOLS_FRESH8,              # noqa: E402
+from research.symbols_fresh import (SYMBOLS_FRESH9,              # noqa: E402
                                     assert_disjoint)
 from riptide.config import BAR_SECONDS                           # noqa: E402
 
@@ -66,8 +66,8 @@ def main():
     argv = [a for a in sys.argv[1:] if a in TFS]
     tfs = argv or list(TFS)
     print("UNDERTOW — THE SWING SCALE, 50/5 against 6/2")
-    print("prereg: indicators/undertow/prereg/PREREG_undertow_scale.md")
-    print("population: SYMBOLS_FRESH8, never looked at")
+    print("prereg: indicators/undertow/prereg/PREREG_undertow_scale2.md")
+    print("population: SYMBOLS_FRESH9, never looked at")
     print("The engine and the detector were already measured; the SCALE was")
     print("not, and it is the largest of the three changes. The control is a")
     print("random ENTRY: the two scales share 17% of their trades, so the")
@@ -75,11 +75,11 @@ def main():
 
     rows, void = [], False
     for tf in tfs:
-        LOADED[tf] = load(tf, SYMBOLS_FRESH8)
-        syms = [s for s in SYMBOLS_FRESH8
+        LOADED[tf] = load(tf, SYMBOLS_FRESH9)
+        syms = [s for s in SYMBOLS_FRESH9
                 if len(LOADED[tf].get(s) or []) >= MIN_BARS]
         if len(syms) < MIN_SYMS:
-            print(f"\n{tf}: only {len(syms)} FRESH8 symbols carry {MIN_BARS} "
+            print(f"\n{tf}: only {len(syms)} FRESH9 symbols carry {MIN_BARS} "
                   f"bars — the prereg says this timeframe is NOT REPORTED.")
             continue
         days = sum(len(LOADED[tf][s]) for s in syms) * BAR_SECONDS[tf] / 86400
@@ -91,13 +91,18 @@ def main():
         out = {}
         for aid, name, over in ARMS:
             p = dataclasses.replace(BASE, **over)
-            agg, keys, choch = U.Result(), set(), 0
+            agg, keys, choch, after = U.Result(), set(), 0, 0
             for sym in syms:
                 r = U.run(LOADED[tf][sym], p, sym)
                 agg.add(r)
                 keys |= {(sym, t.bar, t.short) for t in r.real}
                 st, _ = U.structure(LOADED[tf][sym], p)
-                choch += sum(1 for v in st["choch"] if v)
+                cb = [i for i, v in enumerate(st["choch"]) if v]
+                choch += len(cb)
+                # AFTER THE FIRST BREAK. The first CHoCH of a series is the one
+                # event the two engines are now known to disagree on, and
+                # excluding it is what turns a broken check into a real one.
+                after += len(cb) - (1 if cb else 0)
             m, se, n = clustered(agg.real)
             wr = 100.0 * sum(1 for t in agg.real if t.won) / max(1, n)
             print(f"  {aid:3} {name:40} {m:+8.3f} {se:6.3f} {n:6} "
@@ -106,23 +111,35 @@ def main():
                   + ("   ·descriptive" if aid in DESCRIPTIVE else "")
                   + ("   CAP!" if agg.nCap else ""))
             out[aid] = dict(m=m, se=se, n=n, res=agg, wr=wr, keys=keys,
-                            choch=choch)
+                            choch=choch, after=after)
 
-        # THE IMPOSSIBILITIES, before anything is read as a result.
+        # THE IMPOSSIBILITIES, REWRITTEN, before anything is read as a
+        # result. The first attempt registered "the two engines' CHoCH counts
+        # must match" and that fired on a 0.1% difference whose whole cause is
+        # the SERIES' FIRST BREAK -- LuxAlgo's bias starts at neither,
+        # riptide's starts at bearish. It was meant to say "the length reached
+        # the detector" and said something far stronger instead. Each one below
+        # asserts the thing it is actually checking for.
         a, b = out[PRIMARY], out["S0"]
-        live = [("S0 and S2 agree on CHoCH", out["S0"]["choch"]
-                 == out["S2"]["choch"]),
+        live = [("the length reaches the detector",
+                 a["choch"] * 2 < b["choch"]),
                 ("S1 != S0", a["n"] != b["n"] or abs(a["m"] - b["m"]) > 1e-12),
+                ("the engines agree after the first break",
+                 out["S0"]["after"] == out["S2"]["after"]),
                 ("nCap is 0 everywhere",
                  all(out[x]["res"].nCap == 0 for x in out))]
         for label, held in live:
-            print(f"  IMPOSSIBILITY  {label:26} "
+            print(f"  IMPOSSIBILITY  {label:38} "
                   + ("holds" if held else "VIOLATED — RUN IS VOID"))
-        if out["S0"]["choch"] != out["S2"]["choch"]:
-            print(f"      {out['S0']['choch']} CHoCH from SMC at 6/2 against "
-                  f"{out['S2']['choch']} from riptide's engine at 6/2. "
-                  f"smc.py and test_undertow_port.py both assert these are "
-                  f"the same list; on fresh data they are not.")
+        if a["choch"] * 2 >= b["choch"]:
+            print(f"      50/5 fired {a['choch']} CHoCH against 6/2's "
+                  f"{b['choch']}. A 50-bar pivot cannot flip as often as a "
+                  f"6-bar one; smcSwingLen is not being read.")
+        if out["S0"]["after"] != out["S2"]["after"]:
+            print(f"      {out['S0']['after']} CHoCH from SMC at 6/2 after the "
+                  f"first break against {out['S2']['after']} from riptide's. "
+                  f"smc.py's corrected claim is that these agree EXACTLY once "
+                  f"the first break is excluded, and here they do not.")
         void = void or not all(h for _, h in live)
 
         cm, cse, cn = clustered(control_full(a["res"].real, tf))

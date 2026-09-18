@@ -199,6 +199,33 @@ SYMBOLS_FRESH8 = (
 ).split()
 
 
+# THE NINTH FRESH SET, and it exists because the eighth was SPENT ON A VOID
+# RUN. PREREG_undertow_scale.md registered an impossibility that fired, so its
+# numbers are unpublishable -- but they were computed and read, so FRESH8
+# cannot serve the same question twice. See
+# ../indicators/undertow/measurements/UNDERTOW_SCALE.md.
+#
+# A universe can be spent by a study that produces nothing. That is the cost of
+# a badly specified check and it is worth one comment here so the next person
+# sees the price before writing one.
+#
+#   FRESH7   min 109   median 158   max 1095
+#   FRESH8   min 118   median 138   max 1227
+#   FRESH9   min 109   median 115   max  164
+#
+# 165 unused contracts remain.
+SYMBOLS_FRESH9 = (
+    "AIOZ_USDT JELLYJELLY_USDT RED_USDT FOGO_USDT YB_USDT NOM_USDT "
+    "STBL_USDT BMT_USDT CELR_USDT ILV_USDT RARE_USDT PUFFER_USDT "
+    "WAVES_USDT ME_USDT RLC_USDT ASTEROID_USDT CLANKER_USDT "
+    "GMT_USDT MEW_USDT MANTA_USDT M_USDT PRL_USDT BP_USDT BIO_USDT "
+    "1INCH_USDT ETHW_USDT TOSHI_USDT AIO_USDT XCN_USDT BIRB_USDT "
+    "STEEM_USDT PIXEL_USDT SPELL_USDT CHILLGUY_USDT DEEP_USDT "
+    "THE_USDT BANANA_USDT FLR_USDT TAKE_USDT WOO_USDT ICNT_USDT "
+    "HUMA_USDT QTUM_USDT ACT_USDT GOAT_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
@@ -209,7 +236,8 @@ def assert_disjoint():
             "SYMBOLS_FRESH5": set(SYMBOLS_FRESH5),
             "SYMBOLS_FRESH6": set(SYMBOLS_FRESH6),
             "SYMBOLS_FRESH7": set(SYMBOLS_FRESH7),
-            "SYMBOLS_FRESH8": set(SYMBOLS_FRESH8)}
+            "SYMBOLS_FRESH8": set(SYMBOLS_FRESH8),
+            "SYMBOLS_FRESH9": set(SYMBOLS_FRESH9)}
     names = sorted(sets)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
