@@ -222,8 +222,8 @@ overlapMode = input.string("collapse", "Overlapping setups", group = gShow,
 showZones = input.bool(true, "Risk / reward zones", group = gShow)
 showUnfilled = input.bool(true, "Draw setups that never filled", group = gShow,
   tooltip = "Armed setups that were stopped or expired before the limit filled, drawn muted with an ×. Off keeps the chart clean; ON is how you check past detection without waiting for live ones.")
-showInternal = input.bool(false, "… internal breaks too", group = gShow,
-  tooltip = "DRAW THE MINOR TIER'S CHoCH AND BOS AS WELL, dashed and small.\n\nOFF BY DEFAULT, AND THIS IS THE SETTING THAT MAKES THE CHART LOOK BUSY. LuxAlgo's 'Market Structure with Inducements & Sweeps' draws ONE tier and that is the whole of why it looks clean; this chart runs two, and at an internal length of 5 the minor one fires many times between two swing breaks. Turning it on is thirty labels a screen instead of three.\n\nIt is worth having when you are reading where a pullback is turning, which is what the minor tier is for — and it is noise the rest of the time.")
+showInternal = input.bool(true, "… internal breaks too", group = gShow,
+  tooltip = "DRAW THE MINOR TIER'S BREAKS AS WELL, dashed, small, and PREFIXED — iCHoCH and iBOS. Two tiers both saying 'BOS' is what made this chart hard to read next to a one-tier one; dashed and small said which was which and evidently not loudly enough.\n\nTHERE IS NO iIDM AND THERE CANNOT BE. The internal tier is LuxAlgo's Smart Money Concepts, which has no inducement anywhere in it. The IDM marks on this chart all belong to the EXTERNAL engine, which is the only one with the rule.\n\nAt an internal length of 5 the minor tier fires many times between two swing breaks, so this is thirty labels a screen against three. It is worth having when you are reading where a pullback is turning, which is what the minor tier is for.")
 showStruct = input.bool(true, "Market structure", group = gShow,
   tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye. One toggle for all three.\n\nAND THE TWO LIVE LEVELS AT THE RIGHT EDGE, which are the only things on this chart that say what the NEXT bar could change. 'CHoCH' is the swing on the other side — a close beyond it turns the bias and kills every live setup. 'BOS' is the running extreme in the trend's own direction — a close beyond it is the trend proving itself again and clears an Ending.\n\nTHE BOS LEVEL MOVES. It is the RUNNING extreme, so it rises with every new high in an uptrend. It is not a level to leave an alert on; it is how far price has got so far. The CHoCH level holds still until the pivot behind it changes.\n\nTHERE IS NO IDM LINE and that is not an omission. LuxAlgo's 'Market Structure with Inducements & Sweeps' draws an unswept inducement beside these two, which is the best thing about it — but that is a different engine. The Smart Money Concepts engine this chart runs has no inducement anywhere in it, so a BOS here is a close beyond the last pivot with no liquidity precondition. Drawing the line would mean inventing the concept rather than reporting it.")
 showBias = input.bool(true, "Bias badge", group = gShow,
@@ -1599,6 +1599,29 @@ msBreak(int fromX, float lvl, string tag, bool up, bool internal) =>
     while msLabBuf.size() > 120
         label.delete(msLabBuf.shift())
 
+// ── THE INDUCEMENT, DRAWN WHERE IT IS TAKEN ─────────────────────────────────
+// `v2IdmUp` and `v2IdmDn` have been firing since the engine came back and
+// NOTHING DREW THEM: the only IDM on the chart was the unswept one projected
+// at the right edge, so the history showed none at all. LuxAlgo's script draws
+// one at every sweep and that is most of what its chart says.
+//
+// Dotted, small, and from the minor pivot to the bar that took it — the span
+// IS the claim: this level sat there, and price came back for it.
+if barOk and showStruct and useV2
+    if v2IdmUp
+        msLineBuf.push(line.new(v2SBtmX, v2SBtmY, bar_index, v2SBtmY,
+          xloc = xloc.bar_index, color = colLine, style = line.style_dotted))
+        msLabBuf.push(label.new(math.round(0.5 * (v2SBtmX + bar_index)),
+          v2SBtmY, "IDM", xloc = xloc.bar_index, color = color(na),
+          textcolor = colLine, style = label.style_label_up, size = size.tiny))
+    if v2IdmDn
+        msLineBuf.push(line.new(v2STopX, v2STopY, bar_index, v2STopY,
+          xloc = xloc.bar_index, color = colLine, style = line.style_dotted))
+        msLabBuf.push(label.new(math.round(0.5 * (v2STopX + bar_index)),
+          v2STopY, "IDM", xloc = xloc.bar_index, color = color(na),
+          textcolor = colLine, style = label.style_label_down,
+          size = size.tiny))
+
 // THE LEVEL OF THE LAST BREAK ACTUALLY DRAWN, per kind. The projections below
 // are hidden when they would land on one of these: a line already on the chart
 // at that exact price, with its own label, is not made clearer by a second
@@ -1626,10 +1649,14 @@ if barOk and showStruct
     // AND THE INTERNAL TIER, which is most of what a LuxAlgo chart shows. At
     // length 5 it fires many times between two swing breaks; drawing only the
     // swing tier left two labels on a screen that should carry thirty.
+    // THE INTERNAL TIER IS PREFIXED. Two tiers on one chart both saying
+    // "BOS" is the thing that made the old screenshot unreadable: you could
+    // not tell at a glance which character a label belonged to. Dashed and
+    // small already said it and evidently not loudly enough.
     if inUp and showInternal
-        msBreak(iTopX, iTopY, inChoch ? "CHoCH" : "BOS", true, true)
+        msBreak(iTopX, iTopY, inChoch ? "iCHoCH" : "iBOS", true, true)
     if inDn and showInternal
-        msBreak(iBtmX, iBtmY, inChoch ? "CHoCH" : "BOS", false, true)
+        msBreak(iBtmX, iBtmY, inChoch ? "iCHoCH" : "iBOS", false, true)
 
 // ── WHAT HAS TO HAPPEN NEXT ─────────────────────────────────────────────────
 // Two levels projected to the right edge, live, on the last bar only.

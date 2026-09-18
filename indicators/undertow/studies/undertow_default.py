@@ -139,11 +139,12 @@ def main():
         for aid, name, over in ARMS:
             p = dataclasses.replace(BASE, **over)
             agg = U.Result()
-            keys = set()
+            keys = {}
             for sym in syms:
                 r = U.run(LOADED[tf][sym], p, sym)
                 agg.add(r)
-                keys |= {(sym, t.bar, t.short) for t in r.real}
+                for t in r.real:
+                    keys[(sym, t.bar, t.short)] = t.stop
             m, se, n = clustered(agg.real)
             wr = 100.0 * sum(1 for t in agg.real if t.won) / max(1, n)
             pc = 100.0 * (1 - len(off_shape(agg.real)) / max(1, n))
@@ -165,7 +166,25 @@ def main():
                 ("the shape gate is live", not offs),
                 ("the inducement is live",
                  len(idm_off.real) != len(a["res"].real)),
-                ("the stop is the minor swing", a["n"] != out["L3"]["n"]),
+                # THE REGISTERED CONDITION IS "D1 != L3" AND THIS IS WHAT
+                # THAT MEANS. The first version of this line tested TRADE
+                # COUNT, which is a proxy and a bad one: a stop source moves
+                # the stop LEVEL, and only changes how many setups arm in the
+                # corner cases where there is no swing to hang one on or the
+                # stop lands the wrong side of the entry. On Min30 both arms
+                # came to 588 trades and scored -0.037 against -0.105 -- the
+                # setting plainly read, the proxy plainly fired, and the run
+                # declared VOID on a check that was not asking the registered
+                # question. Third proxy-check incident in this project, and
+                # the prereg for this very study contains a line warning
+                # against it.
+                #
+                # The stops themselves, on the trades the two arms share, is
+                # the unambiguous reading and cannot fire for the wrong reason.
+                ("the stop is the minor swing",
+                 any(out["L3"]["keys"].get(k) != v
+                     for k, v in a["keys"].items()
+                     if k in out["L3"]["keys"])),
                 ("nCap is 0 everywhere",
                  all(out[x]["res"].nCap == 0 for x in out))]
         for label, held in live:

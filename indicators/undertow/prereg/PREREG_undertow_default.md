@@ -1,5 +1,22 @@
 # PRE-REGISTRATION — the shipped configuration, all of it
 
+> **RUN, AND THE RESULT IS
+> [`UNDERTOW_DEFAULT.md`](../measurements/UNDERTOW_DEFAULT.md).** NULL: D1 − D0
+> = +0.032 / −0.015 / −0.066, all inside one standard error, and D1 loses to
+> its control on all three timeframes. Bars 3, 4 and 6 fail.
+>
+> **IT PRINTED VOID FIRST AND THE CHECK WAS WRONG.** The registered condition
+> here is "D1 ≠ L3"; the code tested TRADE COUNT, and on Min30 both arms armed
+> 588 setups while scoring −0.037 against −0.105 — a stop source moves the
+> stop, not the count. Corrected to compare the stop LEVELS on shared trades,
+> re-run, and the arms came back bit-identical. Third proxy-check incident in
+> this project, and the section below warning about it is the one I wrote.
+>
+> **`armWins` contributes exactly zero** on all three timeframes, because
+> `famStrict` leaves at most one unarmed candidate per direction for it to
+> drop. Two of the four changes were turned on the same day and one cancels
+> the other — which no single-component study could have found.
+
 Committed before the first number. Run by
 `indicators/undertow/studies/undertow_default.py`.
 
