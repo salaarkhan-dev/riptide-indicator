@@ -305,6 +305,36 @@ SYMBOLS_FRESH12 = (
 ).split()
 
 
+# 2026-09-18, RE-COUNTED AGAINST THE LIVE EXCHANGE, and the note above is
+# WRONG in the direction that matters. It says 29 contracts remain. Today's
+# contract/detail plus contract/ticker, filtered exactly as
+# riptide/exchange.py::universe does it -- USDT quote, state 0, apiAllowed,
+# no "tradfi" conceptPlate, 80k 24h turnover -- gives 585 eligible, 563
+# spoken for, and **22 UNUSED**. One of those is USDC_USDT, a stablecoin this
+# file already rejected once at the top of an unused list, so **21 are
+# usable** and every one of them sits at the 80-85k floor.
+#
+# The first count was taken before this run's own filter was applied to the
+# whole list; 447 contracts look unused until the tokenised equities, metals,
+# indices and oil are removed, and those are most of what is left at the top
+# of the exchange by turnover.
+#
+# WHAT THAT CHANGES. The note above offers "29 contracts, which will not field
+# 20 symbols on Min60". The real position is worse and should be stated
+# plainly: at the coverage the last three sets actually achieved -- 97% on
+# Min15, 89% on Min30, 67% on Min60 -- 21 contracts field about 20 / 19 / 14.
+# A thirteenth set cannot report Min30 either, and the symbols it would report
+# Min15 on are the thinnest tail on the venue, which is not the population any
+# earlier page measured.
+#
+# SO THE DISJOINT HOLDOUT IS NOT NEARLY OVER, IT IS OVER. The two honest
+# designs left are the two already named above: walk-forward on the spent
+# sets, and the prospective forward record the watch was built for. A study
+# proposed after this line should say which of those it is before it says
+# anything else.
+REMAINING_ELIGIBLE = 21
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
