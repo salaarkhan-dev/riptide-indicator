@@ -234,31 +234,20 @@ def check(path: str) -> list[str]:
     return found
 
 
-# FINDINGS THAT ARE REAL, IN A FILE THAT MAY NOT BE TOUCHED.
+# NOTHING IS WAIVED, and the list is kept because it earned its place once.
 #
-# `indicators/riptide/pine/riptide-indicator.pine` is the PRODUCTION indicator
-# and is frozen by tests/test_control_frozen.py; changing it needs the owner's
-# say-so, and a static-check finding is not that. These two are recorded here
-# rather than silenced, so the finding stays visible and the decision stays
-# open. They surfaced the day preflight started making every Pine file a
-# target instead of only the first, so they are OLD, not new.
+# When preflight started making every Pine file a target instead of only the
+# first, two old findings surfaced in the PRODUCTION indicator -- :721 and
+# :744, both an array read guarded only by `and`/`or`, which Pine does not
+# guarantee to short-circuit. They were waived here, with the analysis written
+# out rather than silenced, because that file is frozen and a static-check
+# finding is not authorisation to edit it. The owner then gave it, both are
+# fixed, and the entries are gone.
 #
-#   :721  `d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm`
-#   :744  `zTm.size() > 0 and (dTm - zTm.get(0)) > poiMaxAgeDays * 86400000`
-#
-# BOTH ARE THE SAME HAZARD. Pine does not guarantee short-circuit evaluation
-# of `and`/`or`, so the guard may not stop the array read, and an empty array
-# read raises at runtime. 721 is the safer of the two: `size() == 0 or ...`
-# reads `size() - 1`, which is -1 on an empty array. 744 reads `get(0)`.
-#
-# Whether either has ever fired is unknown and that is the point -- it would
-# fire as a chart error, not as a wrong number, so nobody would see it in a
-# backtest. The fix is a nested `if`, it is three lines, and it needs
-# authorisation on a frozen file.
-WAIVED = [
-    ("indicators/riptide/pine/riptide-indicator.pine", ":721:"),
-    ("indicators/riptide/pine/riptide-indicator.pine", ":744:"),
-]
+# THE SHAPE OF THAT IS THE POINT. A waiver records a decision somebody has to
+# make; it is not a way to make a check quiet. An entry added here says who has
+# to decide and what happens if they decide nothing.
+WAIVED: list[tuple[str, str]] = []
 
 
 def waived(finding: str) -> bool:

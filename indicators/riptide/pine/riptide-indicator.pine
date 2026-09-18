@@ -718,7 +718,16 @@ pushZone(int t, bool bull, float lo, float hi) =>
 // engine.daily_zones exactly: bar 2 is the newest, and a zone is dated by the
 // bar it COMPLETED on, never the bar it started from — a three-candle gap is
 // not knowable until the third candle closes.
-if poiOn and not na(dTm) and (d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm)
+// PINE DOES NOT GUARANTEE SHORT-CIRCUIT EVALUATION of `and` / `or`, so a guard
+// on the same line as the array read it protects may not protect it. On an
+// empty `d3t` the old one-liner could evaluate `d3t.get(-1)` and raise — a
+// CHART error, not a wrong number, which is why no backtest would ever show
+// it. Split so the read happens only inside a branch that has already proved
+// the array is non-empty. Same condition, same signals.
+bool d3Fresh = d3t.size() == 0
+if not d3Fresh
+    d3Fresh := d3t.get(d3t.size() - 1) != dTm
+if poiOn and not na(dTm) and d3Fresh
     d3o.push(dOp)
     d3h.push(dHi)
     d3l.push(dLo)
@@ -741,7 +750,13 @@ if poiOn and not na(dTm) and (d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm)
             pushZone(dTm, true, d3l.get(1), d3h.get(1))
         else if d3o.get(2) - d3c.get(2) > dAtr and d3c.get(1) > d3o.get(1)
             pushZone(dTm, false, d3l.get(1), d3h.get(1))
-    while zTm.size() > 0 and (dTm - zTm.get(0)) > poiMaxAgeDays * 86400000
+    // Same hazard as the `d3Fresh` split above: `zTm.get(0)` sat behind an
+    // `and` on an array that can be empty. The loop condition is now the
+    // emptiness test alone and the age test is a break inside it, so the read
+    // is unreachable on an empty array. Identical iteration order.
+    while zTm.size() > 0
+        if (dTm - zTm.get(0)) <= poiMaxAgeDays * 86400000
+            break
         zTm.shift()
         zBl.shift()
         zLo.shift()
