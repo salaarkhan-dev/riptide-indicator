@@ -222,6 +222,8 @@ overlapMode = input.string("collapse", "Overlapping setups", group = gShow,
 showZones = input.bool(true, "Risk / reward zones", group = gShow)
 showUnfilled = input.bool(true, "Draw setups that never filled", group = gShow,
   tooltip = "Armed setups that were stopped or expired before the limit filled, drawn muted with an ×. Off keeps the chart clean; ON is how you check past detection without waiting for live ones.")
+showInternal = input.bool(false, "… internal breaks too", group = gShow,
+  tooltip = "DRAW THE MINOR TIER'S CHoCH AND BOS AS WELL, dashed and small.\n\nOFF BY DEFAULT, AND THIS IS THE SETTING THAT MAKES THE CHART LOOK BUSY. LuxAlgo's 'Market Structure with Inducements & Sweeps' draws ONE tier and that is the whole of why it looks clean; this chart runs two, and at an internal length of 5 the minor one fires many times between two swing breaks. Turning it on is thirty labels a screen instead of three.\n\nIt is worth having when you are reading where a pullback is turning, which is what the minor tier is for — and it is noise the rest of the time.")
 showStruct = input.bool(true, "Market structure", group = gShow,
   tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye. One toggle for all three.\n\nAND THE TWO LIVE LEVELS AT THE RIGHT EDGE, which are the only things on this chart that say what the NEXT bar could change. 'CHoCH' is the swing on the other side — a close beyond it turns the bias and kills every live setup. 'BOS' is the running extreme in the trend's own direction — a close beyond it is the trend proving itself again and clears an Ending.\n\nTHE BOS LEVEL MOVES. It is the RUNNING extreme, so it rises with every new high in an uptrend. It is not a level to leave an alert on; it is how far price has got so far. The CHoCH level holds still until the pivot behind it changes.\n\nTHERE IS NO IDM LINE and that is not an omission. LuxAlgo's 'Market Structure with Inducements & Sweeps' draws an unswept inducement beside these two, which is the best thing about it — but that is a different engine. The Smart Money Concepts engine this chart runs has no inducement anywhere in it, so a BOS here is a close beyond the last pivot with no liquidity precondition. Drawing the line would mean inventing the concept rather than reporting it.")
 showBias = input.bool(true, "Bias badge", group = gShow,
@@ -1570,24 +1572,36 @@ msBreak(int fromX, float lvl, string tag, bool up, bool internal) =>
     while msLabBuf.size() > 120
         label.delete(msLabBuf.shift())
 
+// THE LEVEL OF THE LAST BREAK ACTUALLY DRAWN, per kind. The projections below
+// are hidden when they would land on one of these: a line already on the chart
+// at that exact price, with its own label, is not made clearer by a second
+// label fifteen bars to the right of it. That duplication is what put two and
+// three "BOS" tags on one horizontal line.
+var float drawnBosY = na
+var float drawnChochY = na
+
 if barOk and showStruct
     // SOLID for a CHoCH, DASHED for a BOS. The CHoCH is the event that sets
     // the direction and the BOS is the one that confirms it, so the heavier
     // line belongs to the heavier event.
     if brkUp
         msBreak(brkUpX, dTopY, "CHoCH", true, false)
+        drawnChochY := dTopY
     else if msBosUp
         msBreak(bosUpX, msMax[1], "BOS", true, false)
+        drawnBosY := msMax[1]
     if brkDn
         msBreak(brkDnX, dBtmY, "CHoCH", false, false)
+        drawnChochY := dBtmY
     else if msBosDn
         msBreak(bosDnX, msMin[1], "BOS", false, false)
+        drawnBosY := msMin[1]
     // AND THE INTERNAL TIER, which is most of what a LuxAlgo chart shows. At
     // length 5 it fires many times between two swing breaks; drawing only the
     // swing tier left two labels on a screen that should carry thirty.
-    if inUp
+    if inUp and showInternal
         msBreak(iTopX, iTopY, inChoch ? "CHoCH" : "BOS", true, true)
-    if inDn
+    if inDn and showInternal
         msBreak(iBtmX, iBtmY, inChoch ? "CHoCH" : "BOS", false, true)
 
 // ── WHAT HAS TO HAPPEN NEXT ─────────────────────────────────────────────────
@@ -1628,13 +1642,16 @@ if barstate.islast and showStruct
     color chC = bull ? colShort : colLong
     color boC = bull ? colLong : colShort
     // na on a fresh chart, before the engine has a pivot to hold.
-    if not na(chY)
+    if not na(chY) and chY != drawnChochY
         nextChoch.set_xy1(na(chX) ? bar_index : chX, chY)
         nextChoch.set_xy2(bar_index + 15, chY)
         nextChoch.set_color(chC)
         nextChochLab.set_xy(bar_index + 15, chY)
         nextChochLab.set_style(bull ? label.style_label_up : label.style_label_down)
         nextChochLab.set_textcolor(chC)
+    else
+        nextChoch.set_color(color(na))
+        nextChochLab.set_textcolor(color(na))
     // THE THIRD LINE, AND ONLY THE v2 ENGINE CAN DRAW IT. An unswept
     // inducement: the liquidity still owed before the BOS above counts.
     // Its PRESENCE is the flag — it is drawn only while `v2SBtmCrossed` is
@@ -1658,13 +1675,16 @@ if barstate.islast and showStruct
     else
         nextIdm.set_color(color(na))
         nextIdmLab.set_textcolor(color(na))
-    if not na(boY)
+    if not na(boY) and boY != drawnBosY
         nextBos.set_xy1(na(boX) ? bar_index : boX, boY)
         nextBos.set_xy2(bar_index + 15, boY)
         nextBos.set_color(boC)
         nextBosLab.set_xy(bar_index + 15, boY)
         nextBosLab.set_style(bull ? label.style_label_down : label.style_label_up)
         nextBosLab.set_textcolor(boC)
+    else
+        nextBos.set_color(color(na))
+        nextBosLab.set_textcolor(color(na))
 
 // DEBUG: one mark per pin, and hovering it says why. Blue took it, grey did
 // not, and the tooltip carries the reason either way. A bar with NO mark at all

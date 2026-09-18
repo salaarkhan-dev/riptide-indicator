@@ -70,6 +70,10 @@ PORT = ROOT / "indicators/undertow/port/undertow.py"
 DISPLAY_ONLY = {"showZones", "showUnfilled", "showStruct", "keepN",
                 "overlapMode", "showStats", "showBias", "showOB", "colOBBull",
                 "colOBBear", "showFVG", "fvgExtend", "zoneAuto",
+                # The minor tier's breaks, drawn or not. Pure drawing: the
+                # tier itself always runs, because endMinor and the
+                # minor-swing stop read it whether or not it is on screen.
+                "showInternal",
                 # HOW MANY ZONES SURVIVE, AND WHAT KILLS THEM. All three
                 # reach only box.new and box.delete.
                 #
