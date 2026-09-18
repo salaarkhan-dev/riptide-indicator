@@ -64,6 +64,12 @@ from __future__ import annotations
 
 from indicators.undertow.port.swings import bar_swings
 
+# WHICH of the two passes is the BIAS. Here rather than in undertow.py
+# because undertow.py imports this module and not the other way round, and
+# because the branch that reads them is `state()` below.
+TIER_SWING = "swing"
+TIER_INTERNAL = "internal"
+
 BULLISH = 1
 BEARISH = -1
 
@@ -154,6 +160,22 @@ def state(cs, p):
     n = len(cs)
     maj = structure(cs, p.smcSwingLen)
     mnr = structure(cs, p.smcInternalLen, ref=maj)
+    # WHICH TIER IS THE BIAS. The major one by default -- the swing character
+    # says which way and the internal one says where the pullback is turning,
+    # which is the arrangement LuxAlgo draws and every page in ../measurements
+    # was produced under.
+    #
+    # On "internal" the two swap roles and the SHORTER pass becomes the
+    # direction. That is a far twitchier bias and therefore many more setups,
+    # which is the reason it was asked for.
+    #
+    # AND THE MINOR-STRUCTURE ENDING RULE GOES INERT WHEN IT DOES, because
+    # there is no third, shorter pass for it to read. `sOs` is then the same
+    # series as `os`, so `minorAgainst` is false on every bar and `endMinor`
+    # never fires whatever it is set to. Stated rather than faked: fabricating
+    # a minor tier out of a still shorter pivot would make the two tiers look
+    # comparable while quietly being a different engine.
+    lead = mnr if p.biasTier == TIER_INTERNAL else maj
 
     out = dict(os=[], choch=[], bosUp=[], bosDn=[], sweepUp=[], sweepDn=[],
                msMax=[], msMin=[], msMaxX=[], msMinX=[], sOs=[],
@@ -162,8 +184,8 @@ def state(cs, p):
     mxX = mnX = 0
     for i in range(n):
         c = cs[i]
-        d = maj["dir"][i] or BULLISH
-        flip = i > 0 and maj["dir"][i] != maj["dir"][i - 1]
+        d = lead["dir"][i] or BULLISH
+        flip = i > 0 and lead["dir"][i] != lead["dir"][i - 1]
         if flip or mx is None:
             mx, mn, mxX, mnX = c.h, c.l, i, i
         else:
@@ -172,9 +194,9 @@ def state(cs, p):
             if c.l < mn:
                 mn, mnX = c.l, i
         out["os"].append(1 if d > 0 else 0)
-        out["choch"].append(maj["choch"][i])
-        out["bosUp"].append(maj["bos"][i] and maj["up"][i])
-        out["bosDn"].append(maj["bos"][i] and maj["dn"][i])
+        out["choch"].append(lead["choch"][i])
+        out["bosUp"].append(lead["bos"][i] and lead["up"][i])
+        out["bosDn"].append(lead["bos"][i] and lead["dn"][i])
         # No sweep concept in this engine. Stated, not faked -- a fabricated
         # sweep would make the Ending rules look comparable while not being.
         out["sweepUp"].append(False)

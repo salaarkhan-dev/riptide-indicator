@@ -100,6 +100,33 @@ BS_MTF = "MTF EMA align"
 # the original engine: the swing detector and the CHoCH are IDENTICAL, and the
 # pivot length and the BOS rule are not.
 BS_SMC = "SMC structure"
+# ChartArt's "EMA Slope + EMA Cross Strategy", supplied as a v3 script and
+# transcribed in dir_ema_slope_cross. Asked for because the SMC bias is
+# tradeable a small fraction of the time and the setups are correspondingly
+# few; this one is always in the market, so it is never not tradeable.
+#
+# IT IS CONTRARIAN AND THE NAME DOES NOT SAY SO. `long` fires when price
+# crosses UNDER the slow EMA, not over it. Read the original: the fast pair is
+# a slope filter and the slow EMA is a mean-reversion trigger. That matters
+# here because Undertow trades CONTINUATION in the direction of the bias --
+# it finds a counter-trend candle in a pullback and bets the trend resumes --
+# so composing it with a mean-reversion direction is not the same idea twice.
+# Nothing about that is measured; it is written down so the composition is a
+# choice rather than an accident.
+BS_XCROSS = "EMA slope + cross"
+# `biasTier` -- WHICH of the SMC engine's two passes is the direction.
+#
+# LITERALS, not aliases of smc.py's. Both deploy/undertow-port-check.py and
+# deploy/undertow-three-way-check.py read this file with the AST and resolve a
+# field default only through a module-level CONSTANT; `smc.TIER_SWING` is an
+# attribute lookup and comes back unresolved, which silently turns a compared
+# setting into an uncompared one. The guard below is what stops the two copies
+# drifting instead.
+TIER_SWING = "swing"
+TIER_INTERNAL = "internal"
+assert (TIER_SWING, TIER_INTERNAL) == (smc.TIER_SWING, smc.TIER_INTERNAL), (
+    "the two copies of the bias-tier names have drifted; smc.py::state "
+    "compares by value and would fall through to the swing tier in silence")
 # `swingSrc` — how a swing is DEFINED. Compared by value on both sides.
 SW_BAR = "bar pivot"
 SW_RANGE = "price move"
@@ -241,6 +268,12 @@ class P:
     mtfFast: int = 20
     mtfSlow: int = 50
     mtfMult: int = 2
+    # ChartArt's three EMA lengths, at the values the original ships. The fast
+    # pair is a SLOPE filter -- their direction of travel, not their level --
+    # and the slow one is the mean-reversion trigger. See BS_XCROSS.
+    scFast: int = 2
+    scMid: int = 4
+    scSlow: int = 20
     # For every source EXCEPT the structure engine there is no BOS to count, so
     # "running" cannot mean "has broken structure once". It means the direction
     # has held this many bars since it last flipped. Structure ignores it.
@@ -271,6 +304,13 @@ class P:
     # what the measurement did was establish that the choice is free.
     smcSwingLen: int = 14
     smcInternalLen: int = 5
+    # WHICH TIER IS THE BIAS. "swing" is what ships and what every measurement
+    # page was produced under: the major character says which way, the internal
+    # one says where the pullback is turning. "internal" swaps them, which is a
+    # much twitchier direction and many more setups -- and it puts the
+    # minor-structure Ending rule out of action, because there is no third
+    # shorter pass for it to read. See port/smc.py::state.
+    biasTier: str = TIER_SWING
     matureBars: int = 20
     # 2 · Candle
     wickEdge: float = 0.05
@@ -877,8 +917,55 @@ def _roll_min(v, L):
     return out
 
 
+def dir_ema_slope_cross(cs, p):
+    """ChartArt's "EMA Slope + EMA Cross Strategy", v3, transcribed.
+
+        long  = crossunder(close, MA3)
+                or (change(close)<0 and change(MA1)<0
+                    and crossunder(close, MA1) and change(MA2)>0)
+        short = crossover(close, MA3)
+                or (change(close)>0 and change(MA1)>0
+                    and crossover(close, MA1) and change(MA2)<0)
+
+    ALWAYS IN THE MARKET: the original is a strategy that flips on each signal
+    and holds until the next, so the direction persists between signals. That
+    is what makes it a bias rather than an event.
+
+    SHORT WINS A TIE. Both conditions can be true on one bar -- a cross of MA3
+    one way and of MA1 the other. Pine v3 runs `if long` then `if short`, both
+    strategy.entry, so the second call is the position that results. Ties are
+    rare and the rule is here so the two copies cannot disagree about them.
+
+    THE SEED IS +1, as dir_supertrend's is, because there is no direction
+    before the first signal and every other source here is defined from bar 0.
+    With a 20-bar slow EMA the first cross arrives within a few dozen bars, so
+    it washes out; it is stated because a seeded warm-up is a real thing in the
+    first setups of a series.
+    """
+    cl = [c.c for c in cs]
+    m1, m2, m3 = (_ema(cl, p.scFast), _ema(cl, p.scMid), _ema(cl, p.scSlow))
+    out, d = [], 1
+    for i in range(len(cs)):
+        if i:
+            up1 = cl[i - 1] >= m1[i - 1] and cl[i] < m1[i]      # crossunder
+            dn1 = cl[i - 1] <= m1[i - 1] and cl[i] > m1[i]      # crossover
+            up3 = cl[i - 1] >= m3[i - 1] and cl[i] < m3[i]
+            dn3 = cl[i - 1] <= m3[i - 1] and cl[i] > m3[i]
+            lng = up3 or (cl[i] < cl[i - 1] and m1[i] < m1[i - 1]
+                          and up1 and m2[i] > m2[i - 1])
+            sht = dn3 or (cl[i] > cl[i - 1] and m1[i] > m1[i - 1]
+                          and dn1 and m2[i] < m2[i - 1])
+            if sht:
+                d = -1
+            elif lng:
+                d = 1
+        out.append(d)
+    return out
+
+
 DIRS = {BS_EMA: dir_ema, BS_ST: dir_supertrend, BS_SLOPE: dir_slope,
-        BS_DON: dir_donchian, BS_MTF: dir_mtf_ema}
+        BS_DON: dir_donchian, BS_MTF: dir_mtf_ema,
+        BS_XCROSS: dir_ema_slope_cross}
 
 
 def alt_structure(cs, p):

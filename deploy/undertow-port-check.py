@@ -251,10 +251,17 @@ def main() -> int:
 
     # value, why. The value is what the PINE does; P must agree with it.
     PINE_HARDCODED = {
-        # The Pine runs LuxAlgo's SMC and nothing else — section 3 is the
-        # engine, not a branch. The lengths ARE inputs and are compared above;
-        # the choice of engine is not.
-        "biasSrc": ("SMC structure", "section 3 is the only engine"),
+        # `biasSrc` IS AN INPUT NOW — the chart offers SMC structure and
+        # ChartArt's EMA slope + cross — so it is compared above like any
+        # other dropdown rather than asserted here.
+        #
+        # `matureBars` came the other way. The Pine's second source has no
+        # structure to break, so it fabricates a BOS a fixed number of bars
+        # after a direction flip exactly as alt_structure does, and that
+        # number is the literal `xcMature`. It is not an input: a dial for
+        # "how long until a fabricated break counts" is the kind of setting
+        # SETTINGS.md exists to keep off the panel.
+        "matureBars": (20, "the literal xcMature in the EMA source"),
         # `pinOk` has no bosOk term, so a pin arms in `immature` as readily as
         # in `running`.
         "needBos": (False, "pinOk does not gate on the bias state"),

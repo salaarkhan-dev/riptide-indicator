@@ -76,17 +76,28 @@ string gDbg = "6 · Debug"
 // swing-source dropdown, three "price move" dials, two bar-pivot lengths and
 // an inducement toggle. The engine underneath is LuxAlgo's Smart Money
 // Concepts (section 3), which has one detector and two scales.
+// THE SOURCE. Two, and the second is not a variation of the first.
+string kSmc = "SMC structure"
+string kXc  = "EMA slope + cross"
+biasSrc = input.string("SMC structure", "Bias source", options = ["SMC structure", "EMA slope + cross"], group = gBias,
+  tooltip = "WHERE THE DIRECTION COMES FROM.\n\n'SMC structure' is this chart's own engine — LuxAlgo's Smart Money Concepts, section 3 — and everything in ../measurements was produced on a structure bias.\n\n'EMA slope + cross' is ChartArt's 'EMA Slope + EMA Cross Strategy', transcribed. It is ALWAYS IN THE MARKET: it flips long or short on each signal and holds until the next, so it is never 'no bias yet'.\n\nIT IS CONTRARIAN AND THE NAME DOES NOT SAY SO. It goes LONG when price crosses UNDER the slow EMA. The fast pair is a slope filter and the slow EMA is a mean-reversion trigger. Undertow trades CONTINUATION in the direction of the bias, so pairing it with a mean-reversion direction is not the same idea twice — that is a real choice, not a detail.\n\nIT PRODUCES FEWER SETUPS, NOT MORE, and by a lot. Measured on the spent 23-symbol set at 30m: 197 trades against the structure bias's 1,104. The direction flips every 6 bars or so, the impulse leg resets with it, and 'retraced 70% of the impulse' then fires almost immediately and latches. Turn the retrace rule DOWN or OFF if you run this source — at 0 the same measurement gives 10,333. None of those numbers is a study; they are a spent universe and a design input.")
 smcSwingLen = input.int(14, "Swing structure", minval = 10, maxval = 200,
   group = gBias,
   tooltip = "THE MAJOR TIER, and the bias every setup is taken with. A pivot confirmed by this many bars either side — It ships at 14. LuxAlgo's own default is 50, which on 15m is twelve and a half hours and leaves the bias tradeable only 16% of the time.\n\nIT IS THE LARGEST SINGLE LEVER ON THIS CHART. The old engine ran 6 here. At 50 the bias flips far less often and there are far fewer setups, which is the change you asked for and not a side effect.\n\nNOT MEASURED AT THIS VALUE. Every page in ../measurements was produced on the previous engine at 6/2. ../measurements/UNDERTOW_V2.md scored the ENGINE swap at +0.002 / +0.065 / +0.006 R per trade — the detector is the same expression either way — but it did not score this chart's configuration.")
 smcInternalLen = input.int(5, "Internal structure", minval = 2, maxval = 50,
   group = gBias,
   tooltip = "THE MINOR TIER, same engine at a shorter length. It drives the inducement, the minor CHoCH that ends a trend, and the 'minor swing' stop source.\n\nLuxAlgo's default is 5; the old engine used 2.")
+biasTier = input.string("swing", "Bias tier", options = ["swing", "internal"], group = gBias,
+  tooltip = "WHICH OF THE TWO SMC PASSES IS THE DIRECTION.\n\n'swing' is what ships and what every page in ../measurements was produced under: the major character says which way, the internal one says where the pullback is turning. That is the arrangement LuxAlgo draws.\n\n'internal' swaps them, so the SHORTER pass is the bias. A far twitchier direction and many more setups — 1.6x on all three timeframes, measured on the spent 23-symbol set, and the R column came out BETTER on all three rather than worse. That is a design input on a universe read many times over, not a study, and it is the whole reason it is an option rather than the default.\n\nTHE MINOR-STRUCTURE ENDING RULE GOES INERT WHEN YOU DO THIS. There is no third, shorter pass for it to read, so the minor tier becomes the same series as the bias, nothing is ever 'against' it, and 'End: minor structure' stops firing whatever it is set to. The panel's Ending row will only ever say 'retrace'. Stated rather than faked — inventing a still shorter pivot would make the two tiers look comparable while quietly being a different engine.\n\nInert under the 'EMA slope + cross' source, which has no tiers.")
 endMinor = input.string("on the flip", "End: minor structure", group = gBias,
   options = ["off", "on the flip", "while opposed"],
   tooltip = "The short swings turn before the long ones. 'on the flip' fires the bar the minor structure turns against the trend and can be missed if it turned earlier; 'while opposed' is true the whole time it is against, so it catches far more and leaves far fewer setups.")
 retraceMax = input.int(70, "End: retraced % of the impulse", minval = 0, maxval = 100, group = gBias,
-  tooltip = "Give back this much of the move since the CHoCH and the trend is over in any practical sense. 0 turns it off. THE STRONGEST CHOP GUARD HERE and it needs no extra indicator.")
+  tooltip = "Give back this much of the move since the CHoCH and the trend is over in any practical sense. 0 turns it off. THE STRONGEST CHOP GUARD HERE and it needs no extra indicator.\n\nIT IS ALSO THE LARGEST SINGLE BRAKE ON HOW MANY SETUPS YOU SEE, which is worth knowing if the chart feels quiet. Measured on the spent 23-symbol set at 30m: 1,104 trades at 70, and 2,146 with it off — it halves them. On the 'EMA slope + cross' source the effect is not a halving but a wipe-out, 197 against 10,333, because that direction flips every few bars and a 70% giveback of a six-bar impulse happens almost at once.\n\nUNMEASURED AS A CHOICE. Those are counts on a spent universe, not a study: nothing here says which value TRADES better, only how many setups each leaves. It is the biggest lever on this chart with no page behind it.")
+scFast = input.int(2, "… EMA slope + cross: fast", minval = 1, maxval = 50, group = gBias, inline = "xc",
+  tooltip = "ChartArt's three lengths, at the values the original ships: 2, 4 and 20. The first two are a SLOPE filter — their direction of travel, not their level — and the third is the mean-reversion trigger that does most of the work. Inert unless the bias source is 'EMA slope + cross'.")
+scMid = input.int(4, "", minval = 1, maxval = 100, group = gBias, inline = "xc")
+scSlow = input.int(20, "", minval = 2, maxval = 400, group = gBias, inline = "xc")
 // THREE ENDING RULES CAME OFF THE CHART. `endSweep`, `endStale` with its
 // `staleBars`, and the ADX gate `adxMin` all shipped OFF, none was ever
 // measured switched ON, and four inputs offering settings nothing supports is
@@ -124,6 +135,19 @@ string kFail = tTouch
 confirmOrder = input.string("working then failure", "Confirmations", group = gSet,
   options = ["working then failure", "either order"],
   tooltip = "THE ORDER THE TWO CONFIRMATIONS MUST ARRIVE IN, and the default is a CORRECTION rather than a preference.\n\n'working then failure' is the strategy: the pin is a counter-trend candle, W is it appearing to WORK as a reversal, F is that reversal FAILING, and the limit goes at the Focus line on the failure. So the attempt has to happen first.\n\n    W → F          arms\n    F → W → F      arms, on the second F\n    F → W          does NOT arm — waits for an F\n\n'either order' is what v1 did and it is a different event: it admits bars where the reversal never worked at all and only the same two lines were touched. Every measurement page in ../measurements was produced under it.\n\nA bar that spans BOTH lines does not arm either way — intrabar order is unknowable and this indicator resolves that against the trade everywhere else.")
+// THE ROUTE, NAMED ONCE. Under "working then failure" a candidate whose
+// FAILURE line broke first does not arm on the following W — it waits for a
+// SECOND failure break, so the route it actually took is F→W→F. Calling it
+// F→W describes a sequence that cannot arm in this mode.
+//
+// It reads differently under "either order", where W and F in any order is
+// the whole rule and F→W really is what happened. So the label follows the
+// setting rather than being fixed, and it is a function because the two places
+// that render it had drifted apart: the setup label said F→W→F and the
+// tooltip on the same object said F→W.
+routeName(int ord) =>
+    ord == 1 ? "W→F" : confirmOrder == "working then failure" ? "F→W→F" : "F→W"
+
 confirmBars = input.int(20, "Confirm within", minval = 2, maxval = 200, group = gSet,
   tooltip = "Bars for BOTH confirmations to land. Without a bound the rule is eventually true for almost any candle.")
 fillBars = input.int(20, "Fill within", minval = 1, maxval = 200, group = gSet,
@@ -304,7 +328,7 @@ drawLine(int x1, int x2, float y, color c, string st) =>
 // lets the marker sit at the entry PRICE and carry a hover.
 drawFill(Cand c, int openN) =>
     color cc = c.short ? colShort : colLong
-    string info = c.tag + "\nbias at the pin: " + c.state + "\nentry " + str.tostring(c.focus, format.mintick) + "\nstop  " + str.tostring(c.stop, format.mintick) + "\ntgt   " + str.tostring(c.target, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin · " + (c.order == 1 ? "W→F" : "F→W")
+    string info = c.tag + "\nbias at the pin: " + c.state + "\nentry " + str.tostring(c.focus, format.mintick) + "\nstop  " + str.tostring(c.stop, format.mintick) + "\ntgt   " + str.tostring(c.target, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin · " + routeName(c.order)
     if openN > 0
         // A FOLLOWER: its entry line, faint, and a small badge carrying the
         // size of the group it just joined. No box and no price label, which
@@ -615,17 +639,92 @@ else
 // reads them, they now say exactly one thing, and leaving the seam in place is
 // cheaper than touching six hundred lines that are not wrong.
 
+// ── WHICH SMC PASS IS THE BIAS ──────────────────────────────────────────────
+// `biasTier` swaps the roles of the two passes. On "internal" the shorter one
+// becomes the direction and the minor tier has no third pass to read, so it
+// reads the same series as the bias and `endMinor` goes inert. That is the
+// honest consequence and ../port/smc.py::state does exactly the same thing.
+// The internal pass already publishes everything the major one does: its own
+// CHoCH and BOS in section 4, and `legMax`/`legMin` are its running extremes
+// since its last turn -- the same object `msMax`/`msMin` are for the major
+// tier, which is what the retrace rule and the pullback both need.
+bool  tierInt     = biasTier == "internal"
+int   ldOs        = tierInt ? msSOs : msOs
+bool  ldChoch     = tierInt ? msMinorChoch : msChoch
+bool  ldBosUp     = tierInt ? inBosUp : msBosUp
+bool  ldBosDn     = tierInt ? inBosDn : msBosDn
+float ldMax       = tierInt ? legMax : msMax
+float ldMin       = tierInt ? legMin : msMin
+int   ldMaxX      = tierInt ? legMaxX : msMaxX
+int   ldMinX      = tierInt ? legMinX : msMinX
+
+// ── THE SECOND SOURCE: ChartArt's EMA slope + cross ─────────────────────────
+// A direction dressed as the state below, which is what ../port/undertow.py's
+// `alt_structure` does and this is a transcription of it. The DOWNSTREAM IS
+// UNCHANGED, which is the point: switching source changes the direction and
+// nothing else.
+//
+//   choch     the bar the direction flipped. There is no CHoCH here, but a
+//             flip is the same event for every purpose downstream.
+//   bosUp/Dn  fired ONCE, `xcMature` bars after a flip. With no structure to
+//             break, "running" has to mean "the direction has held a while" or
+//             every setup would read immature forever.
+//   max/min   the running extremes SINCE THE FLIP — exactly what the structure
+//             engine's are since its CHoCH, so the retrace rule means the same
+//             thing under both sources.
+//   sweeps, minor structure   ABSENT, and faking them would make the two
+//             sources look comparable while not being. `endMinor` simply does
+//             nothing under this source; the panel's Ending row will only ever
+//             say "retrace".
+//
+// ALWAYS IN THE MARKET, seeded +1. The original flips on each signal and holds
+// until the next, and SHORT WINS A TIE because Pine v3 ran `if long` then
+// `if short` and the second entry is the position that results.
+int xcMature = 20
+float xm1 = ta.ema(close, scFast)
+float xm2 = ta.ema(close, scMid)
+float xm3 = ta.ema(close, scSlow)
+var int xcDir = 1
+bool xcLong  = ta.crossunder(close, xm3) or (ta.change(close) < 0 and ta.change(xm1) < 0 and ta.crossunder(close, xm1) and ta.change(xm2) > 0)
+bool xcShort = ta.crossover(close, xm3)  or (ta.change(close) > 0 and ta.change(xm1) > 0 and ta.crossover(close, xm1)  and ta.change(xm2) < 0)
+if xcShort
+    xcDir := -1
+else if xcLong
+    xcDir := 1
+bool  xcFlip = ta.change(xcDir) != 0
+var float xcMax = na
+var float xcMin = na
+var int   xcMaxX = 0
+var int   xcMinX = 0
+var int   xcSince = 0
+if xcFlip or na(xcMax)
+    xcMax := high
+    xcMin := low
+    xcMaxX := bar_index
+    xcMinX := bar_index
+    xcSince := 0
+else
+    xcSince := xcSince + 1
+    if high > xcMax
+        xcMax := high
+        xcMaxX := bar_index
+    if low < xcMin
+        xcMin := low
+        xcMinX := bar_index
+bool xcRipe = xcSince == xcMature
+
 // ── the mux. Everything below reads these. ──────────────────────────────────
-int   bOs         = msOs
-bool  bChoch      = msChoch
-bool  bBosUp      = msBosUp
-bool  bBosDn      = msBosDn
-int   bSOs        = msSOs
-bool  bMinorChoch = msMinorChoch
-float bMax        = msMax
-float bMin        = msMin
-int   bMaxX       = msMaxX
-int   bMinX       = msMinX
+bool  useXc       = biasSrc == kXc
+int   bOs         = useXc ? (xcDir > 0 ? 1 : 0) : ldOs
+bool  bChoch      = useXc ? xcFlip : ldChoch
+bool  bBosUp      = useXc ? (xcRipe and xcDir > 0) : ldBosUp
+bool  bBosDn      = useXc ? (xcRipe and xcDir < 0) : ldBosDn
+int   bSOs        = useXc ? (xcDir > 0 ? 1 : 0) : msSOs
+bool  bMinorChoch = useXc ? false : msMinorChoch
+float bMax        = useXc ? xcMax : ldMax
+float bMin        = useXc ? xcMin : ldMin
+int   bMaxX       = useXc ? xcMaxX : ldMaxX
+int   bMinX       = useXc ? xcMinX : ldMinX
 
 
 // ══════════════════════════ 5. BIAS — THE THREE STATES ═══════════════════════
@@ -1236,7 +1335,7 @@ if cands.size() > 0
             lb.set_xy(bar_index, c.focus)
             lb.set_color(color.new(lc, 25))
             lb.set_textcolor(color.white)
-            lb.set_text(c.code + " " + (c.armed ? "ARMED " + (c.order == 1 ? "W→F" : "F→W→F") : c.workOk ? "W✓ F·" : c.failOk ? "W· F✓" : "W· F·") + " " + str.tostring(bar_index - c.bar) + "b")
+            lb.set_text(c.code + " " + (c.armed ? "ARMED " + routeName(c.order) : c.workOk ? "W✓ F·" : c.failOk ? "W· F✓" : "W· F·") + " " + str.tostring(bar_index - c.bar) + "b")
             slot := slot + 1
 
 // THE SWING DOTS ARE GONE. They marked every confirmed pivot with a circle,

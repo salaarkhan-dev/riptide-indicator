@@ -171,8 +171,20 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # PREREG_undertow_complement.md is the replication. Purely additive: no
 # existing default moves, and with famStrict off the new branch cannot be
 # reached at all, so no study's arms change and nothing needed re-running.
-DEFAULTS_FINGERPRINT = "e2a8f0a50df6838b"
-DEFAULTS_COUNT = 68
+#
+# 2026-09-18: `biasTier` plus ChartArt's three EMA lengths (`scFast`, `scMid`,
+# `scSlow`), for the two "why are there so few setups" levers. Both additive:
+# biasTier defaults to "swing", which IS the old behaviour, and the three
+# lengths are unreachable unless biasSrc is BS_XCROSS, which is not the
+# default.
+#
+# THE PROCEDURE WAS FOLLOWED rather than asserted. The shipped configuration
+# was counted on the spent 23 immediately before the change and immediately
+# after: 1101 / 1104 / 1104 armed trades on 15m / 30m / 1h, identical both
+# times. `biasSrc` was already in PINNED, so every study that runs an
+# alternative source names it.
+DEFAULTS_FINGERPRINT = "ae12db37c83d4e49"
+DEFAULTS_COUNT = 72
 
 good = []
 

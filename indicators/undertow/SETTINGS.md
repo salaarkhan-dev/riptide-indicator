@@ -1,5 +1,39 @@
 # Every setting, and where its value came from
 
+> ## WHY ARE THERE SO FEW SETUPS — measured, 2026-09-18
+>
+> Asked directly, so here is the answer with numbers. Counts on the **spent**
+> 23-symbol set, Min30, `maxLive 64`. **This is a design input, not a study:**
+> the universe has been read many times, nothing is pre-registered, and the R
+> column is printed because hiding it would be worse rather than because it
+> means anything.
+>
+> | configuration | trades | ×ships | R/trade |
+> |---|---|---|---|
+> | **what ships** — SMC swing tier, retrace 70 | 1,104 | 1.0× | −0.070 |
+> | bias on the **internal** tier | 1,762 | 1.6× | −0.061 |
+> | **retrace off** | 2,146 | 1.9× | −0.025 |
+> | internal tier **+** retrace off | 5,390 | 4.9× | −0.007 |
+> | EMA slope + cross | 197 | **0.2×** | −0.239 |
+> | EMA slope + cross, retrace off | 10,333 | 9.4× | −0.018 |
+>
+> **`retraceMax` is the brake, not the bias source.** It halves the setups on
+> the structure bias and very nearly eliminates them on the fast one: that
+> direction flips every six bars or so, the impulse leg resets with it, and a
+> 70% giveback of a six-bar impulse happens almost immediately and latches.
+>
+> **The requested EMA source gives FEWER setups, not more** — a fifth of what
+> ships — which is the opposite of the reason it was asked for. It is on the
+> chart because it was asked for, off by default, with the number in its
+> tooltip.
+>
+> **Nothing here changes a default.** Every row is a rule that changes which
+> trades exist, measured on a universe that cannot support a conclusion. The
+> internal tier and the retrace latch are now the two largest unmeasured levers
+> on the chart and one fresh universe remains — 75 contracts, one set of 45.
+> Spending it on `retraceMax` is the best remaining use of it, and that is a
+> pre-registration rather than a table.
+
 You asked me to revisit the parameters. This is the audit, not a retune — the
 last section says why those are different things.
 

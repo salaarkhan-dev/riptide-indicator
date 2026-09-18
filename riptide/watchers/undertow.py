@@ -136,6 +136,14 @@ RECENT_BARS = 6
 BIAS_SRC = "SMC structure"
 SMC_SWING_LEN = 14
 SMC_INTERNAL_LEN = 5
+# WHICH OF THE TWO PASSES IS THE BIAS. "swing" is what the chart ships and what
+# every page in ../../indicators/undertow/measurements was produced under.
+# "internal" makes the SHORTER pass the direction -- 1.6x the setups on all
+# three timeframes, measured on the spent 23-symbol set -- and takes the
+# minor-structure Ending rule out of action, because there is then no third
+# shorter pass for it to read. deploy/undertow-three-way-check.py holds this to
+# P's default, so if the chart's default moves this file has to move with it.
+BIAS_TIER = "swing"
 # THE CONFIRMATION ORDER, and it matches the port's default and the chart's.
 # v1 armed on "both lines, in either order", which was a misreading of the
 # strategy — see indicators/undertow/SPEC.md section 8. Every measurement page
@@ -171,6 +179,26 @@ LOC_TOL = 0
 STOP_BUF = 0.25
 STOP_TRACK = True
 RR = 3.5
+
+
+def _route(order: int) -> str:
+    """What actually happened, and "F→W" was a route that cannot arm.
+
+    Under CONFIRM_ORDER "working then failure" a candidate whose FAILURE line
+    broke first does not arm on the following W -- arming needs a failure
+    break STRICTLY after a working break, so it waits for a SECOND F. The
+    route it took is F->W->F. The alert said F->W, which describes a sequence
+    this watcher never arms on and sent the reader looking for two closes on
+    the chart when there were three.
+
+    It stays F->W under "either order", where W and F in any order is the rule.
+    That branch is unreachable while CONFIRM_ORDER is frozen at the corrected
+    value, and it is here because the constant is what decides, not this
+    function.
+    """
+    if order == 1:
+        return "W→F"
+    return "F→W→F" if CONFIRM_ORDER == "working then failure" else "F→W"
 
 
 def _dp(ref: float) -> int:
@@ -455,6 +483,11 @@ def run_setups(cs, max_live: int = 4):
     # compared pass for pass.
     maj = _smc_structure(cs, SMC_SWING_LEN)
     mnr = _smc_structure(cs, SMC_INTERNAL_LEN, ref=maj)
+    # THE LEAD PASS. Both are always computed -- the internal one is built with
+    # the major as its reference either way, so choosing the lead afterwards is
+    # not the same as swapping the lengths. port/smc.py::state does exactly
+    # this and the parity test holds the two together.
+    lead = mnr if BIAS_TIER == "internal" else maj
 
     msMax = msMin = msMaxX = msMinX = None
     dirs: list = []
@@ -479,10 +512,10 @@ def run_setups(cs, max_live: int = 4):
 
         # Every structure event is READ from the two passes rather than
         # recomputed, so there is one state machine and not two.
-        msChoch = maj["choch"][i]
-        msBosUp = maj["bos"][i] and maj["up"][i]
-        msBosDn = maj["bos"][i] and maj["dn"][i]
-        msOs = 1 if (maj["dir"][i] or 1) > 0 else 0
+        msChoch = lead["choch"][i]
+        msBosUp = lead["bos"][i] and lead["up"][i]
+        msBosDn = lead["bos"][i] and lead["dn"][i]
+        msOs = 1 if (lead["dir"][i] or 1) > 0 else 0
         msSOs = 1 if (mnr["dir"][i] or 1) > 0 else 0
         msMinorChoch = mnr["choch"][i]
         msSTopY = mnr["hiLvl"][i]
@@ -739,7 +772,7 @@ def detect(cs, symbol: str, tf: str, opts: dict) -> tuple:
                     f"stop {stop:g} tgt {target:g}"),
             entry=a["entry"], stop=stop, target=target,
             code=a["code"], state=a["state"],
-            order="W→F" if a["order"] == 1 else "F→W",
+            order=_route(a["order"]),
             riskPct=100.0 * risk / a["entry"] if a["entry"] else 0.0))
     return out, dropped
 
@@ -919,9 +952,12 @@ SPEC = register(Indicator(
            "either order. That is the moment the setup is complete and the "
            "limit order goes on, which is the whole point of the alert.</i>"
            "\n\n<b>W→F</b><i> means the Working line closed first and the "
-           "Failure line second; </i><b>F→W</b><i> is the other way round. "
-           "Both count and neither is better — the tag is there so the "
-           "message matches what you saw on the chart.</i>\n\n"
+           "Failure line second. </i><b>F→W→F</b><i> is a candidate whose "
+           "Failure line broke FIRST: that does not arm it, so it waited and "
+           "armed on a second Failure break after the Working one. Three "
+           "closes, not two.</i>\n\n<i>Both count and neither is better — "
+           "the tag is there so the message matches what you saw on the "
+           "chart.</i>\n\n"
            "<i>The numbers are the pin's open (your limit), the stop a "
            "quarter ATR past the pullback extreme, and the target at the "
            "configured reward ratio. Nothing has filled yet — about a third "
