@@ -342,6 +342,7 @@ def main() -> int:
         # Pine changing.
         "biasGate": ("tradeable", "the Pine refuses a setup while Ending"),
         "locAtr": (0.0, "the Pine's location test counts bars, not ATR"),
+        "pbLook": (10, "PIN_LOCAL only; the Pine has no local anchor"),
         "shortsOnly": (False, "pin selection, research only"),
         # THE RETIRED BIAS SOURCES. EMA cross, Slope, Donchian midpoint,
         # Supertrend and MTF EMA align were all on the chart to be measured;

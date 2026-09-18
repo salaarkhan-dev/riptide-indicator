@@ -176,6 +176,21 @@ PIN_TREND = "trend extreme"
 # of it -- measured, 0% at any tolerance below 5. SPEC 2.3 avoided swings for
 # exactly this reason and the same reason applies here.
 PIN_LEG = "leg extreme"
+# THE FOURTH ANCHOR, and the one two of the chart owner's own trades point at.
+# The other three are all tied to STRUCTURE -- a 50-bar pivot, the major CHoCH,
+# the last internal break -- and in a grinding trend they sit a long way from
+# where the trader's pullback is. On his two worked setups the shipped anchor
+# was 7 and 41 bars back, 1.17 and 4.86 ATR away; PIN_LEG and PIN_TREND were
+# worse still at 45 and 79 bars.
+#
+# This one has no structure in it at all: THE PULLBACK IS THE RALLY SINCE THE
+# LOWEST LOW OF THE LAST `pbLook` BARS (mirrored for an uptrend). Under it both
+# his pins land ON the extreme -- 0.00 and 0.13 ATR -- and his stop on the
+# second matches the level to 14 points in 78,500.
+#
+# NOT MEASURED. It reproduces two remembered setups, which is a reason to
+# measure it and not a result.
+PIN_LOCAL = "local pullback"
 # `slopeUnit` — whether the Slope source measures its window and its threshold
 # in bars (so it means a different thing on every chart) or in time.
 SL_BARS = "bars"
@@ -427,6 +442,11 @@ class P:
     # sit within `locAtr` x ATR of the pullback's extreme, and `locTol` is not
     # consulted. Continuous, scale-free, and it asks the question the rule was
     # always trying to ask.
+    # How far back PIN_LOCAL looks for the low that starts the pullback. The
+    # answer was stable from 6 to 12 on both worked setups -- a plateau rather
+    # than a fitted point -- and breaks at 16, where the anchor jumps back to
+    # the structural high the shipped rule already uses.
+    pbLook: int = 10
     locAtr: float = 0.0
     retraceLatch: bool = True
     pinLag: int = 0
@@ -2089,7 +2109,18 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         # INTERNAL break, which is the per-leg object the author's diagram
         # shows. See the constants at the top for why the third exists.
         anchorX = pbExtX
-        if p.pinAt == PIN_TREND:
+        if p.pinAt == PIN_LOCAL:
+            # Recomputed per bar rather than tracked, because the window slides
+            # and a running extreme cannot un-see a low that has aged out.
+            j0 = max(0, i - p.pbLook)
+            loX = min(range(j0, i + 1), key=lambda k: cs[k].l) if biasDir < 0 \
+                else max(range(j0, i + 1), key=lambda k: cs[k].h)
+            span = range(loX, i + 1)
+            exX = (max(span, key=lambda k: cs[k].h) if biasDir < 0
+                   else min(span, key=lambda k: cs[k].l))
+            pbExt = cs[exX].h if biasDir < 0 else cs[exX].l
+            pbExtX, pbStartX, anchorX = exX, loX, exX
+        elif p.pinAt == PIN_TREND:
             anchorX = (st["msMinX"][i] if biasDir < 0 else st["msMaxX"][i])
             if anchorX is None:
                 anchorX = i

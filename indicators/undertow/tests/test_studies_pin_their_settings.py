@@ -436,8 +436,34 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # widened. Both stay off until that is decided deliberately.
 #
 # 75 -> 77 fields. undertow_anchor re-ran BIT-IDENTICAL.
-DEFAULTS_FINGERPRINT = "d862ee4bd8f4ed09"
-DEFAULTS_COUNT = 77
+# 2026-09-18: `PIN_LOCAL` and `pbLook` -- a FOURTH anchor, off by default.
+#
+# FOUND BY DIAGNOSING TWO OF THE CHART OWNER'S OWN SETUPS. All three existing
+# anchors are tied to STRUCTURE -- a 50-bar pivot, the major CHoCH, the last
+# internal break -- and in a grinding trend they sit nowhere near the pullback
+# he is actually trading. On his two worked shorts the SHIPPED anchor was 7 and
+# 41 bars back, 1.17 and 4.86 ATR away; PIN_LEG and PIN_TREND were worse still
+# at 45 and 79 bars.
+#
+# PIN_LOCAL has no structure in it: the pullback is the rally since the LOWEST
+# LOW OF THE LAST `pbLook` BARS. Under it both his pins land on the extreme --
+# 0.00 and 0.13 ATR -- and his stop on the second matches the level to 14
+# points in 78,500. The answer was stable from pbLook 6 to 12, a plateau rather
+# than a fitted point, and breaks at 16 where it collapses back onto the
+# structural high.
+#
+# WHAT IT REFRAMES. `locAtr` measured WORSE when widened, and this is why:
+# widening a tolerance around the WRONG anchor admits noise rather than finding
+# the right candles. With the anchor corrected, his first pin passes locTol = 0
+# outright and the second needs 0.13 ATR.
+#
+# NOT MEASURED AND NOT DEFAULT. It reproduces two remembered setups, which is a
+# reason to measure it and not a result -- remembered setups are the ones that
+# worked. Additive; undertow_anchor re-ran BIT-IDENTICAL.
+#
+# 77 -> 78 fields.
+DEFAULTS_FINGERPRINT = "33b879adeacad6ef"
+DEFAULTS_COUNT = 78
 
 good = []
 
