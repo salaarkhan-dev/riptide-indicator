@@ -162,8 +162,17 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # warning here: it took the author's stated anchor, confirmed the mechanism
 # fired 86-88% of the time, and the trades were worse. A shape filter is the
 # same kind of claim and gets the same treatment.
-DEFAULTS_FINGERPRINT = "f65fc02f96bed9ce"
-DEFAULTS_COUNT = 67
+#
+# 2026-09-18: `famInvert` added, OFF, and PORT-ONLY -- no chart input, which is
+# the first field in a while to have none. It inverts `famStrict` so the gate
+# admits the SECOND-choice shape instead of the first. Nobody asked for the
+# rule; UNDERTOW_STRICT.md found that on 1h those shapes scored +0.197 against
+# the priority half's -0.062, the only |z| >= 2 in eighteen studies, and
+# PREREG_undertow_complement.md is the replication. Purely additive: no
+# existing default moves, and with famStrict off the new branch cannot be
+# reached at all, so no study's arms change and nothing needed re-running.
+DEFAULTS_FINGERPRINT = "e2a8f0a50df6838b"
+DEFAULTS_COUNT = 68
 
 good = []
 

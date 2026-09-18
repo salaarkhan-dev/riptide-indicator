@@ -244,6 +244,37 @@ SYMBOLS_FRESH10 = (
 ).split()
 
 
+# THE ELEVENTH FRESH SET, for the complement study — the one finding in this
+# project with a positive number behind it, which is exactly the kind that has
+# to be replicated on data nobody has seen. 91-100k 24h turnover.
+#
+# THE ORDERING WAS RECOMPUTED ON 2026-09-18, not read off the 2026-09-17 run.
+# 24h volume is a rolling window and the ranks move, so "ranks 496-540" is not
+# a thing that survives a day. What IS stable is the RULE, and it is applied
+# unchanged: the same filter, the same exclusions, sorted by 24h quote volume,
+# then every symbol already in SYMBOLS or in FRESH..FRESH10 dropped — 473 of
+# them — and the next 45 taken. 593 contracts passed the filter and 120 were
+# unused, so this leaves 75: one more set of this size and nothing after it.
+#
+# AND THE BAND IS RUNNING OUT, which is a limit on the science and not just on
+# the bookkeeping. FRESH8 122-1230k, FRESH9 109-168k, FRESH10 100-112k,
+# FRESH11 91-100k. Thinner names are also NEWER listings, and 12,000 bars of
+# 1h is 500 days: FRESH7 could only field 30 of 45 symbols on Min60. Any study
+# whose primary timeframe is 1h should check its coverage before it reads a
+# result, because "not reported" is a likelier outcome here than it was at
+# FRESH2.
+SYMBOLS_FRESH11 = (
+    "KGEN_USDT BLUAI_USDT HOT_USDT BEAMX_USDT SAPIEN_USDT CAT_USDT "
+    "CGPT_USDT FIGHT_USDT SANTOS_USDT SUPRA_USDT ANKR_USDT AZTEC_USDT "
+    "AWE_USDT KNC_USDT APEX_USDT ALICE_USDT XPIN_USDT XVS_USDT "
+    "MITO_USDT DOLO_USDT VANA_USDT AGT_USDT AGLD_USDT ZETA_USDT "
+    "BROCCOLI_USDT LQTY_USDT KERNEL_USDT ARCSOL_USDT BROCCOLIF3B_USDT "
+    "TRUTH_USDT NMR_USDT IRYS_USDT HANA_USDT LAYER_USDT "
+    "WOTAMALAILE_USDT AVAAI_USDT TURTLE_USDT IN_USDT RON_USDT "
+    "MIRA_USDT C_USDT IDOL_USDT MAV_USDT NXPC_USDT SAFE_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
@@ -256,7 +287,8 @@ def assert_disjoint():
             "SYMBOLS_FRESH7": set(SYMBOLS_FRESH7),
             "SYMBOLS_FRESH8": set(SYMBOLS_FRESH8),
             "SYMBOLS_FRESH9": set(SYMBOLS_FRESH9),
-            "SYMBOLS_FRESH10": set(SYMBOLS_FRESH10)}
+            "SYMBOLS_FRESH10": set(SYMBOLS_FRESH10),
+            "SYMBOLS_FRESH11": set(SYMBOLS_FRESH11)}
     names = sorted(sets)
     for i, a in enumerate(names):
         for b in names[i + 1:]:

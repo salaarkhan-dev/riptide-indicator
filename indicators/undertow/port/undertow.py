@@ -362,6 +362,25 @@ class P:
     # this project has produced for its own prereg, and it needs a fresh
     # universe rather than a promotion out of the study that found it.
     famStrict: bool = False
+    # WHICH HALF THE STRICT GATE ADMITS, and it is PORT-ONLY on purpose.
+    #
+    # With `famStrict` on and this on, the gate inverts: only the hanging man
+    # in a bullish trend and only the inverted hammer in a bearish one -- the
+    # shapes the strategy calls second-best. Nobody asked for this rule. It
+    # exists because ../measurements/UNDERTOW_STRICT.md found that on 1h those
+    # shapes scored +0.197 R per trade against the priority half's -0.062, the
+    # only |z| >= 2 in eighteen studies, and the only way to find out whether
+    # that was the ~14% coincidence its own page predicted is to run it on a
+    # universe nobody has seen.
+    #
+    # NO CHART INPUT UNTIL IT EARNS ONE. An input is for a rule somebody wants
+    # to trade; this is a rule being tested. See
+    # ../prereg/PREREG_undertow_complement.md, which also says why the study's
+    # PRIMARY arm is a slice of the baseline rather than this flag: with the
+    # gate inverted the priority shapes never enter the pool, so famPriority's
+    # rivalry has nothing to act on and the surviving set can differ. This flag
+    # is the tradeable version; the slice is the measured one.
+    famInvert: bool = False
     # FIRST TO ARM WINS, and the rest of the pullback's candidates are dropped.
     #
     # "Which one wins first we should remove the other -- by win I mean W→F."
@@ -1644,8 +1663,10 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         # reference to the bias. Doing it here also keeps the funnel honest:
         # a bar the strict rule refuses never counted as a pin, which is what
         # `nRaw` is supposed to mean.
-        if p.famStrict and not (famHam if biasDir < 0 else famStar):
-            famOk = False
+        if p.famStrict:
+            prio = famHam if biasDir < 0 else famStar
+            if prio == p.famInvert:
+                famOk = False
         colourOk = True if not p.useColour else (
             isGreen if biasDir < 0 else not isGreen)
         # LOCATION, plus the two minimums. `pbAge` is measured from where the

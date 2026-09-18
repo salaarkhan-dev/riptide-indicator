@@ -300,8 +300,15 @@ def main() -> int:
     # and that refactor would break undertow-ms-check.py's anchor against v2.
     # If the gate ever clears its prereg, that refactor is the price of putting
     # it on the chart.
+    #
+    # `famInvert` is port-only because it is a rule being TESTED, not one
+    # anybody wants to trade. It inverts famStrict so the gate admits the
+    # second-choice shape, and it exists only because UNDERTOW_STRICT.md found
+    # that half scored +0.197 on 1h against the priority half's -0.062 — the
+    # only |z| >= 2 in eighteen studies. An input is for a rule somebody wants;
+    # if PREREG_undertow_complement.md replicates it, it earns one then.
     PORT_ONLY = {"htfMult", "htfUnit", "htfHours", "feeFrac",
-                 "useFamily", "useColour", "bkMode"} | RETIRED
+                 "useFamily", "useColour", "bkMode", "famInvert"} | RETIRED
     for name in sorted(fields):
         if name not in pin and name not in PORT_ONLY:
             bad.append((name, "P has this field and the Pine has no such "

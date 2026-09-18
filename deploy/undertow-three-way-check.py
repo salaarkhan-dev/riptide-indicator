@@ -152,6 +152,11 @@ ABSENT = {
     "bkLateBars": (None, "backup fill"), "bkMode": (None, "backup fill"),
     # scoring, which the watcher never does: it alerts, it does not grade.
     "feeFrac": (None, "the watcher scores nothing"),
+    # A RULE UNDER TEST, not one on the chart. Port-only, off, and reachable
+    # only when famStrict is on -- which the watcher mirrors at off. If
+    # PREREG_undertow_complement.md replicates the 1h finding this becomes a
+    # chart input and moves to MIRRORED with a watcher constant beside it.
+    "famInvert": (False, "port-only, a rule under test; must stay off"),
 }
 
 # A parameter the watcher accepts and deliberately ignores needs a reason.
