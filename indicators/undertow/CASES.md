@@ -110,3 +110,58 @@ distribution puts it. His 10.73R and 10.11R sit in the top ~6%.
 
 Quoting a superseded page as though it described what ships is the exact failure
 `PROVENANCE.md` was written to prevent, and it was written the same day.
+
+---
+
+## SHIPPED: `msLen` 14 and `biasGate` "direction only"
+
+And the first thing to say is that **`msLen 14` fixed case 3 and broke case 1.**
+
+| case | he went | msLen 50 | msLen 14 |
+|---|---|---|---|
+| 1 (Min30) | SHORT | **SHORT** | **LONG** |
+| 3 (Min15) | SHORT | **LONG** | **SHORT** |
+
+Case 1 flips at 20 and below; case 3 needs 14 or shorter. **No single length
+agrees with him on both.** The recommendation was made on four legs and one of
+them — "it agrees with his direction" — had only ever been checked on the case
+it was derived from. Checking the other two first was one command.
+
+It is not a reason to revert: 50 was wrong on case 3, is the root of the
+blockers on 1 and 2, and the population favours 14 (Min30 spread +0.200 against
++0.140, Min15 t 3.26 against 2.86). But the claim is 1 of 2, not 2 of 2.
+
+### Where the three stand on what now ships
+
+| | bias | blocked at |
+|---|---|---|
+| 1 | LONG, ending | shape — the direction now disagrees too |
+| 2 | SHORT, ending | **location**, anchor 4 bars back |
+| 3 | SHORT, immature | **location**, anchor 10 bars back |
+
+The bias gate is gone as a blocker on all three. Cases 2 and 3 fail on LOCATION
+alone, which is what `PIN_LOCAL` fixes and which was deliberately held back so
+that one change shipped at a time. The blocker moved cleanly from one gate to
+the next, which is the whole argument for shipping them singly.
+
+### Two guards that were not guarding
+
+* **`msLen` sat in the three-way check's ABSENT bucket** as "bar-pivot bias
+  only" while the watcher had `MS_LEN` and fed it straight to `_bar_pivots`.
+  The check that exists to stop the chart and the bot drifting apart was blind
+  to the largest lever on either, and this change could have reached one and
+  not the other in silence. Now MIRRORED, with `msShortLen` and `biasGate`.
+* **`biasGate` was not in `PINNED`**, so moving it would have re-pointed all
+  twenty studies. Fielded, pinned at `tradeable` in all twenty, and only then
+  moved — with `anchor`, `htf` and `slope` bit-identical first.
+
+### Now that Ending trades
+
+| tf | ending | running | immature |
+|---|---|---|---|
+| Min15 | 20 | 19 | 13 |
+| Min30 | 21 | 16 | 14 |
+
+Roughly a third each. The state rides on every armed setup and every alert, so
+the three are scoreable apart whenever that is asked for — which is the reason
+for taking all three rather than a claim that Ending is as good as Running.

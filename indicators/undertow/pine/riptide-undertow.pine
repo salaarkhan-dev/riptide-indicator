@@ -106,12 +106,14 @@ smcInternalLen = input.int(5, "Internal structure", minval = 2, maxval = 50,
 // is one fewer thing to reason about. Nineteen studies pinned it and none of
 // them could be affected — every one pinned the swing tier, which is now the
 // only behaviour.
+biasGate = input.string("direction only", "Bias gate", options = ["tradeable", "direction only"], group = gBias,
+  tooltip = "WHAT THE BIAS IS FOR.\n\n'direction only' is what ships: the bias says WHICH WAY and never refuses a setup. Immature, Running and Ending all trade. The alert and the panel still report which state each setup was taken in, so the three can be compared later — which is the whole reason for taking them all.\n\n'tradeable' is the older behaviour: a setup is refused unless the bias is Immature or Running, so Ending and None kill it outright.\n\nWHAT THE VETO WAS COSTING. On a Min30 chart the bias is Ending roughly three quarters of the time at a 50-bar pivot, and it LATCHES — it clears only on a new CHoCH or a break of structure in the trend's direction. One of the setups that led to this change was refused while the retracement that caused the Ending had already recovered to 46% against a threshold of 70.\n\nThis is a DESIGN DECISION, not a measured one. Nothing here says the Ending state is uninformative; it says the state should be recorded rather than used as a veto until it has been scored.")
 endMinor = input.string("on the flip", "End: minor structure", group = gBias,
   options = ["off", "on the flip", "while opposed"],
   tooltip = "The short swings turn before the long ones. 'on the flip' fires the bar the minor structure turns against the trend and can be missed if it turned earlier; 'while opposed' is true the whole time it is against, so it catches far more and leaves far fewer setups.")
 retraceMax = input.int(70, "End: retraced % of the impulse", minval = 0, maxval = 100, group = gBias,
   tooltip = "Give back this much of the move since the CHoCH and the trend is over in any practical sense. 0 turns it off. THE STRONGEST CHOP GUARD HERE and it needs no extra indicator.\n\nIT IS ALSO THE LARGEST SINGLE BRAKE ON HOW MANY SETUPS YOU SEE, which is worth knowing if the chart feels quiet. Measured on the spent 23-symbol set at 30m: 1,104 trades at 70, and 2,146 with it off — it halves them. On the 'EMA slope + cross' source the effect is not a halving but a wipe-out, 197 against 10,333, because that direction flips every few bars and a 70% giveback of a six-bar impulse happens almost at once.\n\nUNMEASURED AS A CHOICE. Those are counts on a spent universe, not a study: nothing here says which value TRADES better, only how many setups each leaves. It is the biggest lever on this chart with no page behind it.")
-msLen = input.int(50, "… external: CHoCH / IDM detection", minval = 2, maxval = 200, group = gBias, inline = "v2",
+msLen = input.int(14, "… external: CHoCH / IDM detection", minval = 2, maxval = 200, group = gBias, inline = "v2",
   tooltip = "THE TWO BAR-PIVOT LENGTHS OF THE v2 ENGINE, at the values the script this came from ships: 50 and 3.\n\nThe first finds the SWING highs and lows whose break is a CHoCH — a high with this many bars either side that failed to beat it. The second finds the MINOR lows that serve as inducement.\n\nTHE GAP BETWEEN THEM IS THE POINT. A slow, stable reversal level and a fast, responsive inducement. It also means the CHoCH level is confirmed 50 bars AFTER the swing formed — two and a half hours on a 3m chart — which is inherent to a pivot and not a fault. The line appears at the confirmation bar and extends back to the swing, so nothing repaints.\n\nA BAR COUNT IS NOT SCALE INVARIANT: 50 bars is a different span of time on every timeframe. That is the known flaw the price-move swings were adopted to fix, and this engine still supports those — but the chart being reproduced here is the bar-pivot one, so that is what this draws.\n\nInert unless the bias source is 'market structure + inducement'.")
 msShortLen = input.int(3, "", minval = 2, maxval = 50, group = gBias, inline = "v2")
 msBosNeedsIdm = input.bool(true, "… external: a BOS needs its inducement swept", group = gBias,
@@ -1022,6 +1024,11 @@ if biasSeen and (endA or endD)
 
 string biasState = not biasSeen ? "none" : ending ? "ending" : bosN == 0 ? "immature" : "running"
 bool tradeable = biasSeen and not ending
+// THE GATE EVERY SETUP TEST READS. `tradeable` keeps the veto; 'direction
+// only' keeps the direction and drops it, and then the only thing required is
+// that a direction EXISTS -- before the first CHoCH there is none, just the
+// initial value of the structure state.
+bool gateOk = biasGate == "tradeable" ? tradeable : biasSeen
 
 
 // ═══════════════════════ 6. THE PULLBACK, AND THE PIN ════════════════════════
@@ -1092,7 +1099,7 @@ bool locOk = bar_index - anchorX <= locTol
 
 bool barOk = barstate.isconfirmed
 bool pinRaw = barOk and famOk
-bool pinFound = pinRaw and tradeable
+bool pinFound = pinRaw and gateOk
 bool pinOk = pinFound and colourOk and locOk
 
 // The grade is a LABEL and gates nothing. Free to record, and if partials later
@@ -1109,7 +1116,7 @@ bool pinOk = pinFound and colourOk and locOk
 // THE STRICT REASON IS TESTED FIRST, and separately from the other family
 // reasons, because "no dominant wick" on a textbook hanging man is a lie the
 // debug layer would otherwise tell on every rejected bar with the toggle on.
-string pinWhy = famStrict and (biasDir < 0 ? famStar : famHam) ? (biasDir < 0 ? "star family in a downtrend" : "hammer family in an uptrend") + " — 'priority shape only' is on" : not famOk ? "no dominant wick (doji, or the family is off)" : not colourOk ? (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend") + " — wrong colour" : not tradeable ? "bias is " + biasState : not locOk ? str.tostring(bar_index - anchorX) + "b past the " + (pinAt == sAnchPull ? "pullback extreme" : pinAt == sAnchTrend ? "trend extreme" : "leg extreme") + " (tol " + str.tostring(locTol) + ")" : "ok"
+string pinWhy = famStrict and (biasDir < 0 ? famStar : famHam) ? (biasDir < 0 ? "star family in a downtrend" : "hammer family in an uptrend") + " — 'priority shape only' is on" : not famOk ? "no dominant wick (doji, or the family is off)" : not colourOk ? (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend") + " — wrong colour" : not gateOk ? "bias is " + biasState : not locOk ? str.tostring(bar_index - anchorX) + "b past the " + (pinAt == sAnchPull ? "pullback extreme" : pinAt == sAnchTrend ? "trend extreme" : "leg extreme") + " (tol " + str.tostring(locTol) + ")" : "ok"
 
 string pinGrade = bodyR <= 0.35 ? "normal" : "partial"
 string pinFace = famHam ? (isGreen ? "Hammer" : "Hanging man") : (isGreen ? "Inv hammer" : "Shooting star")
@@ -1271,7 +1278,7 @@ if barOk and cands.size() > 0
         // resolve on one bar and a shared string would label each of them with
         // the last one's reason.
         string why = ""
-        if not tradeable and not c.ghost
+        if not gateOk and not c.ghost
             why := "bias turned " + biasState + " · " + endWhy
             if not c.armed
                 // The same event to an UNARMED candidate. `nMissBias` below is
@@ -1905,11 +1912,11 @@ var array<label> dbgBuf = array.new<label>()
 // every one of them said nothing and buried the marks that meant something,
 // so colour now decides which tier a bar lands in rather than which colour
 // the cross is.
-bool dbgKeep = colourOk and (pinOk or not tradeable)
+bool dbgKeep = colourOk and (pinOk or not gateOk)
 if dbgOn and pinRaw and (dbgKeep or dbgRejects)
     color dbgC = pinOk ? color.new(color.blue, 30)
       : not colourOk ? color.new(color.red, 45)
-      : not tradeable ? color.new(color.orange, 25)
+      : not gateOk ? color.new(color.orange, 25)
       : color.new(color.gray, 45)
     // A CIRCLE MEANS "this was the candle", cross means it was not. The bias
     // being off is not the candle's fault, so it keeps the circle.

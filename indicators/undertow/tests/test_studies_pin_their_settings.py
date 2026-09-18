@@ -60,7 +60,12 @@ PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
           #
           # `biasTier` was in here and is gone with the field: it could only
           # ever be read on the BS_SMC path and the shipped source bypasses it.
-          "useBackup", "famStrict", "armWins", "stopSrc")
+          "useBackup", "famStrict", "armWins", "stopSrc",
+          # `biasGate` went "tradeable" -> "direction only" and EVERY page was
+          # produced under the veto. It goes in here, and into all twenty
+          # baselines, BEFORE the default moves -- which is the order this file
+          # has had to state three times in one day.
+          "biasGate")
 # A SETTING THAT ONLY ONE SOURCE READS DOES NOT BELONG IN PINNED, because
 # PINNED makes EVERY study name it. `emaFast`/`emaSlow` moved 50/200 -> 9/21
 # when the EMA cross went on the chart, and putting them above made twelve
@@ -462,7 +467,39 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # worked. Additive; undertow_anchor re-ran BIT-IDENTICAL.
 #
 # 77 -> 78 fields.
-DEFAULTS_FINGERPRINT = "33b879adeacad6ef"
+# 2026-09-18: `msLen` 50 -> 14 and `biasGate` -> "direction only". SHIPPED, in
+# all three copies, at the strategy author's instruction.
+#
+# msLen, because at 50 a bar pivot needs fifty bars either side -- twelve and a
+# half hours on 15m -- and the bias cannot know about a trend that started this
+# morning. It read LONG on his Min15 chart in the middle of a multi-day
+# decline. Six alternative definitions were tested and EVERY ONE read SHORT
+# there: 14/3, 6/2, SMC, an EMA cross, a regression slope, a Donchian midpoint.
+# The genuinely fast ones are WORSE on the population -- Donchian is negative
+# on Min15 -- so the answer was the same engine at a shorter length, not a
+# different engine. Min30 spread +0.200 against +0.140; Min15 t 3.26 against
+# 2.86; 12 turns per thousand bars against 3.6; tradeable 41% against 24%.
+#
+# biasGate, because "keep bias as the direction, nothing will stop the trade".
+# Immature, Running and Ending all trade now. `Result.armed` carries the state
+# on every setup, and the alert and panel report it, so the three can be scored
+# apart later -- which is the stated reason for taking them all.
+#
+# THE PROCEDURE, IN THE ONLY ORDER THAT WORKS, and this file has had to say so
+# three times today:
+#   1. `biasGate` went into PINNED above. It was NOT there and every one of the
+#      twenty studies read it from the default.
+#   2. All twenty now pass biasGate=U.BG_TRADEABLE, which is what every
+#      published page was produced under.
+#   3. Only then did the default move.
+# undertow_anchor, _htf and _slope all re-ran BIT-IDENTICAL before this line.
+#
+# AND THE THREE-WAY CHECK WAS NOT WATCHING msLen. It sat in the ABSENT bucket
+# as "bar-pivot bias only" while the watcher had MS_LEN and fed it straight to
+# _bar_pivots -- so the check that exists to stop the chart and the bot
+# drifting apart was blind to the single largest lever on either. Moved to
+# MIRRORED with msShortLen and biasGate.
+DEFAULTS_FINGERPRINT = "be2ecc06ce36fb9a"
 DEFAULTS_COUNT = 78
 
 good = []

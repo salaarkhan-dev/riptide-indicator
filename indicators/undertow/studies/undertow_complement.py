@@ -49,7 +49,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # AS SHIPPED, PINNED -- see test_studies_pin_their_settings.py. Identical to
 # undertow_strict.py's BASE, deliberately: this study has to reproduce that
 # one's I2 arm exactly or its own impossibility fires.
-BASE = U.P(stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_SMC, smcSwingLen=14, smcInternalLen=5,
+BASE = U.P(biasGate=U.BG_TRADEABLE, stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_SMC, smcSwingLen=14, smcInternalLen=5,
            confirmOrder=U.C_WF, failTest=U.T_TOUCH,
            pinNewest=True, famPriority=True, famStrict=False, famInvert=False,
            pinAt=U.PIN_PULL, locTol=0, armWins=False,

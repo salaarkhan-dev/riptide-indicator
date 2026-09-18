@@ -149,8 +149,15 @@ SMC_INTERNAL_LEN = 5
 # IT IS THE ONLY ENGINE HERE WITH AN INDUCEMENT, which is why the chart made it
 # the default: a close beyond the running extreme is a BOS only once the minor
 # low below has been swept.
-MS_LEN = 50
+# 50 -> 14. At 50 a bar pivot needs fifty bars either side -- twelve and a half
+# hours on 15m -- and the bias could not know about a trend that started this
+# morning. It read LONG on a Min15 chart in the middle of a multi-day decline.
+MS_LEN = 14
 MS_SHORT_LEN = 3
+# WHAT THE BIAS IS FOR. "direction only" ships: the bias says which way and
+# never refuses a setup, so Immature, Running and Ending all alert. The state
+# rides along on every alert so the three can be scored apart later.
+BIAS_GATE = "direction only"
 MS_BOS_NEEDS_IDM = True
 # THE CONFIRMATION ORDER, and it matches the port's default and the chart's.
 # v1 armed on "both lines, in either order", which was a misreading of the
@@ -696,6 +703,8 @@ def run_setups(cs, max_live: int = 4):
         if biasSeen and (endA or endB or endC or endD):
             ending = True
         tradeable = biasSeen and not ending
+        # The gate every setup test reads -- see BIAS_GATE.
+        gate_ok = tradeable if BIAS_GATE == "tradeable" else biasSeen
         state = ("none" if not biasSeen else "ending" if ending
                  else "immature" if bosN == 0 else "running")
 
@@ -721,7 +730,7 @@ def run_setups(cs, max_live: int = 4):
         armWon: set = set()
         for cd in list(cands):
             gone = False
-            if not tradeable:
+            if not gate_ok:
                 cands.remove(cd)
                 continue
             if not cd.armed:
@@ -880,7 +889,7 @@ def run_setups(cs, max_live: int = 4):
         # and the port has always had it after; at max_live 64 the pool never
         # reaches the cap and the two agree, which is why the parity test --
         # which ran only at 64 -- never saw it.
-        if (famOk and tradeable and colourOk
+        if (famOk and gate_ok and colourOk
                 and (i - pbExtX) <= LOC_TOL):
             # THE NEWEST PIN SUPERSEDES, AND THE PRIORITY SHAPE OUTRANKS
             # RECENCY. Hammer in a bearish trend, shooting star in a bullish

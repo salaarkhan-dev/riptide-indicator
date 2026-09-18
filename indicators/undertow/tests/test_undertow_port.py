@@ -357,7 +357,12 @@ def test_ghosts_do_not_touch_the_real_numbers():
     # producing a filled ghost at all -- which would leave the accounting
     # under test asserted on an empty column.
     cs = walk(3000, seed=43, drift=0.0004)
+    # `biasGate` IS NAMED. It shipped at "direction only", under which the
+    # gate never cancels anything and `nMissBias` is 0 by construction -- this
+    # whole test then asserts an empty column. The ghost accounting is a fact
+    # about the VETO, so the veto is what it runs.
     a = U.run(cs, U.P(swingSrc=U.SW_BAR, msLen=6, msShortLen=2,
+                      biasGate=U.BG_TRADEABLE,
                       famStrict=False, armWins=False, stopSrc=U.S_PULL), "T")
     ok(a.nMissBias > 0, f"the bias gate cancelled something: {a.nMissBias}")
     ok(len(a.ghosts) > 0, f"some of those ghosts filled: {len(a.ghosts)}")

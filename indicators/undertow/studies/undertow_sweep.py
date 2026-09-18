@@ -68,7 +68,7 @@ def grid():
                     # endSweep/endStale were True when UNDERTOW_PARAMS.md
                     # was run and are False now; pinned so the page still
                     # reproduces. See test_studies_pin_their_settings.py.
-                    yield U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, endMinor=em, htfMult=h, rr=rr, feeFrac=FEE,
+                    yield U.P(biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, endMinor=em, htfMult=h, rr=rr, feeFrac=FEE,
                               confirmOrder=U.C_EITHER,
                               endSweep=True, endStale=True, **sw)
 

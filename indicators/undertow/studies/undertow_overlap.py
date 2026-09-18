@@ -39,7 +39,7 @@ from research.data import SYMBOLS                                # noqa: E402
 # AS PUBLISHED, PINNED — see test_studies_pin_their_settings.py. maxLive is 64
 # rather than the chart's 4 for the usual reason: the cap turns setups away and
 # would itself suppress the overlap this is trying to size.
-SHIPPED = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
+SHIPPED = U.P(biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
               swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,
               endSweep=False, endStale=False)
 HOURS = {"Min15": 0.25, "Min30": 0.5, "Min60": 1.0}

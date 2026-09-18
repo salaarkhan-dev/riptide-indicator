@@ -74,6 +74,16 @@ MIRRORED = {
     "pinNewest": ("const", "PIN_NEWEST"),
     "famPriority": ("const", "FAM_PRIORITY"),
     "famStrict": ("const", "FAM_STRICT"),
+    # THESE THREE WERE IN THE WRONG BUCKET AND ONE OF THEM MATTERED. `msLen`
+    # and `msShortLen` sat in ABSENT as "bar-pivot bias only" -- but the
+    # watcher HAS MS_LEN and MS_SHORT_LEN and feeds them straight to
+    # `_bar_pivots`. So the check that exists to stop the chart and the bot
+    # drifting apart was not comparing the single largest lever on either of
+    # them, and msLen 50 -> 14 could have shipped to one and not the other in
+    # silence. `biasGate` is new and is mirrored from the start.
+    "msLen": ("const", "MS_LEN"),
+    "msShortLen": ("const", "MS_SHORT_LEN"),
+    "biasGate": ("const", "BIAS_GATE"),
     # BOTH WERE HARDCODED AND BOTH BECAME REAL. This check is what said so, the
     # moment the chart's defaults moved: it had `armWins` pinned at False and
     # `stopSrc` at the pullback extreme with the watcher's code as the reason,
@@ -125,7 +135,6 @@ ABSENT = {
     # without a line of code changing anywhere.
     "pinLag": (0, "the watcher trades the newest qualifying candle"),
     "retraceLatch": (True, "the watcher latches Ending like the chart"),
-    "biasGate": ("tradeable", "the watcher refuses a setup while Ending"),
     "locAtr": (0.0, "the watcher's location test counts bars"),
     "pbLook": (10, "PIN_LOCAL only; the watcher has no local anchor"),
     "shortsOnly": (False, "the watcher alerts both directions"),
@@ -143,8 +152,6 @@ ABSENT = {
     "matureBars": (None, "alt_structure only, unreachable at BS_SMC"),
     "msBosNeedsIdm": (None, "the BS_STRUCT branch only, unreachable at "
                             "BS_SMC; LuxAlgo's BOS has no inducement"),
-    "msLen": (None, "bar-pivot bias only"),
-    "msShortLen": (None, "bar-pivot bias only"),
     "emaFast": (None, "EMA bias only"), "emaSlow": (None, "EMA bias only"),
     "stAtrLen": (None, "supertrend bias only"),
     "stMult": (None, "supertrend bias only"),

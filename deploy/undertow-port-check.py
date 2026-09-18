@@ -340,7 +340,6 @@ def main() -> int:
         # both sit on the value that reproduces it. Either moving would put the
         # chart and the port on different admission rules without a line of
         # Pine changing.
-        "biasGate": ("tradeable", "the Pine refuses a setup while Ending"),
         "locAtr": (0.0, "the Pine's location test counts bars, not ATR"),
         "pbLook": (10, "PIN_LOCAL only; the Pine has no local anchor"),
         "shortsOnly": (False, "pin selection, research only"),

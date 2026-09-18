@@ -225,7 +225,22 @@ class P:
     """Every input in the Pine, same names, same defaults, plus the three the
     Pine cannot have. Frozen so a sweep cannot mutate a shared config."""
     # 1 · Bias
-    msLen: int = 50
+    # 50 -> 14. At 50 a bar pivot needs fifty bars either side, which on 15m
+    # is twelve and a half hours, and the bias could not know about a trend
+    # that started this morning: on the chart owner's own Min15 short it read
+    # LONG in the middle of a multi-day decline. Every shorter definition
+    # tested -- 14/3, 6/2, SMC, an EMA cross, a regression slope, a Donchian
+    # midpoint -- read SHORT there.
+    #
+    # It is also the root of the other two diagnosed setups: `ending` cannot
+    # clear and `pbExt` cannot reset, because both wait on events that at fifty
+    # bars are a hundred bars apart.
+    #
+    # The population does not argue against it. Forward-return spread, long
+    # minus short: Min30 +0.200 against +0.140, Min15 +0.100 at t 3.26 against
+    # +0.118 at t 2.86. It turns 3.4x more often -- 12 per thousand bars
+    # against 3.6 -- and is tradeable 41% of the time against 24%.
+    msLen: int = 14
     msShortLen: int = 3
     msBosNeedsIdm: bool = True
     endMinor: str = E_FLIP
@@ -431,7 +446,11 @@ class P:
     # setups will be taken into a leg that has already given itself back.
     # `biasSeen` is still required -- before the first CHoCH there is no
     # direction to trade, only the initial value of `os`.
-    biasGate: str = BG_TRADEABLE
+    # DIRECTION ONLY, by the strategy author's instruction: "keep bias as the
+    # direction, nothing will stop the trade". Immature, Running AND Ending all
+    # trade now; `Result.armed` carries the state on every setup, so the three
+    # can be scored apart later, which is the reason for taking them all.
+    biasGate: str = BG_DIRECTION
     # LOCATION IN ATR RATHER THAN IN BARS, and this is the knife edge fixed.
     # `locTol` counts BARS since the pullback extreme and ships at 0, so the
     # pin must BE the extreme bar -- a doji or a wrong-coloured bar there

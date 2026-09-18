@@ -46,7 +46,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # AS PUBLISHED, PINNED — see test_studies_pin_their_settings.py. W0 IS v1
 # EXACTLY AS SHIPPED, the same BASE undertow_v2.py uses, which is what makes
 # the two studies' baselines comparable.
-BASE = U.P(famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, failTest=U.T_CLOSE,
+BASE = U.P(biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, failTest=U.T_CLOSE,
            famPriority=False, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE,
            rr=3.5,
            swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,

@@ -80,7 +80,7 @@ def arms(tf, syms, strict):
         if not cs or len(cs) < 11000:
             continue
         for lag in (0, 1):
-            r = U.run(cs, U.P(pinLag=lag,
+            r = U.run(cs, U.P(biasGate=U.BG_TRADEABLE, pinLag=lag,
                               **{**BASE, 'famStrict': strict}), s)
             by = {(t.symbol, t.armBar): t for t in r.real}
             counts[lag][0] += len(r.armed)
