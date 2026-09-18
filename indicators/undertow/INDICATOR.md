@@ -1,6 +1,6 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED FIFTEEN TIMES, nothing promoted. The last two measured the
+**Status: MEASURED SIXTEEN TIMES, nothing promoted. The last two measured the
 CORRECTED rule — see SPEC.md 8 — and both are null. The fourteenth also found
 that the break-even line these pages quote, 22.2%, is the figure BEFORE costs:
 the real line is 22.9–23.5% and the shipped rule sits exactly on it. Ships as a
@@ -24,6 +24,8 @@ watch, OFF by default, saying so in every message.**
 | [`UNDERTOW_V3.md`](measurements/UNDERTOW_V3.md) | **the corrected ANCHOR — the counter-trend candle is the bounce attempt at the leg low, not the top of the pullback.** Positive on 3 of 3 and above its control on 3 of 3, the first arm here to do either, and **it clears neither bar** because every margin is a third of an SE. Two things it settled against me: **22.2% is the break-even BEFORE fees** — the real line is 22.9–23.5% and v1's win rate matches it to a tenth of a point on all three timeframes — and **the 76.7% family mix in my own prereg is an artifact of `locTol 0`**, where the pinned bar *is* the bar that made the low, so a green bar there is a hammer by construction. The trades the anchor ADDS are +0.054 / +0.107 / +0.089 R, none significant: the first thing here worth measuring twice |
 
 | [`UNDERTOW_SCALE.md`](measurements/UNDERTOW_SCALE.md) | **the 50/5 swing scale against 6/2 — NULL, and the price is not in R.** Δ of −0.061 / +0.019 / −0.006, every one inside one SE in both directions. What it buys: the bias flips **a sixth as often** (2.18 → 0.35 a day on 15m) and the strategy takes **39% of the trades**, for no change in expectancy. A quieter chart for the same money. It STAYS, by the prereg's asymmetric rule — a preference that costs nothing needs no overruling. Third universe to score the engine swap at nothing (+0.060 / −0.038 / +0.007). **Voided twice first, both times by my own checks**, once genuinely and once while the registered condition held exactly |
+
+| [`UNDERTOW_ANCHOR.md`](measurements/UNDERTOW_ANCHOR.md) | **the leg-extreme anchor — the author's stated rule, at the right object — and the cleanest negative here.** The pre-registered impossibility demanded ≥70% of its pins be the priority shape; it came in at **85.9 / 86.3 / 88.1%** against the shipped anchor's 53%. So the rule is not broken or mistuned — **it finds the candle the diagram draws nine times in ten, and those trades are worse**: the pool unique to it scores −0.093 / −0.040 / −0.196, the worst of the three on two timeframes. Negative on 3 of 3, below its control on 3 of 3, and the first arm in the project whose win rate sits consistently **under** the fee-inclusive line. Nothing ships |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
