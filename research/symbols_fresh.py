@@ -275,6 +275,36 @@ SYMBOLS_FRESH11 = (
 ).split()
 
 
+
+# THE TWELFTH FRESH SET, AND THE LAST ONE OF THIS SIZE. 86-156k 24h turnover.
+# 592 contracts pass the filter, 518 were already spoken for, 74 were unused --
+# so this takes 45 and leaves TWENTY-NINE. There is no thirteenth set of 45.
+#
+# WHAT THAT MEANS FOR THE PROGRAMME, said here rather than discovered later:
+# the disjoint-holdout method this repository has run twelve times is over.
+# A study after this one has three honest options and no fourth --
+#
+#   * 29 contracts, which will not field 20 symbols on Min60 and so cannot
+#     report the timeframe most of these questions are asked on
+#   * a smaller set, accepting that the population is now the thin tail and
+#     no longer resembles the one every earlier page measured
+#   * a different design entirely -- walk-forward on the spent sets, or a
+#     prospective forward record, which is what the watch was built for
+#
+# This set is spent on the SHIPPED CONFIGURATION rather than on one more
+# component, which is the right last use of it: twelve studies measured parts
+# and none measured the chart anybody would actually trade.
+SYMBOLS_FRESH12 = (
+    "VELO_USDT GLM_USDT F_USDT WAL_USDT TAIKO_USDT RECALL_USDT ESP_USDT "
+    "C98_USDT ALPINE_USDT SONIC_USDT CTC_USDT EPIC_USDT XEC_USDT "
+    "TROLLSOL_USDT MAVIA_USDT XNY_USDT ZIG_USDT SPACE_USDT 2Z_USDT "
+    "OFC_USDT EYE_USDT CTK_USDT RPL_USDT UMA_USDT AMP_USDT WCT_USDT "
+    "SLP_USDT JOE_USDT LUMIA_USDT FRAX_USDT NPC_USDT ORDER_USDT "
+    "GWEI_USDT TA_USDT ANIME_USDT GAS_USDT NEX_USDT BOBA_USDT OL_USDT "
+    "Q_USDT PTB_USDT MOCA_USDT WAXP_USDT PUMPBTC_USDT PROMPT_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
@@ -288,7 +318,8 @@ def assert_disjoint():
             "SYMBOLS_FRESH8": set(SYMBOLS_FRESH8),
             "SYMBOLS_FRESH9": set(SYMBOLS_FRESH9),
             "SYMBOLS_FRESH10": set(SYMBOLS_FRESH10),
-            "SYMBOLS_FRESH11": set(SYMBOLS_FRESH11)}
+            "SYMBOLS_FRESH11": set(SYMBOLS_FRESH11),
+            "SYMBOLS_FRESH12": set(SYMBOLS_FRESH12)}
     names = sorted(sets)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
