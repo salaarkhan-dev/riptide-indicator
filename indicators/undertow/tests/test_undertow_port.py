@@ -629,6 +629,46 @@ def test_the_stop_fallback_cannot_touch_a_source_that_has_a_minor_tier():
        f"the fallback stop IS the pullback stop: {len(sa & sb)}/{len(sa)} match")
 
 
+def test_pin_lag_picks_the_second_newest_and_costs_the_singletons():
+    """`pinLag` is the chart owner's "if three qualified, take n-1".
+
+    THE RULE ONLY BITES ON A MINORITY AND THE TEST SAYS SO. 82% of pullbacks
+    offer exactly one qualifying candle, so lag 1 cannot pick a different one
+    there -- it picks NOTHING, which is a real cost of the rule rather than a
+    detail, and `nLagShort` has to be non-zero for that reason.
+    """
+    cs = walk(8000, seed=73, drift=-0.0004)
+    a = U.run(cs, U.P(), "T")
+    b = U.run(cs, U.P(pinLag=1), "T")
+    ok(a.nLagShort == 0, f"lag 0 never runs short: {a.nLagShort}")
+    ok(b.nLagShort > 0, f"lag 1 gives up the single-candle pullbacks: {b.nLagShort}")
+    ok(0 < len(b.armed) < len(a.armed),
+       f"lag 1 arms fewer, not none: {len(b.armed)} of {len(a.armed)}")
+    # THE PICKED CANDLE IS A DIFFERENT ONE, not merely a subset. If lag 1 were
+    # just dropping setups, every pin it keeps would also be one lag 0 keeps.
+    pa = {(x["short"], x["pin"]) for x in a.armed}
+    pb = {(x["short"], x["pin"]) for x in b.armed}
+    ok(bool(pb - pa), f"lag 1 trades candles lag 0 never does: {len(pb - pa)}")
+    print(f"       lag0 {len(a.armed)} armed · lag1 {len(b.armed)} armed · "
+          f"{len(pb - pa)} pins unique to lag 1 · {b.nLagShort} pullbacks gave up")
+
+
+def test_shorts_only_removes_longs_without_disturbing_the_shorts():
+    """Filtering at the pin, not on the trade list.
+
+    A long that never existed also never took a `maxLive` slot. Filtering the
+    output afterwards would leave the shorts silently shaped by longs that were
+    never traded, which is not "just measure the shorts".
+    """
+    cs = walk(8000, seed=31, drift=-0.0003)
+    full = U.run(cs, U.P(maxLive=64), "T")
+    sh = U.run(cs, U.P(maxLive=64, shortsOnly=True), "T")
+    ok(all(x["short"] for x in sh.armed), "every armed setup is a short")
+    a = {(x["short"], x["pin"], x["bar"]) for x in full.armed if x["short"]}
+    b = {(x["short"], x["pin"], x["bar"]) for x in sh.armed}
+    ok(a == b, f"the shorts are the same ones: {len(a & b)}/{len(a)} at maxLive 64")
+
+
 def test_slope_in_hours_survives_an_aggregation():
     """THE CLAIM BEHIND `slopeUnit="hours"`, tested the same way the swings'
     was: aggregate 4:1 and count direction flips per unit of TIME.
@@ -843,6 +883,8 @@ def main():
                test_htf_gate_only_removes_setups,
                test_price_swing_sources_run_end_to_end,
                test_every_bias_source_can_actually_arm_a_setup,
+               test_pin_lag_picks_the_second_newest_and_costs_the_singletons,
+               test_shorts_only_removes_longs_without_disturbing_the_shorts,
                test_the_stop_fallback_cannot_touch_a_source_that_has_a_minor_tier,
                test_slope_in_hours_survives_an_aggregation,
                test_htf_hours_is_the_same_gate_in_a_consistent_unit):

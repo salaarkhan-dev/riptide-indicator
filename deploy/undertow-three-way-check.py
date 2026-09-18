@@ -118,6 +118,13 @@ HARDCODED = {
 # field has an OFF value, it must still be there; where it has none, the entry
 # is None and the reason carries the justification.
 ABSENT = {
+    # RESEARCH-ONLY PIN SELECTION. The watcher takes the newest qualifying
+    # candle and both directions, which is `pinLag` 0 and `shortsOnly` False --
+    # so the OFF value IS asserted here rather than left as None. A default
+    # moving would put the live alerts on a different candle from the chart
+    # without a line of code changing anywhere.
+    "pinLag": (0, "the watcher trades the newest qualifying candle"),
+    "shortsOnly": (False, "the watcher alerts both directions"),
     # the nine bias sources the watcher does not run. Guarded by biasSrc,
     # which is MIRRORED, so a switch away from SMC is caught there.
     # THESE TWO WERE IN THE HARDCODED BUCKET AND THE REASONS WERE WRONG.

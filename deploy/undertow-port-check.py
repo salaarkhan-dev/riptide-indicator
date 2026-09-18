@@ -323,6 +323,18 @@ def main() -> int:
     # value or None, why. None means the field has no "off" setting worth
     # asserting — it parameterises machinery the Pine does not contain.
     PINE_ABSENT = {
+        # RESEARCH-ONLY PIN SELECTION, and both sit on the value the chart
+        # behaves as. `pinLag` 0 is "trade the newest qualifying candle", which
+        # is what the Pine's supersede already produces; `shortsOnly` False is
+        # both directions, which is the only thing the Pine does. If either
+        # default moved, the chart and the port would part company in silence,
+        # which is what the OFF-value assertion below is for.
+        #
+        # They exist for undertow_pinlag.py, measuring the chart owner's own
+        # account of his eye -- "if three qualified, n, n-1 and n-2, take n-1".
+        # Nothing is on the chart until that measures something.
+        "pinLag": (0, "pin selection, research only"),
+        "shortsOnly": (False, "pin selection, research only"),
         # THE RETIRED BIAS SOURCES. EMA cross, Slope, Donchian midpoint,
         # Supertrend and MTF EMA align were all on the chart to be measured;
         # UNDERTOW_BIAS_SOURCE.md and undertow_slope.py measured them, none

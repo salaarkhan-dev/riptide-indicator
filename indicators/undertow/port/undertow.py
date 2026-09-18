@@ -358,6 +358,29 @@ class P:
     # hammer, and an inverted hammer then a hammer uses the hammer. At False
     # every pin runs as its own candidate, which is what v1 did.
     pinNewest: bool = True
+    # WHICH of the pullback's qualifying candles to trade, counting back from
+    # the newest. 0 = the newest, which is what `pinNewest` already produces
+    # and what ships. 1 = THE SECOND NEWEST -- "if three qualified, n, n-1 and
+    # n-2, take n-1" -- which is the chart owner's own description of what his
+    # eye does and has never been coded.
+    #
+    # IT BITES ON A MINORITY BY CONSTRUCTION. 82% of pullbacks offer exactly
+    # ONE qualifying candle under the strict shape gate (78% under the whole
+    # hammer family), so lag 1 can only differ on the remaining 18%, and the
+    # three-candle case it was described with is 2%. A study that compares two
+    # whole populations sharing 82% of their trades is measuring noise; the
+    # comparison that can answer this is PAIRED, on the pullbacks where the two
+    # rules pick different candles.
+    #
+    # A pullback with fewer qualifying candles than the lag needs produces NO
+    # setup. That is a real cost of the rule rather than an implementation
+    # detail, and `nLagShort` counts it so no page can quietly omit it.
+    pinLag: int = 0
+    # Take only shorts. The chart owner asked for the bearish leg on its own
+    # first -- "just measure the shorts and bearish whether this work or not"
+    # -- and filtering AFTER the run is not the same thing, because the longs
+    # would still have consumed `maxLive` slots and changed which shorts exist.
+    shortsOnly: bool = False
     confirmBars: int = 20
     fillBars: int = 20
     maxLive: int = 4
@@ -628,6 +651,10 @@ class Result:
     # Superseded by a later pin in the same pullback -- `pinNewest`. This is
     # the one that turned out to dominate the funnel.
     nSuper: int = 0
+    # Pullbacks that never offered enough qualifying candles for `pinLag` to
+    # have one to pick. At lag 0 this is always 0; at lag 1 it is most of them,
+    # and it is the honest cost of the rule.
+    nLagShort: int = 0
     # The bias stopped being tradeable while the candidate was still unarmed.
     nBiasDrop: int = 0
     # Fills that came from a backup zone rather than the Focus line. Counted
@@ -1546,6 +1573,21 @@ class _Cand:
     bkWhy: str = ""
     ran: bool = False
     late: bool = False
+    # HOW MANY QUALIFYING CANDLES CAME BEFORE THIS ONE in the same pullback,
+    # same direction. `pinLag` reads it: a candidate may arm only once exactly
+    # `pinLag` newer candles exist, so lag 0 is "nothing came after me" (what
+    # pinNewest already enforces by deletion) and lag 1 is "exactly one did".
+    pinIdx: int = 0
+    # Counted ONCE into nLagShort. A candidate can survive past the reset that
+    # ends its own pullback, and counting it at every later reset turned an
+    # honest diagnostic into a number four times too big.
+    lagCounted: bool = False
+    # WHICH PULLBACK THIS CANDLE BELONGS TO, stamped at creation. Recorded so
+    # two pin rules can be compared PAIRED on the same pullback: comparing
+    # whole populations that share 82% of their trades measures noise. It is
+    # taken at creation and not at the arm because a candidate can outlive the
+    # pullback that produced it.
+    pbStart: int = -1
 
 
 def run(cs, p: P = P(), symbol: str = "") -> Result:
@@ -1575,6 +1617,8 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
     live: list[Trade] = []
     pbExt = None
     pbExtX = None
+    # Qualifying candles so far in the CURRENT pullback, per direction.
+    pinSeen: dict = {}
     pbStartX = None
     # The per-leg running extreme, for PIN_LEG. See the constant's note.
     legMax = legMin = None
@@ -1595,6 +1639,18 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             pbExt = c.h if biasDir < 0 else c.l
             pbExtX = i
             pbStartX = i
+            # A NEW PULLBACK, so the qualifying candles start counting again.
+            # Anything still waiting on a newer candle that will now never
+            # come is the cost of `pinLag`, counted rather than dropped in
+            # silence.
+            if p.pinLag:
+                for x in cands:
+                    if (not x.armed and not x.ghost and not x.lagCounted
+                            and pinSeen.get(x.short, 0) - x.pinIdx - 1
+                            < p.pinLag):
+                        x.lagCounted = True
+                        res.nLagShort += 1
+            pinSeen = {}
         elif biasDir < 0 and c.h >= pbExt:
             pbExt, pbExtX = c.h, i
         elif biasDir > 0 and c.l <= pbExt:
@@ -1656,6 +1712,19 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                 # what makes F->W->F work.
                 ready = (cd.workOk and cd.failOk if p.confirmOrder == C_EITHER
                          else fHit and cd.workBar >= 0 and i > cd.workBar)
+                # THE LAG GATE. A candidate may arm only once EXACTLY `pinLag`
+                # newer qualifying candles exist in its pullback. At 0 that is
+                # "nothing came after me", which is what pinNewest already
+                # enforces by deleting the losers; at 1 it is "exactly one
+                # did", which is the chart owner's n-1.
+                #
+                # It is checked HERE, at the arm, rather than at the pin,
+                # because how many candles came after is not knowable when the
+                # candle forms. Deciding it at arm time is the only causal
+                # reading and is what a person watching the chart is doing.
+                if ready and p.pinLag:
+                    newer = pinSeen.get(cd.short, 0) - cd.pinIdx - 1
+                    ready = newer == p.pinLag
                 if ready:
                     sw = st["sTopY"][i] if cd.short else st["sBtmY"][i]
                     base = ((cd.hi if cd.short else cd.lo) if p.stopSrc == S_PIN
@@ -1692,7 +1761,8 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                                 bar=i, symbol=symbol, short=cd.short,
                                 entry=cd.focus, stop=cd.stop,
                                 target=cd.target, code=cd.code,
-                                state=cd.state, pin=cd.bar, order=cd.order))
+                                state=cd.state, pin=cd.bar, order=cd.order,
+                                pbStart=cd.pbStart, pinIdx=cd.pinIdx))
                             # FIRST TO ARM WINS. Every other candidate in the
                             # same direction that has NOT armed is dropped --
                             # the pattern completed somewhere, and the rest of
@@ -1972,6 +2042,12 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     res.nLoc += 1
                     if not htfOk:
                         res.nHtf += 1
+        # THE BEARISH LEG ON ITS OWN. Filtered here rather than on the trade
+        # list afterwards, because a long that never existed also never took a
+        # `maxLive` slot -- filtering after the run would leave the shorts
+        # changed by longs that were never traded.
+        if p.shortsOnly and biasDir > 0:
+            famOk = False
         if famOk and tradeable[i] and colourOk and locOk and htfOk and bosOk:
             # THE NEWEST COUNTER-TREND CANDLE SUPERSEDES THE ONES BEFORE IT,
             # across families. A hammer then an inverted hammer uses the
@@ -1979,7 +2055,15 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             # hammer. Only UNARMED candidates in the same direction are
             # dropped -- one that has already confirmed is a live setup with an
             # order behind it and is not somebody's second opinion any more.
-            if p.pinNewest:
+            # THIS CANDLE'S PLACE IN THE PULLBACK, before anything is dropped.
+            side = biasDir < 0
+            idx = pinSeen.get(side, 0)
+            pinSeen[side] = idx + 1
+            # `pinNewest` DELETES the older rivals, which is exactly right at
+            # lag 0 and destroys the rule at lag 1 -- the candle to be traded
+            # is one of the ones it would remove. So the deletion is skipped
+            # while lagging and the arm gate below does the selecting instead.
+            if p.pinNewest and not p.pinLag:
                 # THE PRIORITY SHAPE WINS, and the newest of that shape. A
                 # hammer (lower wick) in a bearish trend, a shooting star
                 # (upper wick) in a bullish one; the other shape is used only
@@ -2001,7 +2085,8 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             else:
                 cands.append(_Cand(
                     bar=i, hi=c.h, lo=c.l, focus=c.o, workHi=famHam,
-                    short=biasDir < 0, pbExt=pbExt,
+                    short=biasDir < 0, pbExt=pbExt, pinIdx=idx,
+                    pbStart=pbStartX if pbStartX is not None else i,
                     state=st["biasState"][i],
                     code=("HAM" if isGreen else "HGM") if famHam
                     else ("IH" if isGreen else "SS")))

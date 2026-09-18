@@ -349,8 +349,22 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # bit-identical against their pre-removal output before this line moved.
 #
 # 73 -> 72 fields.
-DEFAULTS_FINGERPRINT = "a0470f1043d0e13d"
-DEFAULTS_COUNT = 72
+# 2026-09-18: `pinLag` and `shortsOnly` added, for the chart owner's own
+# description of what his eye does -- "let's say three qualified (n, n-1,
+# n-2), in this case choose n-1".
+#
+# PURELY ADDITIVE. pinLag 0 is the newest candle, which is what `pinNewest`
+# already produced and what every page was measured under; shortsOnly False
+# keeps both directions. No existing default moves and no study's arms change.
+# undertow_anchor re-ran BIT-IDENTICAL before this line moved.
+#
+# NEITHER GOES IN PINNED. `shortsOnly` is read by one study and `pinLag` by
+# one, so putting them above would make twenty studies declare a setting they
+# do not use -- the `emaFast` argument, a few entries up.
+#
+# 72 -> 74 fields.
+DEFAULTS_FINGERPRINT = "f1a1453b6f15d4b4"
+DEFAULTS_COUNT = 74
 
 good = []
 
