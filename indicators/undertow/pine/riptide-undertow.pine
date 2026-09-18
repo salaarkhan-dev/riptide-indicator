@@ -175,6 +175,8 @@ showUnfilled = input.bool(true, "Draw setups that never filled", group = gShow,
   tooltip = "Armed setups that were stopped or expired before the limit filled, drawn muted with an ×. Off keeps the chart clean; ON is how you check past detection without waiting for live ones.")
 showStruct = input.bool(true, "Market structure", group = gShow,
   tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye. One toggle for all three.")
+showBias = input.bool(true, "Bias badge", group = gShow,
+  tooltip = "One cell in the BOTTOM RIGHT with the trend bias and its state, so the stats table can be switched off without losing the only line most people read off it.\n\nThe bias is the MAJOR tier — swing structure at the length set in group 1. It decides whether a setup can exist at all: no setup is taken while it reads `ending` or `none`, however good the candle looks.\n\nOrange is `ending`, and it is worth knowing how sticky that is. The retrace rule latches, and it only clears on a new CHoCH or a break of structure in the trend's direction — at a 50-bar swing those can be a hundred bars apart.")
 showStats = input.bool(true, "Stats table", group = gShow,
   tooltip = "The panel top-right. Its first row is the BIAS — direction and state — so turning the rest off still leaves that if you re-enable it. Off draws nothing and costs nothing.")
 showOB = input.bool(false, "Order blocks", group = gShow, inline = "z1",
@@ -1405,6 +1407,20 @@ if barOk and showFVG
 // `last reject` is the whole reason it exists: "why was nothing found" is the
 // only question a quiet detector ever raises, and a count alone cannot answer
 // it.
+
+// THE BIAS BADGE. The stats table is seventeen rows and most of the time the
+// only one being read is the first. This is that row on its own, in the
+// opposite corner, so the table can be turned off without losing the thing
+// that decides whether a setup can exist at all.
+var table biasTag = table.new(position.bottom_right, 1, 1, border_width = 0)
+if barstate.islast and showBias
+    color bbc = not biasSeen ? color.gray : ending ? color.orange
+      : biasDir > 0 ? colLong : colShort
+    table.cell(biasTag, 0, 0,
+      (not biasSeen ? "NO BIAS" : (biasDir > 0 ? "LONG" : "SHORT"))
+      + (biasSeen ? "  ·  " + str.upper(biasState) : ""),
+      text_color = color.white, bgcolor = color.new(bbc, 10),
+      text_size = size.normal)
 
 var table pnl = table.new(position.top_right, 2, 17, border_width = 1,
   frame_width = 1, frame_color = color.new(color.gray, 60))
