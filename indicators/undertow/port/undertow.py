@@ -278,7 +278,18 @@ class P:
     useStar: bool = True
     # 3 · Setup
     workTest: str = T_CLOSE
-    failTest: str = T_CLOSE
+    # "AFTER EXACT CLOSE AT THE FAILURE WE WILL CONSIDER AS FAILED, at that
+    # failure or beyond." The strategy's author, and it is a definition rather
+    # than a setting: a close that lands exactly ON the Failure line IS the
+    # failure. WORKING stays strict -- the counter-trend attempt has to
+    # genuinely clear its line for it to count as having worked, which is the
+    # asymmetry the rule describes.
+    #
+    # It bites less often than it sounds and more often than never: an exact
+    # equality needs a close on the tick, which happens on coarse ticks and
+    # round numbers. Every measurement page was produced under the strict test
+    # and each study now pins it.
+    failTest: str = T_TOUCH
     # THE DEFAULT IS THE CORRECTED RULE, and it matches the chart's. v1's
     # "either order" was a misreading of the strategy, so shipping it as the
     # default would mean the port and the Pine agree on a rule that is not the
@@ -297,7 +308,7 @@ class P:
     # it, across families: a hammer then an inverted hammer uses the inverted
     # hammer, and an inverted hammer then a hammer uses the hammer. At False
     # every pin runs as its own candidate, which is what v1 did.
-    pinNewest: bool = False
+    pinNewest: bool = True
     confirmBars: int = 20
     fillBars: int = 20
     maxLive: int = 4
@@ -323,7 +334,7 @@ class P:
     # The stated priority: HAMMER in a bearish trend, SHOOTING STAR in a
     # bullish one, with the other shape acceptable when the priority one is
     # absent. v1 had no ordering at all and took whichever sat at the extreme.
-    famPriority: bool = False
+    famPriority: bool = True
     locTol: int = 0
     pbMinAge: int = 0
     pbMinDepth: float = 0.0

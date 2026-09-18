@@ -140,6 +140,12 @@ SMC_INTERNAL_LEN = 5
 # in indicators/undertow/measurements was produced under the old rule and each
 # study now pins it; the WATCH trades the corrected one.
 CONFIRM_ORDER = "working then failure"
+# The author's stated rule, shipped as a correction — see
+# indicators/undertow/SPEC.md 2.3d. A close exactly ON the Failure line
+# IS the failure; Working stays strict.
+FAIL_TEST = "close at or beyond"
+PIN_NEWEST = True
+FAM_PRIORITY = True
 END_MINOR = "on the flip"
 END_SWEEP = False
 END_STALE = False
@@ -539,8 +545,13 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
                     cd.pbExt = c.h
                 if not cd.short and c.l < cd.pbExt:
                     cd.pbExt = c.l
+                # WORKING IS STRICT AND FAILURE IS INCLUSIVE, which is the
+                # author's rule rather than a symmetry that got broken: a
+                # close exactly ON the Failure line IS the failure, while the
+                # counter-trend attempt has to genuinely clear its line to
+                # count as having worked. FAIL_TEST names it.
                 wHit = (c.c > cd.hi) if cd.workHi else (c.c < cd.lo)
-                fHit = (c.c < cd.lo) if cd.workHi else (c.c > cd.hi)
+                fHit = (c.c <= cd.lo) if cd.workHi else (c.c >= cd.hi)
                 # THE ORDER IS NOT FREE, and this comment used to say it was.
                 # A WORKING break must come first and a FAILURE break after it:
                 # the pin is a counter-trend candle, W is it appearing to work
@@ -627,6 +638,24 @@ def run_setups(cs, ms_len: int = 6, max_live: int = 64):
         colourOk = isGreen if biasDir < 0 else not isGreen
         if ((famHam or famStar) and tradeable and colourOk
                 and (i - pbExtX) <= LOC_TOL and len(cands) < max_live):
+            # THE NEWEST PIN SUPERSEDES, AND THE PRIORITY SHAPE OUTRANKS
+            # RECENCY. Hammer in a bearish trend, shooting star in a bullish
+            # one; the other shape is usable and second choice. A non-priority
+            # candle does not displace a priority one that is still waiting,
+            # and an ARMED candidate is never touched — it has levels and an
+            # order behind it.
+            if PIN_NEWEST:
+                isPriority = famHam if biasDir < 0 else famStar
+                # No `ghost` term: the port keeps bias-cancelled setups to
+                # score them and this scanner drops them, so every candidate
+                # here is already a real one.
+                rivals = [x for x in cands
+                          if not x.armed and x.short == (biasDir < 0)]
+                if FAM_PRIORITY and not isPriority:
+                    held = any(x.workHi == (biasDir < 0) for x in rivals)
+                    rivals = [] if held else rivals
+                for x in rivals:
+                    cands.remove(x)
             cands.append(_Cand(
                 bar=i, hi=c.h, lo=c.l, focus=c.o, workHi=famHam,
                 short=biasDir < 0, pbExt=pbExt, state=state,

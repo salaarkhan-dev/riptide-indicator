@@ -42,7 +42,8 @@ STUDIES = pathlib.Path(__file__).resolve().parents[1] / "studies"
 # this list when you move another one -- that is cheaper than the alternative,
 # which is finding out from a table that silently disagrees with its page.
 PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
-          "endStale", "confirmOrder", "biasSrc")
+          "endStale", "confirmOrder", "biasSrc", "pinNewest", "famPriority",
+          "failTest")
 # A study whose whole job is to describe what currently ships puts this on the
 # line that reads the default. It is a deliberate, visible opt-out.
 EXEMPT = "TRACKS THE CURRENT DEFAULT"
@@ -129,7 +130,21 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # (undertow_v2's SMC dict, undertow_scale's arms), checked rather than assumed,
 # and no study reads these from the default. The pinning test's own rule is
 # what made that cheap to verify.
-DEFAULTS_FINGERPRINT = "bdc05ec8da4e59af"
+#
+# 2026-09-18: `pinNewest` and `famPriority` ON, `failTest` → "close at or
+# beyond". All three are the strategy author's stated rule, shipped as a
+# CORRECTION on the footing W→F went out on: the author's rule goes on the
+# chart, and measurement decides defaults it has an opinion about.
+# UNDERTOW_V3.md measured the pair at nothing, so it has none.
+#
+# THE PROCEDURE, AND THE TRAP IT ALMOST WALKED INTO. Every study was pinned
+# first — and the textual check that drives PINNED reads the WHOLE FILE, so
+# undertow_pin, undertow_v2 and undertow_v3 all looked pinned because they name
+# `pinNewest` or `famPriority` in an ARM dict while their BASE read the
+# default. Caught by constructing each BASE and printing the three fields
+# rather than trusting the grep. That is a real weakness in this test: it
+# proves a name appears, not that the baseline names it.
+DEFAULTS_FINGERPRINT = "3c3ba96d84fac3c4"
 DEFAULTS_COUNT = 65
 
 good = []

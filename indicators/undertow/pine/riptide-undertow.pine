@@ -108,7 +108,17 @@ string tBody = "whole body beyond"
 // judge "close at or beyond" against "whole body beyond" from a chart and no
 // study has ever varied them. They stay in the port, unmeasured, where an
 // unmeasured option belongs.
-string kTest = "close beyond"
+// THE TWO TESTS ARE NO LONGER THE SAME, and that is the strategy's author's
+// correction: "after exact close AT the failure we will consider as failed, at
+// that failure or beyond". A close that lands exactly on the Failure line IS
+// the failure. Working stays strict — it has to be genuinely cleared for the
+// counter-trend attempt to count as having worked.
+//
+// It matters less often than it sounds and more than nothing: an exact equality
+// needs a close on the tick, which happens on coarse ticks and round numbers.
+// It is here because it is the rule, not because it was measured.
+string kWork = "close beyond"
+string kFail = tTouch
 confirmOrder = input.string("working then failure", "Confirmations", group = gSet,
   options = ["working then failure", "either order"],
   tooltip = "THE ORDER THE TWO CONFIRMATIONS MUST ARRIVE IN, and the default is a CORRECTION rather than a preference.\n\n'working then failure' is the strategy: the pin is a counter-trend candle, W is it appearing to WORK as a reversal, F is that reversal FAILING, and the limit goes at the Focus line on the failure. So the attempt has to happen first.\n\n    W → F          arms\n    F → W → F      arms, on the second F\n    F → W          does NOT arm — waits for an F\n\n'either order' is what v1 did and it is a different event: it admits bars where the reversal never worked at all and only the same two lines were touched. Every measurement page in ../measurements was produced under it.\n\nA bar that spans BOTH lines does not arm either way — intrabar order is unknowable and this indicator resolves that against the trade everywhere else.")
@@ -919,8 +929,8 @@ if barOk and cands.size() > 0
                 c.pbExt := high
             if not c.short and low < c.pbExt
                 c.pbExt := low
-            bool wHit = c.workHi ? beyondUp(c.hi, kTest) : beyondDn(c.lo, kTest)
-            bool fHit = c.workHi ? beyondDn(c.lo, kTest) : beyondUp(c.hi, kTest)
+            bool wHit = c.workHi ? beyondUp(c.hi, kWork) : beyondDn(c.lo, kWork)
+            bool fHit = c.workHi ? beyondDn(c.lo, kFail) : beyondUp(c.hi, kFail)
             if wHit and not c.workOk
                 c.workOk := true
                 c.workBar := bar_index
@@ -1091,11 +1101,33 @@ if pinOk
         nCap := nCap + 1
         lastReject := "at the live cap (" + str.tostring(maxLive) + ")"
     else
+        // THE NEWEST PIN SUPERSEDES, AND THE PRIORITY SHAPE OUTRANKS RECENCY.
+        // The strategy's author, three times: in a bearish trend the candle
+        // working against it is the GREEN HAMMER and in a bullish one the RED
+        // SHOOTING STAR; the other shape is usable but second choice.
+        //
+        // So a new pin clears the unarmed candidates in its own direction —
+        // EXCEPT that a non-priority shape does not displace a priority one
+        // that is still waiting. An armed candidate is never touched: it has
+        // levels and an order behind it and is not somebody's second opinion.
+        //
+        // Ported from the port's block of the same name, which is the only
+        // copy that had it. UNDERTOW_V3.md measured the pair at nothing;
+        // it ships because it is the rule, on the same footing as W→F.
+        bool isPriority = biasDir < 0 ? famHam : famStar
+        bool held = false
+        if not isPriority and cands.size() > 0
+            for i = 0 to cands.size() - 1
+                Cand x = cands.get(i)
+                if not x.armed and not x.ghost and x.short == (biasDir < 0)
+                    held := held or (x.workHi == (biasDir < 0))
+        if not held and cands.size() > 0
+            for i = cands.size() - 1 to 0
+                Cand x = cands.get(i)
+                if not x.armed and not x.ghost and x.short == (biasDir < 0)
+                    cands.remove(i)
         // WORKING IS THE DIRECTION THE CANDLE'S SHAPE PREDICTS, and Failure is
-        // the opposite. They are NOT fixed to high and low. While the two
-        // comparison modes match, they are mechanically identical — a close
-        // beyond the high and a close beyond the low — and the labelling only
-        // starts to matter when the Working and Failure tests differ.
+        // the opposite. They are NOT fixed to high and low.
         cands.push(Cand.new(bar = bar_index, hi = high, lo = low, focus = open,
           workHi = famHam, short = biasDir < 0, pbExt = pbExt, tag = pinTag,
           code = pinCode, state = biasState))
