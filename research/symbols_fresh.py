@@ -226,6 +226,24 @@ SYMBOLS_FRESH9 = (
 ).split()
 
 
+# THE TENTH FRESH SET, for the leg-anchor study. 100-112k 24h turnover, and
+# the band is narrowing as the tail flattens out: FRESH8 122-1230, FRESH9
+# 109-168, FRESH10 100-112. 122 unused contracts remain, which is two more
+# sets of this size at most before the population stops resembling the one
+# every earlier page was measured on.
+SYMBOLS_FRESH10 = (
+    "KAT_USDT BIANRENSHENG_USDT GMX_USDT EUL_USDT AXL_USDT "
+    "SOONNETWORK_USDT 1000000MOG_USDT MELANIA_USDT FLUX_USDT "
+    "US_USDT SKL_USDT SSV_USDT DOOD_USDT SHELL_USDT CLO_USDT "
+    "DIA_USDT NEWT_USDT CHR_USDT AUCTION_USDT VELODROME_USDT "
+    "PHAROS_USDT HOME_USDT 1000BTT_USDT JIMOTHY_USDT ZKP_USDT "
+    "CTSI_USDT ERA_USDT MAGIC_USDT B3_USDT ZEREBRO_USDT JCT_USDT "
+    "HMSTR_USDT USTC_USDT AEVO_USDT OPENLEDGER_USDT HYPER_USDT "
+    "STO_USDT ARPA_USDT COOKIE_USDT CTR_USDT ACU_USDT SFP_USDT "
+    "TOAD_USDT BAS_USDT BLEND_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
@@ -237,7 +255,8 @@ def assert_disjoint():
             "SYMBOLS_FRESH6": set(SYMBOLS_FRESH6),
             "SYMBOLS_FRESH7": set(SYMBOLS_FRESH7),
             "SYMBOLS_FRESH8": set(SYMBOLS_FRESH8),
-            "SYMBOLS_FRESH9": set(SYMBOLS_FRESH9)}
+            "SYMBOLS_FRESH9": set(SYMBOLS_FRESH9),
+            "SYMBOLS_FRESH10": set(SYMBOLS_FRESH10)}
     names = sorted(sets)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
