@@ -629,6 +629,16 @@ class Result:
     nMissStop: int = 0
     nMissGone: int = 0
     nMissBias: int = 0
+    # Candidates that expired inside the confirm window, split by what was
+    # missing. nLoc - nCap - nArmed == nNoWork + nNoFail + whatever is still
+    # live at the end of the series.
+    nNoWork: int = 0
+    nNoFail: int = 0
+    # Superseded by a later pin in the same pullback -- `pinNewest`. This is
+    # the one that turned out to dominate the funnel.
+    nSuper: int = 0
+    # The bias stopped being tradeable while the candidate was still unarmed.
+    nBiasDrop: int = 0
     # Fills that came from a backup zone rather than the Focus line. Counted
     # apart so no number can imply the limit worked when it did not.
     nBackup: int = 0
@@ -1595,6 +1605,13 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             gone = False
             filled = False
             if not tradeable[i] and not cd.ghost:
+                if not cd.armed:
+                    # THE BIAS TURNED UNDER AN UNARMED CANDIDATE. Counted
+                    # separately from nMissBias, which is the same event to an
+                    # ARMED setup and already has a panel row -- this one had
+                    # none, and between it and nSuper they are three quarters
+                    # of the drop from "setups found" to "triggered".
+                    res.nBiasDrop += 1
                 if cd.armed:
                     res.nMissBias += 1
                     w = st["endWhy"][i]
@@ -1693,6 +1710,23 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                         else:
                             gone = True
                 elif i - cd.bar >= p.confirmBars:
+                    # WHY THE FUNNEL NARROWS, and nothing counted it until
+                    # somebody looked at a panel reading "setups found 139,
+                    # triggered 13" and had nowhere to go. The panel has a
+                    # whole section for why an ARMED setup did not enter and
+                    # had none for the far bigger drop before it.
+                    #
+                    # Two different failures and they mean different things: a
+                    # pin whose Working line never broke was never a reversal
+                    # attempt at all, and one that worked and never failed is
+                    # a reversal that is still going. The second is the
+                    # strategy being right about the candle and wrong about
+                    # what came next; the first is just a shape that did
+                    # nothing.
+                    if not cd.workOk:
+                        res.nNoWork += 1
+                    else:
+                        res.nNoFail += 1
                     gone = True
 
             if not gone and cd.armed and p.stopTrack and p.stopSrc == S_PULL:
@@ -1809,6 +1843,7 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
         # THE ARM-WINS SWEEP, after every candidate has had its bar.
         for x in [y for y in cands
                   if not y.armed and not y.ghost and y.short in armWon]:
+            res.nSuper += 1
             cands.remove(x)
 
         # ── filled trades, walked to their target or their stop ─────────────
@@ -1945,6 +1980,7 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     held = any(x.workHi == (biasDir < 0) for x in rivals)
                     rivals = [] if held else rivals
                 for x in rivals:
+                    res.nSuper += 1
                     cands.remove(x)
             if len([x for x in cands if not x.ghost]) >= p.maxLive:
                 res.nCap += 1

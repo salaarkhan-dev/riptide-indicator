@@ -1124,6 +1124,14 @@ var int nPins = 0
 var int nColour = 0
 var int nLoc = 0
 var int nCap = 0
+// WHERE THE FUNNEL GOES, and none of this was counted until a panel reading
+// "setups found 139 · triggered 13" left the reader with nowhere to look. The
+// panel has had a whole section for why an ARMED setup did not ENTER since v1
+// and nothing at all for the much bigger drop before it.
+var int nSuper = 0
+var int nBiasDrop = 0
+var int nNoWork = 0
+var int nNoFail = 0
 var int nArmed = 0
 var int nFilled = 0
 // Armed and then lost, split by HOW — because the split is the whole point.
@@ -1191,6 +1199,12 @@ if barOk and cands.size() > 0
         string why = ""
         if not tradeable and not c.ghost
             why := "bias turned " + biasState + " · " + endWhy
+            if not c.armed
+                // The same event to an UNARMED candidate. `nMissBias` below is
+                // the armed case and has had a panel row since v1; this one
+                // had none, and with nSuper it is three quarters of the drop
+                // from "setups found" to "triggered".
+                nBiasDrop := nBiasDrop + 1
             if c.armed
                 nMissBias := nMissBias + 1
                 nEndMinor := nEndMinor + (endWhy == "minor" ? 1 : 0)
@@ -1295,6 +1309,15 @@ if barOk and cands.size() > 0
                     gone := true
             else if bar_index - c.bar >= confirmBars
                 why := "confirm window · no " + (not c.workOk ? "W" : confirmOrder == "either order" ? "F" : "F after the W")
+                // TWO DIFFERENT FAILURES. A pin whose Working line never broke
+                // was never a reversal attempt at all; one that worked and
+                // never failed is a reversal still going. The first is a shape
+                // that did nothing, the second is the strategy right about the
+                // candle and wrong about what came next.
+                if not c.workOk
+                    nNoWork := nNoWork + 1
+                else
+                    nNoFail := nNoFail + 1
                 gone := true
         // THE PULLBACK IS OFTEN NOT FINISHED WHEN A SETUP ARMS, and freezing
         // the stop there sets it on an unfinished move. A long cannot arm
@@ -1375,6 +1398,7 @@ if (armWonUp or armWonDn) and cands.size() > 0
     for k = cands.size() - 1 to 0
         Cand y = cands.get(k)
         if not y.armed and not y.ghost and (y.short ? armWonDn : armWonUp)
+            nSuper := nSuper + 1
             cands.remove(k)
 
 if barOk and trades.size() > 0
@@ -1446,6 +1470,7 @@ if pinOk
         for i = cands.size() - 1 to 0
             Cand x = cands.get(i)
             if not x.armed and not x.ghost and x.short == (biasDir < 0)
+                nSuper := nSuper + 1
                 cands.remove(i)
     // THE CAP IS COUNTED AFTER THE SUPERSEDE, and it used to be counted
     // before. The order is not cosmetic: the pin above usually DROPS its
@@ -2001,7 +2026,13 @@ if barstate.islast and showBias
       text_color = color.white, bgcolor = color.new(bbc, 10),
       text_size = size.normal)
 
-var table pnl = table.new(position.top_right, 2, 17, border_width = 1,
+// 22 ROWS, AND THE COUNT HAS TO MATCH. table.cell past the declared height is
+// a Pine RUNTIME error, which takes the whole indicator down -- the same class
+// as the max_bars_back bug this chart already shipped once. Three funnel rows
+// were added here at 17 and the panel would have died on the first bar.
+// deploy/pine-static-check.py now compares the declared height against the
+// highest row index used.
+var table pnl = table.new(position.top_right, 2, 22, border_width = 1,
   frame_width = 1, frame_color = color.new(color.gray, 60))
 
 // `tip` rather than a wider cell: the caveats belong ON the number they
@@ -2028,9 +2059,19 @@ if barstate.islast and showStats
       "bars since the pullback began and how much of the impulse it has given back")
     row(2, "setups found", str.tostring(nLoc), color.gray,
       "candles that passed all four tests: a dominant wick, a tradeable bias, the counter-trend colour, and sitting at the pullback extreme. Nothing has been confirmed yet — these are candidates.")
-    row(3, "triggered", str.tostring(nArmed), color.gray,
-      "of those, the ones where price then closed beyond BOTH the pin's high and its low inside the confirm window, and a sane stop existed. This is where a limit order would go on.")
-    row(4, "entered", str.tostring(nFilled), color.gray,
+    // WHERE THE OTHER 87% WENT. Measured across 23 symbols at 30m: of 4,051
+    // setups found, 12.7% arm. The panel used to print the two ends of that
+    // and nothing in between, so the honest reading of "139 found, 13
+    // triggered" was unavailable — it looks like 126 failures and it is not.
+    row(3, "  superseded", str.tostring(nSuper), color.gray,
+      "OF THE SETUPS FOUND, the ones replaced by a LATER pin in the same pullback before they could confirm. This is the largest single bucket by a distance — 52% of all setups found, measured across 23 symbols at 30m.\n\nTHEY ARE NOT FAILURES. A pullback offers several counter-trend candles and 'newest wins' keeps the last one; the earlier ones were never going to run alongside it. A panel that prints 'found 139, triggered 13' and nothing between them reads as 126 things going wrong, and about half of them are this.\n\nTurn off `pinNewest` in the port to keep them all — it is not a chart input, deliberately.")
+    row(4, "  bias turned", str.tostring(nBiasDrop), color.gray,
+      "OF THE SETUPS FOUND, the ones dropped because the bias stopped being tradeable while they were still waiting to confirm. 23% at the same measurement.\n\nThis is the same event as the 'bias' entry on the no-entry row below, but to a candidate that had not armed yet — that row counts only ARMED setups the bias cancelled, and until now nothing counted these.\n\nThe retrace rule is most of it. See 'End: retraced %'.")
+    row(5, "  no W · W no F", str.tostring(nNoWork) + " · " + str.tostring(nNoFail), color.gray,
+      "OF THE SETUPS FOUND, the ones that ran out the confirm window. 5.6% and 6.9% at the same measurement, so together barely an eighth of the drop — WIDENING THE WINDOW IS NOT THE LEVER it looks like. At confirmBars 60 instead of 20 the arming rate goes from 12.7% to 15.6%.\n\nTWO DIFFERENT THINGS. 'no W' never broke its Working line: the reversal attempt never happened and the candle was just a shape. 'W no F' worked and never failed — the strategy was right about the candle and wrong about what came next, which is the more interesting of the two.")
+    row(6, "triggered", str.tostring(nArmed), color.gray,
+      "of those, the ones where price then closed beyond BOTH the pin's high and its low inside the confirm window, and a sane stop existed. This is where a limit order would go on.\n\nMEASURED AT 12.7% OF SETUPS FOUND across 23 symbols at 30m, so a ratio like 139 to 13 is the shipped behaviour rather than a fault. The three rows above say where the rest went.")
+    row(7, "entered", str.tostring(nFilled), color.gray,
       "of those, the ones where price came back and touched the limit at the Focus line.")
     // `trades` HOLDS GHOSTS TOO, and counting them here was a real bug: the
     // panel read "28 / 58 · 1 open" while `entered` read 86, because the one
@@ -2065,59 +2106,59 @@ if barstate.islast and showStats
     float beRate = 100.0 * (1.0 + feeR) / (1.0 + rr)
     // The colour is the same comparison as the number: net R above zero after
     // costs is exactly a win rate above this line.
-    row(5, "won / lost · be " + str.tostring(beRate, "#.#") + "%",
+    row(8, "won / lost · be " + str.tostring(beRate, "#.#") + "%",
       nRes == 0 ? "—" : str.tostring(nWon) + " / " + str.tostring(nLost)
       + " · " + str.tostring(100.0 * nWon / nRes, "#.#") + "%"
       + (openReal > 0 ? " · " + str.tostring(openReal) + " open" : ""),
       netR > 0 ? colLong : netR < 0 ? colShort : color.gray,
       "entered trades walked forward to their target or their stop, stop first when one bar spans both, and the share of them that won.\n\nBREAK-EVEN AT " + str.tostring(rr, "#.#") + "R IS " + str.tostring(beRate, "#.#") + "%, AFTER THE ROUND-TRIP FEE. Before it the line would be " + str.tostring(100.0 / (1.0 + rr), "#.#") + "%, which is also what a driftless random walk returns — but the fee is charged in price and the trade is scored in R, so it costs " + str.tostring(feeR, "#.###") + "R on the trades taken here and the line moves up by that much. This percentage is only information relative to the line, and the colour is that comparison. Green is above it, red below.\n\nSet the round-trip fee to 0 under Levels to read it gross.\n\n`open` counts REAL trades only — a ghost still running is on the gate-cost row, not here, and won + lost + open always equals `entered`. IN-SAMPLE: same caveat as net R.")
-    row(6, "  running", nRun == 0 ? "—" : str.tostring(nWonRun) + " / "
+    row(9, "  running", nRun == 0 ? "—" : str.tostring(nWonRun) + " / "
       + str.tostring(nLostRun) + " · "
       + str.tostring(100.0 * nWonRun / nRun, "#.#") + "%",
       nRun == 0 ? color.gray : 100.0 * nWonRun / nRun > beRate ? colLong : colShort,
       "trades taken while the bias had already broken structure at least once since its CHoCH. The state is the one at the PIN, not now. Coloured against break-even for this reward ratio, which is " + str.tostring(beRate, "#.#") + "% at " + str.tostring(rr, "#.#") + "R — a win rate below that loses money however healthy it looks.")
-    row(7, "  immature", nImm == 0 ? "—" : str.tostring(nWonImm) + " / "
+    row(10, "  immature", nImm == 0 ? "—" : str.tostring(nWonImm) + " / "
       + str.tostring(nLostImm) + " · "
       + str.tostring(100.0 * nWonImm / nImm, "#.#") + "%",
       nImm == 0 ? color.gray : 100.0 * nWonImm / nImm > beRate ? colLong : colShort,
       "trades taken on a fresh CHoCH, before any break of structure in the new direction. Same break-even line: " + str.tostring(beRate, "#.#") + "%. If these two rows differ by much on a few hundred trades it is worth a study, not a setting change — 'immature' and 'running' were never measured apart.")
-    row(8, "net R", (netR >= 0 ? "+" : "") + str.tostring(netR, "#.#"),
+    row(11, "net R", (netR >= 0 ? "+" : "") + str.tostring(netR, "#.#"),
       netR > 0 ? colLong : netR < 0 ? colShort : color.gray,
       "won x " + str.tostring(rr, "#.#") + " minus lost, GROSS — no fees and no slippage, and both matter at this size. IN-SAMPLE AND NOT EVIDENCE: whatever settings are loaded, on the bars on screen, no pre-registration, no control. A filter picked by watching a number like this scored +0.089 in sample and -0.082 out elsewhere in this project. Read it to check the detection looks sane, never to choose settings.")
-    row(9, "no entry", str.tostring(noEntry), color.gray,
+    row(12, "no entry", str.tostring(noEntry), color.gray,
       "triggered, then lost before the limit filled. The breakdown below is what decides how much work a backup fill is worth.")
-    row(10, "  back·gone·bias·stop",
+    row(13, "  back·gone·bias·stop",
       str.tostring(nMissBack) + "·" + str.tostring(nMissGone) + "·"
       + str.tostring(nMissBias) + "·" + str.tostring(nMissStop), color.gray,
       "BACK = price never came back to the limit — the OB/FVG number, these are the ones a backup fill would have caught. GONE = the target printed before the fill, so the move was available at a worse price. BIAS = the trend turned Ending while waiting. STOP = price went beyond the planned stop first; this is 0 whenever the stop is set to follow the pullback, because a stop below the running low cannot be run.")
     // WHICH gate cancelled them. On the three charts that prompted this row,
     // BIAS was the largest no-entry bucket on all three — 39 of 62, 25 of 34,
     // 13 of 15 — and the panel could not say which rule did it.
-    row(11, "  minor · retrace",
+    row(14, "  minor · retrace",
       str.tostring(nEndMinor) + " · " + str.tostring(nEndRetr), color.gray,
       "the BIAS number above, split by which Ending rule fired: minor structure · retrace %. It used to be five rules; the other three shipped off, were never measured on, and came off the chart — see ../SETTINGS.md. The larger number here names the setting to question first, and between them these two decide this strategy.")
     // THE GHOST COLUMN. See section 7: these are the cancelled setups, walked
     // forward anyway. This is the only row here that tests a RULE rather than
     // reporting a count.
     float gNetR = gWon * rr - gLost
-    row(12, "  gate cost",
+    row(15, "  gate cost",
       nMissBias == 0 ? "—" : str.tostring(gWon) + " / " + str.tostring(gLost)
       + " · " + (gNetR > 0 ? "cost " + str.tostring(gNetR, "#.#")
       : "saved " + str.tostring(-gNetR, "#.#")) + "R"
       + (gOpen > 0 ? " · " + str.tostring(gOpen) + " open" : ""),
       nMissBias == 0 ? color.gray : gNetR > 0 ? colShort : colLong,
       "what the setups the bias gate CANCELLED would have done if it had been allowed to let them run: filled at the same limit, then walked to the same target or the same stop. They are in no number above and they never draw on the chart.\n\nSAVED means the gate is earning its place — the setups it killed were losers.\nCOST means the gate is throwing trades away, and this is how much.\n\nSame caveat as net R, doubled: in-sample, on whatever settings happen to be loaded, no control and no pre-registration. It is a reason to run a study, never a result.")
-    row(13, "live", slot == 0 ? "—" : str.tostring(slot), color.gray,
+    row(16, "live", slot == 0 ? "—" : str.tostring(slot), color.gray,
       "candidates currently waiting for their confirmations. Ghosts are excluded — they hold no slot.")
-    row(14, "last reject", lastReject, color.new(color.gray, 20),
+    row(17, "last reject", lastReject, color.new(color.gray, 20),
       "why the most recent candle was turned down. Hover any grey × on the chart for that candle's own reason.")
     if dbgOn
-        row(15, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
+        row(18, "funnel", str.tostring(nRaw) + "·" + str.tostring(nPins) + "·"
           + str.tostring(nColour) + "·" + str.tostring(nLoc) + "·"
           + str.tostring(nArmed) + "·" + str.tostring(nFilled), color.gray,
           "pin shape · bias tradeable · colour · location · triggered · entered. The biggest drop between two of these is where the detector is actually selecting.")
-        row(16, "at cap", str.tostring(nCap), color.gray,
+        row(19, "at cap", str.tostring(nCap), color.gray,
           "setups turned away because " + str.tostring(maxLive) + " were already live. If this is large, raise 'Live setups at once'.")
     else
-        row(15, "", "", color.gray, "")
-        row(16, "", "", color.gray, "")
+        row(20, "", "", color.gray, "")
+        row(21, "", "", color.gray, "")

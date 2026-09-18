@@ -266,6 +266,56 @@ def check(path: str) -> list[str]:
 
     if depth != 0:
         found.append(f"{path}: file ends with bracket depth {depth}")
+    # ── a table.cell past the declared height ───────────────────────────────
+    # A RUNTIME ERROR, WHICH IN PINE KILLS THE WHOLE INDICATOR. Same class as
+    # reading a series by a runtime index without max_bars_back, which this
+    # repository shipped once and the user found on TradingView.
+    #
+    # It was nearly shipped a second time: three rows were added to Undertow's
+    # panel, taking the highest index to 21 against a table declared with 17
+    # rows, and every other check here passed.
+    #
+    # THE HELPER HAS TO BE RESOLVED TO ITS TABLE. Rows are written through
+    # `row(r, ...) => table.cell(pnl, 0, r, ...)`, so the indices live at the
+    # CALL sites and the table name lives in the DEFINITION. A first version
+    # skipped that step and applied one table's row numbers to another, which
+    # reported a one-row badge as overflowing at index 21.
+    #
+    # Text-level, so only LITERAL indices are seen. A row index built from a
+    # variable is invisible here and that is stated rather than papered over.
+    src = "\n".join(lines)
+    for m in re.finditer(r"table\.new\([^,]+,\s*\d+\s*,\s*(\d+)", src):
+        height = int(m.group(1))
+        decl = src[:m.start()].count("\n")
+        nm = re.search(r"(\w+)\s*=\s*$", src[:m.start()].rstrip()[:m.start()])
+        tname = None
+        head = lines[decl]
+        mn = re.search(r"(?:var\s+)?table\s+(\w+)\s*=", head)
+        if mn:
+            tname = mn.group(1)
+        if not tname:
+            continue
+        used = [int(x.group(1)) for x in
+                re.finditer(rf"table\.cell\(\s*{tname}\s*,\s*\d+\s*,\s*(\d+)",
+                            src)]
+        used += [int(x.group(1)) for x in
+                 re.finditer(rf"\b{tname}\.cell\(\s*\d+\s*,\s*(\d+)", src)]
+        # helpers whose BODY writes this table, and whose first argument is the
+        # row: collect their call sites' literal first arguments.
+        for fm in re.finditer(r"^(\w+)\(int (\w+)[^)]*\)\s*=>", src, re.M):
+            fn, arg = fm.group(1), fm.group(2)
+            body = src[fm.end():]
+            body = body[:body.find("\n\n") if "\n\n" in body else len(body)]
+            if re.search(rf"table\.cell\(\s*{tname}\s*,\s*\d+\s*,\s*{arg}\b",
+                         body):
+                used += [int(x.group(1)) for x in
+                         re.finditer(rf"^\s*{fn}\((\d+),", src, re.M)]
+        if used and max(used) >= height:
+            bad(decl, f"table {tname} is declared with {height} rows and row "
+                      f"index {max(used)} is written -- table.cell past the "
+                      f"declared height is a RUNTIME error and kills the "
+                      f"whole indicator")
+
     return found
 
 
