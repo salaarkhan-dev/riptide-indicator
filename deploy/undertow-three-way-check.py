@@ -101,10 +101,6 @@ HARDCODED = {
                  "wHit is a strict close past the Working line"),
     "needBos": (False,
                 "arming does not gate on bosN; bosN only labels the state"),
-    "msBosNeedsIdm": (True,
-                      "no inducement anywhere in LuxAlgo's structure, so "
-                      "nothing branches on it -- it is dead in the SMC path "
-                      "on both sides"),
     "useHammer": (True, "the hammer family always arms"),
     "useStar": (True, "the star family always arms"),
     "useFamily": (True, "famHam/famStar is the only shape gate"),
@@ -112,9 +108,6 @@ HARDCODED = {
     "pbMinAge": (0, "no age test on the pullback extreme"),
     "pbMinDepth": (0.0, "no depth test on the pullback extreme"),
     "stopSrc": ("Pullback extreme", "the stop is pbExt +/- stopBuf * ATR"),
-    "matureBars": (20,
-                   "the watcher labels immature as bosN == 0, which is the "
-                   "port's rule at this default"),
 }
 
 # ── bucket 3: ABSENT ── the watcher does not implement this at all. Where the
@@ -123,6 +116,18 @@ HARDCODED = {
 ABSENT = {
     # the nine bias sources the watcher does not run. Guarded by biasSrc,
     # which is MIRRORED, so a switch away from SMC is caught there.
+    # THESE TWO WERE IN THE HARDCODED BUCKET AND THE REASONS WERE WRONG.
+    # `matureBars` was justified as "the watcher labels immature as bosN == 0,
+    # which is the port's rule at this default" -- but the port's rule is
+    # bosN == 0 at EVERY value, because matureBars is read only by
+    # alt_structure and structure() returns the SMC state before reaching it.
+    # `msBosNeedsIdm` was justified as "dead in the SMC path on both sides",
+    # which is true and is a reason for ABSENT, not for asserting a value.
+    # Neither is a setting the watcher implements one value of; both are
+    # parameters of machinery it does not contain, guarded by biasSrc.
+    "matureBars": (None, "alt_structure only, unreachable at BS_SMC"),
+    "msBosNeedsIdm": (None, "the BS_STRUCT branch only, unreachable at "
+                            "BS_SMC; LuxAlgo's BOS has no inducement"),
     "msLen": (None, "bar-pivot bias only"),
     "msShortLen": (None, "bar-pivot bias only"),
     "emaFast": (None, "EMA bias only"), "emaSlow": (None, "EMA bias only"),

@@ -13,6 +13,25 @@ What this IS: every `input.*` in the Pine must have a field of the same name in
 the port's `P`, with the SAME DEFAULT, and every `options = [...]` list must
 match the string constants the port compares against.
 
+AND THE OTHER DIRECTION, which is the half that used to be weak. Every field of
+`P` with NO Pine input is placed in one of two buckets, by name, with a reason:
+
+    PINE_HARDCODED   the Pine implements this, at exactly one value, with no
+                     input to change it. P must still default to that value.
+    PINE_ABSENT      the Pine does not implement it at all. Where the field
+                     has an OFF value, P must still be sitting on it.
+
+That used to be one flat "retired" set, waved through on the strength of "the
+chart no longer offers this", with no VALUE compared. But `pinNewest` and
+`famPriority` are not absent from the chart — the Pine supersedes and it ranks,
+unconditionally, on every bar. The day either default flipped in P, the chart
+would keep ranking and the port would stop, and nothing here would say a word.
+Same for the two confirmation tests, which the Pine holds as the literals
+`kWork` and `kFail`, and for `biasSrc`, which the Pine simply IS.
+
+A new field of P in neither bucket fails the check, which is how the decision
+gets made in a diff rather than by default.
+
 That sounds small. It is the drift that actually happens. The port and the Pine
 are edited on different days for different reasons, and the failure is silent
 in the worst possible way: a study reports a number for `retraceMax = 70` while
@@ -26,9 +45,14 @@ port's comparison silently stops matching, every branch falls through to its
 else, and the machine still runs.
 
 DELIBERATELY NOT COMPARED: the display group (showZones, showUnfilled,
-showStruct, keepN, the colours, the two debug toggles). Those drive drawing,
-and the port draws nothing. They are listed in DISPLAY_ONLY below by name, so
-adding to that list shows up in a diff rather than quietly widening the hole.
+showStruct, keepN, the zone counts and mitigation choice, the colours, the two
+debug toggles). Those drive drawing, and the port draws nothing. They are
+listed in DISPLAY_ONLY below by name, so adding to that list shows up in a diff
+rather than quietly widening the hole.
+
+THE THIRD COPY IS NOT THIS FILE'S JOB. deploy/undertow-three-way-check.py does
+the same accounting for riptide/watchers/undertow.py, which is the copy that
+sends the alerts, and it uses the same three buckets for the same reason.
 """
 from __future__ import annotations
 
@@ -188,138 +212,181 @@ def main() -> int:
                               "reworded dropdown makes every branch fall "
                               "through in silence"))
 
-    # The other direction: a field in P with no Pine input behind it means
-    # either a deliberate port-only feature or an input the Pine has LOST.
-    # Fields the Pine deliberately does not have. The first group is the three
-    # things Pine cannot do (a scale-invariant swing, an HTF bias without
-    # breaking the v2 parity check, and a cost model). The second is the
-    # ablation switches, which are not settings anyone should trade -- they
-    # exist so a study can remove one gate at a time. Adding to this set is how
-    # the check gets quietly widened, so each entry is here in a diff, with a
-    # reason above it.
-    # The swing source is NO LONGER port-only: `range` became the default and
-    # the chart has to be able to show what the studies measured, so all four
-    # of its inputs now exist in the Pine and are compared like any other.
-    # THE THREE RETIRED BIAS SOURCES. EMA cross, Slope and Range midpoint were
-    # on the chart to be measured; UNDERTOW_BIAS_SOURCE.md measured them, none
-    # beat the baseline, and they cost fifteen inputs in group 1 to offer
-    # settings the page warns against. They came OFF THE CHART and stayed in
-    # the port, because undertow_bias.py (S2, S4, S5) and undertow_slope.py
-    # (A1, A2) still run them and those pages must keep reproducing. Supertrend
-    # is still on the chart, so stAtrLen/stMult are NOT in here.
-    RETIRED = {"emaFast", "emaSlow", "donLen",
-               "slopeUnit", "slopeLen", "slopeMin",
-               "slopeHours", "slopeMinPerHr",
-               # Supertrend and MTF EMA align went the same way, and with them
-               # `matureBars`, which only ever meant anything for a source with
-               # no BOS to count. The CHART NOW OFFERS STRUCTURE AND NOTHING
-               # ELSE: five measured alternatives, none of which beat it, were
-               # costing seven inputs in group 1. They stay in the port because
-               # undertow_bias, undertow_slope and undertow_mtf have to keep
-               # reproducing their pages.
-               "biasSrc", "stAtrLen", "stMult", "matureBars",
-               "mtfFast", "mtfSlow", "mtfMult",
-               # THE v2 RULE CORRECTIONS, SPEC.md section 8. They are the
-               # strategy's author saying v1 detected the wrong thing, so they
-               # go to the port first and to the chart only once measured --
-               # putting them on the chart now would repeat exactly the habit
-               # that gave group 1 twenty inputs for four settings nothing
-               # supported. All three default to v1 meanwhile.
-               "confirmOrder", "needBos", "pinNewest",
-               # The LuxAlgo structure source, same rule: port
-               # first, chart once measured.
-               "smcSwingLen", "smcInternalLen",
-               # THE ANCHOR IS NO LONGER PORT-ONLY. UNDERTOW_V3.md measured it
-               # on 45 unseen symbols: not actively harmful (+0.023 / +0.023 /
-               # +0.054 R), not an edge, and its prereg said in advance that
-               # this is the outcome where it becomes selectable rather than
-               # default. `pinAt` is now compared like any other input.
-               # `famPriority` stays here -- it was measured in the same study
-               # and did nothing recoverable, so it has no claim on an input.
-               "famPriority",
-               # SIXTEEN INPUTS CAME OFF THE CHART IN ONE PASS, and the rule
-               # applied was the one ../indicators/undertow/SETTINGS.md
-               # arrives at: an input earns its place only if the strategy's
-               # definition needs it, a study showed the choice matters, or it
-               # is display. Everything below failed all three, and every one
-               # is still HERE, in the port, because that is where an
-               # unmeasured option belongs -- the studies that name them keep
-               # reproducing their pages unchanged.
-               #
-               # THE BACKUP FILL, eight inputs, measured twice and worthless:
-               # +0.03 R per armed setup significant on none
-               # (UNDERTOW_BACKUP_FILL.md), and waiting for the limit to
-               # expire removes the tax and all the opportunity
-               # (UNDERTOW_LATE_BACKUP.md). Two of the eight -- bkWhen and
-               # bkLateBars -- were never even WIRED UP in the Pine: declared,
-               # never read. That is what an input panel nobody prunes looks
-               # like.
-               "useBackup", "bkTrigger", "bkMaxRisk", "useOB", "useFVG",
-               "bkLook", "bkWhen", "bkLateBars",
-               # THREE ENDING RULES AND THE ADX GATE. All shipped off, none
-               # was ever measured switched on, and ADX failed as a filter
-               # elsewhere in this project (CCP_CONTEXT_FILTERS.md).
-               "endSweep", "endStale", "staleBars", "adxMin",
-               # THE TWO PULLBACK MINIMUMS. Measured: the setups they remove
-               # are not systematically worse (UNDERTOW_PULLBACK.md).
-               "pbMinAge", "pbMinDepth",
-               # THE TWO CONFIRMATION TESTS. "A close beyond" is the rule, and
-               # three unmeasured variants each is not a setting, it is an
-               # invitation to tune something nobody can judge.
-               "workTest", "failTest",
-               # THE THREE "PRICE MOVE" DIALS, and these had the strongest case
-               # of the lot. swingK 0.40 and swingKMinor 0.12 are the Min30
-               # TRAINING winner from UNDERTOW_PARAMS.md, the study that
-               # measured best-of-48 selection at +0.31 R per trade of
-               # illusion; they became defaults because they were already on
-               # the chart when the sweep agreed with them. An input is an
-               # invitation to search again and the last search is the reason
-               # not to. swingHours 24 was never varied by anything. All three
-               # are now FIXED IN THE PINE at the values every measurement page
-               # was produced under, so the chart and the studies still
-               # describe the same detector -- and still adjustable here, where
-               # the study that finally tests them will need them.
-               "swingK", "swingKMinor", "swingHours",
-               # THE OLD STRUCTURE ENGINE'S INPUTS. Section 3 of the Pine is
-               # now a transcription of LuxAlgo's Smart Money Concepts instead
-               # of a copy of riptide-indicator-v2's engine, so the chart has
-               # one detector at two lengths -- smcSwingLen and smcInternalLen,
-               # compared above like any other input -- and no longer has a
-               # source to choose between, bar-pivot lengths to set, or an
-               # inducement rule to gate a BOS on. LuxAlgo's BOS has no
-               # inducement anywhere in it.
-               #
-               # All four stay in the port because UNDERTOW_PARAMS.md,
-               # UNDERTOW_BIAS_SOURCE.md and ten other pages were produced on
-               # that engine and have to keep reproducing. The port can still
-               # run it; the chart no longer offers it.
-               "swingSrc", "msLen", "msShortLen", "msBosNeedsIdm"}
-    # htfUnit/htfHours join htfMult for the same reason the port's docstring
-    # gives: an honest HTF bias in Pine needs the whole structure slab inside a
-    # function so request.security can evaluate it on higher-timeframe bars,
-    # and that refactor would break undertow-ms-check.py's anchor against v2.
-    # If the gate ever clears its prereg, that refactor is the price of putting
-    # it on the chart.
+    # ── THE OTHER DIRECTION, and it is the half that used to be weak ──
     #
-    # `famInvert` is port-only because it is a rule being TESTED, not one
-    # anybody wants to trade. It inverts famStrict so the gate admits the
-    # second-choice shape, and it exists only because UNDERTOW_STRICT.md found
-    # that half scored +0.197 on 1h against the priority half's -0.062 — the
-    # only |z| >= 2 in eighteen studies. An input is for a rule somebody wants;
-    # if PREREG_undertow_complement.md replicates it, it earns one then.
-    PORT_ONLY = {"htfMult", "htfUnit", "htfHours", "feeFrac",
-                 "useFamily", "useColour", "bkMode", "famInvert"} | RETIRED
-    for name in sorted(fields):
-        if name not in pin and name not in PORT_ONLY:
-            bad.append((name, "P has this field and the Pine has no such "
-                              "input — was an input removed from the Pine?"))
+    # A field of P with no Pine input is not automatically fine. There are two
+    # very different reasons for one, and only the first is safe to wave
+    # through:
+    #
+    #   PINE_ABSENT     the Pine does not implement this part of the strategy
+    #                   at all. Where the field has an OFF value, P must still
+    #                   be sitting on it, or the port is running a gate the
+    #                   chart has no way to show.
+    #   PINE_HARDCODED  the Pine DOES implement it, at exactly one value, with
+    #                   no input to change it. P must still default to that
+    #                   value.
+    #
+    # THE SECOND BUCKET IS WHY THIS WAS REWRITTEN. It used to be one flat
+    # RETIRED set: every field in it was waved through on the strength of
+    # "the chart no longer offers this", and nothing compared a VALUE. But
+    # `pinNewest` and `famPriority` are not absent from the Pine — it
+    # supersedes and it ranks, unconditionally, on every bar. The day either
+    # default flips to False in P, the chart keeps ranking, the port stops,
+    # and no check in this repository says a word. Same for the two
+    # confirmation tests, which the Pine holds as the literals `kWork` and
+    # `kFail`, and for `biasSrc`, which the Pine simply IS.
+    #
+    # Each entry below was checked against the Pine rather than assumed, and
+    # two beliefs did not survive that:
+    #
+    #   * `swingK`, `swingKMinor` and `swingHours` were documented here as
+    #     "FIXED IN THE PINE at the values every measurement page was produced
+    #     under". They do not appear in the Pine at all. The chart runs SMC
+    #     structure and has no price-move swings to scale, so they are ABSENT.
+    #   * `matureBars` and `msBosNeedsIdm` are not hardcoded either. Both are
+    #     read only by `alt_structure` and the BS_STRUCT branch, and
+    #     `structure()` returns before either when biasSrc is BS_SMC. They are
+    #     unreachable at the shipped configuration, and biasSrc is checked
+    #     below, which is what guards them.
 
-    print(f"{checked} shared inputs compared "
-          f"({len(DISPLAY_ONLY)} display-only inputs skipped by name, "
-          f"{len(PORT_ONLY)} port-only fields allowed)")
+    # value, why. The value is what the PINE does; P must agree with it.
+    PINE_HARDCODED = {
+        # The Pine runs LuxAlgo's SMC and nothing else — section 3 is the
+        # engine, not a branch. The lengths ARE inputs and are compared above;
+        # the choice of engine is not.
+        "biasSrc": ("SMC structure", "section 3 is the only engine"),
+        # `pinOk` has no bosOk term, so a pin arms in `immature` as readily as
+        # in `running`.
+        "needBos": (False, "pinOk does not gate on the bias state"),
+        # The supersede block runs unconditionally on every accepted pin, and
+        # the priority ranking runs unconditionally inside it. NEITHER IS
+        # ABSENT FROM THE CHART, which is the whole reason this bucket exists.
+        "pinNewest": (True, "a new pin always clears its unarmed rivals"),
+        "famPriority": (True,
+                        "and a non-priority pin never displaces a waiting "
+                        "priority one"),
+        # `famOk` is the wick test with no "gate off" branch, and `colourOk`
+        # is unconditional in `pinOk`.
+        "useFamily": (True, "famOk has no bypass"),
+        "useColour": (True, "colourOk is a term of pinOk, not a switch"),
+        # `locOk` is the tolerance and nothing else; the port adds the two
+        # minimums to it only when they are above zero.
+        "pbMinAge": (0, "locOk carries no age test"),
+        "pbMinDepth": (0.0, "locOk carries no depth test"),
+        # Held as literals near the top of the Pine: `string kWork` and
+        # `string kFail`. Compared BY VALUE on both sides, so a reworded
+        # constant is the silent-fallthrough failure this file's docstring
+        # warns about, one step removed.
+        "workTest": ("close beyond", "the literal kWork"),
+        "failTest": ("close at or beyond", "the literal kFail, via tTouch"),
+    }
+
+    # value or None, why. None means the field has no "off" setting worth
+    # asserting — it parameterises machinery the Pine does not contain.
+    PINE_ABSENT = {
+        # THE RETIRED BIAS SOURCES. EMA cross, Slope, Donchian midpoint,
+        # Supertrend and MTF EMA align were all on the chart to be measured;
+        # UNDERTOW_BIAS_SOURCE.md and undertow_slope.py measured them, none
+        # beat the baseline, and they cost fifteen inputs in group 1 to offer
+        # settings their own pages warn against. They stay in the port because
+        # undertow_bias (S2, S4, S5) and undertow_slope (A1, A2) must keep
+        # reproducing. `biasSrc` above is what stops the port drifting onto
+        # one of them unnoticed.
+        "emaFast": (None, "EMA bias"), "emaSlow": (None, "EMA bias"),
+        "donLen": (None, "Donchian bias"),
+        "slopeUnit": (None, "slope bias"), "slopeLen": (None, "slope bias"),
+        "slopeMin": (None, "slope bias"), "slopeHours": (None, "slope bias"),
+        "slopeMinPerHr": (None, "slope bias"),
+        "stAtrLen": (None, "supertrend bias"), "stMult": (None, "supertrend"),
+        "mtfFast": (None, "MTF bias"), "mtfSlow": (None, "MTF bias"),
+        "mtfMult": (None, "MTF bias"),
+        # Only alt_structure reads it, and structure() returns the SMC state
+        # before reaching alt_structure. Unreachable at the shipped biasSrc.
+        "matureBars": (None, "alt_structure only, unreachable at BS_SMC"),
+        # THE OLD BAR-PIVOT ENGINE and the price-move swings that fed it.
+        # Section 3 is a transcription of LuxAlgo's SMC now, so the chart has
+        # one detector at two lengths and no swing source to choose, no pivot
+        # lengths to set and no inducement rule to gate a BOS on.
+        "swingSrc": (None, "no swing source on the chart"),
+        "swingK": (None, "price-move swings, which the chart does not have"),
+        "swingKMinor": (None, "price-move swings"),
+        "swingHours": (None, "price-move swings"),
+        "msLen": (None, "bar-pivot lengths"),
+        "msShortLen": (None, "bar-pivot lengths"),
+        "msBosNeedsIdm": (None,
+                          "the BS_STRUCT branch only; LuxAlgo's BOS has no "
+                          "inducement and structure() never reaches it at "
+                          "BS_SMC"),
+        # THE BACKUP FILL, eight inputs, measured twice and worthless: +0.03 R
+        # per armed setup significant on none (UNDERTOW_BACKUP_FILL.md), and
+        # waiting for the limit to expire removes the tax and all the
+        # opportunity (UNDERTOW_LATE_BACKUP.md). Two of the eight — bkWhen and
+        # bkLateBars — were never even WIRED UP in the Pine: declared, never
+        # read. That is what an input panel nobody prunes looks like.
+        #
+        # `useBackup` CARRIES A REQUIRED VALUE and the rest do not. The chart
+        # cannot fill on a zone, so a port that could would be scoring trades
+        # the chart never shows.
+        "useBackup": (False, "the chart has no backup fill; must stay off"),
+        "bkTrigger": (None, "backup fill"), "bkMaxRisk": (None, "backup fill"),
+        "useOB": (None, "backup fill"), "useFVG": (None, "backup fill"),
+        "bkLook": (None, "backup fill"), "bkWhen": (None, "backup fill"),
+        "bkLateBars": (None, "backup fill"), "bkMode": (None, "backup fill"),
+        # THREE ENDING RULES AND THE ADX GATE, all shipped off, none ever
+        # measured switched on, and ADX failed as a filter elsewhere in this
+        # project (CCP_CONTEXT_FILTERS.md). Each carries its off value: an
+        # ending rule live in the port and absent from the chart would cancel
+        # setups the chart still draws.
+        "endSweep": (False, "no sweep rule on the chart; must stay off"),
+        "endStale": (False, "no stale rule on the chart; must stay off"),
+        "staleBars": (None, "parameter of the stale rule"),
+        "adxMin": (0, "no ADX gate on the chart; must stay off"),
+        # THE HTF BIAS. An honest one in Pine needs the whole structure slab
+        # inside a function so request.security can evaluate it on
+        # higher-timeframe bars. If the gate ever clears a prereg, that
+        # refactor is the price of putting it on the chart.
+        "htfMult": (0, "HTF gate; must stay off"),
+        "htfUnit": (None, "HTF gate"), "htfHours": (0.0, "HTF gate"),
+        # A RULE UNDER TEST, not one on the chart. It inverts famStrict so the
+        # gate admits the second-choice shape. UNDERTOW_COMPLEMENT.md ran it
+        # and it did not replicate, so it has no claim on an input.
+        "famInvert": (False, "port-only, did not replicate; must stay off"),
+    }
+
+    for name in sorted(fields):
+        if name in pin:
+            continue
+        if name in PINE_HARDCODED:
+            want, why = PINE_HARDCODED[name]
+            if fields[name] != want:
+                bad.append((name, f"THE PINE HARDCODES {want!r} ({why}) and "
+                                  f"P now defaults to {fields[name]!r}. The "
+                                  f"chart cannot follow — there is no input "
+                                  f"to change"))
+            continue
+        if name in PINE_ABSENT:
+            want, why = PINE_ABSENT[name]
+            if want is not None and fields[name] != want:
+                bad.append((name, f"the Pine does not implement this ({why}) "
+                                  f"and P now defaults to {fields[name]!r} "
+                                  f"rather than {want!r} — the port would be "
+                                  f"running a rule the chart cannot show"))
+            continue
+        bad.append((name, "P has this field and the Pine has no input for it. "
+                          "Say which: PINE_HARDCODED if the Pine implements "
+                          "one value of it, PINE_ABSENT if the Pine does not "
+                          "implement it at all"))
+
+    print(f"{checked} shared inputs compared, "
+          f"{len(PINE_HARDCODED)} values the Pine hardcodes, "
+          f"{len(PINE_ABSENT)} the Pine does not implement — "
+          f"{checked + len(PINE_HARDCODED) + len(PINE_ABSENT)} of P's "
+          f"{len(fields)} fields, with {len(DISPLAY_ONLY)} display-only "
+          f"inputs skipped by name")
     if not bad:
-        print("\nTHE PINE AND THE PORT AGREE ON EVERY INPUT.")
-        print("Defaults and dropdown strings only — the LOGIC is held by")
+        print("\nTHE PINE AND THE PORT AGREE ON EVERY SETTING.")
+        print("Defaults, dropdown strings and the values the Pine holds")
+        print("as literals — the LOGIC is held by")
         print("indicators/undertow/tests/test_undertow_port.py.")
         return 0
     print(f"\n{len(bad)} DISAGREEMENT(S):")
