@@ -61,14 +61,31 @@ SKIP_DIRS = ("__pycache__", ".git", ".cache", "node_modules")
 # when a .pine file moves, this is what has to move with it, and stage 4 is
 # what says so out loud instead of leaving a stale path in a docstring.
 PINE = "indicators/{}/pine/{}"
+# Every Pine source in the repo. Each one is the TARGET of its own
+# pine-static-check run below and a control for the other four.
+PINE_FILES = [
+    ("ccp", "riptide-ccp.pine"),
+    ("riptide", "riptide-indicator.pine"),
+    ("riptide_ms", "riptide-indicator-v2.pine"),
+    ("exhaustion", "riptide-reversal.pine"),
+    ("undertow", "riptide-undertow.pine"),
+]
 PINE_CHECKS = [
     # (label, indicator or None for repo-wide, argv after the script)
-    ("pine-static-check", None, [
-        PINE.format("ccp", "riptide-ccp.pine"),
-        PINE.format("riptide", "riptide-indicator.pine"),
-        PINE.format("riptide_ms", "riptide-indicator-v2.pine"),
-        PINE.format("exhaustion", "riptide-reversal.pine"),
-        PINE.format("undertow", "riptide-undertow.pine")]),
+    # ONE INVOCATION PER FILE, and the reason is a compile error that shipped
+    # through a green preflight. pine-static-check takes the FIRST path as the
+    # target and treats the rest as CONTROLS -- findings present in a control
+    # are idioms this repo already accepts, not news. With a single invocation
+    # only riptide-ccp.pine was ever the target, so the other four, including
+    # the one under active development, were never statically checked at all:
+    # a top-level variable read 130 lines before its declaration passed here
+    # and would have failed to compile on TradingView.
+    #
+    # Each file is now the target once, with the other four behind it. It costs
+    # five subprocesses and it is the difference between a check and a label.
+    *[("pine-static-check", None, [PINE.format(*t)]
+       + [PINE.format(*o) for o in PINE_FILES if o != t])
+      for t in PINE_FILES],
     # The production indicator against the bot's own config. The one check
     # here that guards a live trading path rather than a research bench.
     ("check-parity", "riptide", []),

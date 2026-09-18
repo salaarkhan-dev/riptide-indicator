@@ -187,11 +187,11 @@ showStruct = input.bool(true, "Market structure", group = gShow,
 showStats = input.bool(true, "Stats table", group = gShow,
   tooltip = "The panel top-right. Its first row is the BIAS — direction and state — so turning the rest off still leaves that if you re-enable it. Off draws nothing and costs nothing.")
 showOB = input.bool(false, "Order blocks", group = gShow, inline = "z1",
-  tooltip = "The last unmitigated order block either side, drawn as a box to the right edge. DRAWING ONLY — nothing here enters on one.\n\nOff by default, and the backup fill that used to enter on these is gone from the chart entirely: ../measurements/UNDERTOW_BACKUP_FILL.md measured it at +0.03 R per armed setup, positive on 3 of 3 and significant on none.")
-colOB = input.color(color.new(#2157f3, 80), "", group = gShow, inline = "z1")
-showFVG = input.bool(false, "Fair value gaps", group = gShow, inline = "z2",
-  tooltip = "Three-bar gaps, drawn as boxes. Drawing only.")
-colFVG = input.color(color.new(#878b94, 80), "", group = gShow, inline = "z2")
+  tooltip = "THE LAST UNMITIGATED ORDER BLOCKS EITHER SIDE, drawn as boxes to the right edge and removed when price trades through them. DRAWING ONLY — nothing here enters on one.\n\nThe block is found the way LuxAlgo's Smart Money Concepts finds it, not by the looser 'last opposite candle' rule this chart used before: when structure breaks, the span from the broken pivot to the breaking bar is scanned and the block is its most extreme bar — the highest high for a bearish break, the lowest low for a bullish one.\n\nAND THE EXTREME IS TAKEN FROM A FILTERED HIGH/LOW. On a bar whose range is 2x ATR(200) the high and the low are SWAPPED before the scan, so one violent candle cannot become the order block for a whole leg. That filter is the substance of the difference.\n\nOff by default, and the backup fill that used to ENTER on these is gone from the chart entirely: ../measurements/UNDERTOW_BACKUP_FILL.md measured it at +0.03 R per armed setup, positive on 3 of 3 and significant on none. A drawn zone is a description; entering on one was measured and is not worth it.")
+colOBBull = input.color(color.new(#3179f5, 80), "", group = gShow, inline = "z1")
+colOBBear = input.color(color.new(#f77c80, 80), "", group = gShow, inline = "z1")
+showFVG = input.bool(false, "Fair value gaps", group = gShow,
+  tooltip = "Three-bar imbalances, drawn as two half-boxes split at the midpoint and removed when price fills them — the same shape LuxAlgo's Smart Money Concepts draws.\n\nTHE COLOURS COME FROM THE ORDER BLOCK COLOURS ABOVE, lightened. A gap and a block in the same direction are the same idea at different scales, so giving them independent colour pickers was two inputs buying nothing.\n\nDrawing only.")
 fvgExtend = input.int(5, "… extend zones by", minval = 0, maxval = 50, group = gShow,
   tooltip = "How many bars past the gap the box is drawn. Cosmetic.")
 zoneAuto = input.bool(false, "… auto threshold", group = gShow,
@@ -1163,23 +1163,66 @@ plot(showStruct ? msTop : na, "Swing high", color.new(colShort, 40), 4,
   plot.style_circles, offset = -msLen)
 plot(showStruct ? msBtm : na, "Swing low", color.new(colLong, 40), 4,
   plot.style_circles, offset = -msLen)
-// EACH MARK CARRIES ITS OWN NAME, and sits on the BAR rather than at the top
-// of the pane. plotshape text costs nothing against the drawing budget, unlike
-// a label, and it means no legend has to be remembered.
-plotshape(showStruct and msChoch and msOs == 1, "CHoCH up", shape.diamond,
-  location.belowbar, color.new(color.orange, 20), size = size.tiny,
-  text = "CHoCH", textcolor = color.new(color.orange, 20))
-plotshape(showStruct and msChoch and msOs == 0, "CHoCH down", shape.diamond,
-  location.abovebar, color.new(color.orange, 20), size = size.tiny,
-  text = "CHoCH", textcolor = color.new(color.orange, 20))
-// BOS, because it is what separates Immature from Running and the panel says
-// which of the two it thinks it is in.
-plotshape(showStruct and msBosUp, "BOS up", shape.cross, location.belowbar,
-  color.new(color.gray, 45), size = size.tiny, text = "BOS",
-  textcolor = color.new(color.gray, 35))
-plotshape(showStruct and msBosDn, "BOS down", shape.cross, location.abovebar,
-  color.new(color.gray, 45), size = size.tiny, text = "BOS",
-  textcolor = color.new(color.gray, 35))
+// THE BREAKS, and each one names the pivot it broke so the scan has a span.
+// A CHoCH broke the latched swing level; a BOS broke the running extreme,
+// which the engine had finished updating on the PREVIOUS bar — hence the [1].
+var float dTopY = na
+var int   dTopX = na
+var float dBtmY = na
+var int   dBtmX = na
+if not na(msTop)
+    dTopY := msTop
+    dTopX := msTopX
+if not na(msBtm)
+    dBtmY := msBtm
+    dBtmX := msBtmX
+
+bool brkUp = msChoch and msOs == 1
+bool brkDn = msChoch and msOs == 0
+int  brkUpX = na(dTopX) ? bar_index : dTopX
+int  brkDnX = na(dBtmX) ? bar_index : dBtmX
+int  bosUpX = na(msMaxX[1]) ? bar_index : msMaxX[1]
+int  bosDnX = na(msMinX[1]) ? bar_index : msMinX[1]
+
+// CHoCH AND BOS ARE DRAWN AS THE BREAK ITSELF, not as a mark on the breaking
+// bar — a horizontal line at the level that was taken out, running from the
+// pivot that set it to the bar that broke it, with the name at its midpoint.
+// The shape LuxAlgo's Smart Money Concepts uses, and it is better for one
+// concrete reason: a diamond under a candle says "something happened here",
+// while the line says WHICH LEVEL went and HOW FAR BACK it had stood. The
+// second is the thing being read when a bias is checked by eye.
+//
+// Capped at keepN like every other buffer here. Pine's ceiling is 500 lines
+// and 500 labels for the whole indicator, and the setups need most of it.
+var array<line> msLineBuf = array.new<line>()
+var array<label> msLabBuf = array.new<label>()
+
+msBreak(int fromX, float lvl, string tag, bool up) =>
+    color c = up ? colLong : colShort
+    msLineBuf.push(line.new(fromX, lvl, bar_index, lvl,
+      xloc = xloc.bar_index, color = c,
+      style = tag == "CHoCH" ? line.style_solid : line.style_dashed))
+    msLabBuf.push(label.new(math.round(0.5 * (fromX + bar_index)), lvl, tag,
+      xloc = xloc.bar_index, color = color(na), textcolor = c,
+      style = up ? label.style_label_down : label.style_label_up,
+      size = size.tiny))
+    while msLineBuf.size() > keepN
+        line.delete(msLineBuf.shift())
+    while msLabBuf.size() > keepN
+        label.delete(msLabBuf.shift())
+
+if barOk and showStruct
+    // SOLID for a CHoCH, DASHED for a BOS. The CHoCH is the event that sets
+    // the direction and the BOS is the one that confirms it, so the heavier
+    // line belongs to the heavier event.
+    if brkUp
+        msBreak(brkUpX, dTopY, "CHoCH", true)
+    else if msBosUp
+        msBreak(bosUpX, msMax[1], "BOS", true)
+    if brkDn
+        msBreak(brkDnX, dBtmY, "CHoCH", false)
+    else if msBosDn
+        msBreak(bosDnX, msMin[1], "BOS", false)
 
 // DEBUG: one mark per pin, and hovering it says why. Blue took it, grey did
 // not, and the tooltip carries the reason either way. A bar with NO mark at all
@@ -1203,43 +1246,150 @@ if dbgOn and pinRaw and (pinOk or dbgRejects)
 
 
 // ════════════════ 8b. ORDER BLOCKS AND FAIR VALUE GAPS ══════════════════════
-// THE SAME DEFINITIONS THE BACKUP FILL USED, kept when that came off the
-// chart. Drawing a zone costs nothing and shows where the structure engine
-// thinks the imbalances are; ENTERING on one is what two studies measured and
-// found worthless, and that is the part that went.
+// DETECTION ADAPTED FROM LuxAlgo's "Smart Money Concepts", CC BY-NC-SA 4.0,
+// https://creativecommons.org/licenses/by-nc-sa/4.0/ — the same source
+// ../port/smc.py already transcribes for the structure engine. What is
+// borrowed is the METHOD, run on Undertow's own CHoCH and BOS events rather
+// than on LuxAlgo's pivots.
 //
-// Both are as loose as they look, which is why they are OFF by default:
-// UNDERTOW_BACKUP_FILL.md measured the thing they feed at +0.03 R per armed
-// setup, positive on 3 of 3 and significant on none.
-var array<box> zoneBuf = array.new<box>()
+// WHY IT WAS WORTH REPLACING WHAT WAS HERE. The old rule was "the last
+// opposite-coloured candle before a close through its extreme" — one bar of
+// context, no filter, a fixed-width box that never went away. LuxAlgo's is a
+// different quality of thing on three counts:
+//
+//   1. IT IS ANCHORED TO A STRUCTURE BREAK. When a pivot is taken out, the
+//      span from that pivot to the breaking bar is scanned and the block is
+//      the most extreme bar in it. That is the candle the break came from,
+//      not whichever bar happened to precede it.
+//   2. THE EXTREME IS FILTERED. On a bar whose range is >= 2x ATR(200) the
+//      high and low are SWAPPED before the scan, so a single violent candle
+//      cannot claim the whole leg. This is the part that does the work.
+//   3. IT IS MITIGATED. A block is deleted once price trades through it, so
+//      what stays on the chart is only what is still unfilled.
+//
+// The fair value gaps get the same treatment: two half-boxes split at the
+// midpoint, an optional auto threshold from the running mean body move, and
+// removal on fill.
+//
+// DRAWING ONLY, AND THAT IS THE WHOLE STATUS OF THIS SECTION. Entering on
+// these zones was measured twice and came off the chart —
+// ../measurements/UNDERTOW_BACKUP_FILL.md and UNDERTOW_LATE_BACKUP.md. A
+// better-drawn zone is a better DESCRIPTION, not evidence of an edge, and
+// nothing below feeds a single number on the panel.
+type Zone
+    box   bx   = na
+    box   bx2  = na
+    float top  = na
+    float btm  = na
+    bool  bull = false
 
-zonePush(float top, float btm, color c) =>
-    zoneBuf.push(box.new(bar_index, top, bar_index + fvgExtend, btm,
-      border_color = color.new(c, 40), bgcolor = c))
-    while zoneBuf.size() > keepN
-        box.delete(zoneBuf.shift())
+var array<Zone> obZones = array.new<Zone>()
+var array<Zone> fvgZones = array.new<Zone>()
 
-// ta.* unconditionally. The threshold is only READ when zoneAuto is on.
-float zoneAvgRange = ta.sma(high - low, 50)
-float zoneMin = zoneAuto ? zoneAvgRange : 0.0
+// How many of each survive on the chart. Not inputs: LuxAlgo ships 5 order
+// blocks and ../SETTINGS.md is the argument against offering a dial for a
+// number nobody can judge from a chart.
+int OB_KEEP = 5
+int FVG_KEEP = 20
+
+// ta.* unconditionally — a ta.* inside a branch grows a different history.
+float atr200 = ta.atr(200)
+// THE VOLATILITY SWAP. `parsedHigh`/`parsedLow` are the bar's own high and low
+// EXCEPT on a bar wider than 2x ATR, where they are exchanged. A 2x-range bar
+// then scores as its opposite extreme and loses the scan below, which is how a
+// single spike stops becoming the order block for a whole leg.
+bool obWild = (high - low) >= 2 * atr200
+float obPH = obWild ? low : high
+float obPL = obWild ? high : low
+
+zoneDrop(array<Zone> arr, int idx) =>
+    Zone z = arr.get(idx)
+    box.delete(z.bx)
+    box.delete(z.bx2)
+    arr.remove(idx)
+
+// MITIGATION. A bearish block dies when price trades above its high, a bullish
+// one when price trades below its low — the wick, not the close, which is
+// LuxAlgo's "High/Low" setting and the stricter of its two.
+if barOk and obZones.size() > 0
+    for k = obZones.size() - 1 to 0
+        Zone z = obZones.get(k)
+        if (z.bull and low < z.btm) or (not z.bull and high > z.top)
+            zoneDrop(obZones, k)
+
+if barOk and fvgZones.size() > 0
+    for k = fvgZones.size() - 1 to 0
+        Zone z = fvgZones.get(k)
+        if (z.bull and low < z.btm) or (not z.bull and high > z.top)
+            zoneDrop(fvgZones, k)
+
+// THE SCAN. Walk back `span` bars and return the offset of the most extreme
+// FILTERED value — the highest obPH for a bearish break, the lowest obPL for a
+// bullish one. Returns an offset from the current bar, so `high[off]` is it.
+obPick(int span, bool bull) =>
+    int best = 0
+    float val = bull ? obPL : obPH
+    for b = 1 to math.min(math.max(span, 1), 300)
+        float v = bull ? obPL[b] : obPH[b]
+        if bull ? v < val : v > val
+            val := v
+            best := b
+    best
+
+obPush(int span, bool bull) =>
+    int off = obPick(span, bull)
+    color c = bull ? colOBBull : colOBBear
+    Zone z = Zone.new(box.new(bar_index - off, obPH[off], bar_index, obPL[off],
+      xloc = xloc.bar_index, extend = extend.right, border_color = color(na),
+      bgcolor = c), na, obPH[off], obPL[off], bull)
+    obZones.unshift(z)
+    while obZones.size() > OB_KEEP * 2
+        zoneDrop(obZones, obZones.size() - 1)
+
+
+if barOk and showOB
+    if brkUp
+        obPush(bar_index - brkUpX, true)
+    else if msBosUp
+        obPush(bar_index - bosUpX, true)
+    if brkDn
+        obPush(bar_index - brkDnX, false)
+    else if msBosDn
+        obPush(bar_index - bosDnX, false)
+
+// FAIR VALUE GAPS. Two boxes per gap, split at the midpoint, because a gap is
+// filled from one side and the half that is gone should read as gone.
+//
+// THE AUTO THRESHOLD is LuxAlgo's: the running mean of the absolute body move
+// as a fraction, doubled, so a gap has to be bigger than twice the average
+// candle to count. Off by default — a filter nothing here has measured is a
+// filter nobody should trust.
+float fvgDelta = (close[1] - open[1]) / (open[1] * 100)
+float fvgThr = zoneAuto ? ta.cum(math.abs(fvgDelta)) / bar_index * 2 : 0.0
+
+fvgPush(float top, float btm, bool bull) =>
+    color c = color.new(bull ? colOBBull : colOBBear, 70)
+    float mid = math.avg(top, btm)
+    int r = bar_index + fvgExtend
+    box b1 = box.new(bar_index, top, r, mid, xloc = xloc.bar_index,
+      border_color = color(na), bgcolor = c)
+    box b2 = box.new(bar_index, mid, r, btm, xloc = xloc.bar_index,
+      border_color = color(na), bgcolor = c)
+    Zone z = Zone.new(b1, b2, top, btm, bull)
+    fvgZones.unshift(z)
+    while fvgZones.size() > FVG_KEEP
+        zoneDrop(fvgZones, fvgZones.size() - 1)
 
 if barOk and showFVG
     // [2] is the OLDER bar. Pine counts backwards, and getting this inverted
     // is what made the PORT's FVG detector silently find zero gaps until a
     // test asserted both zone types fire.
-    bool fvgUp = low > high[2] and (low - high[2]) >= zoneMin
-    bool fvgDn = high < low[2] and (low[2] - high) >= zoneMin
+    bool fvgUp = low > high[2] and close[1] > high[2] and fvgDelta > fvgThr
+    bool fvgDn = high < low[2] and close[1] < low[2] and -fvgDelta > fvgThr
     if fvgUp
-        zonePush(low, high[2], colFVG)
+        fvgPush(low, high[2], true)
     if fvgDn
-        zonePush(low[2], high, colFVG)
-
-if barOk and showOB
-    // The last opposite-coloured candle before a close through its extreme.
-    bool obUp = close > high[1] and close[1] < open[1]
-    bool obDn = close < low[1] and close[1] > open[1]
-    if obUp or obDn
-        zonePush(high[1], low[1], colOB)
+        fvgPush(low[2], high, false)
 
 // ═══════════════════════════ 9. THE STATUS PANEL ═════════════════════════════
 // A STATUS panel, not a stats table. It says what the indicator is currently

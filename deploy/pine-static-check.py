@@ -234,6 +234,37 @@ def check(path: str) -> list[str]:
     return found
 
 
+# FINDINGS THAT ARE REAL, IN A FILE THAT MAY NOT BE TOUCHED.
+#
+# `indicators/riptide/pine/riptide-indicator.pine` is the PRODUCTION indicator
+# and is frozen by tests/test_control_frozen.py; changing it needs the owner's
+# say-so, and a static-check finding is not that. These two are recorded here
+# rather than silenced, so the finding stays visible and the decision stays
+# open. They surfaced the day preflight started making every Pine file a
+# target instead of only the first, so they are OLD, not new.
+#
+#   :721  `d3t.size() == 0 or d3t.get(d3t.size() - 1) != dTm`
+#   :744  `zTm.size() > 0 and (dTm - zTm.get(0)) > poiMaxAgeDays * 86400000`
+#
+# BOTH ARE THE SAME HAZARD. Pine does not guarantee short-circuit evaluation
+# of `and`/`or`, so the guard may not stop the array read, and an empty array
+# read raises at runtime. 721 is the safer of the two: `size() == 0 or ...`
+# reads `size() - 1`, which is -1 on an empty array. 744 reads `get(0)`.
+#
+# Whether either has ever fired is unknown and that is the point -- it would
+# fire as a chart error, not as a wrong number, so nobody would see it in a
+# backtest. The fix is a nested `if`, it is three lines, and it needs
+# authorisation on a frozen file.
+WAIVED = [
+    ("indicators/riptide/pine/riptide-indicator.pine", ":721:"),
+    ("indicators/riptide/pine/riptide-indicator.pine", ":744:"),
+]
+
+
+def waived(finding: str) -> bool:
+    return any(path in finding and tag in finding for path, tag in WAIVED)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(__doc__)
@@ -245,10 +276,15 @@ def main(argv: list[str]) -> int:
         ctrl |= {f.split(": ", 1)[1] for f in check(c)}
 
     new = [f for f in tf if f.split(": ", 1)[1] not in ctrl]
-    print(f"{target}: {len(tf)} findings, {len(tf) - len(new)} also present in "
-          f"the control file(s)")
+    held = [f for f in new if waived(f)]
+    new = [f for f in new if not waived(f)]
+    print(f"{target}: {len(tf)} findings, {len(tf) - len(new) - len(held)} "
+          f"also present in the control file(s)"
+          + (f", {len(held)} WAIVED" if held else ""))
     if controls:
         print(f"controls: {', '.join(controls)}")
+    for f in held:
+        print(f"  WAIVED (frozen file, see WAIVED in this script)\n    {f}")
     print()
     if not new:
         print("NO FINDINGS UNIQUE TO THE TARGET.")
