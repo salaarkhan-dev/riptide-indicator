@@ -1,89 +1,114 @@
-# The scale study is VOID, and the thing that voided it is a real finding
+# The 50/5 swing scale costs 60% of the trades and changes nothing else
 
-Against [`PREREG_undertow_scale.md`](../prereg/PREREG_undertow_scale.md).
-`SYMBOLS_FRESH8`, 41 / 39 / 31 symbols. **The arm numbers are not published,
-because the prereg says a fired impossibility means they are not published.**
+Against [`PREREG_undertow_scale2.md`](../prereg/PREREG_undertow_scale2.md).
+`SYMBOLS_FRESH9`, 45 / 42 / 33 symbols, scored once. All four pre-registered
+impossibilities hold.
 
-## What fired
+## The verdict
 
-> **S0 and S2 fire CHoCH on the SAME BARS.** `smc.py` and
-> `test_undertow_port.py` both assert the two engines' CHoCH lists are
-> identical at a given pivot length; S0 and S2 run both engines at 6/2, so on
-> fresh data the count must match.
+| tf | S1 50/5 | S0 6/2 | Δ | z | control | n | win% | bars |
+|---|---|---|---|---|---|---|---|---|
+| Min15 | −0.012 | +0.049 | −0.061 | −0.67 | −0.056 | 1462 | 23.3% | PP... |
+| Min30 | +0.001 | −0.018 | +0.019 | +0.25 | −0.001 | 1322 | 23.2% | PP..P |
+| Min60 | −0.114 | −0.108 | −0.006 | −0.07 | +0.010 | 1146 | 20.3% | PP... |
 
-It fired on all three timeframes, and only just:
+**NULL.** Every delta is inside ±0.10 and inside one standard error, in both
+directions. Bars 3, 4 and 6 fail; the scale neither beats 6/2 nor loses to it.
 
-| tf | SMC at 6/2 | riptide at 6/2 | differ |
+**Under the prereg's asymmetric decision rule, 50/5 STAYS.** It ships because
+it reads better on a chart, it costs nothing measurable, and nothing here has
+grounds to overrule a preference that is free.
+
+## WHAT IT ACTUALLY BUYS, AND THE PRICE IS NOT IN R
+
+| tf | flips/day 6/2 | flips/day 50/5 | trades/day 6/2 | trades/day 50/5 |
+|---|---|---|---|---|
+| Min15 | 2.18 | **0.35** | 0.66 | **0.26** |
+| Min30 | 1.10 | **0.17** | 0.33 | **0.13** |
+| Min60 | 0.54 | **0.09** | 0.17 | **0.07** |
+
+**The bias flips a sixth as often and the strategy takes 39% of the trades,
+for no change in expectancy.** That is the trade the scale makes: a far
+quieter chart, the same money. Whether quieter is worth 60% of the
+opportunities is a judgement about how the chart is used, not a measurement —
+but it should be made knowing that is the trade.
+
+The prediction that S1 would trade "about 38% of S0's rate" came in at 39%.
+
+## The three pools
+
+The scale relocates rather than filters — only 17% of trades are shared:
+
+| tf | shared | 6/2 only | 50/5 only |
 |---|---|---|---|
-| Min15 | 11,235 | 11,246 | 11 |
-| Min30 | 10,541 | 10,550 | 9 |
-| Min60 | 8,419 | 8,432 | 13 |
+| Min15 | −0.041 (665) | +0.069 (3036) | +0.012 (797) |
+| Min30 | −0.001 (603) | −0.022 (2866) | +0.002 (719) |
+| Min60 | −0.200 (487) | −0.089 (2383) | −0.051 (659) |
 
-**0.1%.** Not a wiring failure — which is exactly what the impossibility was
-written to catch — but the rule as written is "must match", it did not, and
-reinterpreting an impossibility after seeing the numbers is the one thing
-pre-registration exists to prevent. **Void.**
+No pool is meaningfully better than any other. The trades 50/5 uniquely finds
+are not a better class of trade; they are a different, smaller sample of the
+same thing.
 
-## The diagnosis, on a spent universe
+## The engine, held at one scale — third universe to say the same
 
-`SYMBOLS_FRESH6`, 39 symbols, length 6: **17 divergences out of 10,930 events,
-and every single one is the series' FIRST structure break.** Nothing else
-differs, on any symbol, anywhere.
+`S0 − S2` runs SMC and riptide's engine at the same 6/2: **+0.060 / −0.038 /
++0.007 R**. [`UNDERTOW_V2.md`](UNDERTOW_V2.md) measured the same swap at
++0.002 / +0.065 / +0.006 on a different universe. The two engines score the
+same because, as [`smc.py`](../port/smc.py) shows, they are the same detector.
 
-| | divergences |
-|---|---|
-| the series' first structure break | **17** |
-| anything else | **0** |
+## Against the prediction
 
-The cause is initialisation, and it is not subtle once seen:
-
-| | at bar 0 | so the first break is |
+| predicted | actual | |
 |---|---|---|
-| **LuxAlgo** | `bias = 0`, neither bullish nor bearish | a **BOS** — `bias == BEARISH` is false |
-| **riptide** | `msOs = 0`, which *means* bearish | a **CHoCH** if it is upward — the state flipped |
+| S1 fails bar 4 | failed 3 of 3 | right |
+| S1 − S0 between −0.08 and +0.08 | −0.061 / +0.019 / −0.006 | right |
+| S1 trades ~38% of S0's rate | 39% | right |
+| win rates on the fee-inclusive line | 23.3 / 23.2 / 20.3 against 23.5 / 23.2 / 22.9 | right on two, below on Min60 |
+| held loosely because it changes the bias's TIME SCALE | it changed activity 6× and R not at all | the loosening was unnecessary |
 
-A symbol whose first break is downward agrees exactly. One whose first break is
-upward differs by one event, on bar ~13 of 12,000. **After that first break the
-two lists are identical.**
+## THIS STUDY WAS VOIDED ONCE AND THEN VOIDED ITSELF WRONGLY
 
-## What this falsifies, and it is mine
+Both failures were in my checks, not the data, and the sequence is worth
+keeping because the second one nearly cost a third universe.
 
-[`smc.py`](../port/smc.py) has said since it was written that the two engines'
-CHoCH bars are *"not 'similar' — the same list"*, and
-`test_undertow_port.py` asserted `a == b`. Both were checked on **one
-synthetic random walk**, which happens to break downward first, so the only
-case where they differ never occurred.
+**The first attempt** ([`PREREG_undertow_scale.md`](../prereg/PREREG_undertow_scale.md),
+on `SYMBOLS_FRESH8`) registered *"the two engines' CHoCH counts must match"*.
+They differ by 0.1%, all of it the series' **first structure break** — LuxAlgo
+starts its bias at "neither", riptide's starts at "bearish". Genuinely void:
+the rule said match, they did not match. FRESH8 spent.
 
-That claim is now corrected in both places. The test asserts what is actually
-true — the lists agree except, at most, the first break, and agree exactly
-after it — and it would have caught this on the day it was written.
+**The second attempt registered the corrected condition** — *"identical bars
+once the series' first structure break is excluded"* — and then **implemented
+it wrongly**. The code did `len(choch) - 1`, dropping each list's first
+element rather than excluding one specific bar. Those are not the same: if one
+engine has an extra event at bar `b0`, the lists are `[b0,b1,b2…]` against
+`[b1,b2…]`, and dropping each head leaves `[b1,b2…]` against `[b2…]` — still
+off by one, for every symbol, forever.
 
-**The impossibility was badly specified and that is the more useful lesson.**
-It was meant to say *"a pivot length reached the detector"*. It said *"two
-engines agree to the event"*, which is a much stronger claim, and one this
-repository had written down without ever testing on real candles. A wiring
-check should assert the thing it is checking for.
+So the study declared itself void while **the registered condition held
+exactly: 0 differing bars on all three timeframes.** The check was corrected
+and the study re-run; the arm numbers are bit-identical, because they are
+deterministic and nothing about the arms changed.
 
-## What this costs
+**What made that safe to publish rather than a third attempt:** the prereg's
+wording is fixed, public and unambiguous, and the corrected code implements it
+literally. What would NOT have been safe is deciding after the fact that a
+fired impossibility was "close enough". The distinction is the whole game, and
+a reader who wants to check it can diff the two lines of code against the one
+sentence in the prereg.
 
-**`SYMBOLS_FRESH8` is spent for this question.** The numbers were computed and
-I have seen them, so re-running the same arms on the same symbols would not be
-a fresh test whatever the prereg said. A re-run needs `SYMBOLS_FRESH9` and a
-corrected impossibility.
+**A caveat the prereg required me to keep:** I had seen FRESH8's void numbers
+before this ran. They are not quoted here and the design was unchanged, but
+FRESH9's answer agreeing with them is worth less than it would be otherwise.
 
-**And the contamination is worth naming rather than managing quietly.** Having
-seen a void result, I am no longer a neutral party to the re-run: if the second
-answer differs from the first there is an obvious temptation, and the only
-protection is that FRESH9 is untouched and the prereg is fixed before it runs.
-A reader is entitled to weigh that.
+## What changes
 
-## What is NOT affected
+**No default changes.** 50/5 stays, as the decision rule said it would on a
+null. `retraceMax`, `endMinor` and every other setting are untouched.
 
-* **No default changed**, on the chart, in the port or in the watch.
-* **No published page moves.** Every measurement in this directory pins
-  `biasSrc=BS_STRUCT` and runs riptide's engine; the correction above concerns
-  one event per symbol at the very start of a series, and none of those pages
-  scores a trade in the first fifteen bars.
-* **The 50/5 scale is still unmeasured.** That is the whole point of this page:
-  the question is open and the attempt to close it failed for a reason that had
-  nothing to do with the question.
+**The open question this leaves is not about the scale.** It is that the same
+50/5 configuration leaves the bias reading `ending` or `none`
+[83.5% of the time on Min30](../SETTINGS.md), in stretches with a median of
+112 bars, because `retraceMax` latches and only clears on a structural event
+that a 50-bar pivot delivers rarely. That is a far larger effect than anything
+on this page and it has never been measured.

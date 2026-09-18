@@ -28,6 +28,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3]))
 
+from indicators.undertow.port import smc                          # noqa: E402
 from indicators.undertow.port import undertow as U               # noqa: E402
 from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
     FEE, LOADED, TFS, clustered, load)
@@ -88,6 +89,14 @@ def main():
               f"\n{'-' * 78}")
         print(f"  {'':3} {'configuration':40} {'R/trade':>8} {'+/-':>6} "
               f"{'n':>6} {'win%':>6} {'choch/d':>8} {'trades/d':>9}")
+        # The series' first structure break, per symbol, from the engine that
+        # defines it. Computed once: both arms must exclude the SAME bar.
+        firstBreak = {}
+        for sym in syms:
+            m = smc.structure(LOADED[tf][sym], 6)
+            firstBreak[sym] = next((i for i in range(len(LOADED[tf][sym]))
+                                    if m["up"][i] or m["dn"][i]), -1)
+
         out = {}
         for aid, name, over in ARMS:
             p = dataclasses.replace(BASE, **over)
@@ -99,10 +108,15 @@ def main():
                 st, _ = U.structure(LOADED[tf][sym], p)
                 cb = [i for i, v in enumerate(st["choch"]) if v]
                 choch += len(cb)
-                # AFTER THE FIRST BREAK. The first CHoCH of a series is the one
-                # event the two engines are now known to disagree on, and
-                # excluding it is what turns a broken check into a real one.
-                after += len(cb) - (1 if cb else 0)
+                # AFTER THE FIRST BREAK, and this has to EXCLUDE A SPECIFIC BAR
+                # rather than drop each list's first element. The first version
+                # did `len(cb) - 1`, which is not the same thing: if one engine
+                # has an extra CHoCH at the first break its list is
+                # [b0, b1, b2...] against [b1, b2...], and dropping the head of
+                # each leaves [b1, b2...] against [b2...] — still off by one,
+                # for every symbol, forever. It fired on a run where the
+                # REGISTERED condition held exactly.
+                after += len(set(cb) - {firstBreak[sym]})
             m, se, n = clustered(agg.real)
             wr = 100.0 * sum(1 for t in agg.real if t.won) / max(1, n)
             print(f"  {aid:3} {name:40} {m:+8.3f} {se:6.3f} {n:6} "

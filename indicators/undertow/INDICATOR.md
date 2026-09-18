@@ -1,6 +1,6 @@
 # Riptide Undertow — market-structure bias + a single-candle pin
 
-**Status: MEASURED FOURTEEN TIMES, nothing promoted; a fifteenth ran and is VOID. The last two measured the
+**Status: MEASURED FIFTEEN TIMES, nothing promoted. The last two measured the
 CORRECTED rule — see SPEC.md 8 — and both are null. The fourteenth also found
 that the break-even line these pages quote, 22.2%, is the figure BEFORE costs:
 the real line is 22.9–23.5% and the shipped rule sits exactly on it. Ships as a
@@ -23,7 +23,7 @@ watch, OFF by default, saying so in every message.**
 | [`UNDERTOW_V2.md`](measurements/UNDERTOW_V2.md) | **the corrected strategy — W→F confirmation, SMC 50/5 structure, CHoCH+BOS only, pullback after the BOS, newest pin wins.** Negative on 3 of 3, loses to its control on 2 of 3, worse than v1 on two. **Every win rate in the study lands between 20.3% and 23.5% against a 22.2% break-even** |
 | [`UNDERTOW_V3.md`](measurements/UNDERTOW_V3.md) | **the corrected ANCHOR — the counter-trend candle is the bounce attempt at the leg low, not the top of the pullback.** Positive on 3 of 3 and above its control on 3 of 3, the first arm here to do either, and **it clears neither bar** because every margin is a third of an SE. Two things it settled against me: **22.2% is the break-even BEFORE fees** — the real line is 22.9–23.5% and v1's win rate matches it to a tenth of a point on all three timeframes — and **the 76.7% family mix in my own prereg is an artifact of `locTol 0`**, where the pinned bar *is* the bar that made the low, so a green bar there is a hammer by construction. The trades the anchor ADDS are +0.054 / +0.107 / +0.089 R, none significant: the first thing here worth measuring twice |
 
-| [`UNDERTOW_SCALE.md`](measurements/UNDERTOW_SCALE.md) | **VOID**, and the thing that voided it is the finding. The 50/5 swing scale that now ships was to be measured against 6/2; a pre-registered impossibility fired — the two structure engines' CHoCH lists differ by **0.1%** where `smc.py` had claimed for weeks they were *"the same list"*. Diagnosed on a spent universe: **17 divergences in 10,930 events, every one of them the series' FIRST break**, caused by LuxAlgo starting its bias at "neither" and riptide's starting at "bearish". The claim was checked on one synthetic walk that happens to break downward first. **The scale is still unmeasured and FRESH8 is spent** |
+| [`UNDERTOW_SCALE.md`](measurements/UNDERTOW_SCALE.md) | **the 50/5 swing scale against 6/2 — NULL, and the price is not in R.** Δ of −0.061 / +0.019 / −0.006, every one inside one SE in both directions. What it buys: the bias flips **a sixth as often** (2.18 → 0.35 a day on 15m) and the strategy takes **39% of the trades**, for no change in expectancy. A quieter chart for the same money. It STAYS, by the prereg's asymmetric rule — a preference that costs nothing needs no overruling. Third universe to score the engine swap at nothing (+0.060 / −0.038 / +0.007). **Voided twice first, both times by my own checks**, once genuinely and once while the registered condition held exactly |
 
 **It ships anyway, off by default, for one reason.** One explanation survives
 all three and no backtest can reach it: whether a human choosing which one in
