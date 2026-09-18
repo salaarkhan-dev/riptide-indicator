@@ -1719,6 +1719,23 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         return res
     st, atr = structure(cs, p)
     dirs, tradeable = bias(cs, st, p)
+    # THE BIAS GATE, AS ONE SERIES READ IN BOTH PLACES. `tradeable` refuses a
+    # setup while the bias is Ending or None; "direction only" keeps the
+    # direction and drops the refusal -- "we don't reject based on the bias, we
+    # just trade the bias direction".
+    #
+    # IT IS ONE LIST BECAUSE IT WAS TWO AND THAT WAS A BUG. The first version
+    # changed only the ADMISSION test and left the candidate-lifecycle drop
+    # below reading `tradeable[i]`, so a pin was admitted and then killed one
+    # bar later. It measured as "direction only changes almost nothing", and
+    # the conclusion drawn from that -- that confirmation rather than the bias
+    # is the binding constraint -- was an artefact of the half-wiring.
+    #
+    # `biasSeen` is still required either way: before the first CHoCH there is
+    # no direction to trade, only the initial value of `os`, and that is what
+    # the "none" state means.
+    gateOk = (tradeable if p.biasGate == BG_TRADEABLE
+              else [x != "none" for x in st["biasState"]])
     hM = htf_mult(cs, p)
     hD, hK = (htf_dir(cs, p, hM) if hM
               else ([0] * len(cs), [True] * len(cs)))
@@ -1771,7 +1788,7 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         for cd in list(cands):
             gone = False
             filled = False
-            if not tradeable[i] and not cd.ghost:
+            if not gateOk[i] and not cd.ghost:
                 if not cd.armed:
                     # THE BIAS TURNED UNDER AN UNARMED CANDIDATE. Counted
                     # separately from nMissBias, which is the same event to an
@@ -2164,15 +2181,7 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         # makes the pullback a pullback FROM something.
         bosOk = (not p.needBos) or st["biasState"][i] == "running"
 
-        # THE BIAS GATE. `tradeable` refuses a setup while the bias is Ending
-        # or None; `direction only` keeps the direction and drops the refusal,
-        # which is what the strategy's author asked for -- "we don't reject
-        # based on the bias, we just trade the bias direction". `biasSeen` is
-        # still required either way, and that is what `st["biasState"] != none`
-        # tests: before the first CHoCH there is no direction, only the initial
-        # value of `os`.
-        biasOk = (tradeable[i] if p.biasGate == BG_TRADEABLE
-                  else st["biasState"][i] != "none")
+        biasOk = gateOk[i]
         if trace:
             res.trace.append(dict(
                 i=i, t=getattr(c, "t", None), o=c.o, h=c.h, l=c.l, c=c.c,
