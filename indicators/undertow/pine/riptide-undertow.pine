@@ -217,7 +217,7 @@ showZones = input.bool(true, "Risk / reward zones", group = gShow)
 showUnfilled = input.bool(true, "Draw setups that never filled", group = gShow,
   tooltip = "Armed setups that were stopped or expired before the limit filled, drawn muted with an ×. Off keeps the chart clean; ON is how you check past detection without waiting for live ones.")
 showStruct = input.bool(true, "Market structure", group = gShow,
-  tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye. One toggle for all three.")
+  tooltip = "CHoCH, BOS and the swing dots, so the bias can be checked by eye. One toggle for all three.\n\nAND THE TWO LIVE LEVELS AT THE RIGHT EDGE, which are the only things on this chart that say what the NEXT bar could change. 'CHoCH' is the swing on the other side — a close beyond it turns the bias and kills every live setup. 'BOS' is the running extreme in the trend's own direction — a close beyond it is the trend proving itself again and clears an Ending.\n\nTHE BOS LEVEL MOVES. It is the RUNNING extreme, so it rises with every new high in an uptrend. It is not a level to leave an alert on; it is how far price has got so far. The CHoCH level holds still until the pivot behind it changes.\n\nTHERE IS NO IDM LINE and that is not an omission. LuxAlgo's 'Market Structure with Inducements & Sweeps' draws an unswept inducement beside these two, which is the best thing about it — but that is a different engine. The Smart Money Concepts engine this chart runs has no inducement anywhere in it, so a BOS here is a close beyond the last pivot with no liquidity precondition. Drawing the line would mean inventing the concept rather than reporting it.")
 showBias = input.bool(true, "Bias badge", group = gShow,
   tooltip = "One cell in the BOTTOM RIGHT with the trend bias and its state, so the stats table can be switched off without losing the only line most people read off it.\n\nThe bias is the MAJOR tier — swing structure at the length set in group 1. It decides whether a setup can exist at all: no setup is taken while it reads `ending` or `none`, however good the candle looks.\n\nOrange is `ending`, and it is worth knowing how sticky that is. The retrace rule latches, and it only clears on a new CHoCH or a break of structure in the trend's direction — at a 50-bar swing those can be a hundred bars apart.")
 showStats = input.bool(true, "Stats table", group = gShow,
@@ -1433,6 +1433,57 @@ if barOk and showStruct
         msBreak(iTopX, iTopY, inChoch ? "CHoCH" : "BOS", true, true)
     if inDn
         msBreak(iBtmX, iBtmY, inChoch ? "CHoCH" : "BOS", false, true)
+
+// ── WHAT HAS TO HAPPEN NEXT ─────────────────────────────────────────────────
+// Two levels projected to the right edge, live, on the last bar only.
+//
+//   CHoCH   the swing the engine is holding on the OTHER side. A close beyond
+//           it turns the bias, and every live setup dies with it.
+//   BOS     the running extreme in the trend's own direction. A close beyond
+//           it is the trend proving itself again, and it clears an Ending.
+//
+// IT IS THE STATE MACHINE OF SECTION 5, AS TWO PRICES. Everything the chart
+// draws behind you is history; these are the only two numbers on it that say
+// what the next bar could change. Borrowed from LuxAlgo's "Market Structure
+// with Inducements & Sweeps", whose extensions block does the same thing.
+//
+// THERE IS NO THIRD LINE, AND THAT IS NOT AN OMISSION. That script's best
+// feature is its unswept IDM -- the inducement still owed before a BOS counts
+// -- and this engine has no inducement to draw. LuxAlgo's Smart Money Concepts
+// has no inducement anywhere in it, so a BOS here is a close beyond the last
+// pivot with no liquidity precondition. Drawing an IDM line would mean
+// inventing the concept rather than reporting it. See SPEC.md section 1.
+//
+// THE BOS LEVEL MOVES. It is the RUNNING extreme, so it rises with every new
+// high in an uptrend -- it is not a level to leave an alert on, it is "how far
+// price has got so far". The CHoCH level does not move until the pivot does.
+var line nextChoch = line.new(na, na, na, na, style = line.style_dashed)
+var line nextBos = line.new(na, na, na, na)
+var label nextChochLab = label.new(na, na, "CHoCH", color = color(na), size = size.tiny)
+var label nextBosLab = label.new(na, na, "BOS", color = color(na), size = size.tiny)
+if barstate.islast and showStruct
+    bool bull = biasDir > 0
+    float chY = bull ? dBtmY : dTopY
+    int   chX = bull ? brkDnX : brkUpX
+    float boY = bull ? bMax : bMin
+    int   boX = bull ? bMaxX : bMinX
+    color chC = bull ? colShort : colLong
+    color boC = bull ? colLong : colShort
+    // na on a fresh chart, before the engine has a pivot to hold.
+    if not na(chY)
+        nextChoch.set_xy1(na(chX) ? bar_index : chX, chY)
+        nextChoch.set_xy2(bar_index + 15, chY)
+        nextChoch.set_color(chC)
+        nextChochLab.set_xy(bar_index + 15, chY)
+        nextChochLab.set_style(bull ? label.style_label_up : label.style_label_down)
+        nextChochLab.set_textcolor(chC)
+    if not na(boY)
+        nextBos.set_xy1(na(boX) ? bar_index : boX, boY)
+        nextBos.set_xy2(bar_index + 15, boY)
+        nextBos.set_color(boC)
+        nextBosLab.set_xy(bar_index + 15, boY)
+        nextBosLab.set_style(bull ? label.style_label_down : label.style_label_up)
+        nextBosLab.set_textcolor(boC)
 
 // DEBUG: one mark per pin, and hovering it says why. Blue took it, grey did
 // not, and the tooltip carries the reason either way. A bar with NO mark at all
