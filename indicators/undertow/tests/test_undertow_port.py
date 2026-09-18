@@ -717,14 +717,41 @@ def test_smc_is_the_same_swings_and_the_same_choch():
            f"{len(lux_hi)} pivot highs both ways")
 
     # And the CHoCH, against the engine Undertow already had.
+    #
+    # THIS ASSERTION USED TO BE `a == b` AND IT WAS TOO STRONG. It passed on
+    # this synthetic walk and failed on real candles: 17 divergences across 39
+    # FRESH6 symbols, 0.16% of 10,930 events, and EVERY ONE of them the
+    # series' FIRST structure break. The cause is initialisation and nothing
+    # else --
+    #
+    #   LuxAlgo   `bias` starts at 0, which is neither BULLISH nor BEARISH, so
+    #             the first break is tagged BOS: `bias == BEARISH` is false
+    #   riptide   `msOs` starts at 0 MEANING BEARISH, so the first up-break is
+    #             a flip and reads as a CHoCH
+    #
+    # A symbol whose first break is downward agrees; one whose first break is
+    # upward differs by exactly one event, on bar ~13 of 12,000. The synthetic
+    # series below happens to break downward first, which is why one draw of
+    # one random walk called two engines identical for as long as it did.
+    #
+    # It cost a study: PREREG_undertow_scale.md registered "the CHoCH counts
+    # must match" as an impossibility meant to catch a length that never
+    # reached the detector, and this fired instead. That run is VOID.
     for size in (6, 15):
         lux = smc.structure(cs, size)
         mine = U.structure(cs, U.P(biasSrc=U.BS_STRUCT, swingSrc=U.SW_BAR,
                                    msLen=size, msShortLen=2))[0]
         a = [i for i, v in enumerate(lux["choch"]) if v]
         b = [i for i, v in enumerate(mine["choch"]) if v]
-        ok(a == b, f"size {size}: the CHoCH bars are the same list "
-                   f"({len(a)} of them)")
+        first = next((i for i in range(len(cs))
+                      if lux["up"][i] or lux["dn"][i]), None)
+        gap = sorted(set(a) ^ set(b))
+        ok(gap == [] or gap == [first],
+           f"size {size}: the CHoCH bars agree except, at most, the series' "
+           f"FIRST break ({len(a)} events, {len(gap)} differ)")
+        ok([i for i in a if first is None or i > first]
+           == [i for i in b if first is None or i > first],
+           f"size {size}: AFTER the first break they are the same list")
 
     # NO LOOK-AHEAD. A break on bar i must be decidable from bars <= i, so
     # truncating the series after i cannot change it.

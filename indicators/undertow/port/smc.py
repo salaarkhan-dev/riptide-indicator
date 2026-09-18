@@ -18,6 +18,26 @@ TWO THINGS ARE ALREADY IDENTICAL, MEASURED ON ETH 15m:
   2. THE CHoCH. Identical bars at every size tested: 172 of 172, 68 of 68,
      30 of 30. Not "similar" -- the same list.
 
+     CORRECTION, and it cost a study. On REAL candles the lists differ by
+     0.16% -- 17 events across 39 FRESH6 symbols -- and every divergence is
+     the series' FIRST structure break, none of them anything else. The cause
+     is initialisation, not the rule:
+
+         LuxAlgo   `bias` starts at 0, neither BULLISH nor BEARISH, so the
+                   first break is a BOS -- `bias == BEARISH` is false
+         riptide   `msOs` starts at 0 MEANING BEARISH, so a first up-break is
+                   a flip and reads as a CHoCH
+
+     A symbol whose first break is downward agrees exactly. One whose first
+     break is upward differs by one event, on bar ~13 of 12,000. After that
+     first break the two lists are identical, which is what the sentence above
+     should have said and now does.
+
+     The claim held for as long as it did because it was checked on ONE
+     synthetic random walk, which happens to break downward first.
+     PREREG_undertow_scale.md registered "the CHoCH counts must match" as a
+     wiring check on the strength of it, and that run is VOID.
+
 SO WHAT IS ACTUALLY DIFFERENT IS TWO THINGS:
 
   1. THE PIVOT LENGTH, and this is the one that shows on a chart. LuxAlgo runs
