@@ -96,6 +96,28 @@ PINE_CHECKS = [
         PINE.format("riptide_ms", "riptide-indicator-v2.pine"),
         "indicators/riptide_ms/port/ms_struct.py"]),
     ("ccp-grab-check", "ccp", []),
+    # undertow-ms-check IS STILL RETIRED, and the v2 engine coming BACK to
+    # riptide-undertow.pine (section 4b) does not revive it as-is. Two reasons,
+    # both concrete:
+    #
+    #   * the two engines now coexist, so every name in the recovered block is
+    #     prefixed `v2` -- section 3 still owns `msOs`, `msMax` and the rest
+    #     for LuxAlgo's. This check keeps identifier names deliberately ("var
+    #     float msMax = na losing its initial value IS a difference"), so a
+    #     rename map would have to come first.
+    #   * the block is not the whole of v2's section 12 any more: the
+    #     price-move branch and its mux are gone, and the minor tier now comes
+    #     from LuxAlgo's internal pass instead of this engine's own short
+    #     swings. A multiset compare would report those as real differences,
+    #     because they are.
+    #
+    # So reviving it is a job, not a line, and pretending otherwise would put
+    # a green check next to an engine nothing is holding. What DOES cover the
+    # recovered block today: deploy/undertow-port-check.py compares its two
+    # lengths and its inducement toggle against P, and the port's own copy is
+    # held to ms_struct.py by test_undertow_port.py.
+    #
+    # The original headstone follows.
     # undertow-ms-check IS RETIRED, and this line is its headstone rather than
     # a deletion. It held riptide-undertow.pine's section 3 to
     # riptide-indicator-v2.pine's section 12, statement for statement, because

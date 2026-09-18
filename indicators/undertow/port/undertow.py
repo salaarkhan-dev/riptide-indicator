@@ -77,7 +77,14 @@ B_LATE = "after the limit expires"
 # event on a different population doing a different job. Carrying its verdict
 # to "direction source for a pullback-continuation strategy" was wrong, and
 # these are here to be measured rather than assumed either way.
-BS_STRUCT = "structure"
+# THE VALUE IS THE DROPDOWN LABEL, and it was "structure" until this engine
+# went back on the chart beside LuxAlgo's. Both sides compare biasSrc BY VALUE,
+# so the Pine's option must be this exact string -- and "structure" next to
+# "SMC structure" in a dropdown tells the reader nothing about which is which.
+# Renaming the literal is safe: every reader in the tree uses the CONSTANT
+# (checked -- there was no bare "structure" comparison anywhere), P's default
+# is BS_SMC so no fingerprint moves, and no study's arms change.
+BS_STRUCT = "v2 structure (inducement)"
 BS_EMA = "EMA cross"
 BS_ST = "Supertrend"
 BS_SLOPE = "Slope"
@@ -191,8 +198,8 @@ class P:
     """Every input in the Pine, same names, same defaults, plus the three the
     Pine cannot have. Frozen so a sweep cannot mutate a shared config."""
     # 1 · Bias
-    msLen: int = 6
-    msShortLen: int = 2
+    msLen: int = 50
+    msShortLen: int = 3
     msBosNeedsIdm: bool = True
     endMinor: str = E_FLIP
     endSweep: bool = False
@@ -505,7 +512,7 @@ class P:
     # both, against the bar pivot's 2.3 and 1.1. One setting that means one
     # thing on every chart is worth having on its own terms, and it makes every
     # future measurement comparable across timeframes.
-    swingSrc: str = SW_RANGE
+    swingSrc: str = SW_BAR
     swingK: float = 0.40
     swingKMinor: float = 0.12
     swingHours: float = 24.0
@@ -1115,6 +1122,12 @@ def structure(cs, p: P):
     if p.biasSrc != BS_STRUCT:
         return alt_structure(cs, p)
     n = len(cs)
+    # THE HYBRID. This engine supplies the EXTERNAL character -- direction,
+    # CHoCH, BOS and the inducement that gates the BOS -- and LuxAlgo's
+    # internal pass supplies the minor tier that `endMinor` and the
+    # minor-swing stop read. Computed here so the loop below can take it
+    # per bar; see the comment where sOs is filled.
+    inner = smc.structure(cs, p.smcInternalLen)
     atr = atr_series(cs, 14)
     msTop, msTopX, msBtm, msBtmX = _swings(cs, p, True, atr)
     msSTop, msSTopX, msSBtm, msSBtmX = _swings(cs, p, False, atr)
@@ -1219,10 +1232,20 @@ def structure(cs, p: P):
         out["bosDn"].append(msBosDn)
         out["sweepUp"].append(msSweepUp)
         out["sweepDn"].append(msSweepDn)
-        out["sOs"].append(msSOs)
-        out["minorChoch"].append(msMinorChoch)
-        out["sTopY"].append(msSTopY)
-        out["sBtmY"].append(msSBtmY)
+        # THE MINOR TIER COMES FROM LuxAlgo'S INTERNAL PASS, NOT FROM THIS
+        # ENGINE'S OWN, and that hybrid is deliberate. This engine's short
+        # swings exist to supply the INDUCEMENT -- `msSBtmY` above, which is
+        # the only thing v2 ever used them for. What `endMinor` and the
+        # minor-swing stop read is LuxAlgo's internal structure at
+        # `smcInternalLen`, which is the better of the two at saying where a
+        # pullback is turning.
+        #
+        # External character from one engine, internal from the other. The
+        # Pine's mux does exactly the same thing -- see the comment on `bSOs`.
+        out["sOs"].append(1 if (inner["dir"][i] or 1) > 0 else 0)
+        out["minorChoch"].append(inner["choch"][i])
+        out["sTopY"].append(inner["hiLvl"][i])
+        out["sBtmY"].append(inner["loLvl"][i])
 
         # Trailing extremes, AFTER the tests above read them.
         msMax = c.h if msMax is None else max(c.h, msMax)

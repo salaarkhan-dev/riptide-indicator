@@ -286,6 +286,22 @@ def main() -> int:
         # constant is the silent-fallthrough failure this file's docstring
         # warns about, one step removed.
         "workTest": ("close beyond", "the literal kWork"),
+        # THE FOUR SWING DIALS MOVED BUCKETS WHEN THE v2 ENGINE WENT BACK ON
+        # THE CHART, and the old entry for them was wrong in a way worth
+        # recording: it claimed they were "FIXED IN THE PINE at the values
+        # every measurement page was produced under" while the Pine had no
+        # swing detector in it at all. Now it does -- v2PriceSwings in section
+        # 4b -- and they really are fixed, as literals in the two calls to it
+        # and in the 24-hour reference window. So the claim is finally true and
+        # is finally checked.
+        # THE DETECTOR IS THE BAR PIVOT on the chart -- v2Swings, section 4b --
+        # because the script being reproduced uses one. The price-move swings
+        # this engine also supports have no detector in the Pine at all, so
+        # their three dials are ABSENT below rather than hardcoded. An earlier
+        # version of this file claimed they were "FIXED IN THE PINE at the
+        # values every measurement page was produced under" while the Pine had
+        # no swing detector whatsoever; the bucket split is what caught that.
+        "swingSrc": ("bar pivot", "v2Swings is the only detector"),
         "failTest": ("close at or beyond", "the literal kFail, via tTouch"),
     }
 
@@ -315,16 +331,9 @@ def main() -> int:
         # Section 3 is a transcription of LuxAlgo's SMC now, so the chart has
         # one detector at two lengths and no swing source to choose, no pivot
         # lengths to set and no inducement rule to gate a BOS on.
-        "swingSrc": (None, "no swing source on the chart"),
         "swingK": (None, "price-move swings, which the chart does not have"),
         "swingKMinor": (None, "price-move swings"),
         "swingHours": (None, "price-move swings"),
-        "msLen": (None, "bar-pivot lengths"),
-        "msShortLen": (None, "bar-pivot lengths"),
-        "msBosNeedsIdm": (None,
-                          "the BS_STRUCT branch only; LuxAlgo's BOS has no "
-                          "inducement and structure() never reaches it at "
-                          "BS_SMC"),
         # THE BACKUP FILL, eight inputs, measured twice and worthless: +0.03 R
         # per armed setup significant on none (UNDERTOW_BACKUP_FILL.md), and
         # waiting for the limit to expire removes the tax and all the

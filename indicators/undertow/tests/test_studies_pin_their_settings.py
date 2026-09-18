@@ -238,7 +238,26 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # that did -- test_undertow_port's ghost-accounting walk and
 # test_watch_undertow's stop-tracking walk -- now pin them, because both are
 # fixtures for something else and both went vacuous rather than wrong.
-DEFAULTS_FINGERPRINT = "764a76c042fc3a54"
+#
+# 2026-09-18: THE v2 ENGINE IS BACK ON THE CHART as a bias source, because it
+# is the only one here with an INDUCEMENT -- LuxAlgo's SMC has none, so its BOS
+# is a close beyond the last pivot with no liquidity precondition. Three
+# defaults moved with it, and all three are already in PINNED, which is exactly
+# the situation PINNED exists for:
+#
+#   msLen       6 -> 50    the CHoCH pivot, at the value the script this
+#   msShortLen  2 -> 3     reproduces ships. A slow reversal level and a fast
+#                          inducement; the gap between them is the design.
+#   swingSrc    price move -> bar pivot. The chart draws the bar-pivot version,
+#                          so the port has to default to the same detector or
+#                          the two describe different engines.
+#
+# NO STUDY MOVES, checked rather than assumed: a pinned BS_STRUCT arm at
+# 6/2 price-move scored 3,717 trades at -0.0820 R on Min30 after the move,
+# because it names all three. The bar count is not scale invariant and the
+# price-move swings were adopted to fix that -- that flaw comes back with this
+# engine and is stated in the input's tooltip rather than quietly inherited.
+DEFAULTS_FINGERPRINT = "431be9a584def231"
 DEFAULTS_COUNT = 73
 
 good = []
