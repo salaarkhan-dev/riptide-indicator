@@ -633,6 +633,16 @@ class Result:
     # Fills that came from a backup zone rather than the Focus line. Counted
     # apart so no number can imply the limit worked when it did not.
     nBackup: int = 0
+    # THE SWING STOP HAD NO SWING TO READ, so the pullback extreme was used
+    # instead. Only a source with no minor tier can do this -- `alt_structure`
+    # publishes sTopY/sBtmY as None on every bar, deliberately, because faking
+    # a minor tier would make the sources look comparable when they are not.
+    #
+    # IT IS COUNTED BECAUSE IT USED TO BE SILENT AND FATAL. With `stopSrc` at
+    # the minor swing, every RSI-bias candidate hit `base is None` and was
+    # discarded at arming: 0 setups on every symbol, no counter, no panel row,
+    # and a chart option that selected to nothing.
+    nStopFallback: int = 0
     # which Ending rule cancelled an armed setup
     nEndMinor: int = 0
     nEndSweep: int = 0
@@ -1651,6 +1661,19 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     base = ((cd.hi if cd.short else cd.lo) if p.stopSrc == S_PIN
                             else cd.pbExt if p.stopSrc == S_PULL
                             else sw)
+                    # NO MINOR TIER, SO NO MINOR SWING. Fall back to the
+                    # pullback extreme rather than discard the setup. The
+                    # alternative is what shipped: `base is None` on every bar
+                    # under the RSI source, every candidate dropped as `gone`,
+                    # and the whole source producing 0 setups in silence.
+                    #
+                    # Only the SWING source can land here -- S_PIN and S_PULL
+                    # read the candidate, not the structure -- so this cannot
+                    # change a configuration that currently works.
+                    if base is None and p.stopSrc == S_SWING:
+                        base = cd.pbExt
+                        if base is not None:
+                            res.nStopFallback += 1
                     if base is None:
                         gone = True
                     else:

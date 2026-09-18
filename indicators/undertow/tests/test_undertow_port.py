@@ -582,6 +582,53 @@ def test_price_swing_sources_run_end_to_end():
         ok("unknown swingSrc" in str(e), f"stale swingSrc raises: {e}")
 
 
+def test_every_bias_source_can_actually_arm_a_setup():
+    """A SELECTABLE SOURCE THAT PRODUCES NOTHING IS A BROKEN CHART OPTION.
+
+    "RSI bias" armed ZERO setups on every symbol, at every timeframe, for as
+    long as `stopSrc` had been at the minor swing -- which was hours. The cause
+    is honest on both sides: `alt_structure` publishes sTopY/sBtmY as None
+    because it has no minor tier and says that faking one would make the
+    sources look comparable when they are not, and the arming step discards a
+    candidate it cannot place a stop on. Put the two together and the source
+    selects to nothing, silently: no counter, no panel row, no log line.
+
+    This asserts the property that was missing rather than the fix: every
+    source on the dropdown arms something, under the settings that SHIP.
+    """
+    cs = walk(6000, seed=91, drift=0.0003)
+    for src in (U.BS_STRUCT, U.BS_SMC, U.BS_RSI):
+        r = U.run(cs, U.P(biasSrc=src), "T")
+        ok(r.nArmed > 0,
+           f"biasSrc={src!r} arms setups under the shipped stop: {r.nArmed}")
+        print(f"       {src:>32}: {r.nLoc:4} located, {r.nArmed:4} armed, "
+              f"{r.nStopFallback:4} on the fallback stop")
+
+
+def test_the_stop_fallback_cannot_touch_a_source_that_has_a_minor_tier():
+    """The repair must be unreachable where the swing stop already works.
+
+    Both structure sources publish a minor tier, so neither may ever take the
+    fallback -- otherwise the fix is quietly changing stops on the shipped
+    configuration rather than rescuing one that produced nothing.
+    """
+    cs = walk(6000, seed=44, drift=-0.0002)
+    for src in (U.BS_STRUCT, U.BS_SMC):
+        r = U.run(cs, U.P(biasSrc=src), "T")
+        ok(r.nStopFallback == 0,
+           f"biasSrc={src!r} never falls back: {r.nStopFallback}")
+    # And the fallback, where it DOES fire, must place the same stop the
+    # pullback source would -- it is not a third stop rule.
+    a = U.run(cs, U.P(biasSrc=U.BS_RSI), "T")
+    b = U.run(cs, U.P(biasSrc=U.BS_RSI, stopSrc=U.S_PULL), "T")
+    ok(a.nStopFallback == a.nArmed > 0,
+       f"every RSI arming used the fallback: {a.nStopFallback}/{a.nArmed}")
+    sa = {(x["bar"], round(x["stop"], 8)) for x in a.armed}
+    sb = {(x["bar"], round(x["stop"], 8)) for x in b.armed}
+    ok(sa == sb,
+       f"the fallback stop IS the pullback stop: {len(sa & sb)}/{len(sa)} match")
+
+
 def test_slope_in_hours_survives_an_aggregation():
     """THE CLAIM BEHIND `slopeUnit="hours"`, tested the same way the swings'
     was: aggregate 4:1 and count direction flips per unit of TIME.
@@ -795,6 +842,8 @@ def main():
                test_htf_bias_cannot_look_ahead,
                test_htf_gate_only_removes_setups,
                test_price_swing_sources_run_end_to_end,
+               test_every_bias_source_can_actually_arm_a_setup,
+               test_the_stop_fallback_cannot_touch_a_source_that_has_a_minor_tier,
                test_slope_in_hours_survives_an_aggregation,
                test_htf_hours_is_the_same_gate_in_a_consistent_unit):
         print(f"\n{fn.__name__}")

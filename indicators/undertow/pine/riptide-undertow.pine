@@ -1198,6 +1198,10 @@ var int nCap = 0
 // panel has had a whole section for why an ARMED setup did not ENTER since v1
 // and nothing at all for the much bigger drop before it.
 var int nBackup = 0
+// Setups whose minor-swing stop had no swing and used the pullback extreme.
+// Only a bias source with no minor tier can produce these; see the arming
+// block. It is on the panel because it used to be silent AND fatal.
+var int nStopFallback = 0
 var int nSuper = 0
 var int nBiasDrop = 0
 var int nNoWork = 0
@@ -1326,7 +1330,18 @@ if barOk and cands.size() > 0
                 // drawn from a swing confirmed later is a stop that did not
                 // exist when the trade was taken.
                 float sw = c.short ? msSTopY : msSBtmY
-                float base = stopSrc == sPin ? (c.short ? c.hi : c.lo) : stopSrc == sPull ? c.pbExt : stopSrc == sSwing ? sw : na
+                float base0 = stopSrc == sPin ? (c.short ? c.hi : c.lo) : stopSrc == sPull ? c.pbExt : stopSrc == sSwing ? sw : na
+                // NO MINOR TIER, SO NO MINOR SWING -- fall back to the
+                // pullback extreme instead of discarding the setup. The RSI
+                // source has no minor structure by design, and with the swing
+                // stop shipped that made it select to NOTHING: every candidate
+                // hit a na base and was rejected, 0 setups, on every symbol.
+                // Only sSwing can land here, so a source that already works
+                // cannot change.
+                bool stopFell = stopSrc == sSwing and na(base0) and not na(c.pbExt)
+                float base = stopFell ? c.pbExt : base0
+                if stopFell
+                    nStopFallback := nStopFallback + 1
                 float st = c.short ? base + atrBuf : base - atrBuf
                 float risk = math.abs(st - c.focus)
                 bool sane = not na(st) and risk > 0 and (c.short ? st > c.focus : st < c.focus)
@@ -2266,3 +2281,12 @@ if barstate.islast and showStats
     else
         row(21, "", "", color.gray, "")
         row(22, "", "", color.gray, "")
+    // ONLY WHEN IT HAPPENED. A row that reads 0 on every chart is noise, and
+    // this one is 0 under both structure sources by construction. It appears
+    // exactly when the chosen stop source had nothing to read and the pullback
+    // extreme stood in -- which, before the fallback existed, was the silent
+    // condition that made the RSI bias produce no setups at all.
+    if nStopFallback > 0
+        row(dbgOn ? 21 : 22, "  stop fell back", str.tostring(nStopFallback),
+          color.new(color.orange, 20),
+          "The stop source is '" + stopSrc + "' and this bias source has no minor structure to read, so the PULLBACK EXTREME was used instead on this many setups.\n\nWithout the fallback every one of them would simply not exist: the setup is discarded when there is no level to place a stop on, which is what made 'RSI bias' select to nothing while the swing stop was set.\n\nSwitch the Stop to 'Pullback extreme' to make this explicit, or pick a bias source with a minor tier.")

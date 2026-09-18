@@ -765,11 +765,23 @@ def run_setups(cs, max_live: int = 4):
                     # this bar -- a stop drawn from a swing confirmed later is
                     # a stop that did not exist when the trade was taken.
                     #
-                    # NO SWING MEANS NO SETUP, which is the port's rule and is
-                    # why this is not quietly backed off to the pullback: a
-                    # stop the chart cannot draw is not a stop.
+                    # NO SWING FALLS BACK TO THE PULLBACK EXTREME, and this
+                    # comment used to say the opposite -- "no swing means no
+                    # setup ... a stop the chart cannot draw is not a stop".
+                    # That reasoning is sound and the consequence was not: a
+                    # bias source with no minor tier then produces NOTHING. The
+                    # RSI source publishes no minor structure by design, and
+                    # with this stop shipped it armed 0 setups on every symbol
+                    # with no counter and no log line.
+                    #
+                    # This branch cannot fire in the watcher as configured --
+                    # BIAS_SRC has an SMC internal tier, so there is always a
+                    # swing -- but the three copies have to agree, and
+                    # deploy/undertow-three-way-check.py is what holds them.
                     if STOP_SRC == "Minor swing extreme":
                         base = mnr["hiLvl"][i] if cd.short else mnr["loLvl"][i]
+                        if base is None:
+                            base = cd.pbExt
                     else:
                         base = cd.pbExt
                     stop = (base + atrBuf if cd.short
