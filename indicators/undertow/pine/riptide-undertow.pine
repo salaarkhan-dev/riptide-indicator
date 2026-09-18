@@ -198,8 +198,8 @@ colLine = input.color(color.new(#787b86, 0), "Lines", group = gShow, inline = "c
 
 dbgOn = input.bool(false, "Debug marks", group = gDbg,
   tooltip = "A dot on every pin found, one line of why, and a funnel in the panel.")
-dbgRejects = input.bool(false, "Show rejected pins", group = gDbg,
-  tooltip = "Also mark pins that failed colour or location. Needs Debug marks on.")
+dbgRejects = input.bool(true, "Show rejected pins", group = gDbg,
+  tooltip = "Also mark pins that were FOUND and then thrown away, colour-coded by which gate did it:\n\n    blue ●   taken\n    orange ✕  the bias was not tradeable — `ending` or `none`\n    red ✕     wrong colour for the bias\n    grey ✕    too far from the anchor (location)\n\nON BY DEFAULT, because debug with it off answers the wrong question. The interesting case is almost never 'what did it take' — it is 'I can see a textbook candle there and nothing happened', and only the rejects say why. Hover any mark for the full reason.\n\nNeeds Debug marks on.")
 
 
 // ═════════════════════════════ 2. HELPERS ════════════════════════════════════
@@ -1245,11 +1245,20 @@ if barOk and showStruct
 // setups. Pine's own ceiling is 500 labels and debug is off by default.
 var array<label> dbgBuf = array.new<label>()
 if dbgOn and pinRaw and (pinOk or dbgRejects)
+    // COLOUR-CODED BY WHICH GATE REJECTED IT, because "a mark is here and it
+    // is not blue" only tells you something went wrong, and the whole reason
+    // to turn debug on is to find out WHICH thing. Reading a chart full of
+    // orange says "stop looking at candles, the bias is off"; a chart full of
+    // grey says the anchor or the tolerance is wrong. Those are different
+    // problems and they should not look the same.
+    color dbgC = pinOk ? color.new(color.blue, 30)
+      : not tradeable ? color.new(color.orange, 25)
+      : not colourOk ? color.new(color.red, 35)
+      : color.new(color.gray, 45)
     // On the pullback side: a short's pin is at a high, a long's at a low.
     dbgBuf.push(label.new(bar_index, biasDir < 0 ? high : low, "",
       xloc = xloc.bar_index, style = pinOk ? label.style_circle
-      : label.style_xcross, size = size.tiny,
-      color = pinOk ? color.new(color.blue, 40) : color.new(color.gray, 55),
+      : label.style_xcross, size = size.tiny, color = dbgC,
       tooltip = (pinOk ? pinTag + " · taken" : pinTag + "\n" + pinWhy)
       + "\nbias " + (biasDir > 0 ? "LONG" : "SHORT") + " · " + biasState))
     while dbgBuf.size() > 300
