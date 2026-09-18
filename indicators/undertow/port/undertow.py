@@ -100,20 +100,16 @@ BS_MTF = "MTF EMA align"
 # the original engine: the swing detector and the CHoCH are IDENTICAL, and the
 # pivot length and the BOS rule are not.
 BS_SMC = "SMC structure"
-# ChartArt's "EMA Slope + EMA Cross Strategy", supplied as a v3 script and
-# transcribed in dir_ema_slope_cross. Asked for because the SMC bias is
-# tradeable a small fraction of the time and the setups are correspondingly
-# few; this one is always in the market, so it is never not tradeable.
-#
-# IT IS CONTRARIAN AND THE NAME DOES NOT SAY SO. `long` fires when price
-# crosses UNDER the slow EMA, not over it. Read the original: the fast pair is
-# a slope filter and the slow EMA is a mean-reversion trigger. That matters
-# here because Undertow trades CONTINUATION in the direction of the bias --
-# it finds a counter-trend candle in a pullback and bets the trend resumes --
-# so composing it with a mean-reversion direction is not the same idea twice.
-# Nothing about that is measured; it is written down so the composition is a
-# choice rather than an accident.
-BS_XCROSS = "EMA slope + cross"
+# Wilder's directional movement, the DIRECTION half only: DI+ above DI- is up.
+# The STRENGTH half is `adxMin`, which is a different field, is off, and failed
+# as a filter elsewhere in this project.
+BS_DI = "DI+ / DI-"
+# Duyck's "RSI direction bias - JD", v5, transcribed. UNLIKE EVERY OTHER SOURCE
+# HERE IT IS LATCHED: RSI crossing ABOVE the top level turns it up, crossing
+# BELOW the bottom level turns it down, and between the two it holds whatever
+# it last was. That hysteresis band is the whole idea -- it is the only source
+# in this file that does not have an opinion on every bar.
+BS_RSI = "RSI bias"
 # `biasTier` -- WHICH of the SMC engine's two passes is the direction.
 #
 # LITERALS, not aliases of smc.py's. Both deploy/undertow-port-check.py and
@@ -224,8 +220,27 @@ class P:
     # test_studies_pin_their_settings.py, where the order of operations is
     # written out.
     biasSrc: str = BS_SMC
-    emaFast: int = 50
-    emaSlow: int = 200
+    # THE SECOND BIAS SOURCE, and the only alternative on the chart. Plain
+    # EMA cross: fast above slow is up. 9 and 21 were asked for; the previous
+    # defaults were 50 and 200, which is what UNDERTOW_BIAS_SOURCE.md's S2
+    # measured, and that study pins both explicitly so nothing it reports
+    # moves. undertow_mtf and undertow_mtf_default pin 20/50 the same way.
+    #
+    # Both are in PINNED now that they are chart-facing and their default has
+    # moved once -- the pinning test's whole subject is a default that moves
+    # under a published page.
+    # Wilder's smoothing length for DI+ / DI-, at the universal default.
+    diLen: int = 14
+    # Duyck's RSI bias. The two levels are a HYSTERESIS BAND, not a threshold:
+    # above the top turns it up, below the bottom turns it down, between them
+    # it holds. `rsiHA` picks the "future smoothed" variant, which runs the RSI
+    # over the projected next Heikin-Ashi open instead of ohlc4.
+    rsiLen: int = 14
+    rsiTop: float = 60.0
+    rsiBot: float = 40.0
+    rsiHA: bool = False
+    emaFast: int = 9
+    emaSlow: int = 21
     stAtrLen: int = 10
     stMult: float = 3.0
     # SLOPE, AND THE SAME TRAP THE SWINGS FELL INTO. `slopeLen` is a number of
@@ -268,12 +283,6 @@ class P:
     mtfFast: int = 20
     mtfSlow: int = 50
     mtfMult: int = 2
-    # ChartArt's three EMA lengths, at the values the original ships. The fast
-    # pair is a SLOPE filter -- their direction of travel, not their level --
-    # and the slow one is the mean-reversion trigger. See BS_XCROSS.
-    scFast: int = 2
-    scMid: int = 4
-    scSlow: int = 20
     # For every source EXCEPT the structure engine there is no BOS to count, so
     # "running" cannot mean "has broken structure once". It means the direction
     # has held this many bars since it last flipped. Structure ignores it.
@@ -706,10 +715,14 @@ def atr_series(cs, length=14):
     return _rma(_tr(cs), length)
 
 
-def adx_series(cs, diLen=14, adxLen=14):
-    """ta.dmi(14, 14)[2]. Transcribed from the Pine reference implementation,
-    including the `sum == 0 ? 1 : sum` guard, because that guard is the
-    difference between ADX and a divide by zero on a flat bar."""
+def di_series(cs, diLen=14):
+    """ta.dmi(diLen, _)[0] and [1] -- DI+ and DI-, the two halves of Wilder's
+    directional movement, as a pair of per-bar lists.
+
+    FACTORED OUT OF adx_series RATHER THAN COPIED. ADX is built from exactly
+    these two and the bias source `dir_di` reads them directly, so writing
+    Wilder's smoothing twice would be two things to keep in step for no reason.
+    """
     n = len(cs)
     plusDM, minusDM = [0.0] * n, [0.0] * n
     for i in range(1, n):
@@ -719,13 +732,36 @@ def adx_series(cs, diLen=14, adxLen=14):
         minusDM[i] = dn if (dn > up and dn > 0) else 0.0
     trur = _rma(_tr(cs), diLen)
     rp, rm = _rma(plusDM, diLen), _rma(minusDM, diLen)
-    dx = []
+    # `fixnan`, WHICH IS THE PART A FUDGE GETS WRONG. The reference divides by
+    # `trur` and wraps it in fixnan, so a bar where the smoothed true range is
+    # ZERO carries the PREVIOUS DI forward rather than producing a number. The
+    # first version of this used `trur[i] or 1e-12`, which on such a bar gives
+    # either an enormous DI or a 0/0 tie -- and a tie flips this bias short.
+    #
+    # It only bites when every true range in the window is zero, which is a
+    # halted or completely untraded stretch. Carrying forward is also the right
+    # answer for a BIAS on such a bar: nothing happened, so the direction
+    # should not change.
+    plus, minus = [], []
     for i in range(n):
-        t = trur[i] or 1e-12
-        plus = 100.0 * rp[i] / t
-        minus = 100.0 * rm[i] / t
-        s = plus + minus
-        dx.append(abs(plus - minus) / (s if s != 0 else 1))
+        if trur[i]:
+            plus.append(100.0 * rp[i] / trur[i])
+            minus.append(100.0 * rm[i] / trur[i])
+        else:
+            plus.append(plus[-1] if plus else 0.0)
+            minus.append(minus[-1] if minus else 0.0)
+    return plus, minus
+
+
+def adx_series(cs, diLen=14, adxLen=14):
+    """ta.dmi(14, 14)[2]. Transcribed from the Pine reference implementation,
+    including the `sum == 0 ? 1 : sum` guard, because that guard is the
+    difference between ADX and a divide by zero on a flat bar."""
+    plus, minus = di_series(cs, diLen)
+    dx = []
+    for pl, mi in zip(plus, minus):
+        s = pl + mi
+        dx.append(abs(pl - mi) / (s if s != 0 else 1))
     return [100.0 * v for v in _rma(dx, adxLen)]
 
 
@@ -917,55 +953,86 @@ def _roll_min(v, L):
     return out
 
 
-def dir_ema_slope_cross(cs, p):
-    """ChartArt's "EMA Slope + EMA Cross Strategy", v3, transcribed.
+def _rsi(vals, length):
+    """Wilder's RSI over an arbitrary series, not just closes.
 
-        long  = crossunder(close, MA3)
-                or (change(close)<0 and change(MA1)<0
-                    and crossunder(close, MA1) and change(MA2)>0)
-        short = crossover(close, MA3)
-                or (change(close)>0 and change(MA1)>0
-                    and crossover(close, MA1) and change(MA2)<0)
-
-    ALWAYS IN THE MARKET: the original is a strategy that flips on each signal
-    and holds until the next, so the direction persists between signals. That
-    is what makes it a bias rather than an event.
-
-    SHORT WINS A TIE. Both conditions can be true on one bar -- a cross of MA3
-    one way and of MA1 the other. Pine v3 runs `if long` then `if short`, both
-    strategy.entry, so the second call is the position that results. Ties are
-    rare and the rule is here so the two copies cannot disagree about them.
-
-    THE SEED IS +1, as dir_supertrend's is, because there is no direction
-    before the first signal and every other source here is defined from bar 0.
-    With a 20-bar slow EMA the first cross arrives within a few dozen bars, so
-    it washes out; it is stated because a seeded warm-up is a real thing in the
-    first setups of a series.
+    riptide.engine.rsi_series is close-only and this needs ohlc4 and a
+    Heikin-Ashi projection, so the arithmetic is here. Same duplication rule
+    and same reason as `_rma` above.
     """
-    cl = [c.c for c in cs]
-    m1, m2, m3 = (_ema(cl, p.scFast), _ema(cl, p.scMid), _ema(cl, p.scSlow))
+    up, dn = [0.0], [0.0]
+    for i in range(1, len(vals)):
+        d = vals[i] - vals[i - 1]
+        up.append(max(d, 0.0))
+        dn.append(max(-d, 0.0))
+    au, ad = _rma(up, length), _rma(dn, length)
+    return [100.0 if d == 0 and u > 0 else 50.0 if d == 0
+            else 100.0 - 100.0 / (1.0 + u / d) for u, d in zip(au, ad)]
+
+
+def dir_rsi(cs, p):
+    """Duyck's "RSI direction bias - JD", v5, transcribed.
+
+        if ta.crossover(rsi_val, top_level)    bias := 1
+        if ta.crossunder(rsi_val, bottom_level) bias := -1
+
+    LATCHED, WITH A DEAD BAND, and that is what makes it different from every
+    other source in this file. Between 40 and 60 it holds; nothing else here
+    abstains from having a new opinion on every bar. Seeded +1, as the original
+    does with `var int bias = 1`.
+
+    THE SOURCE IS ohlc4 AND IS NOT AN INPUT. The reference offers a source
+    selector; SETTINGS.md's rule is that an input earns its place only if the
+    definition needs it, a study showed the choice matters, or it is display,
+    and a price-source dropdown on an unmeasured bias fails all three.
+
+    THE FUTURE-SMOOTHED VARIANT hard-codes 14 in the original -- `ta.rsi(
+    next_ha_open, 14)`, not `len` -- and that is reproduced rather than tidied,
+    because tidying it would make this a different indicator from the one that
+    was handed over. `request.security(heikinashi, timeframe.period, ...)` is
+    just Heikin-Ashi on the chart's own timeframe, so it is computed inline
+    here with no lookahead.
+    """
+    if p.rsiHA:
+        hc = [(c.o + c.h + c.l + c.c) / 4.0 for c in cs]
+        ho = []
+        for i, c in enumerate(cs):
+            ho.append((c.o + c.c) / 2.0 if i == 0
+                      else (ho[i - 1] + hc[i - 1]) / 2.0)
+            
+        vals = [(a + b) / 2.0 for a, b in zip(ho, hc)]
+        r = _rsi(vals, 14)
+    else:
+        r = _rsi([(c.o + c.h + c.l + c.c) / 4.0 for c in cs], p.rsiLen)
     out, d = [], 1
     for i in range(len(cs)):
         if i:
-            up1 = cl[i - 1] >= m1[i - 1] and cl[i] < m1[i]      # crossunder
-            dn1 = cl[i - 1] <= m1[i - 1] and cl[i] > m1[i]      # crossover
-            up3 = cl[i - 1] >= m3[i - 1] and cl[i] < m3[i]
-            dn3 = cl[i - 1] <= m3[i - 1] and cl[i] > m3[i]
-            lng = up3 or (cl[i] < cl[i - 1] and m1[i] < m1[i - 1]
-                          and up1 and m2[i] > m2[i - 1])
-            sht = dn3 or (cl[i] > cl[i - 1] and m1[i] > m1[i - 1]
-                          and dn1 and m2[i] < m2[i - 1])
-            if sht:
-                d = -1
-            elif lng:
+            if r[i - 1] <= p.rsiTop < r[i]:
                 d = 1
+            elif r[i - 1] >= p.rsiBot > r[i]:
+                d = -1
         out.append(d)
     return out
 
 
-DIRS = {BS_EMA: dir_ema, BS_ST: dir_supertrend, BS_SLOPE: dir_slope,
-        BS_DON: dir_donchian, BS_MTF: dir_mtf_ema,
-        BS_XCROSS: dir_ema_slope_cross}
+def dir_di(cs, p):
+    """DI+ above DI- is up. Wilder's directional movement as a plain bias.
+
+    NO ADX GATE. The strength half of DMI is `adxMin`, which is a separate
+    field, is off, and failed as a filter elsewhere in this project
+    (CCP_CONTEXT_FILTERS.md). This is the DIRECTION half only, so a study of it
+    is a study of direction like every other source here.
+
+    TIES GO SHORT, as everywhere else in this file. They happen on a flat bar
+    where both are zero, and the alternative is a third state nothing
+    downstream reads.
+    """
+    plus, minus = di_series(cs, p.diLen)
+    return [1 if a > b else -1 for a, b in zip(plus, minus)]
+
+
+DIRS = {BS_EMA: dir_ema, BS_DI: dir_di, BS_RSI: dir_rsi, BS_ST: dir_supertrend, BS_SLOPE: dir_slope,
+        BS_DON: dir_donchian, BS_MTF: dir_mtf_ema}
 
 
 def alt_structure(cs, p):

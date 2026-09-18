@@ -76,11 +76,14 @@ string gDbg = "6 · Debug"
 // swing-source dropdown, three "price move" dials, two bar-pivot lengths and
 // an inducement toggle. The engine underneath is LuxAlgo's Smart Money
 // Concepts (section 3), which has one detector and two scales.
-// THE SOURCE. Two, and the second is not a variation of the first.
+// THE SOURCE. Three, and the two alternatives answer only one question:
+// which way is the trend, on this bar. Everything downstream is untouched.
 string kSmc = "SMC structure"
-string kXc  = "EMA slope + cross"
-biasSrc = input.string("SMC structure", "Bias source", options = ["SMC structure", "EMA slope + cross"], group = gBias,
-  tooltip = "WHERE THE DIRECTION COMES FROM.\n\n'SMC structure' is this chart's own engine — LuxAlgo's Smart Money Concepts, section 3 — and everything in ../measurements was produced on a structure bias.\n\n'EMA slope + cross' is ChartArt's 'EMA Slope + EMA Cross Strategy', transcribed. It is ALWAYS IN THE MARKET: it flips long or short on each signal and holds until the next, so it is never 'no bias yet'.\n\nIT IS CONTRARIAN AND THE NAME DOES NOT SAY SO. It goes LONG when price crosses UNDER the slow EMA. The fast pair is a slope filter and the slow EMA is a mean-reversion trigger. Undertow trades CONTINUATION in the direction of the bias, so pairing it with a mean-reversion direction is not the same idea twice — that is a real choice, not a detail.\n\nIT PRODUCES FEWER SETUPS, NOT MORE, and by a lot. Measured on the spent 23-symbol set at 30m: 197 trades against the structure bias's 1,104. The direction flips every 6 bars or so, the impulse leg resets with it, and 'retraced 70% of the impulse' then fires almost immediately and latches. Turn the retrace rule DOWN or OFF if you run this source — at 0 the same measurement gives 10,333. None of those numbers is a study; they are a spent universe and a design input.")
+string kEma = "EMA cross"
+string kDi  = "DI+ / DI-"
+string kRsi = "RSI bias"
+biasSrc = input.string("SMC structure", "Bias source", options = ["SMC structure", "EMA cross", "DI+ / DI-", "RSI bias"], group = gBias,
+  tooltip = "WHERE THE DIRECTION COMES FROM. Everything downstream — the pullback, the pin, the two confirmations, the levels — is identical under all three, so this changes the direction and nothing else.\n\n'SMC structure' is this chart's own engine, LuxAlgo's Smart Money Concepts in section 3, and everything in ../measurements was produced on a structure bias.\n\n'EMA cross' is the oldest trend rule there is: fast above slow is up.\n\n'DI+ / DI-' is the DIRECTION half of Wilder's DMI. The STRENGTH half is ADX, which is a different thing, is not on this chart, and failed as a filter elsewhere in this project.\n\n'RSI bias' is Duyck's 'RSI direction bias - JD', and it is the odd one out: it is LATCHED. RSI crossing above the top level turns it up, below the bottom level turns it down, and BETWEEN THE TWO IT HOLDS. Every other source here has a fresh opinion on every bar; this one has a dead band, which is why it flips least often of the three.\n\nNONE OF THE ALTERNATIVES HAS A PAGE. ../measurements/UNDERTOW_BIAS_SOURCE.md measured five sources against the structure engine and none beat it; these are the sixth, seventh and eighth and they are unmeasured. They are here because they were asked for, they default to off, and if the chart feels quiet the lever that actually moves the setup count is 'End: retraced %' — see its tooltip.\n\nALL THREE ALTERNATIVES ARE ALWAYS IN THE MARKET. There is no 'no bias yet' and no structure to break, so a break of structure is faked a fixed number of bars after each flip purely so 'immature' does not mean 'forever'. Sweeps and minor structure do not exist for them, and 'End: minor structure' is inert under both.")
 smcSwingLen = input.int(14, "Swing structure", minval = 10, maxval = 200,
   group = gBias,
   tooltip = "THE MAJOR TIER, and the bias every setup is taken with. A pivot confirmed by this many bars either side — It ships at 14. LuxAlgo's own default is 50, which on 15m is twelve and a half hours and leaves the bias tradeable only 16% of the time.\n\nIT IS THE LARGEST SINGLE LEVER ON THIS CHART. The old engine ran 6 here. At 50 the bias flips far less often and there are far fewer setups, which is the change you asked for and not a side effect.\n\nNOT MEASURED AT THIS VALUE. Every page in ../measurements was produced on the previous engine at 6/2. ../measurements/UNDERTOW_V2.md scored the ENGINE swap at +0.002 / +0.065 / +0.006 R per trade — the detector is the same expression either way — but it did not score this chart's configuration.")
@@ -94,10 +97,17 @@ endMinor = input.string("on the flip", "End: minor structure", group = gBias,
   tooltip = "The short swings turn before the long ones. 'on the flip' fires the bar the minor structure turns against the trend and can be missed if it turned earlier; 'while opposed' is true the whole time it is against, so it catches far more and leaves far fewer setups.")
 retraceMax = input.int(70, "End: retraced % of the impulse", minval = 0, maxval = 100, group = gBias,
   tooltip = "Give back this much of the move since the CHoCH and the trend is over in any practical sense. 0 turns it off. THE STRONGEST CHOP GUARD HERE and it needs no extra indicator.\n\nIT IS ALSO THE LARGEST SINGLE BRAKE ON HOW MANY SETUPS YOU SEE, which is worth knowing if the chart feels quiet. Measured on the spent 23-symbol set at 30m: 1,104 trades at 70, and 2,146 with it off — it halves them. On the 'EMA slope + cross' source the effect is not a halving but a wipe-out, 197 against 10,333, because that direction flips every few bars and a 70% giveback of a six-bar impulse happens almost at once.\n\nUNMEASURED AS A CHOICE. Those are counts on a spent universe, not a study: nothing here says which value TRADES better, only how many setups each leaves. It is the biggest lever on this chart with no page behind it.")
-scFast = input.int(2, "… EMA slope + cross: fast", minval = 1, maxval = 50, group = gBias, inline = "xc",
-  tooltip = "ChartArt's three lengths, at the values the original ships: 2, 4 and 20. The first two are a SLOPE filter — their direction of travel, not their level — and the third is the mean-reversion trigger that does most of the work. Inert unless the bias source is 'EMA slope + cross'.")
-scMid = input.int(4, "", minval = 1, maxval = 100, group = gBias, inline = "xc")
-scSlow = input.int(20, "", minval = 2, maxval = 400, group = gBias, inline = "xc")
+emaFast = input.int(9, "… EMA cross: fast / slow", minval = 1, maxval = 400, group = gBias, inline = "ema",
+  tooltip = "Fast above slow is up. 9 and 21 by request.\n\nNOT THE LENGTHS THAT WERE MEASURED. ../measurements/UNDERTOW_BIAS_SOURCE.md scored an EMA cross at 50/200 and it did not beat the structure engine; undertow_mtf scored 20/50. Both studies name their own lengths, so neither describes this pair.\n\nInert unless the bias source is 'EMA cross'.")
+emaSlow = input.int(21, "", minval = 2, maxval = 800, group = gBias, inline = "ema")
+diLen = input.int(14, "… DI length", minval = 2, maxval = 100, group = gBias,
+  tooltip = "Wilder's smoothing for DI+ and DI-, at the universal default. Inert unless the bias source is 'DI+ / DI-'.")
+rsiLen = input.int(14, "… RSI length / top / bottom", minval = 2, maxval = 100, group = gBias, inline = "rsi",
+  tooltip = "Duyck's RSI bias. THE TWO LEVELS ARE A HYSTERESIS BAND, NOT A THRESHOLD: a cross ABOVE the top turns the bias up, a cross BELOW the bottom turns it down, and between them it holds whatever it last was. That dead band is the whole idea and it is why this source flips least often.\n\nThe RSI runs on ohlc4, which is the reference's default and is not offered as an input — a price-source dropdown on an unmeasured bias is the kind of setting ../SETTINGS.md exists to keep off the panel.\n\nInert unless the bias source is 'RSI bias'.")
+rsiTop = input.float(60, "", minval = 50, maxval = 95, group = gBias, inline = "rsi")
+rsiBot = input.float(40, "", minval = 5, maxval = 50, group = gBias, inline = "rsi")
+rsiHA = input.bool(false, "… RSI on the next Heikin-Ashi open", group = gBias,
+  tooltip = "The reference's 'future smoothed rsi': run the RSI over the PROJECTED next Heikin-Ashi open rather than over ohlc4. Smoother, and it turns a bar or so earlier.\n\nIT HARD-CODES LENGTH 14 IN THE ORIGINAL — ta.rsi(next_ha_open, 14), not the length above — and that is reproduced rather than tidied, because tidying it would make this a different indicator from the one it claims to be.")
 // THREE ENDING RULES CAME OFF THE CHART. `endSweep`, `endStale` with its
 // `staleBars`, and the ADX gate `adxMin` all shipped OFF, none was ever
 // measured switched ON, and four inputs offering settings nothing supports is
@@ -658,73 +668,78 @@ float ldMin       = tierInt ? legMin : msMin
 int   ldMaxX      = tierInt ? legMaxX : msMaxX
 int   ldMinX      = tierInt ? legMinX : msMinX
 
-// ── THE SECOND SOURCE: ChartArt's EMA slope + cross ─────────────────────────
+// ── THE TWO ALTERNATIVE SOURCES ─────────────────────────────────────────────
 // A direction dressed as the state below, which is what ../port/undertow.py's
-// `alt_structure` does and this is a transcription of it. The DOWNSTREAM IS
-// UNCHANGED, which is the point: switching source changes the direction and
-// nothing else.
+// `alt_structure` does and this is a transcription of it. ONE block serves
+// both sources, because the only thing that differs is `altDir`.
 //
 //   choch     the bar the direction flipped. There is no CHoCH here, but a
 //             flip is the same event for every purpose downstream.
-//   bosUp/Dn  fired ONCE, `xcMature` bars after a flip. With no structure to
+//   bosUp/Dn  fired ONCE, `altMature` bars after a flip. With no structure to
 //             break, "running" has to mean "the direction has held a while" or
 //             every setup would read immature forever.
 //   max/min   the running extremes SINCE THE FLIP — exactly what the structure
 //             engine's are since its CHoCH, so the retrace rule means the same
-//             thing under both sources.
-//   sweeps, minor structure   ABSENT, and faking them would make the two
-//             sources look comparable while not being. `endMinor` simply does
-//             nothing under this source; the panel's Ending row will only ever
-//             say "retrace".
-//
-// ALWAYS IN THE MARKET, seeded +1. The original flips on each signal and holds
-// until the next, and SHORT WINS A TIE because Pine v3 ran `if long` then
-// `if short` and the second entry is the position that results.
-int xcMature = 20
-float xm1 = ta.ema(close, scFast)
-float xm2 = ta.ema(close, scMid)
-float xm3 = ta.ema(close, scSlow)
-var int xcDir = 1
-bool xcLong  = ta.crossunder(close, xm3) or (ta.change(close) < 0 and ta.change(xm1) < 0 and ta.crossunder(close, xm1) and ta.change(xm2) > 0)
-bool xcShort = ta.crossover(close, xm3)  or (ta.change(close) > 0 and ta.change(xm1) > 0 and ta.crossover(close, xm1)  and ta.change(xm2) < 0)
-if xcShort
-    xcDir := -1
-else if xcLong
-    xcDir := 1
-bool  xcFlip = ta.change(xcDir) != 0
-var float xcMax = na
-var float xcMin = na
-var int   xcMaxX = 0
-var int   xcMinX = 0
-var int   xcSince = 0
-if xcFlip or na(xcMax)
-    xcMax := high
-    xcMin := low
-    xcMaxX := bar_index
-    xcMinX := bar_index
-    xcSince := 0
+//             thing under all three sources.
+//   sweeps, minor structure   ABSENT, and faking them would make the sources
+//             look comparable while not being. `endMinor` simply does nothing
+//             under either; the Ending row will only ever say "retrace".
+int altMature = 20
+float emaF = ta.ema(close, emaFast)
+float emaS = ta.ema(close, emaSlow)
+[diPlus, diMinus, _diAdx] = ta.dmi(diLen, diLen)
+// Duyck's RSI bias. LATCHED, so it is a `var` that two crosses write to,
+// unlike the other two which are an expression evaluated fresh on every bar.
+// Heikin-Ashi is computed inline rather than through request.security: the
+// reference asks for it on `timeframe.period`, which is this chart's own
+// timeframe, so a security call would be the same numbers with a lookahead
+// question attached.
+float rsiHaC = ohlc4
+var float rsiHaO = na
+rsiHaO := na(rsiHaO[1]) ? (open + close) / 2 : (rsiHaO[1] + rsiHaC[1]) / 2
+float rsiSrc = rsiHA ? math.avg(rsiHaO, rsiHaC) : ohlc4
+float rsiVal = rsiHA ? ta.rsi(rsiSrc, 14) : ta.rsi(rsiSrc, rsiLen)
+var int rsiDir = 1
+if ta.crossover(rsiVal, rsiTop)
+    rsiDir := 1
+if ta.crossunder(rsiVal, rsiBot)
+    rsiDir := -1
+
+int altDir = biasSrc == kRsi ? rsiDir : biasSrc == kDi ? (diPlus > diMinus ? 1 : -1) : (emaF > emaS ? 1 : -1)
+bool  altFlip = ta.change(altDir) != 0
+var float altMax = na
+var float altMin = na
+var int   altMaxX = 0
+var int   altMinX = 0
+var int   altSince = 0
+if altFlip or na(altMax)
+    altMax := high
+    altMin := low
+    altMaxX := bar_index
+    altMinX := bar_index
+    altSince := 0
 else
-    xcSince := xcSince + 1
-    if high > xcMax
-        xcMax := high
-        xcMaxX := bar_index
-    if low < xcMin
-        xcMin := low
-        xcMinX := bar_index
-bool xcRipe = xcSince == xcMature
+    altSince := altSince + 1
+    if high > altMax
+        altMax := high
+        altMaxX := bar_index
+    if low < altMin
+        altMin := low
+        altMinX := bar_index
+bool altRipe = altSince == altMature
 
 // ── the mux. Everything below reads these. ──────────────────────────────────
-bool  useXc       = biasSrc == kXc
-int   bOs         = useXc ? (xcDir > 0 ? 1 : 0) : ldOs
-bool  bChoch      = useXc ? xcFlip : ldChoch
-bool  bBosUp      = useXc ? (xcRipe and xcDir > 0) : ldBosUp
-bool  bBosDn      = useXc ? (xcRipe and xcDir < 0) : ldBosDn
-int   bSOs        = useXc ? (xcDir > 0 ? 1 : 0) : msSOs
-bool  bMinorChoch = useXc ? false : msMinorChoch
-float bMax        = useXc ? xcMax : ldMax
-float bMin        = useXc ? xcMin : ldMin
-int   bMaxX       = useXc ? xcMaxX : ldMaxX
-int   bMinX       = useXc ? xcMinX : ldMinX
+bool  useAlt      = biasSrc != kSmc
+int   bOs         = useAlt ? (altDir > 0 ? 1 : 0) : ldOs
+bool  bChoch      = useAlt ? altFlip : ldChoch
+bool  bBosUp      = useAlt ? (altRipe and altDir > 0) : ldBosUp
+bool  bBosDn      = useAlt ? (altRipe and altDir < 0) : ldBosDn
+int   bSOs        = useAlt ? (altDir > 0 ? 1 : 0) : msSOs
+bool  bMinorChoch = useAlt ? false : msMinorChoch
+float bMax        = useAlt ? altMax : ldMax
+float bMin        = useAlt ? altMin : ldMin
+int   bMaxX       = useAlt ? altMaxX : ldMaxX
+int   bMinX       = useAlt ? altMinX : ldMinX
 
 
 // ══════════════════════════ 5. BIAS — THE THREE STATES ═══════════════════════

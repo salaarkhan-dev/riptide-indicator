@@ -44,6 +44,17 @@ STUDIES = pathlib.Path(__file__).resolve().parents[1] / "studies"
 PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
           "endStale", "confirmOrder", "biasSrc", "pinNewest", "famPriority",
           "failTest")
+# A SETTING THAT ONLY ONE SOURCE READS DOES NOT BELONG IN PINNED, because
+# PINNED makes EVERY study name it. `emaFast`/`emaSlow` moved 50/200 -> 9/21
+# when the EMA cross went on the chart, and putting them above made twelve
+# studies that cannot reach the EMA source declare a length for it -- which
+# reads as a dependency that is not there.
+#
+# The real risk is narrower and so is the guard: a study that names BS_EMA and
+# forgets the lengths. `biasSrc` IS in PINNED, so such a study has to name the
+# source out loud, and the test below then requires the lengths beside it.
+SOURCE_BOUND = {"BS_EMA": ("emaFast", "emaSlow"), "BS_DI": ("diLen",),
+                "BS_RSI": ("rsiLen", "rsiTop", "rsiBot")}
 # A study whose whole job is to describe what currently ships puts this on the
 # line that reads the default. It is a deliberate, visible opt-out.
 EXEMPT = "TRACKS THE CURRENT DEFAULT"
@@ -172,19 +183,39 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # existing default moves, and with famStrict off the new branch cannot be
 # reached at all, so no study's arms change and nothing needed re-running.
 #
-# 2026-09-18: `biasTier` plus ChartArt's three EMA lengths (`scFast`, `scMid`,
-# `scSlow`), for the two "why are there so few setups" levers. Both additive:
-# biasTier defaults to "swing", which IS the old behaviour, and the three
-# lengths are unreachable unless biasSrc is BS_XCROSS, which is not the
-# default.
+# 2026-09-18: `biasTier`, for the "why are there so few setups" question.
+# Additive -- it defaults to "swing", which IS the old behaviour. The shipped
+# configuration was counted on the spent 23 immediately before and after:
+# 1101 / 1104 / 1104 armed trades on 15m / 30m / 1h, identical both times.
 #
-# THE PROCEDURE WAS FOLLOWED rather than asserted. The shipped configuration
-# was counted on the spent 23 immediately before the change and immediately
-# after: 1101 / 1104 / 1104 armed trades on 15m / 30m / 1h, identical both
-# times. `biasSrc` was already in PINNED, so every study that runs an
-# alternative source names it.
-DEFAULTS_FINGERPRINT = "ae12db37c83d4e49"
-DEFAULTS_COUNT = 72
+# 2026-09-18: ChartArt's EMA slope + cross came and WENT IN THE SAME DAY.
+# `scFast`/`scMid`/`scSlow` and `BS_XCROSS` are gone: measured at a FIFTH of
+# the setups on the spent 23, which is the opposite of the reason it was
+# added, and its author asked for it removed. It is not in the history as a
+# default that moved, because it never was one.
+#
+# 2026-09-18: `diLen` added and `emaFast`/`emaSlow` MOVED, 50/200 -> 9/21, for
+# the two bias sources that replaced it. THE DEFAULT MOVE IS THE PART THAT
+# NEEDED CARE and the procedure was followed in the only order that works:
+#
+#   1. emaFast and emaSlow went into PINNED above. Three studies read the EMA
+#      source -- undertow_bias (S2), undertow_mtf (M2) and
+#      undertow_mtf_default -- and all three already named their own lengths,
+#      checked rather than assumed.
+#   2. S2 was reproduced at its pinned 50/200 AFTER the default moved: 791
+#      trades at -0.032 R on Min30, which is the study's own configuration and
+#      not the chart's.
+#   3. Only then did the default move.
+#
+# `diLen` is purely additive: nothing reads it unless biasSrc is BS_DI.
+#
+# 2026-09-18: `rsiLen`/`rsiTop`/`rsiBot`/`rsiHA`, for Duyck's RSI bias -- the
+# third alternative source and the only LATCHED one. Purely additive: nothing
+# reads any of them unless biasSrc is BS_RSI, which is not the default, and
+# BS_RSI is bound to its own fields by test_a_source_arm_names_its_own_lengths
+# so a future study cannot name the source and inherit the chart's levels.
+DEFAULTS_FINGERPRINT = "ce5519e17914999b"
+DEFAULTS_COUNT = 74
 
 good = []
 
@@ -216,6 +247,32 @@ def test_every_study_pins_or_opts_out():
         ok(not missing,
            f"{p.name} pins its settings"
            + ("" if not missing else f" — MISSING {', '.join(missing)}"))
+
+
+def test_a_source_arm_names_its_own_lengths():
+    """Naming an alternative bias source without its lengths reads the chart's.
+
+    `emaFast`/`emaSlow` went 50/200 -> 9/21 the day the EMA cross went on the
+    chart. UNDERTOW_BIAS_SOURCE.md's S2 is "EMA cross 50/200" and it names both
+    -- had it not, the page's title would now describe an arm that ran 9/21.
+    """
+    for p in sorted(STUDIES.glob("*.py")):
+        src = p.read_text()
+        if EXEMPT in src:
+            continue
+        for const, needed in sorted(SOURCE_BOUND.items()):
+            if not re.search(rf"\b{const}\b", src):
+                continue
+            # BOTH SPELLINGS. An arm is written either as a keyword,
+            # `emaFast=50`, or inside a dict literal, `"emaFast": 50`.
+            # undertow_bias.py uses the second and the first version of this
+            # test only matched the first, which failed a study that was
+            # already doing the right thing.
+            missing = [f for f in needed
+                       if not re.search(rf'\b{f}\s*=|"{f}"\s*:', src)]
+            ok(not missing,
+               f"{p.name} names {const} and its lengths"
+               + ("" if not missing else f" — MISSING {', '.join(missing)}"))
 
 
 def test_the_marker_is_not_a_blank_cheque():
@@ -272,6 +329,7 @@ def test_the_defaults_have_not_moved_unnoticed():
 
 def main():
     for fn in (test_every_study_pins_or_opts_out,
+               test_a_source_arm_names_its_own_lengths,
                test_the_marker_is_not_a_blank_cheque,
                test_the_defaults_have_not_moved_unnoticed):
         print(f"\n{fn.__name__}")

@@ -14,25 +14,35 @@
 > | bias on the **internal** tier | 1,762 | 1.6× | −0.061 |
 > | **retrace off** | 2,146 | 1.9× | −0.025 |
 > | internal tier **+** retrace off | 5,390 | 4.9× | −0.007 |
-> | EMA slope + cross | 197 | **0.2×** | −0.239 |
-> | EMA slope + cross, retrace off | 10,333 | 9.4× | −0.018 |
+> | EMA cross 9/21 | 1,899 | 1.7× | −0.023 |
+> | DI+ / DI− 14 | 2,598 | 2.4× | −0.031 |
+> | RSI bias 14, 60/40 | 1,760 | 1.6× | −0.053 |
+> | RSI bias, next HA open | 1,666 | 1.5× | −0.082 |
 >
-> **`retraceMax` is the brake, not the bias source.** It halves the setups on
-> the structure bias and very nearly eliminates them on the fast one: that
-> direction flips every six bars or so, the impulse leg resets with it, and a
-> 70% giveback of a six-bar impulse happens almost immediately and latches.
+> **`retraceMax` is the single largest brake.** It halves the setups on the
+> structure bias on its own, and it is the reason a fast direction source
+> produces *fewer* setups rather than more: the impulse leg resets on every
+> flip, and a 70% giveback of a six-bar impulse fires almost immediately and
+> latches. ChartArt's EMA-slope source was added and removed the same day for
+> exactly that — a fifth of the setups, not more.
 >
-> **The requested EMA source gives FEWER setups, not more** — a fifth of what
-> ships — which is the opposite of the reason it was asked for. It is on the
-> chart because it was asked for, off by default, with the number in its
-> tooltip.
+> **DO NOT READ THE R COLUMN AS A RANKING.** Eight configurations on a
+> universe that has been scored many times over is a best-of-eight search, and
+> [`UNDERTOW_PARAMS.md`](measurements/UNDERTOW_PARAMS.md) priced that exact
+> search at **−0.31 R per trade of illusion** on a holdout. DI+/DI− is top on
+> two of three timeframes here; that is what the top of eight looks like
+> whether or not anything is there.
 >
-> **Nothing here changes a default.** Every row is a rule that changes which
-> trades exist, measured on a universe that cannot support a conclusion. The
-> internal tier and the retrace latch are now the two largest unmeasured levers
-> on the chart and one fresh universe remains — 75 contracts, one set of 45.
-> Spending it on `retraceMax` is the best remaining use of it, and that is a
-> pre-registration rather than a table.
+> **Nothing here changes a default.** Every row changes which trades exist. The
+> three alternative sources are on the chart because they were asked for, all
+> default to off, and none has a page —
+> [`UNDERTOW_BIAS_SOURCE.md`](measurements/UNDERTOW_BIAS_SOURCE.md) measured
+> five sources against the structure engine and none beat it; these are the
+> sixth, seventh and eighth.
+>
+> **One fresh universe remains** — 75 contracts, one set of 45. `retraceMax` is
+> the largest unmeasured lever on the chart and the best remaining use of it,
+> and that is a pre-registration rather than a table.
 
 You asked me to revisit the parameters. This is the audit, not a retune — the
 last section says why those are different things.

@@ -142,12 +142,12 @@ ABSENT = {
     "donLen": (None, "donchian bias only"),
     "mtfFast": (None, "MTF bias only"), "mtfSlow": (None, "MTF bias only"),
     "mtfMult": (None, "MTF bias only"),
-    # ChartArt's three EMA lengths. The watcher does not run that source --
-    # biasSrc is MIRRORED above, so a default switch to it fails there rather
-    # than here, which is the right place for it to fail.
-    "scFast": (None, "EMA slope + cross bias"),
-    "scMid": (None, "EMA slope + cross bias"),
-    "scSlow": (None, "EMA slope + cross bias"),
+    # Wilder's DI length. The watcher does not run that source -- biasSrc is
+    # MIRRORED above, so a default switch to it fails there rather than here,
+    # which is the right place for it to fail.
+    "diLen": (None, "DI+ / DI- bias"),
+    "rsiLen": (None, "RSI bias"), "rsiTop": (None, "RSI bias"),
+    "rsiBot": (None, "RSI bias"), "rsiHA": (False, "RSI bias"),
     "swingSrc": (None, "price-move swings feed the bar-pivot bias only"),
     "swingK": (None, "price-move swings only"),
     "swingKMinor": (None, "price-move swings only"),

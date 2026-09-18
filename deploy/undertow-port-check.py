@@ -251,9 +251,10 @@ def main() -> int:
 
     # value, why. The value is what the PINE does; P must agree with it.
     PINE_HARDCODED = {
-        # `biasSrc` IS AN INPUT NOW — the chart offers SMC structure and
-        # ChartArt's EMA slope + cross — so it is compared above like any
-        # other dropdown rather than asserted here.
+        # `biasSrc` IS AN INPUT NOW — the chart offers SMC structure, a plain
+        # EMA cross and DI+/DI- — so it is compared above like any other
+        # dropdown rather than asserted here, and so are emaFast, emaSlow and
+        # diLen.
         #
         # `matureBars` came the other way. The Pine's second source has no
         # structure to break, so it fabricates a BOS a fixed number of bars
@@ -261,7 +262,7 @@ def main() -> int:
         # number is the literal `xcMature`. It is not an input: a dial for
         # "how long until a fabricated break counts" is the kind of setting
         # SETTINGS.md exists to keep off the panel.
-        "matureBars": (20, "the literal xcMature in the EMA source"),
+        "matureBars": (20, "the literal altMature in the two alt sources"),
         # `pinOk` has no bosOk term, so a pin arms in `immature` as readily as
         # in `running`.
         "needBos": (False, "pinOk does not gate on the bias state"),
@@ -299,7 +300,6 @@ def main() -> int:
         # undertow_bias (S2, S4, S5) and undertow_slope (A1, A2) must keep
         # reproducing. `biasSrc` above is what stops the port drifting onto
         # one of them unnoticed.
-        "emaFast": (None, "EMA bias"), "emaSlow": (None, "EMA bias"),
         "donLen": (None, "Donchian bias"),
         "slopeUnit": (None, "slope bias"), "slopeLen": (None, "slope bias"),
         "slopeMin": (None, "slope bias"), "slopeHours": (None, "slope bias"),
@@ -307,9 +307,6 @@ def main() -> int:
         "stAtrLen": (None, "supertrend bias"), "stMult": (None, "supertrend"),
         "mtfFast": (None, "MTF bias"), "mtfSlow": (None, "MTF bias"),
         "mtfMult": (None, "MTF bias"),
-        # Only alt_structure reads it, and structure() returns the SMC state
-        # before reaching alt_structure. Unreachable at the shipped biasSrc.
-        "matureBars": (None, "alt_structure only, unreachable at BS_SMC"),
         # THE OLD BAR-PIVOT ENGINE and the price-move swings that fed it.
         # Section 3 is a transcription of LuxAlgo's SMC now, so the chart has
         # one detector at two lengths and no swing source to choose, no pivot
@@ -360,6 +357,26 @@ def main() -> int:
         "famInvert": (False, "port-only, did not replicate; must stay off"),
     }
 
+    # A BUCKET ENTRY THAT IS ALSO A PINE INPUT IS STALE, and stale is not
+    # harmless: the loop below skips it, so it looks accounted for while the
+    # input is actually being compared by the loop above -- or, worse, the
+    # entry outlives the input and claims a value nothing checks. `feeFrac`
+    # sat in the old port-only set for exactly this reason after it became an
+    # input, and the count is what caught the next one.
+    for name in sorted((set(PINE_HARDCODED) | set(PINE_ABSENT)) & set(pin)):
+        bad.append((name, "listed as hardcoded-or-absent AND present as a "
+                          "Pine input. One of the two is stale"))
+    # AND A FIELD IN BOTH BUCKETS IS A CONTRADICTION. The Pine either
+    # implements a setting at a fixed value or it does not implement it; both
+    # entries cannot be true, the loop below silently takes the first, and the
+    # count is what shows it. `matureBars` was in both the moment the Pine
+    # grew a second bias source: absent from the old chart, and hardcoded as
+    # `altMature` on the new one.
+    for name in sorted(set(PINE_HARDCODED) & set(PINE_ABSENT)):
+        bad.append((name, "in PINE_HARDCODED and PINE_ABSENT at once — the "
+                          "Pine either implements it at a value or does not "
+                          "implement it"))
+
     for name in sorted(fields):
         if name in pin:
             continue
@@ -384,12 +401,12 @@ def main() -> int:
                           "one value of it, PINE_ABSENT if the Pine does not "
                           "implement it at all"))
 
-    print(f"{checked} shared inputs compared, "
-          f"{len(PINE_HARDCODED)} values the Pine hardcodes, "
-          f"{len(PINE_ABSENT)} the Pine does not implement — "
-          f"{checked + len(PINE_HARDCODED) + len(PINE_ABSENT)} of P's "
-          f"{len(fields)} fields, with {len(DISPLAY_ONLY)} display-only "
-          f"inputs skipped by name")
+    hard = len(set(PINE_HARDCODED) & set(fields))
+    absent = len(set(PINE_ABSENT) & set(fields))
+    print(f"{checked} shared inputs compared, {hard} values the Pine "
+          f"hardcodes, {absent} the Pine does not implement — "
+          f"{checked + hard + absent} of P's {len(fields)} fields, with "
+          f"{len(DISPLAY_ONLY)} display-only inputs skipped by name")
     if not bad:
         print("\nTHE PINE AND THE PORT AGREE ON EVERY SETTING.")
         print("Defaults, dropdown strings and the values the Pine holds")
