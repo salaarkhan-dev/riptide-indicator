@@ -503,7 +503,20 @@ class P:
     pbMinAge: int = 0
     pbMinDepth: float = 0.0
     # 4 · Levels
-    stopSrc: str = S_SWING
+    # REVERTED to the pullback extreme. It went to the minor swing this
+    # morning on a reading of the chart owner's rule, and his own worked
+    # example shows the stop sitting just above the PULLBACK'S HIGHEST HIGH
+    # -- 0.447% on BTC against 0.53% for this source and 0.24% for the pin.
+    #
+    # It is also what every page in ../measurements was produced under, and
+    # the paired comparison leans the same way on all three timeframes
+    # (+0.049 / +0.092 / +0.073 R per armed setup, worst leave-one-out still
+    # positive, no z past 1.2 -- a lean, not a result).
+    #
+    # THE MOVE AWAY COST THREE DEFECTS IN A DAY: nineteen silently
+    # re-pointed studies, a bias source that armed zero setups because it has
+    # no minor swing to read, and a stop 1.7x wider than the one being traded.
+    stopSrc: str = S_PULL
     stopTrack: bool = True
     stopBuf: float = 0.25
     rr: float = 3.5

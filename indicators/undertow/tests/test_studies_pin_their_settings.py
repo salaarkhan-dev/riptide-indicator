@@ -363,7 +363,29 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # do not use -- the `emaFast` argument, a few entries up.
 #
 # 72 -> 74 fields.
-DEFAULTS_FINGERPRINT = "f1a1453b6f15d4b4"
+# 2026-09-18: `stopSrc` REVERTED, minor swing -> pullback extreme.
+#
+# It moved TO the minor swing this morning on my reading of the chart owner's
+# rule. His own worked example then showed the stop sitting just above the
+# PULLBACK'S HIGHEST HIGH: 0.447% on BTC, against 0.53% for the pullback
+# extreme and 0.24% for the pin high. The code was running a rule he does not
+# trade.
+#
+# THAT ONE MOVE COST THREE DEFECTS IN A DAY -- nineteen silently re-pointed
+# studies, a bias source that armed ZERO setups for want of a minor swing to
+# read, and a stop 1.7x wider than the one being traded, which is most of why
+# the code books 3.5R where he books 8R on the same move to the same target.
+#
+# The paired comparison leans the same way on all three timeframes, +0.049 /
+# +0.092 / +0.073 R per armed setup with the worst leave-one-out still
+# positive, and clears nothing -- no z past 1.2, symbols agreeing about half
+# the time. It is a lean, not a result, and it is not the reason for the
+# revert. The reason is that every page in ../measurements was produced under
+# the pullback extreme and it is what the strategy's author actually does.
+#
+# NO STUDY MOVES: `stopSrc` is in PINNED and all twenty name it. undertow_
+# anchor re-ran BIT-IDENTICAL before this line changed.
+DEFAULTS_FINGERPRINT = "eba7d28cf76b8564"
 DEFAULTS_COUNT = 74
 
 good = []

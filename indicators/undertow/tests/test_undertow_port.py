@@ -597,12 +597,17 @@ def test_every_bias_source_can_actually_arm_a_setup():
     source on the dropdown arms something, under the settings that SHIP.
     """
     cs = walk(6000, seed=91, drift=0.0003)
-    for src in (U.BS_STRUCT, U.BS_SMC, U.BS_RSI):
-        r = U.run(cs, U.P(biasSrc=src), "T")
-        ok(r.nArmed > 0,
-           f"biasSrc={src!r} arms setups under the shipped stop: {r.nArmed}")
-        print(f"       {src:>32}: {r.nLoc:4} located, {r.nArmed:4} armed, "
-              f"{r.nStopFallback:4} on the fallback stop")
+    # BOTH STOP SOURCES, because the bug this pins was an INTERACTION: the RSI
+    # source has no minor structure, and it armed nothing only while the minor
+    # swing was the shipped stop. Testing the default alone would have gone
+    # quiet the moment that default reverted.
+    for stop in (U.S_PULL, U.S_SWING):
+        for src in (U.BS_STRUCT, U.BS_SMC, U.BS_RSI):
+            r = U.run(cs, U.P(biasSrc=src, stopSrc=stop), "T")
+            ok(r.nArmed > 0,
+               f"biasSrc={src!r} arms setups at stop {stop!r}: {r.nArmed}")
+            print(f"       {stop:>22} {src:>32}: {r.nLoc:4} located, "
+                  f"{r.nArmed:4} armed, {r.nStopFallback:4} fallback")
 
 
 def test_the_stop_fallback_cannot_touch_a_source_that_has_a_minor_tier():
@@ -614,12 +619,17 @@ def test_the_stop_fallback_cannot_touch_a_source_that_has_a_minor_tier():
     """
     cs = walk(6000, seed=44, drift=-0.0002)
     for src in (U.BS_STRUCT, U.BS_SMC):
-        r = U.run(cs, U.P(biasSrc=src), "T")
+        r = U.run(cs, U.P(biasSrc=src, stopSrc=U.S_SWING), "T")
         ok(r.nStopFallback == 0,
            f"biasSrc={src!r} never falls back: {r.nStopFallback}")
     # And the fallback, where it DOES fire, must place the same stop the
     # pullback source would -- it is not a third stop rule.
-    a = U.run(cs, U.P(biasSrc=U.BS_RSI), "T")
+    #
+    # `stopSrc` IS NAMED HERE. It reverted to the pullback extreme, which is
+    # the fallback's own target, so at the default the fallback never fires and
+    # this assertion read 0/43. The configuration under test is the SWING stop;
+    # leaving it to the default made the test describe whatever shipped.
+    a = U.run(cs, U.P(biasSrc=U.BS_RSI, stopSrc=U.S_SWING), "T")
     b = U.run(cs, U.P(biasSrc=U.BS_RSI, stopSrc=U.S_PULL), "T")
     ok(a.nStopFallback == a.nArmed > 0,
        f"every RSI arming used the fallback: {a.nStopFallback}/{a.nArmed}")

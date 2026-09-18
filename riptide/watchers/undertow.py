@@ -188,7 +188,7 @@ ARM_WINS = True
 # pinned to a confirmed swing has nothing to follow. With the swing stop
 # selected that constant does nothing, which is stated rather than left for
 # somebody to discover from a diff.
-STOP_SRC = "Minor swing extreme"
+STOP_SRC = "Pullback extreme"
 END_MINOR = "on the flip"
 END_SWEEP = False
 END_STALE = False

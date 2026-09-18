@@ -204,7 +204,7 @@ locTol = input.int(0, "Anchor tolerance", minval = 0, maxval = 10, group = gSet,
 string sPin = "Pin high / low"
 string sPull = "Pullback extreme"
 string sSwing = "Minor swing extreme"
-stopSrc = input.string("Minor swing extreme", "Stop", group = gLvl,
+stopSrc = input.string("Pullback extreme", "Stop", group = gLvl,
   options = ["Pin high / low", "Pullback extreme", "Minor swing extreme"],
   tooltip = "Where the stop sits. Tighter stops mean bigger R and more setups stopped before the fill.\n\nIT COSTS LITTLE UNDER THE STRUCTURE BIAS — 1,054 setups against 1,104 on the spent 23-symbol set at 30m, because the minor swing is almost always there. UNDER THE 'RSI bias' SOURCE IT COSTS EVERYTHING: that source has no minor structure, so there is no swing to hang a stop on, every setup is dropped for want of one, and the chart shows nothing. Switch this to 'Pullback extreme' if you switch the source. It is stated rather than silently patched — falling back to another stop would make this dropdown say one thing and do another.\n\nNOTE ALSO that 'Stop follows the pullback' applies ONLY to the pullback-extreme stop. With this one selected that checkbox does nothing.")
 stopTrack = input.bool(true, "Stop follows the pullback", group = gLvl,
