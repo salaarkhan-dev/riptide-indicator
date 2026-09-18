@@ -168,6 +168,37 @@ SYMBOLS_FRESH7 = (
 ).split()
 
 
+# THE EIGHTH FRESH SET, for the swing-scale study — 50/5 against 6/2. Same
+# frozen rule, rules 3b and 3c included.
+#
+# AND IT CORRECTS SOMETHING THE FRESH7 NOTE ABOVE GOT WRONG. That note read a
+# steady ~25% decline off three consecutive sets and projected it forward. It
+# was a one-day snapshot of a number that moves: re-ranked a day later, FRESH6
+# reads 124-263k rather than the 181-242k recorded there, and FRESH8 is NOT
+# thinner than FRESH7 --
+#
+#   FRESH6   min 124   median 197   max  263
+#   FRESH7   min 111   median 159   max 1095
+#   FRESH8   min 124   median 135   max 1222
+#
+# 24h turnover is a rolling window on a venue where a symbol can wake up, so
+# the tail is noisy rather than monotone. What DOES hold from that note is the
+# structural part: the top of the book is spent, 210 unused contracts remain,
+# and every further set is drawn from further down. The projection was the
+# wrong shape of claim to make from three points.
+SYMBOLS_FRESH8 = (
+    "BABY_USDT DRIFT_USDT ELSA_USDT TAC_USDT ATH_USDT XAN_USDT "
+    "IOTA_USDT GRVT_USDT MEGA_USDT COLLECT_USDT NIL_USDT "
+    "AIGENSYN_USDT ENSO_USDT 1000000BABYDOGE_USDT METIS_USDT "
+    "INX_USDT XAI_USDT A_USDT BLUR_USDT LUNANEW_USDT POLYX_USDT "
+    "TWT_USDT BANANAS31_USDT KAVA_USDT 1000RATS_USDT MOVE_USDT "
+    "OPG_USDT MASK_USDT FIDA_USDT BENBSC_USDT HIVE_USDT OGN_USDT "
+    "COMP_USDT HAJIMI_USDT YFI_USDT APR_USDT KAIA_USDT LA_USDT "
+    "USUAL_USDT TNSR_USDT YGG_USDT AIXBT_USDT O_USDT IOTX_USDT "
+    "BAND_USDT"
+).split()
+
+
 def assert_disjoint():
     """A fresh holdout that shares a symbol with the training set is not one."""
     from research.data import SYMBOLS
@@ -177,7 +208,8 @@ def assert_disjoint():
             "SYMBOLS_FRESH4": set(SYMBOLS_FRESH4),
             "SYMBOLS_FRESH5": set(SYMBOLS_FRESH5),
             "SYMBOLS_FRESH6": set(SYMBOLS_FRESH6),
-            "SYMBOLS_FRESH7": set(SYMBOLS_FRESH7)}
+            "SYMBOLS_FRESH7": set(SYMBOLS_FRESH7),
+            "SYMBOLS_FRESH8": set(SYMBOLS_FRESH8)}
     names = sorted(sets)
     for i, a in enumerate(names):
         for b in names[i + 1:]:

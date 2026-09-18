@@ -48,9 +48,17 @@
 //  vanishes. The swing dots lag by their detection period and are plotted back
 //  in time; they do not repaint.
 // ══════════════════════════════════════════════════════════════════════════════
+// `max_bars_back` IS NOT COSMETIC HERE. Two places index a series by a value
+// Pine cannot see at compile time: `high[size]` in the structure engine, where
+// size is an input up to 200, and `obPH[b]` in the order-block scan, where b
+// runs to 300. Without a declared referencing length Pine infers one from the
+// largest CONSTANT offset in the file, finds it far too small, and raises AT
+// RUNTIME -- which does not disable one feature, it kills the whole script.
+// That is what "enabling order blocks hides the stats table and the trades"
+// was: not a drawing budget, an unhandled error taking the indicator with it.
 indicator("Riptide Undertow — Structure Bias & Pin Continuation", "Undertow",
   overlay = true, max_lines_count = 500, max_labels_count = 500,
-  max_boxes_count = 500)
+  max_boxes_count = 500, max_bars_back = 500)
 
 
 // ═════════════════════════════ 1. INPUTS ═════════════════════════════════════
@@ -514,11 +522,26 @@ if msMin < msMin[1]
 // equivalent; now both tiers come from one transcription, which is the part of
 // this swap that is unambiguously an improvement — one engine, two lengths,
 // no second implementation to drift.
+// ITS OWN CHoCH AND BOS, tagged the same way the major tier's are: a break
+// that turns the internal trend is a CHoCH, one that continues it is a BOS.
+// LuxAlgo draws BOTH tiers and the internal one is most of what you see on a
+// chart -- at length 5 it fires many times between two swing breaks, which is
+// why their screenshot is dense and ours was two labels.
 var int msSOs = 0
+var bool msSSeen = false
+bool inChoch = false
+bool inBosUp = false
+bool inBosDn = false
 if inUp
+    inChoch := msSSeen and msSOs != 1
+    inBosUp := not inChoch
     msSOs := 1
+    msSSeen := true
 if inDn
+    inChoch := msSSeen and msSOs != 0
+    inBosDn := not inChoch
     msSOs := 0
+    msSSeen := true
 
 bool msMinorChoch = msSOs != msSOs[1]
 
@@ -1127,6 +1150,11 @@ int  brkUpX = na(dTopX) ? bar_index : dTopX
 int  brkDnX = na(dBtmX) ? bar_index : dBtmX
 int  bosUpX = na(msMaxX[1]) ? bar_index : msMaxX[1]
 int  bosDnX = na(msMinX[1]) ? bar_index : msMinX[1]
+// The INTERNAL tier's pivots, for its own lines and for the order blocks.
+float iTopY = inHi.cur
+int   iTopX = na(inHi.bx) ? bar_index : inHi.bx
+float iBtmY = inLo.cur
+int   iBtmX = na(inLo.bx) ? bar_index : inLo.bx
 
 // CHoCH AND BOS ARE DRAWN AS THE BREAK ITSELF, not as a mark on the breaking
 // bar — a horizontal line at the level that was taken out, running from the
@@ -1141,18 +1169,25 @@ int  bosDnX = na(msMinX[1]) ? bar_index : msMinX[1]
 var array<line> msLineBuf = array.new<line>()
 var array<label> msLabBuf = array.new<label>()
 
-msBreak(int fromX, float lvl, string tag, bool up) =>
+// SOLID for the swing tier, DASHED for the internal one, which is LuxAlgo's
+// own convention and the right way round: the heavier line is the structure
+// that decides the bias, the lighter one is the texture inside it.
+msBreak(int fromX, float lvl, string tag, bool up, bool internal) =>
     color c = up ? colLong : colShort
     msLineBuf.push(line.new(fromX, lvl, bar_index, lvl,
       xloc = xloc.bar_index, color = c,
-      style = tag == "CHoCH" ? line.style_solid : line.style_dashed))
+      style = internal ? line.style_dashed : line.style_solid,
+      width = internal ? 1 : 2))
     msLabBuf.push(label.new(math.round(0.5 * (fromX + bar_index)), lvl, tag,
       xloc = xloc.bar_index, color = color(na), textcolor = c,
       style = up ? label.style_label_down : label.style_label_up,
-      size = size.tiny))
-    while msLineBuf.size() > keepN
+      size = internal ? size.tiny : size.small))
+    // TWO TIERS SHARE ONE BUDGET and the internal tier is far the noisier, so
+    // the cap is generous rather than keepN: at length 5 a screen can hold
+    // thirty internal breaks and the swing lines must not be the ones evicted.
+    while msLineBuf.size() > 120
         line.delete(msLineBuf.shift())
-    while msLabBuf.size() > keepN
+    while msLabBuf.size() > 120
         label.delete(msLabBuf.shift())
 
 if barOk and showStruct
@@ -1160,13 +1195,20 @@ if barOk and showStruct
     // the direction and the BOS is the one that confirms it, so the heavier
     // line belongs to the heavier event.
     if brkUp
-        msBreak(brkUpX, dTopY, "CHoCH", true)
+        msBreak(brkUpX, dTopY, "CHoCH", true, false)
     else if msBosUp
-        msBreak(bosUpX, msMax[1], "BOS", true)
+        msBreak(bosUpX, msMax[1], "BOS", true, false)
     if brkDn
-        msBreak(brkDnX, dBtmY, "CHoCH", false)
+        msBreak(brkDnX, dBtmY, "CHoCH", false, false)
     else if msBosDn
-        msBreak(bosDnX, msMin[1], "BOS", false)
+        msBreak(bosDnX, msMin[1], "BOS", false, false)
+    // AND THE INTERNAL TIER, which is most of what a LuxAlgo chart shows. At
+    // length 5 it fires many times between two swing breaks; drawing only the
+    // swing tier left two labels on a screen that should carry thirty.
+    if inUp
+        msBreak(iTopX, iTopY, inChoch ? "CHoCH" : "BOS", true, true)
+    if inDn
+        msBreak(iBtmX, iBtmY, inChoch ? "CHoCH" : "BOS", false, true)
 
 // DEBUG: one mark per pin, and hovering it says why. Blue took it, grey did
 // not, and the tooltip carries the reason either way. A bar with NO mark at all
@@ -1271,9 +1313,15 @@ if barOk and fvgZones.size() > 0
 // FILTERED value — the highest obPH for a bearish break, the lowest obPL for a
 // bullish one. Returns an offset from the current bar, so `high[off]` is it.
 obPick(int span, bool bull) =>
-    int best = 0
-    float val = bull ? obPL : obPH
-    for b = 1 to math.min(math.max(span, 1), 300)
+    // STARTS AT OFFSET 1, NOT 0. LuxAlgo scans
+    // `parsedHighs.slice(pivot.barIndex, bar_index)`, and that slice is
+    // half-open — it excludes the breaking bar itself. Seeding `val` from
+    // offset 0 let the breaking bar win the scan, which would put the order
+    // block ON the candle that broke structure rather than in the leg behind
+    // it. That is the opposite of what the zone is meant to mark.
+    int best = 1
+    float val = bull ? obPL[1] : obPH[1]
+    for b = 2 to math.min(math.max(span, 1), 300)
         float v = bull ? obPL[b] : obPH[b]
         if bull ? v < val : v > val
             val := v
@@ -1291,15 +1339,17 @@ obPush(int span, bool bull) =>
         zoneDrop(obZones, obZones.size() - 1)
 
 
+// FROM THE INTERNAL TIER, which is LuxAlgo's own default: they ship internal
+// order blocks ON and swing order blocks OFF. Anchoring these to the SWING
+// tier instead gave a couple of enormous boxes per screen, because the span
+// from a 50-bar pivot to its break is most of the visible chart and the
+// "most extreme bar in the span" is then a near-meaningless pick. At length 5
+// the span is a leg, which is what an order block is supposed to be.
 if barOk and showOB
-    if brkUp
-        obPush(bar_index - brkUpX, true)
-    else if msBosUp
-        obPush(bar_index - bosUpX, true)
-    if brkDn
-        obPush(bar_index - brkDnX, false)
-    else if msBosDn
-        obPush(bar_index - bosDnX, false)
+    if inUp
+        obPush(bar_index - iTopX, true)
+    if inDn
+        obPush(bar_index - iBtmX, false)
 
 // FAIR VALUE GAPS. Two boxes per gap, split at the midpoint, because a gap is
 // filled from one side and the half that is gone should read as gone.
