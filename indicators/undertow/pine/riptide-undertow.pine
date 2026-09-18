@@ -215,6 +215,151 @@ beyondDn(float lvl, string mode) =>
 // and UNDERTOW_BIAS_SOURCE.md were produced on them and have to keep
 // reproducing.
 
+type Cand
+    int    bar    = na
+    float  hi     = na
+    float  lo     = na
+    float  focus  = na
+    bool   workHi = false
+    bool   workOk = false
+    bool   failOk = false
+    int    workBar = -1
+    bool   armed  = false
+    int    armBar = na
+    bool   short  = false
+    float  stop   = na
+    float  target = na
+    float  pbExt  = na
+    int    order  = 0
+    string tag    = ""
+    string code   = ""
+    string state  = ""
+    // GHOST. An armed setup the bias gate cancelled, kept running anyway and
+    // scored into its own column. It draws nothing, takes no live slot and
+    // never touches the real totals — it exists only to answer whether the
+    // gate that killed it was right to. See section 7.
+    bool   ghost  = false
+
+// ── the drawing buffers, and the two calls section 7 makes ───────────────────
+var array<line> lnBuf = array.new<line>()
+var array<box> bxBuf = array.new<box>()
+var array<label> lbBuf = array.new<label>()
+
+prune() =>
+    while lnBuf.size() > keepN * 3
+        line.delete(lnBuf.shift())
+    while bxBuf.size() > keepN * 2
+        box.delete(bxBuf.shift())
+    while lbBuf.size() > keepN * 2
+        label.delete(lbBuf.shift())
+
+drawLine(int x1, int x2, float y, color c, string st) =>
+    lnBuf.push(line.new(x1, y, x2, y, xloc = xloc.bar_index, color = c, style = st, width = 1))
+
+// THE OVERLAP. A chart of ETH on 15m showed four LONGs inside ten dollars,
+// boxes and labels piled on each other. That is not a drawing accident, it is
+// what the strategy does: measured across 23 symbols, 74% of filled trades on
+// 15m are open at the same time as another in the SAME DIRECTION, up to 13 at
+// once, and those groups resolve the same way 78% of the time.
+//
+// So the first of a group draws in full and the rest draw small. `openN` and
+// `compact` are counted AT THE CALL SITES in section 7 — the live-trade array
+// is declared there, Pine will not let a function here reach forward to it,
+// and a function may not assign to a global either, so no state is kept
+// between calls. NOTHING HERE TOUCHES A COUNTER: the panel counts every fill.
+
+// A FILLED setup. The entry marker is a LABEL rather than a plotshape because
+// two candidates can fill on the same bar and a plotshape draws one; it also
+// lets the marker sit at the entry PRICE and carry a hover.
+drawFill(Cand c, int openN) =>
+    color cc = c.short ? colShort : colLong
+    string info = c.tag + "\nbias at the pin: " + c.state + "\nentry " + str.tostring(c.focus, format.mintick) + "\nstop  " + str.tostring(c.stop, format.mintick) + "\ntgt   " + str.tostring(c.target, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin · " + (c.order == 1 ? "W→F" : "F→W")
+    if openN > 0
+        // A FOLLOWER: its entry line, faint, and a small badge carrying the
+        // size of the group it just joined. No box and no price label, which
+        // is what was piling up. The badge counts rather than a lead label
+        // being edited later, because a function may not write to a global and
+        // a retained label id goes stale the moment prune() reaches it.
+        drawLine(c.bar, bar_index, c.focus, color.new(cc, 50),
+          line.style_dashed)
+        lbBuf.push(label.new(bar_index, c.focus,
+          (c.short ? "▼" : "▲") + " ×" + str.tostring(openN + 1),
+          xloc = xloc.bar_index, style = label.style_label_left,
+          color = color.new(cc, 55), textcolor = color.white,
+          size = size.tiny,
+          tooltip = str.tostring(openN + 1) + " SETUPS IN THIS DIRECTION ARE OPEN AT ONCE, and this is the newest. Every one is counted on the panel; they are drawn small so they do not bury the first.\n\nThey are not independent bets. Measured across 23 symbols, overlapping groups resolve THE SAME WAY 78% of the time on 15m — one idea at " + str.tostring(openN + 1) + "x the size, not " + str.tostring(openN + 1) + " trades.\n\n" + info))
+        prune()
+    else
+        drawLine(c.bar, bar_index, c.focus, cc, line.style_dashed)
+        drawLine(c.bar, bar_index, c.stop, colLine, line.style_dotted)
+        drawLine(c.bar, bar_index, c.target, colLine, line.style_dotted)
+        if showZones
+            // math.max/min rather than positional: on a LONG the stop is BELOW
+            // the entry, and a fixed order draws the box inverted.
+            bxBuf.push(box.new(c.bar, math.max(c.stop, c.focus), bar_index,
+              math.min(c.stop, c.focus), border_color = color.new(cc, 70),
+              bgcolor = color.new(colShort, 92)))
+            bxBuf.push(box.new(c.bar, math.max(c.focus, c.target), bar_index,
+              math.min(c.focus, c.target), border_color = color.new(cc, 70),
+              bgcolor = color.new(colLong, 92)))
+        // THE CANDLE THE TRADE WAS BUILT FROM, named on the bar itself and
+        // placed outside the pin so it never covers what it points at.
+        lbBuf.push(label.new(c.bar, c.short ? c.hi : c.lo, c.code,
+          xloc = xloc.bar_index, style = c.short ? label.style_label_down
+          : label.style_label_up, color = color.new(cc, 35),
+          textcolor = color.white, size = size.normal,
+          tooltip = "the setup candle\n" + info))
+        // "▲ LONG 3.5R" WAS A CHART THAT LIED. `rr` is the configured reward
+        // ratio, drawn at the moment of FILL — it is a plan, not a result —
+        // and it sat in a green label over trades that stopped out on the next
+        // bar. The ✓ / ✕ from drawResult is the outcome and it is the only
+        // thing here that may carry a number. This label says what it is: an
+        // entry, and where.
+        lbBuf.push(label.new(bar_index, c.focus,
+          (c.short ? "▼ SHORT " : "▲ LONG ")
+          + str.tostring(c.focus, format.mintick),
+          xloc = xloc.bar_index, style = label.style_label_left,
+          color = color.new(cc, 20), textcolor = color.white,
+          size = size.normal, tooltip = info))
+        prune()
+
+// WHERE A FILLED TRADE ENDED. A tick or a cross on the bar that resolved it, so
+// the won/lost counts on the panel can be audited against the chart rather than
+// trusted. One label per filled setup.
+// `compact` while OTHER trades in the same direction are still open. Four
+// ✓ +3.5R at the same target within a few bars is four labels in one place, and
+// a crowded group nearly always resolves together — 78% of the time, measured.
+// So the one that empties the group gets the full label and the rest a bare
+// glyph that still hovers. The panel's won / lost counts all of them.
+drawResult(Cand c, bool won, bool compact) =>
+    string tip = (won ? "target" : "stop") + " · " + c.code + " " + (c.short ? "short" : "long") + "\nentry " + str.tostring(c.focus, format.mintick) + "\n" + str.tostring(bar_index - c.bar) + " bars from the pin" + (compact ? "\n\nDrawn small because other trades in the same direction were still open when this one resolved. Every one is counted on the panel." : "")
+    lbBuf.push(label.new(bar_index, won ? c.target : c.stop,
+      compact ? (won ? "✓" : "✕")
+      : (won ? "✓ +" + str.tostring(rr, "#.#") + "R" : "✕ −1R"),
+      xloc = xloc.bar_index, style = label.style_label_left,
+      color = color.new(won ? colLong : colShort, compact ? 70 : 45),
+      textcolor = color.white, size = compact ? size.tiny : size.normal,
+      tooltip = tip))
+    prune()
+
+// ARMED and then gone. Muted and dashed, so a setup that did not happen can
+// never be mistaken at a glance for one that did.
+drawMiss(Cand c, string why) =>
+    string info = c.tag + "\nbias at the pin: " + c.state + "\n" + why + "\nentry " + str.tostring(c.focus, format.mintick) + "\nstop  " + str.tostring(c.stop, format.mintick)
+    drawLine(c.bar, bar_index, c.focus, color.new(color.gray, 55), line.style_dashed)
+    lbBuf.push(label.new(c.bar, c.short ? c.hi : c.lo, c.code,
+      xloc = xloc.bar_index, style = c.short ? label.style_label_down
+      : label.style_label_up, color = color.new(color.gray, 75),
+      textcolor = color.new(color.gray, 10), size = size.normal,
+      tooltip = "setup candle, never filled\n" + info))
+    lbBuf.push(label.new(bar_index, c.focus, "×", xloc = xloc.bar_index,
+      style = label.style_label_left, color = color.new(color.gray, 75),
+      textcolor = color.new(color.gray, 10), size = size.normal,
+      tooltip = info))
+    prune()
+
+
+
 // ═══════ 3. MARKET STRUCTURE — LuxAlgo Smart Money Concepts ══════════════════
 // Transcribed from LuxAlgo's "Smart Money Concepts", CC BY-NC-SA 4.0,
 // https://creativecommons.org/licenses/by-nc-sa/4.0/ — the same source

@@ -40,6 +40,8 @@ METH = re.compile(r"^method\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 # top-level variables. Both of those rules fired on the first UDT written in
 # this project, so the block is skipped whole.
 TYPE = re.compile(r"^type\s+([A-Za-z_][A-Za-z0-9_]*)\s*$")
+# Pine's own capitalised type-ish names, which are not user-defined types.
+BUILTIN_TYPES = {"Inf", "Nan"}
 ASSIGN = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:=")
 
 # A TOP-LEVEL variable declaration: at column 0, so not inside a function or an
@@ -137,6 +139,22 @@ def check(path: str) -> list[str]:
     # ── pass 1: declarations, functions, and their first-use lines ──────────
     declared: dict[str, int] = {}
     topvar: dict[str, int] = {}
+    # USER-DEFINED TYPES, which this checker did not know about until a `type`
+    # block was DELETED WHOLE by an edit meant to remove two functions above it
+    # and the file still passed every check here. TradingView caught it:
+    # "Cand is not a valid type keyword". A type is declared before use exactly
+    # as a function is, and a type that is not declared at all is not a subtle
+    # failure -- it is the compile error a green preflight promised would not
+    # happen.
+    udt: dict[str, int] = {}
+    # Its own pass: `type_body()` marks the type's LINES, and depending on how
+    # it counts, the `type X` header can be among them -- reading udt inside
+    # the loop that skips those lines found nothing and called every use
+    # undeclared.
+    for i, ln in enumerate(lines):
+        mt = TYPE.match(code_of(ln))
+        if mt:
+            udt[mt.group(1)] = i
     for i, ln in enumerate(lines):
         if i in in_type:
             continue
@@ -228,6 +246,23 @@ def check(path: str) -> list[str]:
         for name, dl in topvar.items():
             if dl > i and re.search(rf"(?<![A-Za-z0-9_.]){name}(?![A-Za-z0-9_(])", c):
                 bad(i, f"{name} read at line {i+1} but declared at {dl+1}")
+
+        # A TYPE USED BEFORE — OR WITHOUT — ITS DECLARATION. The three ways a
+        # UDT name appears: `array<T>`, `T.new(`, and `T name = ...` as the
+        # type of a declaration.
+        for m2 in re.finditer(
+                r"array<([A-Z]\w*)>|(?<![\w.])([A-Z]\w*)\.new\s*\(|"
+                r"^\s*(?:var\s+|varip\s+)?([A-Z]\w*)\s+\w+\s*=", c):
+            name = m2.group(1) or m2.group(2) or m2.group(3)
+            if name in BUILTIN_TYPES:
+                continue
+            if name not in udt:
+                bad(i, f"type {name} is used at line {i+1} and never declared "
+                       f"-- TradingView will say it is not a valid type "
+                       f"keyword")
+            elif udt[name] > i:
+                bad(i, f"type {name} used at line {i+1} but declared at "
+                       f"{udt[name]+1}")
 
     if depth != 0:
         found.append(f"{path}: file ends with bracket depth {depth}")
