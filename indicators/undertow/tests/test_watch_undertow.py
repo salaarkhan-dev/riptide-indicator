@@ -162,20 +162,22 @@ def test_fills_agree():
     # True and still shipped; what makes it inert is the source, and an inert
     # switch that silently starts working again is exactly the drift this file
     # exists for.
-    # ACROSS FOUR WALKS, not one. The shipped `famStrict` removes roughly the
+    # ACROSS SIXTEEN WALKS, not one. The shipped `famStrict` removes roughly the
     # smaller half of the population and `armWins` another tenth, and one seed
-    # no longer reliably contains a deepening pullback after an arming -- the
-    # single-walk version of this went to 0 of 25 fills and failed for want of
-    # a fixture rather than for want of the behaviour.
+    # no longer reliably contains a deepening pullback after an arming, and the
+    # external structure at a 50-bar pivot made that worse again. The
+    # single-walk version went to 0 of 25 fills and the four-walk one to 0 of
+    # 48 -- both failing for want of a fixture rather than for want of the
+    # behaviour. Sixteen walks is enough to contain one; if a future default
+    # empties it again the answer is a purpose-built sequence, not more seeds.
     for src, want_move in (("Pullback extreme", True),
                            ("Minor swing extreme", False)):
         old = W.STOP_SRC
         W.STOP_SRC = src
         moved = nfill = 0
         try:
-            for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006),
-                                (14, 0.0002)):
-                cs = walk(4000, seed=seed, drift=drift)
+            for seed in range(11, 27):
+                cs = walk(4000, seed=seed, drift=0.0006 * ((seed % 3) - 1))
                 a, f = W.run_setups(cs, max_live=64)
                 by_arm = {x["bar"]: x for x in a}
                 nfill += len(f)

@@ -257,7 +257,36 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # because it names all three. The bar count is not scale invariant and the
 # price-move swings were adopted to fix that -- that flaw comes back with this
 # engine and is stated in the input's tooltip rather than quietly inherited.
-DEFAULTS_FINGERPRINT = "431be9a584def231"
+#
+# 2026-09-18: `biasSrc` BS_SMC -> BS_STRUCT, and the literal renamed again to
+# "market structure + inducement". THE CHART'S DIRECTION NOW COMES FROM A
+# DIFFERENT ENGINE, which is the largest default move in this file's history
+# and is a chart-owner decision taken with the numbers in front of them:
+#
+#   tf     SMC 14/5 (was)        MS+IDM 50/3 (now)
+#   15m    666 at -0.011         395 at +0.117
+#   30m    682 at -0.008         374 at -0.058
+#   1h     702 at -0.152         402 at -0.072
+#
+# Spent 23, counts and not a study. It is 40% FEWER setups again and the R
+# column disagrees with itself across timeframes, which is what three numbers
+# on a read universe look like.
+#
+# EVERY MEASUREMENT PAGE NOW DESCRIBES A DIFFERENT ENGINE FROM THE CHART, and
+# that is not new but it is worse: the pages were produced on this engine at
+# 6/2 PRICE-MOVE swings, and the chart now runs it at 50/3 BAR pivots with the
+# minor tier coming from LuxAlgo's internal pass. `biasSrc` has been in PINNED
+# since the last engine swap, so all ten studies that read it name it and none
+# moves -- checked, not assumed.
+#
+# AND THE WATCHER HAD TO LEARN THE ENGINE. The parity test failed the instant
+# the default moved, because the bot could not run what the chart draws; that
+# is the whole point of it. riptide/watchers/undertow.py::_ms_structure is the
+# third copy and two bugs were caught getting it there: a bar pivot whose
+# probe sat inside its own window (zero swings, zero setups), and the port
+# building the internal pass WITHOUT the swing pass as its reference, which
+# moved sOs on 351 bars of a 4,000-bar walk.
+DEFAULTS_FINGERPRINT = "ec45908cfb858d1d"
 DEFAULTS_COUNT = 73
 
 good = []

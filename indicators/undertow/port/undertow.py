@@ -77,14 +77,23 @@ B_LATE = "after the limit expires"
 # event on a different population doing a different job. Carrying its verdict
 # to "direction source for a pullback-continuation strategy" was wrong, and
 # these are here to be measured rather than assumed either way.
-# THE VALUE IS THE DROPDOWN LABEL, and it was "structure" until this engine
-# went back on the chart beside LuxAlgo's. Both sides compare biasSrc BY VALUE,
-# so the Pine's option must be this exact string -- and "structure" next to
-# "SMC structure" in a dropdown tells the reader nothing about which is which.
-# Renaming the literal is safe: every reader in the tree uses the CONSTANT
-# (checked -- there was no bare "structure" comparison anywhere), P's default
-# is BS_SMC so no fingerprint moves, and no study's arms change.
-BS_STRUCT = "v2 structure (inducement)"
+# THE EXTERNAL CHARACTER, AND THE DEFAULT. LuxAlgo's "Market Structure with
+# Inducements & Sweeps", which riptide-indicator-v2.pine section 12 is a
+# transcription of -- same bar-pivot detector, same crossed-flag CHoCH, same
+# `sbtmy != btmy` inducement guard, same sweep. It is the only engine here
+# with an INDUCEMENT.
+#
+# IT IS HALF OF A PAIR AND THE NAME SHOULD NOT HIDE THAT. Under this source
+# the MAJOR tier is this engine and the MINOR tier is LuxAlgo's Smart Money
+# Concepts internal pass at `smcInternalLen` -- external character from one,
+# internal from the other, which is the arrangement that was asked for. See
+# `structure()` and the Pine's `bSOs` line.
+#
+# The literal has been "structure" and "v2 structure (inducement)" and is now
+# this. Both sides compare biasSrc BY VALUE so the Pine's option must match it
+# exactly; renaming is safe because every reader in the tree uses the CONSTANT
+# (checked -- no bare literal anywhere).
+BS_STRUCT = "market structure + inducement"
 BS_EMA = "EMA cross"
 BS_ST = "Supertrend"
 BS_SLOPE = "Slope"
@@ -217,7 +226,7 @@ class P:
     # this default now pin BS_STRUCT explicitly so they keep reproducing. See
     # test_studies_pin_their_settings.py, where the order of operations is
     # written out.
-    biasSrc: str = BS_SMC
+    biasSrc: str = BS_STRUCT
     # DUYCK'S RSI BIAS, the one alternative source on the chart. The two
     # levels are a HYSTERESIS BAND, not a threshold: crossing above the top
     # turns the bias up, crossing below the bottom turns it down, and between
@@ -1127,7 +1136,15 @@ def structure(cs, p: P):
     # internal pass supplies the minor tier that `endMinor` and the
     # minor-swing stop read. Computed here so the loop below can take it
     # per bar; see the comment where sOs is filled.
-    inner = smc.structure(cs, p.smcInternalLen)
+    # WITH THE SWING PASS AS ITS REFERENCE, exactly as smc.state builds it.
+    # `ref` is what stops an internal break that sits on a swing level being
+    # counted as a second event, and dropping it changed `sOs` on 351 bars of
+    # a 4,000-bar walk -- enough to arm a setup the other copy did not. The
+    # reference is LuxAlgo's own swing pass, not this engine's major tier:
+    # the internal pass is half of THAT pair and has to be built the way that
+    # pair builds it.
+    inner = smc.structure(cs, p.smcInternalLen,
+                          ref=smc.structure(cs, p.smcSwingLen))
     atr = atr_series(cs, 14)
     msTop, msTopX, msBtm, msBtmX = _swings(cs, p, True, atr)
     msSTop, msSTopX, msSBtm, msSBtmX = _swings(cs, p, False, atr)

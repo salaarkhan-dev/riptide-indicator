@@ -133,7 +133,7 @@ RECENT_BARS = 6
 # watcher runs one engine — but a port default that drifted back to riptide's
 # structure while this file kept running LuxAlgo's is exactly the silent
 # divergence the rest of that test exists to catch.
-BIAS_SRC = "SMC structure"
+BIAS_SRC = "market structure + inducement"
 SMC_SWING_LEN = 14
 SMC_INTERNAL_LEN = 5
 # WHICH OF THE TWO PASSES IS THE BIAS. "swing" is what the chart ships and what
@@ -144,6 +144,18 @@ SMC_INTERNAL_LEN = 5
 # shorter pass for it to read. deploy/undertow-three-way-check.py holds this to
 # P's default, so if the chart's default moves this file has to move with it.
 BIAS_TIER = "swing"
+# THE EXTERNAL CHARACTER, and it is a PAIR with the line above rather than an
+# alternative to it. The major tier is LuxAlgo's "Market Structure with
+# Inducements & Sweeps" at a 50-bar pivot, with a 3-bar pivot supplying the
+# inducement; the minor tier stays LuxAlgo's Smart Money Concepts internal
+# pass. External character from one engine, internal from the other.
+#
+# IT IS THE ONLY ENGINE HERE WITH AN INDUCEMENT, which is why the chart made it
+# the default: a close beyond the running extreme is a BOS only once the minor
+# low below has been swept.
+MS_LEN = 50
+MS_SHORT_LEN = 3
+MS_BOS_NEEDS_IDM = True
 # THE CONFIRMATION ORDER, and it matches the port's default and the chart's.
 # v1 armed on "both lines, in either order", which was a misreading of the
 # strategy — see indicators/undertow/SPEC.md section 8. Every measurement page
@@ -426,6 +438,118 @@ def _smc_structure(cs, size, ref=None):
     return out
 
 
+def _bar_pivots(cs, L):
+    """The bar pivot, mirroring indicators/undertow/port/swings.py::bar_swings
+    statement for statement -- which is itself the verified transcription of
+    `msSwings()` and is held to riptide_ms/port/ms_struct.py by a test.
+
+    THE WINDOW AND THE PROBE DO NOT OVERLAP, and getting that wrong is the
+    whole difficulty. `ta.highest(L)` covers bars i-L+1..i; the bar being
+    tested is `high[L]`, which is cs[i-L] -- one bar EARLIER than the window
+    starts. A first version here took the max over cs[i-L : i+1], so the probe
+    was inside its own window, `cs[i-L].h > hh` could never be true, and the
+    engine produced zero swings and therefore zero setups. The parity test
+    caught it on the first run.
+
+    The swing is dated i-L and is CONFIRMED L bars late. That lag is inherent
+    to a pivot and nothing repaints: the value read is a closed bar's high.
+    """
+    n = len(cs)
+    highs = [c.h for c in cs]
+    lows = [c.l for c in cs]
+    hh = _roll(highs, L, lambda a, b: a <= b)
+    ll = _roll(lows, L, lambda a, b: a >= b)
+    tops, btms = [None] * n, [None] * n
+    sOs = 0
+    for i in range(n):
+        was = sOs
+        if i >= L:
+            if highs[i - L] > hh[i]:
+                sOs = 0
+            elif lows[i - L] < ll[i]:
+                sOs = 1
+            if sOs == 0 and was != 0:
+                tops[i] = (highs[i - L], i - L)
+            if sOs == 1 and was != 1:
+                btms[i] = (lows[i - L], i - L)
+    return tops, btms
+
+
+def _ms_structure(cs):
+    """THE EXTERNAL CHARACTER: LuxAlgo's "Market Structure with Inducements &
+    Sweeps", transcribed, and the only engine here with an INDUCEMENT.
+
+    riptide-undertow.pine section 4b is the same block and
+    indicators/undertow/port/undertow.py::structure is the same again; the
+    parity test holds this copy to the port's.
+
+    THE INDUCEMENT IS THE POINT. A close beyond the running extreme is a BOS
+    only once the MINOR low below it has been dipped through -- the liquidity
+    the move is supposed to take before it goes. `sBtmY != btmY` is the guard
+    that makes it mean anything: the inducement must be a minor low that is NOT
+    the major one, or a break of real structure would read as a sweep.
+
+    Returns the same keys `_smc_structure` does, so the loop that reads it does
+    not know or care which engine filled them.
+    """
+    n = len(cs)
+    tops, btms = _bar_pivots(cs, MS_LEN)
+    stops, sbtms = _bar_pivots(cs, MS_SHORT_LEN)
+    out = dict(dir=[0] * n, choch=[False] * n, bos=[False] * n,
+               up=[False] * n, dn=[False] * n,
+               hiLvl=[None] * n, loLvl=[None] * n)
+    os = 0
+    topY = btmY = sTopY = sBtmY = None
+    topCrossed = btmCrossed = False
+    sTopCrossed = sBtmCrossed = False
+    mx = mn = None
+    for i, c in enumerate(cs):
+        if tops[i] is not None:
+            topY, topCrossed = tops[i][0], False
+        if btms[i] is not None:
+            btmY, btmCrossed = btms[i][0], False
+        if stops[i] is not None:
+            sTopY = stops[i][0]
+        if sbtms[i] is not None:
+            sBtmY = sbtms[i][0]
+        was = os
+        if topY is not None and c.c > topY and not topCrossed:
+            os, topCrossed = 1, True
+        if btmY is not None and c.c < btmY and not btmCrossed:
+            os, btmCrossed = 0, True
+        choch = i > 0 and os != was
+        if choch or mx is None:
+            mx, mn = c.h, c.l
+            sTopCrossed = sBtmCrossed = False
+        # THE INDUCEMENT, then the BOS that needs it. Both before the trailing
+        # extremes update, because the BOS test is meant to see the PREVIOUS
+        # bar's running extreme -- the Pine's comment says the same and the
+        # order is load-bearing on all three copies.
+        if (sBtmY is not None and c.l < sBtmY and not sBtmCrossed
+                and os == 1 and sBtmY != btmY):
+            sBtmCrossed = True
+        bosUp = (c.c > mx and (not MS_BOS_NEEDS_IDM or sBtmCrossed)
+                 and os == 1 and not choch)
+        if bosUp:
+            sBtmCrossed = False
+        if (sTopY is not None and c.h > sTopY and not sTopCrossed
+                and os == 0 and sTopY != topY):
+            sTopCrossed = True
+        bosDn = (c.c < mn and (not MS_BOS_NEEDS_IDM or sTopCrossed)
+                 and os == 0 and not choch)
+        if bosDn:
+            sTopCrossed = False
+        mx, mn = max(c.h, mx), min(c.l, mn)
+        out["dir"][i] = 1 if os == 1 else -1
+        out["choch"][i] = choch
+        out["bos"][i] = bosUp or bosDn
+        out["up"][i] = bosUp or (choch and os == 1)
+        out["dn"][i] = bosDn or (choch and os == 0)
+        out["hiLvl"][i] = topY
+        out["loLvl"][i] = btmY
+    return out
+
+
 def _atr(cs, length=14):
     tr = []
     for i, c in enumerate(cs):
@@ -499,7 +623,8 @@ def run_setups(cs, max_live: int = 4):
     # the major as its reference either way, so choosing the lead afterwards is
     # not the same as swapping the lengths. port/smc.py::state does exactly
     # this and the parity test holds the two together.
-    lead = mnr if BIAS_TIER == "internal" else maj
+    lead = (_ms_structure(cs) if BIAS_SRC == "market structure + inducement"
+            else mnr if BIAS_TIER == "internal" else maj)
 
     msMax = msMin = msMaxX = msMinX = None
     dirs: list = []
@@ -542,7 +667,7 @@ def run_setups(cs, max_live: int = 4):
         # Here the BOS comes from the structure pass, so nothing is left that
         # needs the stale value, and smc.py::state orders it this way.
         dirs.append(1 if msOs == 1 else -1)
-        flip = i > 0 and maj["dir"][i] != maj["dir"][i - 1]
+        flip = i > 0 and lead["dir"][i] != lead["dir"][i - 1]
         if flip or msMax is None:
             msMax, msMin = c.h, c.l
             msMaxX = msMinX = i
