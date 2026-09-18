@@ -126,6 +126,8 @@ confirmBars = input.int(20, "Confirm within", minval = 2, maxval = 200, group = 
   tooltip = "Bars for BOTH confirmations to land. Without a bound the rule is eventually true for almost any candle.")
 fillBars = input.int(20, "Fill within", minval = 1, maxval = 200, group = gSet,
   tooltip = "Bars for the limit to fill before the setup expires unfilled.")
+armWins = input.bool(false, "First to confirm wins", group = gSet,
+  tooltip = "WHEN ONE CANDIDATE COMPLETES ITS W→F, DROP THE OTHERS in the same direction that have not.\n\nA pullback offers several counter-trend candles. 'Newest wins' already thins them as new ones appear, but once one has actually completed the pattern the rest are still sitting there waiting to arm on their own levels — which is how four limit orders end up resting inside one pullback, with their lines on top of each other.\n\nIT IS A BETTER SELECTOR THAN THE LIVE CAP because it selects on an EVENT rather than on age. The cap keeps the oldest four and turns away everything after; this keeps the one that completed the pattern. Measured on a spent universe at the cap of 4, it cuts cap-refusals from 511 to 364.\n\nAn already-ARMED setup is never dropped: it has levels and an order behind it.\n\nOFF AND UNMEASURED. It costs about 10% of armed setups — small, but still a change to which trades exist, and ../measurements/UNDERTOW_ANCHOR.md is what set the standard that those get a prereg rather than shipping because they are clearly stated.")
 maxLive = input.int(4, "Live setups at once", minval = 1, maxval = 8, group = gSet,
   tooltip = "A pullback contains several pins and any of them might be the one that works, so they all run independently. This caps how many, for the chart and the drawing budget; pins arriving at the cap are turned away and counted.")
 // The two anchors, named once. Both spellings are the PORT's constants
@@ -965,6 +967,21 @@ if barOk and cands.size() > 0
                     c.stop := st
                     c.target := c.short ? c.focus - rr * risk : c.focus + rr * risk
                     nArmed := nArmed + 1
+                    // FIRST TO CONFIRM WINS. The pattern completed here, so
+                    // the rest of this pullback's candles stop being separate
+                    // ideas and their unarmed candidates go. Armed ones are
+                    // untouched — they have levels and an order behind them.
+                    //
+                    // Walked BACKWARDS and skipping `i`, because this is
+                    // inside the loop that is itself walking `cands`
+                    // backwards: removing an index above the cursor is safe,
+                    // removing the cursor is not.
+                    if armWins and cands.size() > 1
+                        for k = cands.size() - 1 to 0
+                            if k != i
+                                Cand y = cands.get(k)
+                                if not y.armed and not y.ghost and y.short == c.short
+                                    cands.remove(k)
                 else
                     why := "stop is not beyond the entry"
                     gone := true

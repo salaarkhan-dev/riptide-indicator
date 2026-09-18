@@ -335,6 +335,34 @@ class P:
     # bullish one, with the other shape acceptable when the priority one is
     # absent. v1 had no ordering at all and took whichever sat at the extreme.
     famPriority: bool = True
+    # FIRST TO ARM WINS, and the rest of the pullback's candidates are dropped.
+    #
+    # "Which one wins first we should remove the other -- by win I mean W→F."
+    # A pullback offers several counter-trend candles and `pinNewest` already
+    # thins them as new ones appear, but once one COMPLETES ITS W→F the others
+    # are still sitting there waiting to arm on their own levels. That is how
+    # four limit orders end up resting inside one pullback, which
+    # UNDERTOW_OVERLAP.md measured as one idea at four times the size: 74% of
+    # 15m trades run alongside another in the same direction and they resolve
+    # the same way 78% of the time.
+    #
+    # It is a better selector than `maxLive` because it selects on an EVENT
+    # rather than on age. The cap keeps the oldest four and turns away the
+    # rest; this keeps the one that actually completed the pattern.
+    #
+    # OFF BY DEFAULT AND UNMEASURED, and the size of it is smaller than it
+    # sounds: armed setups fall 10% on a spent universe, not the large share I
+    # assumed before measuring. `pinNewest` already thins the rivals, so by the
+    # time one arms there are often few left to drop. At the CHART's own
+    # maxLive of 4 it also cuts cap-refusals from 511 to 364, which is the
+    # visible half of the complaint -- fewer setups turned away by AGE because
+    # fewer are loitering.
+    #
+    # 10% is small enough to argue it is a correction and large enough that it
+    # is still a trade-population change with no evidence behind it, so it
+    # waits for a prereg rather than shipping on the strength of being clearly
+    # stated.
+    armWins: bool = False
     locTol: int = 0
     pbMinAge: int = 0
     pbMinDepth: float = 0.0
@@ -1407,6 +1435,18 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                                 entry=cd.focus, stop=cd.stop,
                                 target=cd.target, code=cd.code,
                                 state=cd.state, pin=cd.bar, order=cd.order))
+                            # FIRST TO ARM WINS. Every other candidate in the
+                            # same direction that has NOT armed is dropped --
+                            # the pattern completed somewhere, and the rest of
+                            # this pullback's candles are no longer separate
+                            # ideas. Armed ones are untouched: they have
+                            # levels and an order behind them.
+                            if p.armWins:
+                                for x in [y for y in cands
+                                          if y is not cd and not y.armed
+                                          and not y.ghost
+                                          and y.short == cd.short]:
+                                    cands.remove(x)
                         else:
                             gone = True
                 elif i - cd.bar >= p.confirmBars:

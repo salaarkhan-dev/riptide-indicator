@@ -144,8 +144,14 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # default. Caught by constructing each BASE and printing the three fields
 # rather than trusting the grep. That is a real weakness in this test: it
 # proves a name appears, not that the baseline names it.
-DEFAULTS_FINGERPRINT = "3c3ba96d84fac3c4"
-DEFAULTS_COUNT = 65
+#
+# 2026-09-18: `armWins` added, OFF. Purely additive — no existing default
+# moves and no study's arms change, so nothing needed re-running. It is off
+# because it changes which trades exist (about 10% of armed setups) and
+# UNDERTOW_ANCHOR.md is what set the standard that those get a prereg rather
+# than shipping on the strength of being clearly stated.
+DEFAULTS_FINGERPRINT = "a24421b7e23a0f16"
+DEFAULTS_COUNT = 66
 
 good = []
 
