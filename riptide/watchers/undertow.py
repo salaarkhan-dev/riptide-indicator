@@ -722,6 +722,7 @@ def run_setups(cs, max_live: int = 4):
         atrBuf = STOP_BUF * atr[i]
 
         # ── candidates ──────────────────────────────────────────────────────
+        armWon: set = set()
         for cd in list(cands):
             gone = False
             if not tradeable:
@@ -796,11 +797,16 @@ def run_setups(cs, max_live: int = 4):
                         # resting inside one pullback. An already-ARMED
                         # candidate is never dropped: it has an order behind
                         # it.
+                        # RECORDED HERE, SWEPT AFTER THE LOOP. Removing
+                        # them here walked into two bugs in the port's copy:
+                        # this loop iterates a SNAPSHOT, so a victim removed
+                        # mid-loop was still visited and could arm anyway, and
+                        # the `cands.remove(cd)` below then raised on a
+                        # candidate already gone. Sweeping after the bar also
+                        # makes the rule order-independent, which matters
+                        # because the Pine walks its array the other way.
                         if ARM_WINS:
-                            for x in list(cands):
-                                if (x is not cd and not x.armed
-                                        and x.short == cd.short):
-                                    cands.remove(x)
+                            armWon.add(cd.short)
                     else:
                         gone = True
                 elif i - cd.bar >= UNDERTOW_CONFIRM_BARS:
@@ -843,6 +849,10 @@ def run_setups(cs, max_live: int = 4):
                     gone = True
             if gone:
                 cands.remove(cd)
+
+        # THE ARM-WINS SWEEP, after every candidate has had its bar.
+        for x in [y for y in cands if not y.armed and y.short in armWon]:
+            cands.remove(x)
 
         # ── a new pin ───────────────────────────────────────────────────────
         rng = c.h - c.l

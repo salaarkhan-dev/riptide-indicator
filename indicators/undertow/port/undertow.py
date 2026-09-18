@@ -1590,6 +1590,7 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
             pbExt, pbExtX = c.l, i
 
         # ── every candidate, oldest last so removal is safe ─────────────────
+        armWon: set = set()
         for cd in list(cands):
             gone = False
             filled = False
@@ -1667,12 +1668,28 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                             # this pullback's candles are no longer separate
                             # ideas. Armed ones are untouched: they have
                             # levels and an order behind them.
+                            # RECORDED HERE, SWEPT AFTER THE LOOP, and it
+                            # used to remove them right here. That was two
+                            # bugs. This loop walks a SNAPSHOT, list(cands),
+                            # so a victim removed mid-loop was still visited
+                            # afterwards -- it could arm and append a setup
+                            # the rule had just deleted -- and then
+                            # `cands.remove(cd)` at the bottom raised
+                            # ValueError because it was already gone. That
+                            # crash is what the last universe's fetch run
+                            # hit, the first time armWins was ever a default.
+                            #
+                            # Sweeping after the bar also makes the rule
+                            # ORDER-INDEPENDENT. Removing mid-loop meant
+                            # whichever candidate the iteration reached first
+                            # won, and the Pine walks this array in the
+                            # OPPOSITE order -- so the two copies could pick
+                            # different winners with nothing to say they had.
+                            # Two candidates completing on the same bar have
+                            # equal claim: both arm, and the unarmed rest go
+                            # at the end of the bar.
                             if p.armWins:
-                                for x in [y for y in cands
-                                          if y is not cd and not y.armed
-                                          and not y.ghost
-                                          and y.short == cd.short]:
-                                    cands.remove(x)
+                                armWon.add(cd.short)
                         else:
                             gone = True
                 elif i - cd.bar >= p.confirmBars:
@@ -1788,6 +1805,11 @@ def run(cs, p: P = P(), symbol: str = "") -> Result:
                     gone = True
             if gone or filled:
                 cands.remove(cd)
+
+        # THE ARM-WINS SWEEP, after every candidate has had its bar.
+        for x in [y for y in cands
+                  if not y.armed and not y.ghost and y.short in armWon]:
+            cands.remove(x)
 
         # ── filled trades, walked to their target or their stop ─────────────
         # AFTER the candidate loop, as in the Pine, so a setup filled on this

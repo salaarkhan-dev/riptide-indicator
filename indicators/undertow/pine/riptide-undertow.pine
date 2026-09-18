@@ -1176,6 +1176,10 @@ var int nEndMinor = 0
 var int nEndRetr = 0
 
 // ── every live candidate, oldest first, removed in place when it resolves ────
+// `armWonUp` / `armWonDn` are set inside and acted on AFTER, never during —
+// see the comment at the arming site for what removing mid-loop costs.
+bool armWonUp = false
+bool armWonDn = false
 if barOk and cands.size() > 0
     for i = cands.size() - 1 to 0
         Cand c = cands.get(i)
@@ -1253,16 +1257,30 @@ if barOk and cands.size() > 0
                     // ideas and their unarmed candidates go. Armed ones are
                     // untouched — they have levels and an order behind them.
                     //
-                    // Walked BACKWARDS and skipping `i`, because this is
-                    // inside the loop that is itself walking `cands`
-                    // backwards: removing an index above the cursor is safe,
-                    // removing the cursor is not.
-                    if armWins and cands.size() > 1
-                        for k = cands.size() - 1 to 0
-                            if k != i
-                                Cand y = cands.get(k)
-                                if not y.armed and not y.ghost and y.short == c.short
-                                    cands.remove(k)
+                    // RECORDED HERE, SWEPT AFTER THE LOOP, and removing
+                    // them here was a CHART-KILLER waiting for this rule to
+                    // become a default.
+                    //
+                    // This is inside a loop walking `cands` backwards whose
+                    // bound was computed on entry. Removing an index ABOVE the
+                    // cursor is safe; removing one BELOW it shifts every
+                    // element down, so the cursor lands on a different
+                    // candidate and `cands.get(i)` eventually reads past the
+                    // end — a runtime error, which in Pine takes the whole
+                    // indicator with it. The old code removed every k != i,
+                    // below the cursor included.
+                    //
+                    // The port had the same shape and it CRASHED, on the first
+                    // run with armWins on by default. Sweeping after the bar
+                    // also makes the rule order-independent: the port walks
+                    // this array the other way, so removing mid-loop let the
+                    // two copies pick different winners with nothing to say
+                    // they had.
+                    if armWins
+                        if c.short
+                            armWonDn := true
+                        else
+                            armWonUp := true
                 else
                     // TWO DIFFERENT FAILURES AND THEY USED TO SHARE A MESSAGE.
                     // "not beyond the entry" implies a stop was computed and
@@ -1350,6 +1368,15 @@ if barOk and cands.size() > 0
 // conservative reading: a limit filled intrabar really was exposed to the rest
 // of that bar, and when one bar spans both levels the order is unknowable, so
 // it counts as the loss.
+// THE ARM-WINS SWEEP, after every candidate has had its bar. Deferred out of
+// the loop above so the array is never mutated under a cursor that is still
+// walking it, and so the rule does not depend on which end the walk started.
+if (armWonUp or armWonDn) and cands.size() > 0
+    for k = cands.size() - 1 to 0
+        Cand y = cands.get(k)
+        if not y.armed and not y.ghost and (y.short ? armWonDn : armWonUp)
+            cands.remove(k)
+
 if barOk and trades.size() > 0
     for i = trades.size() - 1 to 0
         Cand t = trades.get(i)
