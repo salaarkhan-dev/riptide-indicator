@@ -352,12 +352,24 @@ as an input, off by default**. `famPriority` did nothing recoverable (−0.05 to
 > in a bull trend, only the hammer in a bear trend; the hanging man and the
 > inverted hammer stop being setups. With the colour rule that leaves exactly
 > one code per direction and the four-code taxonomy of §2.1 collapses to two.
-> It cuts **42–46%** of the armed setups, measured on the spent 23-symbol set,
-> and the two surviving codes are untouched — 474 shooting stars become 475 —
-> so the cut is entirely the other two leaving. A rule that removes that much
-> gets a pre-registration before it becomes a default, which is the standard
-> the anchor study set, and the anchor study is also why: a stated rule that
-> demonstrably finds its intended candle can still trade worse.
+> It cuts roughly the smaller half of the armed setups. **It got its
+> pre-registration and it stays off** —
+> [`UNDERTOW_STRICT.md`](measurements/UNDERTOW_STRICT.md). The gate is exact:
+> 3,157 armed trades on a universe never looked at, **100.0% of them the named
+> candle** against a pre-registered impossibility of *zero* off-shape rather
+> than a threshold. And they are not better — −0.067 / −0.040 / −0.062 R
+> against what ships at −0.090 / −0.026 / +0.038, beaten by a matched random
+> discard on two of three.
+>
+> **THE ONE CELL THAT PAGE ASKS YOU TO READ TWICE.** Because the gate is an
+> exact subset, its complement is exact too: `S0 − S1` is precisely the
+> non-priority half, same population, same levels, same exits. That is the
+> most direct test §2.1's taxonomy has ever had, and on 1h **the half the gate
+> throws away scored +0.197 at a 27.3% win rate against the priority half's
+> −0.062**, z −2.46. It is the only |z| ≥ 2 in eighteen studies and it points
+> against the stated rule. One cell of three with the other two at nothing is
+> a ~14% coincidence, so it is **not a result** — it is the best-supported
+> candidate this project has produced for its own pre-registration.
 
 **MEASURED — see [`UNDERTOW_PULLBACK.md`](measurements/UNDERTOW_PULLBACK.md).**
 Defect 3 is real and costs setups rather than money: pins 1–2 bars after the

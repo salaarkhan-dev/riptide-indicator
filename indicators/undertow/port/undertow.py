@@ -345,13 +345,22 @@ class P:
     # so strict + colour is exactly ONE code per direction: SS in a bull trend,
     # HAM in a bear trend. The four-code taxonomy collapses to two.
     #
-    # OFF AND UNMEASURED, and it is the second-largest single cut in P after
-    # the anchor. UNDERTOW_ANCHOR.md set the standard that a rule removing a
-    # large share of the setups gets a pre-registration rather than shipping
-    # because it is clearly stated -- and that study is also the reason to be
-    # careful here specifically, because the leg anchor delivered its stated
-    # mechanism at 86-88% and traded WORSE. A shape filter is the same kind of
-    # claim.
+    # OFF, AND MEASURED -- ../measurements/UNDERTOW_STRICT.md. The gate is
+    # EXACT: 3,157 armed trades on a universe never looked at, not one of them
+    # anything but a hammer short or a shooting star long. The pre-registered
+    # impossibility was zero off-shape rather than a threshold, and it held.
+    # And the trades are not better: -0.067 / -0.040 / -0.062 R against what
+    # ships at -0.090 / -0.026 / +0.038, beaten by a matched random discard on
+    # two of three.
+    #
+    # THE ONE CELL WORTH KNOWING ABOUT, because somebody will find it later
+    # and think it was buried: on 1h the half this gate THROWS AWAY scored
+    # +0.197 at a 27.3% win rate against the priority half's -0.062, z -2.46.
+    # It is the only |z| >= 2 in eighteen studies and it points AGAINST the
+    # stated rule. One cell of three with the other two at nothing is a ~14%
+    # coincidence, so it is not a result -- it is the best-supported candidate
+    # this project has produced for its own prereg, and it needs a fresh
+    # universe rather than a promotion out of the study that found it.
     famStrict: bool = False
     # FIRST TO ARM WINS, and the rest of the pullback's candidates are dropped.
     #

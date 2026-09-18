@@ -150,10 +150,12 @@ PIN_NEWEST = True
 FAM_PRIORITY = True
 # THE PRIORITY SHAPE AND NOTHING ELSE -- only the shooting star in a bull trend
 # and only the hammer in a bear trend, with the hanging man and the inverted
-# hammer no longer setups at all. A chart TOGGLE, off on both sides, and it
-# costs 42-46% of the armed setups, so it is not a free correction: it gets a
-# pre-registration before it becomes the default, on the standard
-# ../../indicators/undertow/measurements/UNDERTOW_ANCHOR.md set.
+# hammer no longer setups at all. A chart TOGGLE, off on both sides.
+#
+# MEASURED and it stays off --
+# ../../indicators/undertow/measurements/UNDERTOW_STRICT.md. The gate admits
+# precisely the named candle, 3,157 of 3,157, and the trades are not better
+# than the ones it replaced or than a coin discarding as often.
 #
 # The watcher carries it as a constant rather than leaving it out because the
 # chart owner can turn it on, and a chart running strict against a bot that is
