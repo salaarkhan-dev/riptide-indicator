@@ -3,14 +3,14 @@
 You asked me to revisit the parameters. This is the audit, not a retune — the
 last section says why those are different things.
 
-> **WHAT THIS AUDIT CHANGED.** The chart went from **56 inputs to 40**, and of
-> those 40 only 23 decide anything — the rest are display and debug. The rule
+> **WHAT THIS AUDIT CHANGED.** The chart went from **56 inputs to 37**, and of
+> those 37 only 20 decide anything — the rest are display and debug. The rule
 > applied, and it is the only rule this file argues for:
 >
 > **an input earns its place only if the strategy's definition needs it, a
 > study showed the choice matters, or it is display.**
 >
-> Sixteen failed all three. They are listed in §6 and every one of them is
+> Nineteen failed all three. They are listed in §6 and every one of them is
 > still in the port, because that is where an unmeasured option belongs: the
 > port can express it, the chart does not offer it, and the studies that name
 > it keep reproducing unchanged. No strategy default was touched.
@@ -18,7 +18,7 @@ last section says why those are different things.
 **65 settings. 17 have a pre-registered study behind them. 15 are values that
 came off your chart or out of the Pine's first draft and have never been
 measured at the value they ship at. 28 are inert. 4 are definitions, not
-numbers. 1 was wrong and is fixed in this commit.**
+numbers. 1 was wrong and is fixed.**
 
 ---
 
@@ -70,12 +70,14 @@ parameters have not moved.
 
 | setting | ships | |
 |---|---|---|
-| `workTest` `failTest` | close beyond | a CLOSE past the line, not a wick through it. Your rule |
+| `workTest` `failTest` | close beyond | a CLOSE past the line, not a wick through it. Your rule — so it is fixed in the Pine now, not a dropdown |
 | `stopSrc` | pullback extreme | the new lower high. Your whiteboard, and [453 of 453 bearish stops sit above the entry](measurements/UNDERTOW_V3.md) |
 | `stopTrack` | on | the stop follows the pullback as it extends |
 
 Changing these makes it a different strategy. They are not candidates for
-tuning.
+tuning, which is why none of them is an input any more except `stopSrc` and
+`stopTrack`, where seeing the alternative drawn is how you check the stop is
+where your whiteboard puts it.
 
 ---
 
@@ -92,8 +94,8 @@ value it ships at.
 | `endSweep` `endStale` | off / off | your chart |
 | `retraceMax` | 70 | the Pine's first draft |
 | `stopBuf` | 0.25 ATR | the Pine's first draft. [The median gap is exactly the buffer](measurements/UNDERTOW_V3.md), so it is load-bearing |
-| `swingK` `swingKMinor` | 0.40 / 0.12 | **worse than unmeasured — see below** |
-| `swingHours` | 24.0 | the window the swing threshold is a fraction OF. Never varied |
+| `swingK` `swingKMinor` | 0.40 / 0.12 | **worse than unmeasured — see below.** No longer adjustable on the chart |
+| `swingHours` | 24.0 | the window the swing threshold is a fraction OF. Never varied, no longer adjustable |
 | `maxLive` | 4 | **see below** |
 | `wickEdge` | 0.05 | the doji exclusion. The margin that decides hammer vs. nothing. Never varied |
 | `confirmBars` | 20 | how long a pin waits for its two confirmations |
@@ -110,6 +112,12 @@ per trade of pure illusion**, three times over. The values then became the
 defaults. That is the one place in this project where a number that failed a
 holdout is still shipping, and it is shipping because it was already on the
 chart when the sweep agreed with it.
+
+**They are now fixed in the Pine rather than adjustable**, at the values every
+measurement page was produced under. That does not make them right — it makes
+them honest: an input is an invitation to search again, and the last search is
+the reason not to. The port still exposes all three for the study that
+eventually tests them.
 
 **`maxLive` 4 means your chart is not running the strategy that was measured.**
 Every study sets 64 and reports `nCap = 0` — no setup was ever turned away. At
@@ -143,7 +151,7 @@ same 7bp every study used. Set it to 0 to read the panel gross.
 
 ---
 
-## 6 · THE SIXTEEN THAT CAME OFF THE CHART
+## 6 · THE NINETEEN THAT CAME OFF THE CHART
 
 Removed from the Pine, kept in the port. None was a default change — every one
 of them was already at the value it is now fixed at.
@@ -154,6 +162,7 @@ of them was already at the value it is now fixed at.
 | **three Ending rules** — `endSweep` `endStale` `staleBars` `adxMin` | all shipped **off**, none ever measured **on**. ADX had already failed as a filter [elsewhere in this project](../ccp/measurements/CCP_CONTEXT_FILTERS.md) |
 | **two pullback minimums** — `pbMinAge` `pbMinDepth` | [measured: the setups they remove are not systematically worse](measurements/UNDERTOW_PULLBACK.md) |
 | **two confirmation tests** — `workTest` `failTest` | three unmeasured variants each of something the strategy defines as *a close beyond* |
+| **three "price move" dials** — `swingK` `swingKMinor` `swingHours` | two of them are a [failed holdout's training winner](measurements/UNDERTOW_PARAMS.md), the third was never varied. Fixed in the Pine at the measured values, still adjustable in the port |
 
 **Two of the backup fill's eight inputs were never wired up at all.** `bkWhen`
 and `bkLateBars` were declared, given tooltips, and never read by a single line

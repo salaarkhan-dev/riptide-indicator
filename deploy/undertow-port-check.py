@@ -246,7 +246,20 @@ def main() -> int:
                # THE TWO CONFIRMATION TESTS. "A close beyond" is the rule, and
                # three unmeasured variants each is not a setting, it is an
                # invitation to tune something nobody can judge.
-               "workTest", "failTest"}
+               "workTest", "failTest",
+               # THE THREE "PRICE MOVE" DIALS, and these had the strongest case
+               # of the lot. swingK 0.40 and swingKMinor 0.12 are the Min30
+               # TRAINING winner from UNDERTOW_PARAMS.md, the study that
+               # measured best-of-48 selection at +0.31 R per trade of
+               # illusion; they became defaults because they were already on
+               # the chart when the sweep agreed with them. An input is an
+               # invitation to search again and the last search is the reason
+               # not to. swingHours 24 was never varied by anything. All three
+               # are now FIXED IN THE PINE at the values every measurement page
+               # was produced under, so the chart and the studies still
+               # describe the same detector -- and still adjustable here, where
+               # the study that finally tests them will need them.
+               "swingK", "swingKMinor", "swingHours"}
     # htfUnit/htfHours join htfMult for the same reason the port's docstring
     # gives: an honest HTF bias in Pine needs the whole structure slab inside a
     # function so request.security can evaluate it on higher-timeframe bars,

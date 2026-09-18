@@ -550,15 +550,15 @@ number that follows a lie.
 
 ---
 
-## 9. Inputs — 40, of which 23 decide anything
+## 9. Inputs — 37, of which 20 decide anything
 
-Sixteen came off in one pass. The rule, from
+Nineteen came off. The rule, from
 [`SETTINGS.md`](SETTINGS.md): **an input earns its place only if the strategy's
 definition needs it, a study showed the choice matters, or it is display.**
 
 | group | inputs |
 |---|---|
-| **1 · Bias** | swings from · major k · minor k · reference hours · major swing · minor swing · BOS needs inducement · End: minor structure · End: retraced % |
+| **1 · Bias** | swings from · major swing · minor swing · BOS needs inducement · End: minor structure · End: retraced % |
 | **2 · Candle** | wick edge · hammer family · star family |
 | **3 · Setup** | confirmations (W→F) · confirm within · fill within · live setups at once · anchor the pin at · anchor tolerance |
 | **4 · Levels** | stop · stop follows the pullback · stop buffer · reward ratio · round-trip fee |
@@ -570,9 +570,11 @@ and two of the eight were never wired up at all), `endSweep` / `endStale` /
 `staleBars` / `adxMin` (all shipped off, never measured on), `pbMinAge` /
 `pbMinDepth` (measured; the setups they remove are not worse), and
 `workTest` / `failTest` (three unmeasured variants each of something §4 defines
-as *a close beyond*).
+as *a close beyond*), and `swingK` / `swingKMinor` / `swingHours` — the first
+two being the training winner of a sweep that failed its own holdout, which is
+the strongest case on the list for not offering a dial.
 
-**All sixteen are still in the port**, where the studies that name them keep
+**All nineteen are still in the port**, where the studies that name them keep
 reproducing their pages. That is the standing arrangement for an option nobody
 has measured: the port can express it, the chart does not offer it.
 

@@ -67,12 +67,24 @@ string gDbg = "6 · Debug"
 swingSrc = input.string("price move", "Swings from", group = gBias,
   options = ["bar pivot", "price move"],
   tooltip = "HOW A SWING IS DEFINED for the structure engine. 'bar pivot' is a pivot of N BARS — six bars is ninety minutes on 15m and three hours on 1h, which is why the same setting flips the bias 2.3x a day on one and 1.1x on the other. 'price move' is a reversal of k x the last N hours' high-to-low, which is the same question on every chart: 0.6 flips a day on both. IT DOES NOT MAKE MONEY — it beat none of the four alternatives measured in ../measurements/UNDERTOW_BIAS_SOURCE.md. It is the default because one setting that means one thing everywhere is worth having on its own terms.")
-swingK = input.float(0.40, "… major k", minval = 0.05, maxval = 3.0, step = 0.05, group = gBias,
-  tooltip = "Only for 'price move'. A swing is confirmed once price retraces this much of the reference range. Higher = fewer, larger swings.")
-swingKMinor = input.float(0.12, "… minor k", minval = 0.02, maxval = 2.0, step = 0.02, group = gBias,
-  tooltip = "Only for 'price move'. The short swings, which drive the inducement and the minor CHoCH.")
-swingHours = input.float(24.0, "… reference hours", minval = 1.0, maxval = 240.0, step = 1.0, group = gBias,
-  tooltip = "Only for 'price move'. The span whose high-to-low sets the scale. A day's range is a day's range whichever chart you open it on — that is the whole reason this is timeframe-invariant and a per-bar quantity like ATR is not.")
+// "PRICE MOVE" NO LONGER HAS THREE DIALS, and of everything taken off this
+// panel these three had the strongest case for going. `swingK` 0.40 and
+// `swingKMinor` 0.12 are the Min30 TRAINING winner from
+// ../measurements/UNDERTOW_PARAMS.md -- the study whose headline is that
+// picking the best of 48 configurations bought +0.31 R per trade of pure
+// illusion. They became defaults because they were already on the chart when
+// the sweep agreed with them. An input is an invitation to search again, and
+// the last search is the reason not to.
+//
+// Fixed at the values EVERY page in ../measurements was produced under, so the
+// chart and the studies keep describing the same detector. `swingHours` 24 is
+// the span whose high-to-low sets the scale: a day's range is a day's range
+// whichever chart you open, which is the whole reason this source is
+// timeframe-invariant where a per-bar quantity like ATR is not. It was never
+// varied by anything.
+float swingK = 0.40
+float swingKMinor = 0.12
+float swingHours = 24.0
 msLen = input.int(6, "Major swing", minval = 2, maxval = 100, group = gBias,
   tooltip = "Bars either side of a major swing. Higher = fewer, larger trends.")
 msShortLen = input.int(2, "Minor swing", minval = 2, maxval = 50, group = gBias,
