@@ -150,15 +150,46 @@ def test_fills_agree():
         ok(not bad, f"seed {seed}: every fill field matches"
            + ("" if not bad else f"  first: {bad[0]}"))
     ok(total > 30, f"the comparison is not vacuous: {total} fills compared")
-    # And the thing that makes this test necessary: the stop really does move.
-    cs = walk(4000, seed=12, drift=0.0006)
-    a, f = W.run_setups(cs, max_live=64)
-    by_arm = {x["bar"]: x for x in a}
-    moved = sum(1 for x in f if x["armBar"] in by_arm
-                and abs(by_arm[x["armBar"]]["stop"] - x["stop"]) > 1e-9)
-    ok(moved > 0,
-       f"{moved} of {len(f)} fills carry a stop that MOVED after arming — "
-       f"which is why the fill alert cannot reuse the arming numbers")
+    # AND THE THING THAT MAKES THIS TEST NECESSARY, which is now TWO claims
+    # because the chart's stop source moved to the minor swing extreme.
+    #
+    #   pullback extreme   the stop TRACKS, so a fill alert cannot reuse the
+    #                      arming numbers -- the original reason for this file
+    #   minor swing        the stop is pinned to a CONFIRMED swing and has
+    #                      nothing to follow, so it must NOT move
+    #
+    # The second is asserted rather than assumed because `stopTrack` is still
+    # True and still shipped; what makes it inert is the source, and an inert
+    # switch that silently starts working again is exactly the drift this file
+    # exists for.
+    # ACROSS FOUR WALKS, not one. The shipped `famStrict` removes roughly the
+    # smaller half of the population and `armWins` another tenth, and one seed
+    # no longer reliably contains a deepening pullback after an arming -- the
+    # single-walk version of this went to 0 of 25 fills and failed for want of
+    # a fixture rather than for want of the behaviour.
+    for src, want_move in (("Pullback extreme", True),
+                           ("Minor swing extreme", False)):
+        old = W.STOP_SRC
+        W.STOP_SRC = src
+        moved = nfill = 0
+        try:
+            for seed, drift in ((11, 0.0), (12, 0.0006), (13, -0.0006),
+                                (14, 0.0002)):
+                cs = walk(4000, seed=seed, drift=drift)
+                a, f = W.run_setups(cs, max_live=64)
+                by_arm = {x["bar"]: x for x in a}
+                nfill += len(f)
+                moved += sum(
+                    1 for x in f if x["armBar"] in by_arm
+                    and abs(by_arm[x["armBar"]]["stop"] - x["stop"]) > 1e-9)
+        finally:
+            W.STOP_SRC = old
+        f = [None] * nfill
+        ok((moved > 0) == want_move,
+           f"{src}: {moved} of {len(f)} fills carry a stop that moved after "
+           f"arming — expected {'some' if want_move else 'none'}")
+    ok(W.STOP_SRC == U.P().stopSrc,
+       f"and the watcher ships the chart's source, {W.STOP_SRC!r}")
 
 
 def test_agree_on_real_candles():

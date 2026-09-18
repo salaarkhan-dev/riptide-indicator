@@ -100,15 +100,6 @@ BS_MTF = "MTF EMA align"
 # the original engine: the swing detector and the CHoCH are IDENTICAL, and the
 # pivot length and the BOS rule are not.
 BS_SMC = "SMC structure"
-# Wilder's directional movement, the DIRECTION half only: DI+ above DI- is up.
-# The STRENGTH half is `adxMin`, which is a different field, is off, and failed
-# as a filter elsewhere in this project.
-BS_DI = "DI+ / DI-"
-# Duyck's "RSI direction bias - JD", v5, transcribed. UNLIKE EVERY OTHER SOURCE
-# HERE IT IS LATCHED: RSI crossing ABOVE the top level turns it up, crossing
-# BELOW the bottom level turns it down, and between the two it holds whatever
-# it last was. That hysteresis band is the whole idea -- it is the only source
-# in this file that does not have an opinion on every bar.
 BS_RSI = "RSI bias"
 # `biasTier` -- WHICH of the SMC engine's two passes is the direction.
 #
@@ -220,27 +211,29 @@ class P:
     # test_studies_pin_their_settings.py, where the order of operations is
     # written out.
     biasSrc: str = BS_SMC
-    # THE SECOND BIAS SOURCE, and the only alternative on the chart. Plain
-    # EMA cross: fast above slow is up. 9 and 21 were asked for; the previous
-    # defaults were 50 and 200, which is what UNDERTOW_BIAS_SOURCE.md's S2
-    # measured, and that study pins both explicitly so nothing it reports
-    # moves. undertow_mtf and undertow_mtf_default pin 20/50 the same way.
+    # DUYCK'S RSI BIAS, the one alternative source on the chart. The two
+    # levels are a HYSTERESIS BAND, not a threshold: crossing above the top
+    # turns the bias up, crossing below the bottom turns it down, and between
+    # them it holds whatever it last was. 55 and 34 by request, against the
+    # reference's 60 and 40.
     #
-    # Both are in PINNED now that they are chart-facing and their default has
-    # moved once -- the pinning test's whole subject is a default that moves
-    # under a published page.
-    # Wilder's smoothing length for DI+ / DI-, at the universal default.
-    diLen: int = 14
-    # Duyck's RSI bias. The two levels are a HYSTERESIS BAND, not a threshold:
-    # above the top turns it up, below the bottom turns it down, between them
-    # it holds. `rsiHA` picks the "future smoothed" variant, which runs the RSI
-    # over the projected next Heikin-Ashi open instead of ohlc4.
+    # `rsiHA` picks the reference's "future smoothed" variant, which runs the
+    # RSI over the projected next Heikin-Ashi open instead of ohlc4 -- and
+    # hard-codes length 14 while doing it, which is the original's quirk and is
+    # reproduced rather than tidied. See dir_rsi.
     rsiLen: int = 14
-    rsiTop: float = 60.0
-    rsiBot: float = 40.0
+    rsiTop: float = 55.0
+    rsiBot: float = 34.0
     rsiHA: bool = False
-    emaFast: int = 9
-    emaSlow: int = 21
+    # PORT-ONLY AGAIN, and back at the lengths its page was produced under.
+    # The EMA cross was on the chart for part of one day at 9/21; the chart now
+    # offers the structure engine and Duyck's RSI bias and nothing else, so the
+    # only readers left are UNDERTOW_BIAS_SOURCE.md's S2 at 50/200 and
+    # undertow_mtf at 20/50 -- both of which name their own lengths, which is
+    # what test_a_source_arm_names_its_own_lengths requires of any study that
+    # touches an alternative source.
+    emaFast: int = 50
+    emaSlow: int = 200
     stAtrLen: int = 10
     stMult: float = 3.0
     # SLOPE, AND THE SAME TRAP THE SWINGS FELL INTO. `slopeLen` is a number of
@@ -410,7 +403,7 @@ class P:
     # coincidence, so it is not a result -- it is the best-supported candidate
     # this project has produced for its own prereg, and it needs a fresh
     # universe rather than a promotion out of the study that found it.
-    famStrict: bool = False
+    famStrict: bool = True
     # WHICH HALF THE STRICT GATE ADMITS, and it is PORT-ONLY on purpose.
     #
     # With `famStrict` on and this on, the gate inverts: only the hanging man
@@ -465,12 +458,12 @@ class P:
     # is still a trade-population change with no evidence behind it, so it
     # waits for a prereg rather than shipping on the strength of being clearly
     # stated.
-    armWins: bool = False
+    armWins: bool = True
     locTol: int = 0
     pbMinAge: int = 0
     pbMinDepth: float = 0.0
     # 4 · Levels
-    stopSrc: str = S_PULL
+    stopSrc: str = S_SWING
     stopTrack: bool = True
     stopBuf: float = 0.25
     rr: float = 3.5
@@ -720,7 +713,8 @@ def di_series(cs, diLen=14):
     directional movement, as a pair of per-bar lists.
 
     FACTORED OUT OF adx_series RATHER THAN COPIED. ADX is built from exactly
-    these two and the bias source `dir_di` reads them directly, so writing
+    these two. The bias source that read them directly is gone -- DI+/DI- was
+    on the chart for part of one day -- but ADX still needs them and writing
     Wilder's smoothing twice would be two things to keep in step for no reason.
     """
     n = len(cs)
@@ -1015,23 +1009,7 @@ def dir_rsi(cs, p):
     return out
 
 
-def dir_di(cs, p):
-    """DI+ above DI- is up. Wilder's directional movement as a plain bias.
-
-    NO ADX GATE. The strength half of DMI is `adxMin`, which is a separate
-    field, is off, and failed as a filter elsewhere in this project
-    (CCP_CONTEXT_FILTERS.md). This is the DIRECTION half only, so a study of it
-    is a study of direction like every other source here.
-
-    TIES GO SHORT, as everywhere else in this file. They happen on a flat bar
-    where both are zero, and the alternative is a third state nothing
-    downstream reads.
-    """
-    plus, minus = di_series(cs, p.diLen)
-    return [1 if a > b else -1 for a, b in zip(plus, minus)]
-
-
-DIRS = {BS_EMA: dir_ema, BS_DI: dir_di, BS_RSI: dir_rsi, BS_ST: dir_supertrend, BS_SLOPE: dir_slope,
+DIRS = {BS_EMA: dir_ema, BS_RSI: dir_rsi, BS_ST: dir_supertrend, BS_SLOPE: dir_slope,
         BS_DON: dir_donchian, BS_MTF: dir_mtf_ema}
 
 

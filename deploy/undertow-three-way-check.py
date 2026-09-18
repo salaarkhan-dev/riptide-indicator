@@ -75,6 +75,13 @@ MIRRORED = {
     "pinNewest": ("const", "PIN_NEWEST"),
     "famPriority": ("const", "FAM_PRIORITY"),
     "famStrict": ("const", "FAM_STRICT"),
+    # BOTH WERE HARDCODED AND BOTH BECAME REAL. This check is what said so, the
+    # moment the chart's defaults moved: it had `armWins` pinned at False and
+    # `stopSrc` at the pullback extreme with the watcher's code as the reason,
+    # and the chart went to True and the minor swing on the same day. The
+    # watcher implements both now and mirrors them.
+    "armWins": ("const", "ARM_WINS"),
+    "stopSrc": ("const", "STOP_SRC"),
     "endMinor": ("const", "END_MINOR"),
     "endSweep": ("const", "END_SWEEP"),
     "endStale": ("const", "END_STALE"),
@@ -96,8 +103,6 @@ MIRRORED = {
 HARDCODED = {
     "pinAt": ("pullback extreme",
               "run_setups pins at pbExtX and has no anchor branch"),
-    "armWins": (False,
-                "no supersede-on-arm block; live setups all stay"),
     "workTest": ("close beyond",
                  "wHit is a strict close past the Working line"),
     "needBos": (False,
@@ -108,7 +113,6 @@ HARDCODED = {
     "useColour": (True, "colourOk is unconditional"),
     "pbMinAge": (0, "no age test on the pullback extreme"),
     "pbMinDepth": (0.0, "no depth test on the pullback extreme"),
-    "stopSrc": ("Pullback extreme", "the stop is pbExt +/- stopBuf * ATR"),
 }
 
 # ── bucket 3: ABSENT ── the watcher does not implement this at all. Where the
@@ -145,7 +149,6 @@ ABSENT = {
     # Wilder's DI length. The watcher does not run that source -- biasSrc is
     # MIRRORED above, so a default switch to it fails there rather than here,
     # which is the right place for it to fail.
-    "diLen": (None, "DI+ / DI- bias"),
     "rsiLen": (None, "RSI bias"), "rsiTop": (None, "RSI bias"),
     "rsiBot": (None, "RSI bias"), "rsiHA": (False, "RSI bias"),
     "swingSrc": (None, "price-move swings feed the bar-pivot bias only"),

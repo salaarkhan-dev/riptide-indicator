@@ -1,48 +1,57 @@
 # Every setting, and where its value came from
 
-> ## WHY ARE THERE SO FEW SETUPS — measured, 2026-09-18
+> ## WHAT THE CHART SHIPS NOW, AND WHAT IT COSTS — 2026-09-18
 >
-> Asked directly, so here is the answer with numbers. Counts on the **spent**
-> 23-symbol set, Min30, `maxLive 64`. **This is a design input, not a study:**
-> the universe has been read many times, nothing is pre-registered, and the R
-> column is printed because hiding it would be worse rather than because it
-> means anything.
+> Three defaults moved by request on one day. Counts on the **spent**
+> 23-symbol set, `maxLive 64`. **Design input, not a study:** the universe has
+> been read many times and nothing here is pre-registered.
 >
-> | configuration | trades | ×ships | R/trade |
+> | | 15m | 30m | 1h |
 > |---|---|---|---|
-> | **what ships** — SMC swing tier, retrace 70 | 1,104 | 1.0× | −0.070 |
-> | bias on the **internal** tier | 1,762 | 1.6× | −0.061 |
-> | **retrace off** | 2,146 | 1.9× | −0.025 |
-> | internal tier **+** retrace off | 5,390 | 4.9× | −0.007 |
-> | EMA cross 9/21 | 1,899 | 1.7× | −0.023 |
-> | DI+ / DI− 14 | 2,598 | 2.4× | −0.031 |
-> | RSI bias 14, 60/40 | 1,760 | 1.6× | −0.053 |
-> | RSI bias, next HA open | 1,666 | 1.5× | −0.082 |
+> | before — pullback stop, no shape gate, no arm-wins | 1,101 | 1,104 | 1,104 |
+> | **what ships now** | **666** | **682** | **702** |
+> | R before | −0.110 | −0.070 | −0.098 |
+> | **R now** | **−0.011** | **−0.008** | **−0.152** |
 >
-> **`retraceMax` is the single largest brake.** It halves the setups on the
-> structure bias on its own, and it is the reason a fast direction source
-> produces *fewer* setups rather than more: the impulse leg resets on every
-> flip, and a 70% giveback of a six-bar impulse fires almost immediately and
-> latches. ChartArt's EMA-slope source was added and removed the same day for
-> exactly that — a fifth of the setups, not more.
+> **It is 40% FEWER setups**, which is the opposite direction from the
+> complaint that started this. `famStrict` removes roughly the smaller half,
+> `armWins` another tenth, and the minor-swing stop drops the few with no swing
+> to hang a stop on. R improved on 15m and 30m and got worse on 1h; on a
+> universe this spent that is three numbers, not a result.
 >
-> **DO NOT READ THE R COLUMN AS A RANKING.** Eight configurations on a
-> universe that has been scored many times over is a best-of-eight search, and
-> [`UNDERTOW_PARAMS.md`](measurements/UNDERTOW_PARAMS.md) priced that exact
-> search at **−0.31 R per trade of illusion** on a holdout. DI+/DI− is top on
-> two of three timeframes here; that is what the top of eight looks like
-> whether or not anything is there.
+> **`famStrict` HAS A PAGE AND THE PAGE IS NEGATIVE.**
+> [`UNDERTOW_STRICT.md`](measurements/UNDERTOW_STRICT.md) scored it −0.067 /
+> −0.040 / −0.062 against the shipped −0.090 / −0.026 / +0.038, below its
+> matched control on two of three. That page's own closing line is that the
+> decision belongs to the chart's owner with the number in front of them, and
+> this is that decision. It is worth being plain that it was taken against the
+> measurement rather than on it.
 >
-> **Nothing here changes a default.** Every row changes which trades exist. The
-> three alternative sources are on the chart because they were asked for, all
-> default to off, and none has a page —
-> [`UNDERTOW_BIAS_SOURCE.md`](measurements/UNDERTOW_BIAS_SOURCE.md) measured
-> five sources against the structure engine and none beat it; these are the
-> sixth, seventh and eighth.
+> ### THE ONE COMBINATION THAT EMPTIES THE CHART
 >
-> **One fresh universe remains** — 75 contracts, one set of 45. `retraceMax` is
-> the largest unmeasured lever on the chart and the best remaining use of it,
-> and that is a pre-registration rather than a table.
+> **`Bias source = RSI bias` together with `Stop = Minor swing extreme` gives
+> ZERO setups** — 0 on all three timeframes, not "fewer". The RSI bias has no
+> minor structure, so there is no swing to place a stop on and every setup is
+> dropped for want of one. Switch the stop to `Pullback extreme` when you
+> switch the source; with that pairing the RSI bias gives 866 / 890 / 923.
+>
+> It is not silently patched. A fallback would make the Stop dropdown say one
+> thing and do another, so instead both tooltips say it and the panel's reject
+> line names it: *"no Minor swing extreme to place a stop on — that source has
+> no minor structure"*.
+>
+> ### WHAT STILL MOVES THE COUNT UP
+>
+> | lever | ×ships (30m) |
+> |---|---|
+> | bias on the **internal** tier | 1.6× |
+> | **retrace off** | 1.9× |
+> | internal tier **+** retrace off | 4.9× |
+>
+> `retraceMax` remains the largest single brake and the largest unmeasured
+> lever on the chart. **One fresh universe remains** — 75 contracts, one set of
+> 45 — and spending it there is the best use left. That is a pre-registration
+> rather than a table.
 
 You asked me to revisit the parameters. This is the audit, not a retune — the
 last section says why those are different things.

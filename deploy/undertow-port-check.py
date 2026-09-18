@@ -300,6 +300,10 @@ def main() -> int:
         # undertow_bias (S2, S4, S5) and undertow_slope (A1, A2) must keep
         # reproducing. `biasSrc` above is what stops the port drifting onto
         # one of them unnoticed.
+        # BACK OFF THE CHART. The EMA cross was an input for part of one day
+        # at 9/21; it is port-only again at the 50/200 its page was produced
+        # under, and DI+/DI- went the same way and left no field behind.
+        "emaFast": (None, "EMA bias"), "emaSlow": (None, "EMA bias"),
         "donLen": (None, "Donchian bias"),
         "slopeUnit": (None, "slope bias"), "slopeLen": (None, "slope bias"),
         "slopeMin": (None, "slope bias"), "slopeHours": (None, "slope bias"),

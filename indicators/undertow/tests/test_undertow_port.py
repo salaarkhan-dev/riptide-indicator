@@ -350,8 +350,15 @@ def test_ghosts_do_not_touch_the_real_numbers():
     # that "the gate is inert now" was not quietly assumed.
     #
     # What is under test is the ghost ACCOUNTING: that the column is free.
+    # AND THE THREE SHAPE/SELECTION SETTINGS ARE PINNED OFF, for the same
+    # reason the swing source is: this is a fixture, not a claim about what
+    # ships. `famStrict` alone removes roughly the smaller half of the
+    # population and `armWins` another tenth, and between them this walk stops
+    # producing a filled ghost at all -- which would leave the accounting
+    # under test asserted on an empty column.
     cs = walk(3000, seed=43, drift=0.0004)
-    a = U.run(cs, U.P(swingSrc=U.SW_BAR, msLen=6, msShortLen=2), "T")
+    a = U.run(cs, U.P(swingSrc=U.SW_BAR, msLen=6, msShortLen=2,
+                      famStrict=False, armWins=False, stopSrc=U.S_PULL), "T")
     ok(a.nMissBias > 0, f"the bias gate cancelled something: {a.nMissBias}")
     ok(len(a.ghosts) > 0, f"some of those ghosts filled: {len(a.ghosts)}")
     ok(all(not t.ghost for t in a.real) and len(a.real) + len(a.ghosts)

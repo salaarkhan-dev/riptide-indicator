@@ -53,7 +53,7 @@ PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
 # The real risk is narrower and so is the guard: a study that names BS_EMA and
 # forgets the lengths. `biasSrc` IS in PINNED, so such a study has to name the
 # source out loud, and the test below then requires the lengths beside it.
-SOURCE_BOUND = {"BS_EMA": ("emaFast", "emaSlow"), "BS_DI": ("diLen",),
+SOURCE_BOUND = {"BS_EMA": ("emaFast", "emaSlow"),
                 "BS_RSI": ("rsiLen", "rsiTop", "rsiBot")}
 # A study whose whole job is to describe what currently ships puts this on the
 # line that reads the default. It is a deliberate, visible opt-out.
@@ -214,8 +214,32 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # reads any of them unless biasSrc is BS_RSI, which is not the default, and
 # BS_RSI is bound to its own fields by test_a_source_arm_names_its_own_lengths
 # so a future study cannot name the source and inherit the chart's levels.
-DEFAULTS_FINGERPRINT = "ce5519e17914999b"
-DEFAULTS_COUNT = 74
+#
+# 2026-09-18: `diLen` GONE with the DI+/DI- source, `emaFast`/`emaSlow` BACK to
+# 50/200 as the EMA cross came off the chart again, and THREE DEFAULTS MOVED
+# BY REQUEST with the numbers in front of the person moving them:
+#
+#   famStrict  False -> True   the priority shape becomes a GATE. It removes
+#                              roughly the smaller half of the setups and
+#                              UNDERTOW_STRICT.md scored it negative on 3 of 3
+#                              and below its control on 2 of 3. Its own page
+#                              says the decision belongs to the chart's owner
+#                              with the number in front of them; this is that.
+#   armWins    False -> True   first to complete W->F drops its unarmed
+#                              rivals. Unmeasured, about 10% of armed setups.
+#   stopSrc    pullback -> minor swing extreme. 1,054 setups against 1,104 on
+#                              the spent 23 at 30m, and it makes `stopTrack`
+#                              inert -- a stop pinned to a confirmed swing has
+#                              nothing to follow.
+#
+# NO STUDY MOVES. All three are in no study's BASE by way of PINNED, but that
+# is not the reason: the reason is that every study in the directory was
+# checked for whether it reads them from the default, and the two fixtures
+# that did -- test_undertow_port's ghost-accounting walk and
+# test_watch_undertow's stop-tracking walk -- now pin them, because both are
+# fixtures for something else and both went vacuous rather than wrong.
+DEFAULTS_FINGERPRINT = "764a76c042fc3a54"
+DEFAULTS_COUNT = 73
 
 good = []
 

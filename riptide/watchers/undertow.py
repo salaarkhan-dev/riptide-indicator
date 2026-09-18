@@ -168,7 +168,19 @@ FAM_PRIORITY = True
 # The watcher carries it as a constant rather than leaving it out because the
 # chart owner can turn it on, and a chart running strict against a bot that is
 # not is the divergence this whole audit was about.
-FAM_STRICT = False
+FAM_STRICT = True
+# FIRST TO CONFIRM WINS -- when one candidate completes its W->F, the others in
+# the same direction that have not are dropped. Unmeasured; it costs about 10%
+# of armed setups and the chart ships it on.
+ARM_WINS = True
+# WHERE THE STOP IS DRAWN FROM. The chart ships the minor swing extreme; the
+# pullback extreme is the alternative and is what this file used to assume.
+#
+# `STOP_TRACK` APPLIES ONLY TO THE PULLBACK EXTREME, on both sides -- a stop
+# pinned to a confirmed swing has nothing to follow. With the swing stop
+# selected that constant does nothing, which is stated rather than left for
+# somebody to discover from a diff.
+STOP_SRC = "Minor swing extreme"
 END_MINOR = "on the flip"
 END_SWEEP = False
 END_STALE = False
@@ -624,11 +636,26 @@ def run_setups(cs, max_live: int = 4):
                          if CONFIRM_ORDER == "working then failure"
                          else cd.workOk and cd.failOk)
                 if ready:
-                    stop = (cd.pbExt + atrBuf if cd.short
-                            else cd.pbExt - atrBuf)
-                    risk = abs(stop - cd.focus)
-                    if risk > 0 and ((stop > cd.focus) if cd.short
-                                     else (stop < cd.focus)):
+                    # WHERE THE STOP COMES FROM. The minor swing extreme is
+                    # the chart's default; the pullback extreme is the other
+                    # one the port offers and the only one this copy used to
+                    # know about. The level must be one CONFIRMED at or before
+                    # this bar -- a stop drawn from a swing confirmed later is
+                    # a stop that did not exist when the trade was taken.
+                    #
+                    # NO SWING MEANS NO SETUP, which is the port's rule and is
+                    # why this is not quietly backed off to the pullback: a
+                    # stop the chart cannot draw is not a stop.
+                    if STOP_SRC == "Minor swing extreme":
+                        base = mnr["hiLvl"][i] if cd.short else mnr["loLvl"][i]
+                    else:
+                        base = cd.pbExt
+                    stop = (base + atrBuf if cd.short
+                            else base - atrBuf) if base is not None else None
+                    risk = abs(stop - cd.focus) if stop is not None else 0.0
+                    if stop is not None and risk > 0 and (
+                            (stop > cd.focus) if cd.short
+                            else (stop < cd.focus)):
                         cd.armed, cd.armBar, cd.stop = True, i, stop
                         cd.target = (cd.focus - RR * risk if cd.short
                                      else cd.focus + RR * risk)
@@ -636,6 +663,19 @@ def run_setups(cs, max_live: int = 4):
                             bar=i, short=cd.short, entry=cd.focus, stop=stop,
                             target=cd.target, code=cd.code, state=cd.state,
                             pin=cd.bar, order=cd.order))
+                        # FIRST TO CONFIRM WINS. A pullback offers several
+                        # counter-trend candles and `pinNewest` thins them as
+                        # new ones appear, but once one has COMPLETED its W->F
+                        # the rest are still waiting to arm on their own
+                        # levels -- which is how four limit orders end up
+                        # resting inside one pullback. An already-ARMED
+                        # candidate is never dropped: it has an order behind
+                        # it.
+                        if ARM_WINS:
+                            for x in list(cands):
+                                if (x is not cd and not x.armed
+                                        and x.short == cd.short):
+                                    cands.remove(x)
                     else:
                         gone = True
                 elif i - cd.bar >= UNDERTOW_CONFIRM_BARS:
@@ -647,7 +687,8 @@ def run_setups(cs, max_live: int = 4):
             # unfinished move. Nothing is lost by moving it -- there is no
             # position yet -- and the target is recomputed with it, or RR would
             # quietly stop meaning RR.
-            if not gone and cd.armed and STOP_TRACK:
+            if (not gone and cd.armed and STOP_TRACK
+                    and STOP_SRC == "Pullback extreme"):
                 deeper = c.h > cd.pbExt if cd.short else c.l < cd.pbExt
                 if deeper:
                     cd.pbExt = c.h if cd.short else c.l
