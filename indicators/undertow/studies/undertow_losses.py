@@ -36,11 +36,19 @@ suggested them, which is the definition of the -0.31 R illusion in
 ../measurements/UNDERTOW_PARAMS.md. They are here so the size of the prize is
 known before a prereg is written, not so one can be chosen.
 
-AND IT CANNOT SEE INSIDE A BAR. MFE and MAE are computed from bar highs and
-lows, so a trade whose bar spanned both +1R and the stop is counted as having
-reached +1R. That flatters "gave it back" and the break-even costing alike; it
-is the same limitation the engine has when it calls such a bar a loss, and it
-is stated rather than corrected because correcting it needs tick data.
+THE TWO EXITS ARE WALKED BAR BY BAR, NOT INFERRED FROM MFE. The first version
+of this page scored them off the excursion -- a loser that reached +1R became a
+0, a winner was left alone -- and that is an UPPER BOUND, because a winner that
+went +1R, came back through its entry and then ran on to the target would
+really have been SCRATCHED and MFE cannot see that it happened. The walk counts
+those as scratches and reports how many there were, which is the difference
+between knowing the prize and hoping for it.
+
+AND IT STILL CANNOT SEE INSIDE A BAR. Highs and lows are all there is, so a bar
+spanning both +1R and the stop counts as having reached +1R, and a bar spanning
+both the break-even stop and the target resolves AGAINST the trade -- the same
+rule the engine uses for a bar spanning entry and stop. Correcting that needs
+tick data.
 """
 from __future__ import annotations
 
@@ -70,8 +78,51 @@ def collect(tf, syms):
         r = U.run(cs, U.P(feeFrac=FEE), s)
         for t in r.real:
             best, worst = mfe_mae(cs, t)
-            rows.append((t, best, worst, t.exitBar - t.fillBar))
+            rows.append((t, best, worst, cs))
     return rows
+
+
+def walk_be(t, cs):
+    """R if the stop moved to break-even once the trade was +1R up.
+
+    WALKED BAR BY BAR rather than inferred from MFE, because the inferred
+    version is an UPPER BOUND and the difference is the whole question: a
+    winner that reached +1R, came back through its entry and then ran on to
+    the target is a SCRATCH under this rule, and MFE cannot see that it
+    happened. The first version of this page counted those as wins and so
+    could only overstate the prize.
+
+    Intrabar order is unknowable, so a bar that spans both levels resolves
+    AGAINST the trade -- the same rule the engine uses for a bar spanning
+    entry and stop.
+    """
+    risk = abs(t.entry - t.stop)
+    if risk <= 0 or t.exitBar <= t.fillBar:
+        return t.r
+    up = False
+    for c in cs[t.fillBar:t.exitBar + 1]:
+        hit1 = ((t.entry - c.l) / risk >= 1.0 if t.short
+                else (c.h - t.entry) / risk >= 1.0)
+        if up:
+            back = c.h >= t.entry if t.short else c.l <= t.entry
+            if back:
+                return 0.0
+        elif hit1:
+            up = True
+    return t.r
+
+
+def walk_half(t, cs):
+    """R if half the position came off at +1R and the rest ran on."""
+    risk = abs(t.entry - t.stop)
+    if risk <= 0 or t.exitBar <= t.fillBar:
+        return t.r
+    for c in cs[t.fillBar:t.exitBar + 1]:
+        hit1 = ((t.entry - c.l) / risk >= 1.0 if t.short
+                else (c.h - t.entry) / risk >= 1.0)
+        if hit1:
+            return 0.5 * 1.0 + 0.5 * t.r
+    return t.r
 
 
 def anatomy(rows):
@@ -120,7 +171,11 @@ def anatomy(rows):
             print(f"       {str(k):22} {len(v):7} trades  "
                   f"R {statistics.mean(v):+.3f}")
     split("by bias state at the pin", lambda t: t.state)
-    split("by confirmation route", lambda t: "F-W-F" if t.order == 2 else "W-F")
+    # NO CONFIRMATION-ROUTE SPLIT. `order` is on the ARMED dict, not on
+    # `Trade`, and asking for it here crashed the first run of this page --
+    # written from memory of the wrong record. Carrying it onto Trade is a
+    # port change for a question nobody has asked yet, so the split is dropped
+    # rather than the field added on a guess.
     split("by candle code", lambda t: t.code)
     split("by fill", lambda t: t.backup or "at the focus line")
     split("by risk size", lambda t: (
@@ -131,23 +186,19 @@ def anatomy(rows):
     print("\n   WHAT TWO EXITS WOULD HAVE DONE — descriptive, not a choice")
     rr = U.P().rr
     base = statistics.mean([t.r for t, _, _, _ in rows])
-    # BREAK-EVEN AFTER +1R. A loser that reached +1R scores 0 instead of -1;
-    # a winner is untouched UNLESS its own MAE shows it dipped back through
-    # the entry after going 1R up -- which bar data cannot resolve, so the
-    # winners are left alone and this is therefore an UPPER BOUND.
-    be = [0.0 if (not t.won and b >= 1.0) else t.r for t, b, _, _ in rows]
-    # PARTIAL AT +1R: half the position out at 1R, the rest runs to the same
-    # target or stop. Same upper-bound caveat on the winners.
-    half = [(0.5 * 1.0 + 0.5 * t.r) if b >= 1.0 else t.r
-            for t, b, _, _ in rows]
+    be = [walk_be(t, c) for t, _, _, c in rows]
+    half = [walk_half(t, c) for t, _, _, c in rows]
     print(f"     as it ships (target {rr}R)      {base:+.4f} R per trade")
     print(f"     + break-even stop after +1R    {statistics.mean(be):+.4f}"
           f"   ({statistics.mean(be) - base:+.4f})")
     print(f"     + half off at +1R              {statistics.mean(half):+.4f}"
           f"   ({statistics.mean(half) - base:+.4f})")
-    print("     BOTH ARE UPPER BOUNDS. A winner that dipped back through its\n"
-          "     entry after +1R would have been stopped for 0 and is still\n"
-          "     counted as a win here — bar data cannot say whether it did.")
+    scr = sum(1 for t, x in zip([r[0] for r in rows], be) if t.won and x == 0.0)
+    print(f"     winners the break-even stop would have SCRATCHED: {scr}"
+          f"  ({pct(scr, len(win))} of winners)")
+    print("     WALKED BAR BY BAR, not inferred from MFE: a winner that went\n"
+          "     +1R, came back through its entry and then ran to target is\n"
+          "     counted as a SCRATCH here, which is what would really happen.")
     return statistics.mean(be) - base
 
 
