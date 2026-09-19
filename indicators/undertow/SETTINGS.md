@@ -1,5 +1,86 @@
 # Every setting, and where its value came from
 
+## Chart label → code name
+
+**WHY THIS TABLE EXISTS.** Every discussion of this indicator happens in code
+names — `pinLag`, `locTol`, `maxLive` — and every chart shows a LABEL that says
+none of them. The chart owner went looking for "the lag" and could not find it,
+because the input is called *"Pullback candle: 0 = newest"* and the word lag
+appears nowhere on the screen. That is a documentation defect, not a user error.
+
+Two labels were reworded the same day for the same reason: `pinLag` from
+"Candle of the pullback", which never said what the number selects, and
+`locTol` from "Anchor tolerance", which never said in what unit. Only dropdown
+OPTION strings are compared by `deploy/undertow-port-check.py`; labels are
+display-only and free to improve.
+
+Regenerate this table from the Pine rather than editing it by hand — the point
+is that it cannot quietly disagree with the chart:
+
+```
+python3 - <<'EOF'
+import re, pathlib
+src = pathlib.Path("indicators/undertow/pine/riptide-undertow.pine").read_text()
+g = dict(re.findall(r'string (g\w+)\s*=\s*"([^"]+)"', src))
+for m in re.finditer(r'^(\w+)\s*=\s*input\.\w+\(\s*("[^"]*"|[-\d.]+|true|false)\s*,\s*"([^"]+)"([^\n]*)', src, re.M):
+    v, d, lab, rest = m.groups()
+    k = re.search(r'group\s*=\s*(g\w+)', rest)
+    print(f"{g.get(k.group(1),'') if k else '':<12} {lab:<46} {v:<16} {d}")
+EOF
+```
+
+| group | chart label | code name | default |
+|---|---|---|---|
+| 1 · Bias | Bias source | `biasSrc` | `market structure + inducement` |
+|  | Swing structure | `smcSwingLen` | `14` |
+|  | Internal structure | `smcInternalLen` | `5` |
+| 1 · Bias | Trade side | `side` | `both` |
+| 1 · Bias | Bias gate | `biasGate` | `direction only` |
+| 1 · Bias | End: minor structure | `endMinor` | `on the flip` |
+| 1 · Bias | End: retraced % of the impulse | `retraceMax` | `70` |
+| 1 · Bias | … external: CHoCH / IDM detection | `msLen` | `14` |
+| 1 · Bias | … external: a BOS needs its inducement swept | `msBosNeedsIdm` | `true` |
+| 1 · Bias | … RSI length / top / bottom | `rsiLen` | `14` |
+| 1 · Bias | … RSI on the next Heikin-Ashi open | `rsiHA` | `false` |
+| 2 · Candle | Wick edge | `wickEdge` | `0.05` |
+| 2 · Candle | Hammer family (lower wick) | `useHammer` | `true` |
+| 2 · Candle | Star family (upper wick) | `useStar` | `true` |
+| 2 · Candle | Priority shape only | `famStrict` | `true` |
+| 3 · Setup | Confirmations | `confirmOrder` | `working then failure` |
+| 3 · Setup | Confirm within | `confirmBars` | `20` |
+| 3 · Setup | Fill within | `fillBars` | `20` |
+| 3 · Setup | First to confirm wins | `armWins` | `true` |
+| 3 · Setup | Backup fill on a zone | `useBackup` | `true` |
+| 3 · Setup | Live setups at once | `maxLive` | `16` |
+| 3 · Setup | Anchor the pin at | `pinAt` | `local pullback` |
+| 3 · Setup | Anchor tolerance, bars | `locTol` | `3` |
+| 3 · Setup | Local pullback lookback | `pbLook` | `10` |
+| 3 · Setup | Pullback candle: 0 = newest | `pinLag` | `0` |
+| 3 · Setup | Which candle arms | `pinPick` | `best entry of those confirming` |
+| 4 · Levels | Stop | `stopSrc` | `Pullback extreme` |
+| 4 · Levels | Stop follows the pullback | `stopTrack` | `true` |
+| 4 · Levels | Stop buffer, ATR | `stopBuf` | `0.25` |
+| 4 · Levels | Reward ratio | `rr` | `3.5` |
+| 4 · Levels | Round-trip fee | `feeFrac` | `0.0007` |
+| 5 · Display | Overlapping setups | `overlapMode` | `collapse` |
+| 5 · Display | Risk / reward zones | `showZones` | `true` |
+| 5 · Display | Draw setups that never filled | `showUnfilled` | `true` |
+| 5 · Display | … internal breaks too | `showInternal` | `true` |
+| 5 · Display | Market structure | `showStruct` | `true` |
+| 5 · Display | Bias badge | `showBias` | `true` |
+| 5 · Display | Stats table | `showStats` | `true` |
+| 5 · Display | Order blocks | `showOB` | `false` |
+| 5 · Display | Fair value gaps | `showFVG` | `false` |
+| 5 · Display | … extend zones by | `fvgExtend` | `5` |
+| 5 · Display | … auto threshold | `zoneAuto` | `false` |
+| 5 · Display | … order blocks kept | `obCount` | `5` |
+| 5 · Display | … gaps kept | `fvgCount` | `20` |
+| 5 · Display | … mitigated by | `zoneMitig` | `wick` |
+| 5 · Display | Keep last N setups | `keepN` | `45` |
+| 6 · Debug | Debug marks | `dbgOn` | `false` |
+| 6 · Debug | Show rejected pins | `dbgRejects` | `true` |
+
+
 > ## WHAT THE CHART SHIPS NOW, AND WHAT IT COSTS — 2026-09-18
 >
 > Three defaults moved by request on one day. Counts on the **spent**
