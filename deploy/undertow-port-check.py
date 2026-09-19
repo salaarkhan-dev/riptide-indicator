@@ -323,17 +323,13 @@ def main() -> int:
     # value or None, why. None means the field has no "off" setting worth
     # asserting — it parameterises machinery the Pine does not contain.
     PINE_ABSENT = {
-        # RESEARCH-ONLY PIN SELECTION, and both sit on the value the chart
-        # behaves as. `pinLag` 0 is "trade the newest qualifying candle", which
-        # is what the Pine's supersede already produces; `shortsOnly` False is
-        # both directions, which is the only thing the Pine does. If either
-        # default moved, the chart and the port would part company in silence,
-        # which is what the OFF-value assertion below is for.
-        #
-        # They exist for undertow_pinlag.py, measuring the chart owner's own
-        # account of his eye -- "if three qualified, n, n-1 and n-2, take n-1".
-        # Nothing is on the chart until that measures something.
-        "pinLag": (0, "pin selection, research only"),
+        # `pinLag` AND `pbLook` WERE BOTH HERE AND ARE NOW PINE INPUTS. They
+        # were listed as research-only on the value the chart behaved as, with
+        # the note "nothing is on the chart until that measures something".
+        # It still has not measured anything -- UNDERTOW_PINLAG.md is a null --
+        # and they went on the chart anyway, at the strategy author's
+        # instruction, because they arm the setups he takes. THIS CHECK IS THE
+        # REASON THAT WAS SAFE: it refused the move until both buckets agreed.
         # The Pine latches Ending unconditionally, which is this field's True.
         "retraceLatch": (True, "the Pine's Ending latch is unconditional"),
         # The Pine gates on the bias STATE and measures location in BARS, so
@@ -341,7 +337,6 @@ def main() -> int:
         # chart and the port on different admission rules without a line of
         # Pine changing.
         "locAtr": (0.0, "the Pine's location test counts bars, not ATR"),
-        "pbLook": (10, "PIN_LOCAL only; the Pine has no local anchor"),
         # THE RETIRED BIAS SOURCES. EMA cross, Slope, Donchian midpoint,
         # Supertrend and MTF EMA align were all on the chart to be measured;
         # UNDERTOW_BIAS_SOURCE.md and undertow_slope.py measured them, none

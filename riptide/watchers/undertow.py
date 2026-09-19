@@ -206,6 +206,22 @@ STALE_BARS = 30
 RETRACE_MAX = 70
 WICK_EDGE = 0.05
 LOC_TOL = 0
+# THE ANCHOR, AND THIS FILE USED TO HARDCODE IT. `pinAt` sat in the three-way
+# check's HARDCODED bucket -- "run_setups pins at pbExtX and has no anchor
+# branch" -- with a note at the top of that file saying in as many words what
+# would happen the day the default moved: the chart pins one candle, the bot
+# pins another, the parity test passes because it sets the field itself, and
+# the alerts are for setups that are not on the chart. The default moved. The
+# branch is implemented rather than the bucket re-pointed.
+PIN_AT = "local pullback"
+# How far back the local anchor looks for the low that starts the pullback.
+PB_LOOK = 10
+# WHICH QUALIFYING CANDLE OF THE PULLBACK ARMS. 1 is the second-newest, the
+# strategy author's own rule. It costs most of the frequency -- a pullback
+# offering one qualifying candle gives it nothing to pick -- and the backtest
+# does not support it (UNDERTOW_PINLAG.md is a null). It ships because it arms
+# the setups he takes; see ../../indicators/undertow/CASES.md.
+PIN_LAG = 1
 STOP_BUF = 0.25
 STOP_TRACK = True
 RR = 3.5
@@ -568,7 +584,10 @@ class _Cand:
     __slots__ = ("bar", "hi", "lo", "focus", "workHi", "short", "pbExt",
                  "state", "code", "workOk", "failOk", "workBar",
                  "armed", "armBar",
-                 "stop", "target", "order")
+                 "stop", "target", "order",
+                 # How many qualifying candles came before this one in the
+                 # same pullback and direction. `PIN_LAG` reads it at the arm.
+                 "pinIdx")
 
     def __init__(self, **kw):
         for k in self.__slots__:
@@ -639,6 +658,9 @@ def run_setups(cs, max_live: int = 4):
     ending = False
     bosN = 0
     pbExt = pbExtX = None
+    prevLocLo = None
+    # Qualifying candles so far in the CURRENT pullback, per direction.
+    pinSeen: dict = {}
     cands: list = []
     armed: list = []
     filled: list = []
@@ -720,12 +742,37 @@ def run_setups(cs, max_live: int = 4):
         pbReset = (biasDir != prevDir
                    or (biasDir < 0 and msMinX != prevMinX)
                    or (biasDir > 0 and msMaxX != prevMaxX))
+        # THE LOCAL ANCHOR DEFINES ITS OWN PULLBACK, so it defines its own
+        # boundary -- and the boundary is what resets `pinSeen`, the count
+        # `PIN_LAG` reads. Computed here, before the reset, because in the port
+        # these two were two hundred lines apart and the counter ran across
+        # what this anchor treats as several separate pullbacks.
+        #
+        # Oldest to newest with a strict comparison, so a tie keeps the
+        # EARLIEST bar -- what Python's min()/max() over a range do in the
+        # port, and a tie broken the other way picks a different candle.
+        locExX = None
+        if PIN_AT == "local pullback":
+            j0 = max(0, i - PB_LOOK)
+            locLoX = (min(range(j0, i + 1), key=lambda k: cs[k].l)
+                      if biasDir < 0
+                      else max(range(j0, i + 1), key=lambda k: cs[k].h))
+            span = range(locLoX, i + 1)
+            locExX = (max(span, key=lambda k: cs[k].h) if biasDir < 0
+                      else min(span, key=lambda k: cs[k].l))
+            pbReset = locLoX != prevLocLo
+            prevLocLo = locLoX
         if pbReset or pbExt is None:
             pbExt, pbExtX = (c.h if biasDir < 0 else c.l), i
+            # A NEW PULLBACK, so the qualifying candles start counting again.
+            pinSeen = {}
         elif biasDir < 0 and c.h >= pbExt:
             pbExt, pbExtX = c.h, i
         elif biasDir > 0 and c.l <= pbExt:
             pbExt, pbExtX = c.l, i
+        if locExX is not None:
+            pbExt = cs[locExX].h if biasDir < 0 else cs[locExX].l
+            pbExtX = locExX
 
         atrBuf = STOP_BUF * atr[i]
 
@@ -769,6 +816,13 @@ def run_setups(cs, max_live: int = 4):
                 ready = (fHit and cd.workBar >= 0 and i > cd.workBar
                          if CONFIRM_ORDER == "working then failure"
                          else cd.workOk and cd.failOk)
+                # THE LAG GATE. A candidate may arm only once EXACTLY
+                # `PIN_LAG` newer qualifying candles exist in its pullback.
+                # Checked at the arm and not at the pin, because how many came
+                # after is not knowable when the candle forms.
+                if ready and PIN_LAG:
+                    newer = pinSeen.get(cd.short, 0) - cd.pinIdx - 1
+                    ready = newer == PIN_LAG
                 if ready:
                     # WHERE THE STOP COMES FROM. The minor swing extreme is
                     # the chart's default; the pullback extreme is the other
@@ -902,7 +956,15 @@ def run_setups(cs, max_live: int = 4):
             # candle does not displace a priority one that is still waiting,
             # and an ARMED candidate is never touched — it has levels and an
             # order behind it.
-            if PIN_NEWEST:
+            # THIS CANDLE'S PLACE IN THE PULLBACK, before anything is dropped.
+            pinSide = biasDir < 0
+            pinIdx = pinSeen.get(pinSide, 0)
+            pinSeen[pinSide] = pinIdx + 1
+            # `PIN_NEWEST` DELETES the older rivals, which is right at lag 0
+            # and destroys the rule at lag 1 -- the candle to be traded is one
+            # of the ones it would remove. Skipped while lagging; the arm gate
+            # does the selecting instead.
+            if PIN_NEWEST and not PIN_LAG:
                 isPriority = famHam if biasDir < 0 else famStar
                 # No `ghost` term: the port keeps bias-cancelled setups to
                 # score them and this scanner drops them, so every candidate
@@ -918,6 +980,7 @@ def run_setups(cs, max_live: int = 4):
                 cands.append(_Cand(
                     bar=i, hi=c.h, lo=c.l, focus=c.o, workHi=famHam,
                     short=biasDir < 0, pbExt=pbExt, state=state,
+                    pinIdx=pinIdx,
                     code=("HAM" if isGreen else "HGM") if famHam
                     else ("IH" if isGreen else "SS")))
     return armed, filled

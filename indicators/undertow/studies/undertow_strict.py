@@ -49,7 +49,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # therefore the chart. Every field the pinning test names is written out, at
 # the value the chart carries today, so a later default drift fails the test
 # rather than silently re-baselining this page.
-BASE = U.P(biasGate=U.BG_TRADEABLE, stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_SMC, smcSwingLen=14, smcInternalLen=5,
+BASE = U.P(pinLag=0, biasGate=U.BG_TRADEABLE, stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_SMC, smcSwingLen=14, smcInternalLen=5,
            confirmOrder=U.C_WF, failTest=U.T_TOUCH,
            pinNewest=True, famPriority=True, famStrict=False,
            pinAt=U.PIN_PULL, locTol=0, armWins=False,

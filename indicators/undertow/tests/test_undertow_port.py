@@ -35,10 +35,16 @@ from indicators.undertow.port.swings import (bar_swings, bars_per,        # noqa
 from riptide.engine import Candle, atr_series                      # noqa: E402
 
 good = []
+# The MESSAGE of each failed check, so conftest.py's guard can name what broke
+# rather than reporting a bare count. See that file: without it, pytest reports
+# every check in here as a pass whatever it recorded.
+bad: list = []
 
 
 def ok(cond, msg):
     good.append(bool(cond))
+    if not cond:
+        bad.append(msg.splitlines()[0])
     print(("  ok   " if cond else "  FAIL ") + msg)
 
 
@@ -647,13 +653,20 @@ def test_the_stop_fallback_cannot_touch_a_source_that_has_a_minor_tier():
 def test_pin_lag_picks_the_second_newest_and_costs_the_singletons():
     """`pinLag` is the chart owner's "if three qualified, take n-1".
 
-    THE RULE ONLY BITES ON A MINORITY AND THE TEST SAYS SO. 82% of pullbacks
+    THE RULE ONLY BITES ON A MINORITY AND THE TEST SAYS SO. Most pullbacks
     offer exactly one qualifying candle, so lag 1 cannot pick a different one
     there -- it picks NOTHING, which is a real cost of the rule rather than a
     detail, and `nLagShort` has to be non-zero for that reason.
+
+    BOTH ARMS NAME THEIR LAG. This test read `U.P()` against `U.P(pinLag=1)`
+    and so described whatever shipped; the day `pinLag` shipped AT 1 the two
+    arms became the same run and every assertion in it went vacuous -- "lag 0
+    never runs short: 696", "lag 1 arms fewer: 38 of 38". It is the third time
+    a test here has been caught describing the default instead of the case it
+    meant, and the fix is always the same: say the setting out loud.
     """
     cs = walk(8000, seed=73, drift=-0.0004)
-    a = U.run(cs, U.P(), "T")
+    a = U.run(cs, U.P(pinLag=0), "T")
     b = U.run(cs, U.P(pinLag=1), "T")
     ok(a.nLagShort == 0, f"lag 0 never runs short: {a.nLagShort}")
     ok(b.nLagShort > 0, f"lag 1 gives up the single-candle pullbacks: {b.nLagShort}")
@@ -692,6 +705,48 @@ def test_one_sided_trading_leaves_the_other_side_untouched():
     ok(len(a) + len(la) == len(full.armed),
        f"the two sides partition the whole run: {len(a)} + {len(la)} "
        f"== {len(full.armed)}")
+
+
+def test_the_shipped_configuration_actually_finds_setups():
+    """THE ONE THING NO OTHER TEST HERE ASSERTS: that what ships works.
+
+    Every test in this file names its own settings, which is the rule and is
+    why they survive a default moving. The gap that leaves is that NOTHING
+    exercises the combination that ships -- and two defaults just moved to a
+    pair that is deliberately far more selective than what came before
+    (`pinLag` 1 refuses any pullback offering a single qualifying candle,
+    which is most of them: 202 armed become 41 on 30m across 23 symbols).
+
+    A selective rule and a broken one look identical from the outside. The
+    difference is whether the number is small or zero, and this asserts it is
+    small: pins are found, some of them arm, some of them fill, and the two
+    sides both appear.
+
+    IT IS NOT A THRESHOLD ON QUALITY. R is not asserted and must not be --
+    ../measurements/UNDERTOW_PINLAG.md is a null and this test would be the
+    wrong place to argue with it.
+    """
+    cs = walk(12000, seed=41, drift=-0.0002)
+    r = U.run(cs, U.P(maxLive=64), "T")
+    p = U.P()
+    ok(p.pinAt == U.PIN_LOCAL and p.pinLag == 1,
+       f"the shipped anchor and candle: {p.pinAt!r}, lag {p.pinLag}")
+    ok(len(r.pins) > 0, f"the shipped default finds pins: {len(r.pins)}")
+    ok(len(r.armed) > 0, f"and some of them arm: {len(r.armed)}")
+    ok(len(r.real) > 0, f"and some of those fill: {len(r.real)}")
+    # THE LAG IS BITING RATHER THAN BEING IGNORED. If `nLagShort` were zero the
+    # rule would be costing nothing, which at lag 1 would mean it is not
+    # running at all -- the failure mode this test exists to separate from
+    # honest selectivity.
+    ok(r.nLagShort > 0,
+       f"the lag gives up the single-candle pullbacks: {r.nLagShort}")
+    # AND IT IS NOT SO SELECTIVE THAT IT IS EFFECTIVELY OFF. A rule that arms
+    # once in twelve thousand bars is not a strategy anybody can run, and the
+    # frequency is the part the measurement pages cannot speak to.
+    ok(len(r.armed) >= 5,
+       f"it is selective, not silent: {len(r.armed)} armed in {len(cs)} bars")
+    print(f"       shipped: {len(r.pins)} pins · {len(r.armed)} armed · "
+          f"{len(r.real)} filled · {r.nLagShort} pullbacks too short")
 
 
 def test_slope_in_hours_survives_an_aggregation():

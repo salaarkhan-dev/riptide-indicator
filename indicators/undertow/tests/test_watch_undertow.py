@@ -41,10 +41,16 @@ from riptide.engine import Candle                           # noqa: E402
 from riptide.watchers import undertow as W                  # noqa: E402
 
 good = []
+# The MESSAGE of each failed check, so conftest.py's guard can name what broke
+# rather than reporting a bare count. See that file: without it, pytest reports
+# every check in here as a pass whatever it recorded.
+bad: list = []
 
 
 def ok(cond, msg):
     good.append(bool(cond))
+    if not cond:
+        bad.append(msg.splitlines()[0])
     print(("  ok   " if cond else "  FAIL ") + msg)
 
 

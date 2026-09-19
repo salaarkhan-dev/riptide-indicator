@@ -25,9 +25,31 @@ both and wrong in one, and it does not pretend to.
 """
 from __future__ import annotations
 
+import ast
 import pathlib
 import re
 import sys
+
+
+def _assignments(path: pathlib.Path, name: str) -> int:
+    """How many times `name` is ASSIGNED, tuple targets included.
+
+    A regex cannot tell `pbStartX = i` from `pbStartX=pbStartX` in a call, and
+    the version of this check that tried counted five writes where there are
+    three. The AST is the only reading that answers the question asked.
+    """
+    n = 0
+    for node in ast.walk(ast.parse(path.read_text())):
+        targets = []
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+            targets = [node.target]
+        for t in targets:
+            for sub in ast.walk(t):
+                if isinstance(sub, ast.Name) and sub.id == name:
+                    n += 1
+    return n
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PINE = ROOT / "indicators/undertow/pine/riptide-undertow.pine"
@@ -54,11 +76,37 @@ TERMS = [
      r"p\.pinAt == PIN_TREND"),
 ]
 
-# `pbStartX` must be assigned on the RESET branch and nowhere else. If it were
-# also set where pbExtX is updated, the age would restart every time the
-# pullback made a new extreme and `pbMinAge` -- port-only now -- would silently
-# mean nothing. The Pine still records the start for the panel's pullback row.
-ONCE = [("pine", PINE, r"pbStartX :="), ("port", PORT, r"pbStartX = i\b")]
+# `pbStartX` must not be assigned where the pullback makes a NEW EXTREME. If it
+# were, the age would restart on every new extreme and `pbMinAge` -- port-only
+# now -- would silently mean nothing. The Pine still records the start for the
+# panel's pullback row.
+#
+# TWO SITES ARE LEGITIMATE and there were two all along: the reset branch, and
+# the `local pullback` anchor, which replaces the structural pullback outright
+# with one it found itself. This rule counted ONE and passed anyway, because
+# the port pattern was `pbStartX = i` and the port's anchor line reads
+# `pbExtX, pbStartX, anchorX = locExX, locLoX, locExX` -- a tuple assignment
+# the regex could not see. So the check was enforcing the count on the Pine
+# only and calling it a two-copy invariant.
+#
+# Counting ANY assignment in both copies is the stronger reading, and it is
+# what a third site would have to get past. The pair is named rather than the
+# number loosened: each copy must set it on the reset AND at the local anchor,
+# and nowhere else.
+# The port is counted through the AST, not a regex. The first attempt at
+# widening this used /pbStartX\s*[,=]/ and got FIVE, because `pbStartX = None`,
+# `pbStartX=pbStartX` and the tuple target all match a pattern that cannot tell
+# a write from a read. Counting assignment TARGETS is the question being asked.
+ONCE_PINE = (PINE, r"pbStartX :=", 2)
+ONCE_PORT = (PORT, "pbStartX", 3)          # + the `= None` initialiser
+# The two sites, asserted by shape so "two assignments" cannot be satisfied by
+# two of the wrong kind.
+SITES = [
+    ("the reset branch records the pullback's start",
+     r"pbStartX := bar_index", r"pbStartX = i\b"),
+    ("the local anchor replaces it with the pullback IT found",
+     r"pbStartX := locLoX", r"pbExtX, pbStartX, anchorX = locExX, locLoX"),
+]
 
 # `pinAt` WAS HERE AND IS NOW IN TERMS ABOVE -- UNDERTOW_V3.md measured the
 # anchor and its prereg's clause for a null-but-harmless result is that it goes
@@ -92,13 +140,26 @@ def main() -> int:
         if not re.search(pat, port):
             bad.append((label, f"MISSING FROM THE PORT — /{pat}/"))
 
-    for who, path, pat in ONCE:
-        n = len(re.findall(pat, path.read_text()))
-        if n != 1:
-            bad.append((f"pbStartX is assigned {n} times in the {who}",
-                        "it must be set on the RESET branch and nowhere else, "
-                        "or the pullback's age restarts whenever it makes a "
-                        "new extreme and pbMinAge quietly means nothing"))
+    WHY = ("the only two legitimate sites are the RESET branch and the local "
+           "anchor. Anywhere the pullback makes a new extreme, the age "
+           "restarts and pbMinAge quietly means nothing")
+    path, pat, want = ONCE_PINE
+    n = len(re.findall(pat, path.read_text()))
+    if n != want:
+        bad.append((f"pbStartX is assigned {n} times in the pine, "
+                    f"expected {want}", WHY))
+    path, name, want = ONCE_PORT
+    n = _assignments(path, name)
+    if n != want:
+        bad.append((f"pbStartX is assigned {n} times in the port, "
+                    f"expected {want} (the two sites plus the initialiser)",
+                    WHY))
+
+    for label, pine_re, port_re in SITES:
+        if not re.search(pine_re, pine):
+            bad.append((label, f"MISSING FROM THE PINE — /{pine_re}/"))
+        if not re.search(port_re, port):
+            bad.append((label, f"MISSING FROM THE PORT — /{port_re}/"))
 
     print(f"{len(TERMS)} pullback terms compared across "
           f"{PINE.name} and {PORT.name}, plus {len(PORT_ONLY_TERMS)} "

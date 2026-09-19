@@ -65,7 +65,23 @@ PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
           # produced under the veto. It goes in here, and into all twenty
           # baselines, BEFORE the default moves -- which is the order this file
           # has had to state three times in one day.
-          "biasGate")
+          "biasGate",
+          # `pinAt` -> PIN_LOCAL and `pinLag` -> 1, the chart owner's own
+          # candle rule, shipped on his instruction. BOTH WERE OUTSIDE THIS
+          # TUPLE AND BOTH DEFAULTS WERE ABOUT TO MOVE -- sixteen studies named
+          # neither, so the move would have silently re-pointed every one of
+          # them. That is the `stopSrc` failure exactly, and the note a few
+          # lines up said the order had already had to be stated three times.
+          # This is the fourth. Pinned first, all twenty baselines updated,
+          # THEN the defaults moved.
+          #
+          # `pinLag`'s entry a few hundred lines down says "NEITHER GOES IN
+          # PINNED" on the `emaFast` argument -- a setting one study reads
+          # should not make twenty declare it. That was right when pinLag was
+          # an off-by-default capability and is wrong the moment it ships:
+          # the argument turns on whether the default MOVES, not on how many
+          # studies read the field.
+          "pinAt", "pinLag")
 # A SETTING THAT ONLY ONE SOURCE READS DOES NOT BELONG IN PINNED, because
 # PINNED makes EVERY study name it. `emaFast`/`emaSlow` moved 50/200 -> 9/21
 # when the EMA cross went on the chart, and putting them above made twelve
@@ -513,15 +529,67 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # two-sided run. The long side had never been exercised on its own at all.
 #
 # 78 fields, and `side` is MIRRORED in the three-way check rather than ABSENT.
-DEFAULTS_FINGERPRINT = "8654fa32717c7b64"
+# 2026-09-19: `pinAt` PIN_PULL -> PIN_LOCAL and `pinLag` 0 -> 1, in all three
+# copies, at the strategy author's instruction. No field is added or removed.
+#
+# THE PROCEDURE, IN ORDER, because both were OUTSIDE `PINNED` and sixteen of
+# the twenty studies named neither -- the exact exposure that let `stopSrc`
+# silently re-point nineteen pages:
+#   1. both added to PINNED above
+#   2. `pinAt=U.PIN_PULL, pinLag=0` inserted into all twenty baselines
+#   3. undertow_anchor re-run and kept as the reference output
+#   4. ONLY THEN the defaults moved
+#   5. undertow_anchor re-run again -- BIT-IDENTICAL, which is the pins doing
+#      their job rather than a claim that nothing changed
+#
+# WHAT ACTUALLY CHANGES. The chart, the port's own default and the live watcher
+# now find the pullback with no structure in it and arm the SECOND-NEWEST
+# qualifying candle. It is far more selective: 202 armed setups become 41 on
+# 30m across the spent 23, because a pullback offering one qualifying candle
+# gives the lag nothing to pick and is simply not traded.
+#
+# AND THE MEASUREMENT DOES NOT SUPPORT IT, which is recorded here rather than
+# in a commit message nobody re-reads. ../measurements/UNDERTOW_PINLAG.md is a
+# null: -0.468 / -0.056 / +0.870 across three timeframes, signs disagreeing,
+# and the one loud cell has nine of sixteen symbols contributing two pullbacks
+# or fewer. PIN_LOCAL finds the right pullbacks at the same expectancy. Neither
+# is measured as paying. They ship because they detect the setups the
+# strategy's author actually takes -- ../CASES.md 2, 3 and 5 -- which is a
+# claim about the DETECTOR, and the instrument that can settle it is the
+# forward record, not another pass over the spent set.
+#
+# THE THREE-WAY CHECK WAS NOT WATCHING EITHER. `pinAt` sat in its HARDCODED
+# bucket and `pinLag`/`pbLook` in ABSENT, on the values the watcher assumed --
+# and that file's own header describes this exact day as the failure it exists
+# for. The watcher implements both now and all three are MIRRORED.
+#
+# AND UNDER PYTEST THE TESTS COULD NOT FAIL. See conftest.py, added with this
+# change: `ok()` records and prints, main() reads the record and exits 1, and
+# pytest calls neither -- so this fingerprint line printed FAIL and was
+# reported as a pass. deploy/preflight.py runs each file directly and was never
+# fooled, so nothing broken has shipped; the blind spot was the hand-run pytest
+# that a person uses mid-change. Fixed first, because without it this entry
+# would be a claim with no evidence behind it.
+DEFAULTS_FINGERPRINT = "e8e30fa15b18d116"
 DEFAULTS_COUNT = 78
 
 good = []
+# The MESSAGE of each failed check, so the pytest guard below can name what
+# broke instead of reporting a count.
+bad: list = []
 
 
 def ok(cond, msg):
     good.append(bool(cond))
+    if not cond:
+        bad.append(msg.splitlines()[0])
     print(("  ok   " if cond else "  FAIL ") + msg)
+
+
+# WHY `bad` EXISTS: conftest.py in this directory turns these recorded results
+# into a real pytest failure. Without it `ok()` only appends and prints, so
+# every check in this file passed under pytest whatever it recorded -- this
+# file's own subject, turned on the file.
 
 
 def test_every_study_pins_or_opts_out():

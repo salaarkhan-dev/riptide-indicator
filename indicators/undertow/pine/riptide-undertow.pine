@@ -192,11 +192,16 @@ maxLive = input.int(4, "Live setups at once", minval = 1, maxval = 8, group = gS
 string sAnchPull = "pullback extreme"
 string sAnchTrend = "trend extreme"
 string sAnchLeg = "leg extreme"
-pinAt = input.string("pullback extreme", "Anchor the pin at", group = gSet,
-  options = ["pullback extreme", "trend extreme", "leg extreme"],
-  tooltip = "WHERE THE COUNTER-TREND CANDLE IS LOOKED FOR, and the two options are different readings of the same rule — see ../SPEC.md 2.3d.\n\n'pullback extreme' is what v1 and v2 do and what every measurement page was produced under: the pin is the highest high of the rally away from the leg low.\n\n'trend extreme' is the strategy as its author states it: the pin is the BOUNCE ATTEMPT at the leg low itself. The stated priority shape in a downtrend is the hammer, which has a long LOWER wick, and a long lower wick at the TOP of a rally is not a rejection of anything.\n\n'leg extreme' is the same idea attached to the RIGHT OBJECT. 'trend extreme' anchors on the running extreme since the major CHoCH — ONE point per trend — and at a 50-bar swing the pin sits a median of 47 bars past it, so tolerance 0 keeps 3.9% of them. 'leg extreme' resets on every INTERNAL turn, so there is one anchor per minor leg, which is what the strategy's diagram shows: median 8 bars.\n\nIT IS NOT THE DEFAULT AND IT IS NOT PROMOTED. ../measurements/UNDERTOW_V3.md measured it on 45 unseen symbols: +0.023 / +0.023 / +0.054 R per trade against v1, positive on 3 of 3 and inside one standard error on 3 of 3. Not actively harmful, not an edge — which is exactly why it is selectable rather than on.")
+string sAnchLocal = "local pullback"
+pinAt = input.string("local pullback", "Anchor the pin at", group = gSet,
+  options = ["pullback extreme", "trend extreme", "leg extreme", "local pullback"],
+  tooltip = "WHERE THE COUNTER-TREND CANDLE IS LOOKED FOR, and the two options are different readings of the same rule — see ../SPEC.md 2.3d.\n\n'pullback extreme' is what v1 and v2 do and what every measurement page was produced under: the pin is the highest high of the rally away from the leg low.\n\n'trend extreme' is the strategy as its author states it: the pin is the BOUNCE ATTEMPT at the leg low itself. The stated priority shape in a downtrend is the hammer, which has a long LOWER wick, and a long lower wick at the TOP of a rally is not a rejection of anything.\n\n'leg extreme' is the same idea attached to the RIGHT OBJECT. 'trend extreme' anchors on the running extreme since the major CHoCH — ONE point per trend — and at a 50-bar swing the pin sits a median of 47 bars past it, so tolerance 0 keeps 3.9% of them. 'leg extreme' resets on every INTERNAL turn, so there is one anchor per minor leg, which is what the strategy's diagram shows: median 8 bars.\n\nIT IS NOT THE DEFAULT AND IT IS NOT PROMOTED. ../measurements/UNDERTOW_V3.md measured it on 45 unseen symbols: +0.023 / +0.023 / +0.054 R per trade against v1, positive on 3 of 3 and inside one standard error on 3 of 3. Not actively harmful, not an edge — which is exactly why it is selectable rather than on.\n\n'local pullback' IS THE DEFAULT, and it is the only one of the four with no structure in it. The other three all anchor on something the structure engine found — a bar pivot, the major CHoCH, the last internal break — and in a grinding trend those sit nowhere near the pullback being traded: on two worked shorts the shipped anchor was 7 and 41 bars back, 1.17 and 4.86 ATR away. Here the pullback is simply the rally since the LOWEST LOW OF THE LAST 'Local pullback lookback' BARS, and both pins land on the extreme (0.00 and 0.13 ATR).\n\nIT IS NOT MEASURED AS BETTER. It finds the right pullbacks at the same expectancy; no page shows it paying. It is the default because it detects what the strategy's author actually trades, which is a claim about the DETECTOR and not about the edge.")
 locTol = input.int(0, "Anchor tolerance", minval = 0, maxval = 10, group = gSet,
   tooltip = "Bars a pin may sit PAST the anchor above and still count. 0 means it must BE the anchor bar — so if that bar is a doji or the wrong colour, the whole pullback is discarded and a textbook pin on the next bar, one tick lower, cannot qualify. That is defect 3 in ../SPEC.md 2.3b.\n\nIT MATTERS MOST ON THE OTHER ANCHOR. At 'trend extreme' with tolerance 0 the pinned bar IS the bar that made the leg low, so 75.6% of pins are the priority shape — a green bar whose own low is the low of the leg is a hammer by construction. One bar of tolerance takes that to 53.2% and two takes it to 51.5%, which is what an unfiltered mix looks like. ../measurements/UNDERTOW_V3.md has the table; the share is a description of the anchor, not a result.\n\nMEASURED at 0 and at 2 (../measurements/UNDERTOW_PULLBACK.md: the 2nd and 3rd candle score within ±0.025 R of the 1st) and at 50, which is the ablation's destroy-it arm rather than a tolerance.")
+pbLook = input.int(10, "Local pullback lookback", minval = 2, maxval = 60, group = gSet,
+  tooltip = "HOW FAR BACK 'local pullback' LOOKS for the low that starts the pullback (the high, in an uptrend). Read only when the anchor above is 'local pullback'.\n\nThe answer was stable from 6 to 12 on both worked setups — a plateau rather than a fitted point — and breaks at 16, where the anchor jumps back onto the structural high the other options already use.")
+pinLag = input.int(1, "Candle of the pullback", minval = 0, maxval = 3, group = gSet,
+  tooltip = "WHICH QUALIFYING CANDLE OF THE PULLBACK ARMS. 0 is the newest one; 1 is the one before it — 'let's say three qualified (n, n-1, n-2), in this case choose n-1', the strategy author's own description of what his eye does.\n\nIT IS CHECKED AT THE ARM, not at the pin, because how many candles came after is not knowable when the candle forms. Deciding it when the setup confirms is the only causal reading and is what a person watching the chart is doing.\n\nAT 1 IT COSTS MOST OF THE FREQUENCY. A pullback that offers only ONE qualifying candle gives the rule nothing to pick, so it is simply not traded — 202 armed setups become 41 on 30m across 23 symbols. That is the rule being selective, not a defect, but it is the shape of something that fires once or twice a day rather than every hour.\n\nAND THE MEASUREMENT DOES NOT SUPPORT IT. ../measurements/UNDERTOW_PINLAG.md is a null: -0.468 / -0.056 / +0.870 R across three timeframes, the signs disagree, and the one loud cell has nine of sixteen symbols contributing two pullbacks or fewer. It ships at 1 because it arms the setups the strategy's author actually takes — a claim the backtest has never been able to see, since it has never seen which setups he takes or how long he holds them.\n\nSETTING IT ABOVE 0 ALSO TURNS OFF 'newest wins'. The candle to be traded is one of the ones that rule deletes, so the supersede is skipped and this gate does the selecting instead.")
 // THE TWO PULLBACK MINIMUMS CAME OFF THE CHART. `pbMinAge` and `pbMinDepth`
 // were added to fix defects 1 and 2 in ../SPEC.md 2.3b, then measured:
 // ../measurements/UNDERTOW_PULLBACK.md found the setups they remove are NOT
@@ -332,6 +337,11 @@ type Cand
     bool   bkRan  = false
     float  bkPx   = na
     string bkWhy  = ""
+    // HOW MANY QUALIFYING CANDLES CAME BEFORE THIS ONE in the same pullback,
+    // same direction. `pinLag` reads it at the arm: a candidate may arm only
+    // once EXACTLY `pinLag` newer candles exist, so 0 is "nothing came after
+    // me" and 1 is "exactly one did".
+    int    pinIdx = 0
 
 // ── the backup fill's zone scan ──────────────────────────────────────────────
 // The nearest order block or fair-value gap edge between `lo` and `focus`, or
@@ -1047,6 +1057,47 @@ var int pbStartX = na
 
 bool pbReset = biasDir != nz(biasDir[1], biasDir) or (biasDir < 0 and bMinX != nz(bMinX[1], bMinX)) or (biasDir > 0 and bMaxX != nz(bMaxX[1], bMaxX))
 
+// ── 'local pullback': THE ANCHOR WITH NO STRUCTURE IN IT ─────────────────────
+// The pullback is the rally since the LOWEST LOW OF THE LAST `pbLook` BARS
+// (mirrored for an uptrend), and its extreme is the highest high from that low
+// to here. Nothing in it comes from the structure engine, which is the point:
+// the other three anchors are all tied to a pivot, a CHoCH or an internal
+// break, and in a grinding trend those sit nowhere near what is being traded.
+//
+// IT DEFINES ITS OWN PULLBACK, SO IT DEFINES ITS OWN BOUNDARY. `pbReset` below
+// resets the per-pullback qualifying-candle count that `pinLag` reads, and in
+// the port that reset ran on the STRUCTURAL boundary while this anchor set its
+// own two hundred lines later — so the count ran across what this rule treats
+// as several pullbacks and `pinLag` fired at the wrong moments. Computed here,
+// before the reset, so the two cannot drift apart again.
+//
+// OLDEST TO NEWEST, WITH A STRICT COMPARISON, so a tie keeps the EARLIEST bar.
+// That is what Python's min()/max() over a range do, and the port is the
+// reference: a tie broken the other way picks a different candle.
+var int prevLocLo = na
+int locLoX = na
+int locExX = na
+if pinAt == sAnchLocal
+    int back = pbLook < bar_index ? pbLook : bar_index
+    float bestLo = na
+    int bestLoX = bar_index - back
+    for o = back to 0
+        float v = biasDir < 0 ? low[o] : high[o]
+        if na(bestLo) or (biasDir < 0 ? v < bestLo : v > bestLo)
+            bestLo := v
+            bestLoX := bar_index - o
+    locLoX := bestLoX
+    float bestEx = na
+    int bestExX = locLoX
+    for o = bar_index - locLoX to 0
+        float v = biasDir < 0 ? high[o] : low[o]
+        if na(bestEx) or (biasDir < 0 ? v > bestEx : v < bestEx)
+            bestEx := v
+            bestExX := bar_index - o
+    locExX := bestExX
+    pbReset := locLoX != nz(prevLocLo, -1)
+    prevLocLo := locLoX
+
 if pbReset or na(pbExt)
     pbExt := biasDir < 0 ? high : low
     pbExtX := bar_index
@@ -1057,6 +1108,24 @@ else if biasDir < 0 and high >= pbExt
 else if biasDir > 0 and low <= pbExt
     pbExt := low
     pbExtX := bar_index
+
+// The local anchor owns all three, not just the extreme: the pullback it found
+// above replaces the structural one outright. Applied after the running block
+// rather than inside it so the running values stay exactly what they were for
+// the other three options.
+if pinAt == sAnchLocal
+    pbExt := biasDir < 0 ? high[bar_index - locExX] : low[bar_index - locExX]
+    pbExtX := locExX
+    pbStartX := locLoX
+
+// HOW MANY QUALIFYING CANDLES THIS PULLBACK HAS OFFERED, per direction, which
+// is what `pinLag` counts against. Reset by `pbReset` above — the same reset,
+// which is the whole reason the local anchor is computed before it.
+var int pinSeenS = 0
+var int pinSeenL = 0
+if pbReset
+    pinSeenS := 0
+    pinSeenL := 0
 
 // The stop buffer, in price. Called here and unconditionally: a ta.* inside a
 // branch grows a different history.
@@ -1095,7 +1164,8 @@ bool colourOk = biasDir < 0 ? isGreen : not isGreen
 // extreme in the TREND's own direction — the leg low in a downtrend — which
 // the bias block already tracks as bMinX / bMaxX.
 int anchorRaw = pinAt == sAnchTrend ? (biasDir < 0 ? bMinX : bMaxX)
-  : pinAt == sAnchLeg ? (biasDir < 0 ? legMinX : legMaxX) : pbExtX
+  : pinAt == sAnchLeg ? (biasDir < 0 ? legMinX : legMaxX)
+  : pinAt == sAnchLocal ? locExX : pbExtX
 int anchorX = na(anchorRaw) ? bar_index : anchorRaw
 bool locOk = bar_index - anchorX <= locTol
 
@@ -1120,7 +1190,7 @@ bool pinOk = pinFound and colourOk and locOk
 // THE STRICT REASON IS TESTED FIRST, and separately from the other family
 // reasons, because "no dominant wick" on a textbook hanging man is a lie the
 // debug layer would otherwise tell on every rejected bar with the toggle on.
-string pinWhy = famStrict and (biasDir < 0 ? famStar : famHam) ? (biasDir < 0 ? "star family in a downtrend" : "hammer family in an uptrend") + " — 'priority shape only' is on" : not famOk ? "no dominant wick (doji, or the family is off)" : not colourOk ? (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend") + " — wrong colour" : not gateOk ? "bias is " + biasState : not locOk ? str.tostring(bar_index - anchorX) + "b past the " + (pinAt == sAnchPull ? "pullback extreme" : pinAt == sAnchTrend ? "trend extreme" : "leg extreme") + " (tol " + str.tostring(locTol) + ")" : "ok"
+string pinWhy = famStrict and (biasDir < 0 ? famStar : famHam) ? (biasDir < 0 ? "star family in a downtrend" : "hammer family in an uptrend") + " — 'priority shape only' is on" : not famOk ? "no dominant wick (doji, or the family is off)" : not colourOk ? (isGreen ? "green" : "red") + " in a" + (biasDir < 0 ? " downtrend" : "n uptrend") + " — wrong colour" : not gateOk ? "bias is " + biasState : not locOk ? str.tostring(bar_index - anchorX) + "b past the " + (pinAt == sAnchPull ? "pullback extreme" : pinAt == sAnchTrend ? "trend extreme" : pinAt == sAnchLocal ? "local pullback extreme" : "leg extreme") + " (tol " + str.tostring(locTol) + ")" : "ok"
 
 string pinGrade = bodyR <= 0.35 ? "normal" : "partial"
 string pinFace = famHam ? (isGreen ? "Hammer" : "Hanging man") : (isGreen ? "Inv hammer" : "Shooting star")
@@ -1336,6 +1406,18 @@ if barOk and cands.size() > 0
             // counts as the loss. That bar does not arm; a later F does, which
             // is what makes F→W→F work.
             bool ready = confirmOrder == "either order" ? (c.workOk and c.failOk) : (fHit and c.workBar >= 0 and bar_index > c.workBar)
+            // THE LAG GATE. A candidate may arm only once EXACTLY `pinLag`
+            // newer qualifying candles exist in its pullback. At 0 that is
+            // "nothing came after me", which the supersede above already
+            // enforces by deletion; at 1 it is "exactly one did".
+            //
+            // CHECKED HERE, AT THE ARM, and not at the pin: how many candles
+            // came after is not knowable when the candle forms. Deciding it
+            // when the setup confirms is the only causal reading, and it is
+            // what a person watching the chart is doing.
+            if ready and pinLag > 0
+                int newer = (c.short ? pinSeenS : pinSeenL) - c.pinIdx - 1
+                ready := newer == pinLag
             if ready
                 // The stop uses values CONFIRMED at or before this bar. A stop
                 // drawn from a swing confirmed later is a stop that did not
@@ -1587,14 +1669,25 @@ if pinOk
     // Ported from the port's block of the same name, which is the only
     // copy that had it. UNDERTOW_V3.md measured the pair at nothing;
     // it ships because it is the rule, on the same footing as W→F.
+    //
+    // AND IT IS SKIPPED WHILE `pinLag` IS SET. At lag 0 "newest wins" is
+    // exactly right; at lag 1 the candle to be traded is one of the ones this
+    // block deletes, so the deletion would destroy the rule before the arm
+    // gate ever saw it. The gate below does the selecting instead.
+    // THIS CANDLE'S PLACE IN THE PULLBACK, taken BEFORE anything is dropped.
+    int pinIdxHere = biasDir < 0 ? pinSeenS : pinSeenL
+    if biasDir < 0
+        pinSeenS := pinSeenS + 1
+    else
+        pinSeenL := pinSeenL + 1
     bool isPriority = biasDir < 0 ? famHam : famStar
     bool held = false
-    if not isPriority and cands.size() > 0
+    if pinLag == 0 and not isPriority and cands.size() > 0
         for i = 0 to cands.size() - 1
             Cand x = cands.get(i)
             if not x.armed and not x.ghost and x.short == (biasDir < 0)
                 held := held or (x.workHi == (biasDir < 0))
-    if not held and cands.size() > 0
+    if pinLag == 0 and not held and cands.size() > 0
         for i = cands.size() - 1 to 0
             Cand x = cands.get(i)
             if not x.armed and not x.ghost and x.short == (biasDir < 0)
@@ -1629,7 +1722,7 @@ if pinOk
         // the opposite. They are NOT fixed to high and low.
         cands.push(Cand.new(bar = bar_index, hi = high, lo = low, focus = open,
           workHi = famHam, short = biasDir < 0, pbExt = pbExt, tag = pinTag,
-          code = pinCode, state = biasState))
+          code = pinCode, state = biasState, pinIdx = pinIdxHere))
 
 
 // ═══════════════════════════════ 8. DRAWING ══════════════════════════════════

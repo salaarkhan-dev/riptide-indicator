@@ -474,7 +474,24 @@ class P:
     pbLook: int = 10
     locAtr: float = 0.0
     retraceLatch: bool = True
-    pinLag: int = 0
+    # WHICH CANDLE OF THE PULLBACK. 0 is the newest qualifying one; 1 is the
+    # one before it -- "let's say three qualified (n, n-1, n-2), in this case
+    # choose n-1", the chart owner's own description of what his eye does.
+    #
+    # SHIPPED AT 1 ON HIS INSTRUCTION, AND THE MEASUREMENT DOES NOT SUPPORT IT.
+    # ../measurements/UNDERTOW_PINLAG.md is a null: -0.468 / -0.056 / +0.870
+    # across three timeframes, the signs disagree, and the one loud cell has
+    # nine of sixteen symbols contributing two pullbacks or fewer. It also
+    # costs most of the frequency -- 202 armed setups become 41 on Min30 --
+    # because a pullback offering only one qualifying candle gives the rule
+    # nothing to pick and it simply does not trade.
+    #
+    # The case FOR it is not in the backtest and should not be read into it:
+    # it arms the setups he actually takes (cases 2, 3 and 5 in ../CASES.md),
+    # and the backtest has never seen his selection or his holds. That is an
+    # argument for a forward record, and the forward record is the instrument
+    # that settles it.
+    pinLag: int = 1
     # WHICH SIDES TO TRADE: both, long only, short only.
     #
     # Filtered AT THE PIN, not on the trade list afterwards, and the difference
@@ -501,9 +518,24 @@ class P:
     #
     # `locTol` has only ever been measured at 0 and at 50, and 50 is the
     # ablation's destroy-it arm, not a 1-to-3-bar tolerance.
-    # DEFAULTS TO v1's so every measurement page keeps reproducing. The
-    # corrected reading is PIN_TREND and it is measured before it moves.
-    pinAt: str = PIN_PULL
+    # SHIPPED AT PIN_LOCAL. Every measurement page in ../measurements was
+    # produced under PIN_PULL and all twenty studies now pin it explicitly, so
+    # they keep reproducing -- see test_studies_pin_their_settings.py, which
+    # had `pinAt` OUTSIDE its PINNED tuple until this moved.
+    #
+    # WHY IT MOVED. The other three anchors are all tied to STRUCTURE -- a
+    # bar pivot, the major CHoCH, the last internal break -- and in a grinding
+    # trend they sit nowhere near the pullback being traded. On the chart
+    # owner's worked shorts the shipped anchor was 7 and 41 bars back, 1.17
+    # and 4.86 ATR away. PIN_LOCAL has no structure in it at all: the pullback
+    # is the rally since the lowest low of the last `pbLook` bars. Under it
+    # both his pins land on the extreme, 0.00 and 0.13 ATR.
+    #
+    # AND IT IS NOT MEASURED AS BETTER. It finds the right pullbacks at the
+    # same expectancy; no page shows it paying. It ships because it detects
+    # what the strategy's author trades, which is a claim about the DETECTOR
+    # and not about the edge.
+    pinAt: str = PIN_LOCAL
     # The stated priority: HAMMER in a bearish trend, SHOOTING STAR in a
     # bullish one, with the other shape acceptable when the priority one is
     # absent. v1 had no ordering at all and took whichever sat at the extreme.

@@ -291,3 +291,44 @@ That is the pinning discipline behaving exactly as designed, and it means the
 headline compares A against B under an old trend read. Re-pinning it to the
 current defaults is a NEW measurement on the spent set, not a re-run, and it
 is not worth taking until there is a reason to prefer B.
+
+---
+
+## SHIPPED — `pinAt = local pullback`, `pinLag = 1`
+
+At the strategy author's instruction, in all three copies, with the argument
+above unchanged: **the measurement does not support this and the reason for it
+is not in the measurement.** `UNDERTOW_PINLAG.md` is a null — -0.468 / -0.056 /
++0.870, signs disagreeing across timeframes, the one loud cell resting on nine
+of sixteen symbols with two pullbacks or fewer. `PIN_LOCAL` finds the right
+pullbacks at the same expectancy. Neither is measured as paying.
+
+They ship because they arm cases 2, 3 and 5 — the setups he actually takes —
+and the backtest has never seen which of the hundred and fifty he takes or how
+long he holds them. That is a claim about the **detector**, and the instrument
+that can settle it is the forward record.
+
+### WHAT IT COST TO SHIP, which is the part worth keeping
+
+| guard | what it caught |
+|---|---|
+| `test_studies_pin_their_settings` | `pinAt` and `pinLag` were **outside** `PINNED`; sixteen of twenty studies named neither, so the move would have silently re-pointed all sixteen |
+| `undertow-port-check` | `pbLook`/`pinLag` listed as absent from the Pine **and** present as inputs — refused the move until the buckets agreed |
+| `undertow-three-way-check` | the watcher **hardcoded** `pinAt` and assumed `pinLag 0`; its own header names this exact day as the failure it exists for |
+| `undertow-pullback-check` | a second `pbStartX` assignment — and the port had had one all along that the check's regex could not see |
+| `conftest.py` (new) | under `pytest` **none of these tests could fail**; the fingerprint printed FAIL and was reported as a pass |
+
+Four of those five were guards catching the thing they were written for. The
+fifth was a guard that had never been able to fire.
+
+Procedure followed in order: pin the fields, update all twenty baselines,
+re-run `undertow_anchor` as the reference, move the defaults, re-run —
+**BIT-IDENTICAL** — then bump the fingerprint. The Pine and the watcher both
+implement the local anchor and the lag gate; `test_watch_undertow` compares 141
+setups field by field under the new defaults and they match.
+
+**The shipped configuration is selective, not silent**: 1337 pins, 49 armed, 40
+filled over 12,000 bars, with 1228 pullbacks refused for offering only one
+qualifying candle. A new test asserts that, because a selective rule and a
+broken one look identical from the outside and the difference is whether the
+number is small or zero.

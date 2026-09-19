@@ -99,6 +99,9 @@ MIRRORED = {
     "retraceMax": ("const", "RETRACE_MAX"),
     "wickEdge": ("const", "WICK_EDGE"),
     "locTol": ("const", "LOC_TOL"),
+    "pinAt": ("const", "PIN_AT"),
+    "pbLook": ("const", "PB_LOOK"),
+    "pinLag": ("const", "PIN_LAG"),
     "stopBuf": ("const", "STOP_BUF"),
     "stopTrack": ("const", "STOP_TRACK"),
     "rr": ("const", "RR"),
@@ -111,8 +114,6 @@ MIRRORED = {
 # the setting. The required default is what the watcher's code assumes; if P
 # moves off it the chart and the bot part company in silence.
 HARDCODED = {
-    "pinAt": ("pullback extreme",
-              "run_setups pins at pbExtX and has no anchor branch"),
     "workTest": ("close beyond",
                  "wHit is a strict close past the Working line"),
     "needBos": (False,
@@ -129,15 +130,16 @@ HARDCODED = {
 # field has an OFF value, it must still be there; where it has none, the entry
 # is None and the reason carries the justification.
 ABSENT = {
-    # RESEARCH-ONLY PIN SELECTION. The watcher takes the newest qualifying
-    # candle and both directions, which is `pinLag` 0 and `shortsOnly` False --
-    # so the OFF value IS asserted here rather than left as None. A default
-    # moving would put the live alerts on a different candle from the chart
-    # without a line of code changing anywhere.
-    "pinLag": (0, "the watcher trades the newest qualifying candle"),
+    # `pinAt`, `pinLag` AND `pbLook` HAVE ALL LEFT THIS FILE'S DEAD BUCKETS.
+    # `pinAt` was HARDCODED ("run_setups pins at pbExtX and has no anchor
+    # branch") and the other two were ABSENT on the value the watcher assumed.
+    # The header of this file names that exact scenario as the failure it
+    # exists for -- "the day `pinAt` defaults to `leg extreme` on the chart,
+    # the watcher keeps pinning the pullback extreme [...] and the bot alerts
+    # setups that are not on the chart". The default moved to `local pullback`
+    # and the watcher implements it, so all three are MIRRORED above.
     "retraceLatch": (True, "the watcher latches Ending like the chart"),
     "locAtr": (0.0, "the watcher's location test counts bars"),
-    "pbLook": (10, "PIN_LOCAL only; the watcher has no local anchor"),
     # the nine bias sources the watcher does not run. Guarded by biasSrc,
     # which is MIRRORED, so a switch away from SMC is caught there.
     # THESE TWO WERE IN THE HARDCODED BUCKET AND THE REASONS WERE WRONG.
