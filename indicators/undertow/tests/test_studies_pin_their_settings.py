@@ -81,7 +81,19 @@ PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
           # an off-by-default capability and is wrong the moment it ships:
           # the argument turns on whether the default MOVES, not on how many
           # studies read the field.
-          "pinAt", "pinLag")
+          "pinAt", "pinLag",
+          # `pinPick` -> PICK_BEST and `maxLive` 4 -> 8, shipped together on
+          # the strategy author's instruction. Both in here BEFORE either
+          # moved; all twenty-two baselines name them.
+          #
+          # `maxLive` is the one that nearly repeated the `stopSrc` failure a
+          # fifth time. Twenty-one of twenty-two studies already passed
+          # maxLive=64 so nobody had noticed it was unpinned -- but
+          # undertow_sweep.py did not, and it runs at the default. Its page
+          # would have been silently re-pointed by a cap change that has
+          # nothing to do with what it measures. Pinned there at 4, its
+          # published value, before the default moved.
+          "pinPick", "maxLive")
 # A SETTING THAT ONLY ONE SOURCE READS DOES NOT BELONG IN PINNED, because
 # PINNED makes EVERY study name it. `emaFast`/`emaSlow` moved 50/200 -> 9/21
 # when the EMA cross went on the chart, and putting them above made twelve
@@ -588,7 +600,46 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # this file had to state the order a fourth time.
 #
 # 78 -> 79 fields.
-DEFAULTS_FINGERPRINT = "a583e60f9bc862a8"
+# 2026-09-19: THREE DEFAULTS MOVE TOGETHER, and they have to, because each one
+# only makes sense with the others.
+#
+#   pinPick   PICK_READY -> PICK_BEST   the pick, shipped
+#   pinLag    1 -> 0                    the proxy it replaces, stood down
+#   maxLive   4 -> 8                    the cap that both of them broke
+#
+# `pinLag` GOES BACK TO 0 RATHER THAN STAYING AT 1. They are different answers
+# to the same question and the lag runs FIRST, so at 1 it refuses candles the
+# pick would have chosen -- the pick would be selecting from what the proxy
+# left, which is the proxy still deciding.
+#
+# `maxLive` IS THE ONE I BROKE THIS MORNING AND DID NOT NOTICE. Both rules skip
+# the newest-wins supersede, so the candidate pool stops collapsing to one per
+# pullback; against a cap of 4 that turned pins away for no reason but pool
+# size. Min15, 6 symbols: lag 0 refused 0, lag 1 refused 412 -- 6.6% of pins
+# and about 4% of armed setups -- PICK_BEST 261. At 8, essentially none.
+#
+# AND IT WAS NOT IN PINNED. Twenty-one of twenty-two studies passed maxLive=64
+# so nobody had noticed, but undertow_sweep.py ran at the DEFAULT and its page
+# would have been silently re-pointed by a cap change that has nothing to do
+# with what it measures. Pinned there at 4 -- its published value -- and in
+# undertow_ablation.py, which overrides the cap per run but never named it in
+# its baseline. That is the fifth field this file has caught unpinned on the
+# day its default moved.
+#
+# THE PROCEDURE, in order: both fields into PINNED, all twenty-two baselines
+# updated, undertow_anchor run as the reference and confirmed UNCHANGED by the
+# pinning pass alone, then the defaults moved, then anchor re-run BIT-IDENTICAL,
+# then this line.
+#
+# THE MEASUREMENT IS A NULL and the ship is not based on it.
+# ../measurements/UNDERTOW_PINPICK.md: R per pullback offered moves -0.027 /
+# +0.041 / -0.022 across three timeframes, signs disagreeing, no z past 1.1.
+# What is not null is frequency -- seven times the armed setups -- and the
+# mechanism, which is the rule the strategy's author described when asked why
+# he uses the proxy. Shipped on his instruction, in all three copies.
+#
+# 79 fields, unchanged -- no field is added or removed.
+DEFAULTS_FINGERPRINT = "49a9558c80fec9de"
 DEFAULTS_COUNT = 79
 
 good = []

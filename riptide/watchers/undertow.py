@@ -221,7 +221,31 @@ PB_LOOK = 10
 # offering one qualifying candle gives it nothing to pick -- and the backtest
 # does not support it (UNDERTOW_PINLAG.md is a null). It ships because it arms
 # the setups he takes; see ../../indicators/undertow/CASES.md.
-PIN_LAG = 1
+#
+# MOVED TO 0 when PIN_PICK below shipped. The two are different answers to the
+# same question and stacking them makes the lag filter the pick's input: the
+# candle the pick wants can be one the lag has already refused.
+PIN_LAG = 0
+# WHICH OF THE CONFIRMING CANDLES ARMS, by PRICE rather than by position.
+#
+# `PIN_LAG` is a rule about position -- "the second-newest" -- and it is a
+# PROXY for what was actually wanted: in a downtrend enter as HIGH as possible
+# among the candles that actually confirm, and as low as possible in an
+# uptrend. For a short the pin is a hammer, so Working is a close above its
+# high and Failure a close below its low; W therefore spreads DOWNWARD through
+# the pullback's candles and F spreads UPWARD, which makes the confirming set
+# exactly knowable on every bar with no lookahead. Its highest member is the
+# best short entry available at the moment an entry exists -- higher pin, same
+# stop, tighter risk.
+#
+# NOT MEASURED AS BETTER. ../../indicators/undertow/measurements/
+# UNDERTOW_PINPICK.md is a null: R per pullback offered moves -0.027 / +0.041 /
+# -0.022 across three timeframes and the signs disagree. What it does change is
+# FREQUENCY -- seven times the armed setups of PIN_LAG 1, because a pullback
+# offering one qualifying candle gave the lag nothing to pick and it traded
+# nothing at all. THE ALERT RATE GOES UP ACCORDINGLY, which is the operational
+# consequence and is stated here rather than discovered.
+PIN_PICK = "best entry of those confirming"
 STOP_BUF = 0.25
 STOP_TRACK = True
 RR = 3.5
@@ -601,7 +625,7 @@ class _Cand:
         self.workBar = kw.get("workBar", -1)
 
 
-def run_setups(cs, max_live: int = 4):
+def run_setups(cs, max_live: int = 8):
     """The two moments worth alerting on: ARMED, and FILLED.
 
     Sections 3-7 of riptide-undertow.pine. The structure engine, the minor
@@ -776,6 +800,40 @@ def run_setups(cs, max_live: int = 4):
 
         atrBuf = STOP_BUF * atr[i]
 
+        # ── WHICH CANDLE THIS BAR BELONGS TO, before any of them arms ───────
+        # See PIN_PICK. The loop below arms each candidate as it reaches it, so
+        # by the time the second is examined the first has armed and the
+        # arm-wins sweep is about to remove the rest. The choice is made here
+        # or not at all.
+        #
+        # ONE PICK PER SIDE: a short wants the highest focus and a long the
+        # lowest, so one winner across both directions would rank them on a
+        # number meaning opposite things and the losing side could never arm.
+        def _confirms(cd):
+            """Would this candidate arm on this bar? Mutates nothing.
+
+            Same-bar W and F does NOT arm -- `workBar` becomes `i` and
+            `i > workBar` is false. Reproduced rather than approximated,
+            because the loose version arms a bar early on every candidate
+            whose two breaks land together.
+            """
+            wH = (c.c > cd.hi) if cd.workHi else (c.c < cd.lo)
+            fH = (c.c <= cd.lo) if cd.workHi else (c.c >= cd.hi)
+            if CONFIRM_ORDER != "working then failure":
+                return (cd.workOk or wH) and (cd.failOk or fH)
+            wB = cd.workBar if cd.workOk else (i if wH else -1)
+            return fH and wB >= 0 and i > wB
+
+        pick: dict = {}
+        if PIN_PICK == "best entry of those confirming" and gate_ok:
+            for cd in cands:
+                if cd.armed or not _confirms(cd):
+                    continue
+                cur = pick.get(cd.short)
+                if cur is None or (cd.focus > cur.focus if cd.short
+                                   else cd.focus < cur.focus):
+                    pick[cd.short] = cd
+
         # ── candidates ──────────────────────────────────────────────────────
         armWon: set = set()
         for cd in list(cands):
@@ -823,6 +881,12 @@ def run_setups(cs, max_live: int = 4):
                 if ready and PIN_LAG:
                     newer = pinSeen.get(cd.short, 0) - cd.pinIdx - 1
                     ready = newer == PIN_LAG
+                # THE PICK GATE. Of the candidates confirming on this bar,
+                # only the best-priced one arms. Chosen above, before the
+                # loop, because arming the first one reached would leave
+                # nothing to choose from.
+                if ready and PIN_PICK == "best entry of those confirming":
+                    ready = pick.get(cd.short) is cd
                 if ready:
                     # WHERE THE STOP COMES FROM. The minor swing extreme is
                     # the chart's default; the pullback extreme is the other
@@ -964,7 +1028,10 @@ def run_setups(cs, max_live: int = 4):
             # and destroys the rule at lag 1 -- the candle to be traded is one
             # of the ones it would remove. Skipped while lagging; the arm gate
             # does the selecting instead.
-            if PIN_NEWEST and not PIN_LAG:
+            # The pick needs the rivals alive for the same reason the
+            # lag does: the candle it would choose is one of these.
+            if (PIN_NEWEST and not PIN_LAG
+                    and PIN_PICK != "best entry of those confirming"):
                 isPriority = famHam if biasDir < 0 else famStar
                 # No `ghost` term: the port keeps bias-cancelled setups to
                 # score them and this scanner drops them, so every candidate
@@ -986,7 +1053,7 @@ def run_setups(cs, max_live: int = 4):
     return armed, filled
 
 
-def armed_setups(cs, max_live: int = 4) -> list:
+def armed_setups(cs, max_live: int = 8) -> list:
     """Just the arming events. Kept because the rate study and the detectors
     read one list at a time, and one machine must produce both."""
     return run_setups(cs, max_live)[0]

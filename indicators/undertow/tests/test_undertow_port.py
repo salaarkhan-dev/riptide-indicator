@@ -658,6 +658,13 @@ def test_pin_lag_picks_the_second_newest_and_costs_the_singletons():
     there -- it picks NOTHING, which is a real cost of the rule rather than a
     detail, and `nLagShort` has to be non-zero for that reason.
 
+    BOTH ARMS NAME THEIR LAG *AND* THEIR PICK. The lag half of this was
+    caught the day `pinLag` shipped at 1; the pick half was caught hours
+    later when `pinPick` shipped as PICK_BEST and both arms silently
+    inherited it, which made "it trades candles the newest-wins rule never
+    does" read 0. A test that names one of the two settings it depends on is
+    a test that will be broken again by the next default that moves.
+
     BOTH ARMS NAME THEIR LAG. This test read `U.P()` against `U.P(pinLag=1)`
     and so described whatever shipped; the day `pinLag` shipped AT 1 the two
     arms became the same run and every assertion in it went vacuous -- "lag 0
@@ -666,8 +673,8 @@ def test_pin_lag_picks_the_second_newest_and_costs_the_singletons():
     meant, and the fix is always the same: say the setting out loud.
     """
     cs = walk(8000, seed=73, drift=-0.0004)
-    a = U.run(cs, U.P(pinLag=0), "T")
-    b = U.run(cs, U.P(pinLag=1), "T")
+    a = U.run(cs, U.P(pinLag=0, pinPick=U.PICK_READY), "T")
+    b = U.run(cs, U.P(pinLag=1, pinPick=U.PICK_READY), "T")
     ok(a.nLagShort == 0, f"lag 0 never runs short: {a.nLagShort}")
     ok(b.nLagShort > 0, f"lag 1 gives up the single-candle pullbacks: {b.nLagShort}")
     ok(0 < len(b.armed) < len(a.armed),
@@ -716,8 +723,8 @@ def test_pick_best_takes_the_best_priced_candle_that_confirms():
     does, and each is asserted rather than assumed.
     """
     cs = walk(12000, seed=41, drift=-0.0002)
-    lag0 = U.run(cs, U.P(maxLive=64, pinLag=0), "T")
-    lag1 = U.run(cs, U.P(maxLive=64, pinLag=1), "T")
+    lag0 = U.run(cs, U.P(maxLive=64, pinLag=0, pinPick=U.PICK_READY), "T")
+    lag1 = U.run(cs, U.P(maxLive=64, pinLag=1, pinPick=U.PICK_READY), "T")
     best = U.run(cs, U.P(maxLive=64, pinLag=0, pinPick=U.PICK_BEST), "T")
     # 1. IT RECOVERS THE FREQUENCY `pinLag` GIVES UP. A pullback offering one
     #    qualifying candle gives lag 1 nothing to pick and it trades nothing;
@@ -748,23 +755,36 @@ def test_pick_best_takes_the_best_priced_candle_that_confirms():
           f"{best.nPickAmong} times")
 
 
-def test_pick_best_is_off_by_default_and_changes_nothing_when_off():
-    """ADDITIVE, asserted rather than claimed in a commit message.
+def test_pick_ready_still_reproduces_the_old_behaviour():
+    """PICK_BEST SHIPS, so the thing worth guarding is the other direction.
 
-    Every measurement page in ../measurements was produced under PICK_READY.
-    The field is only safe to add if the default is bit-identical to not having
-    it, and "bit-identical" is cheap to check here on the whole armed list
-    rather than eyeballed on a study's summary table.
+    This test used to assert `pinPick` was OFF by default and that naming it
+    changed nothing -- which was true for exactly one commit. It is kept, and
+    inverted, because the property that still matters is that PICK_READY is a
+    faithful way back: every page in ../measurements was produced under it and
+    all twenty-two studies pin it, so if it stopped reproducing the old
+    behaviour those pages would be measuring something else under their own
+    names.
+
+    WHAT IT NO LONGER CLAIMS. "The default is the old behaviour" was the whole
+    point of the test and is now false. Rewriting the assertion and keeping the
+    name would have left a test whose title lies about what ships, which is the
+    third time in two days a test here has had to be renamed rather than
+    patched.
     """
-    ok(U.P().pinPick == U.PICK_READY,
-       f"the default is the old behaviour: {U.P().pinPick!r}")
+    ok(U.P().pinPick == U.PICK_BEST,
+       f"PICK_BEST is what ships: {U.P().pinPick!r}")
     cs = walk(8000, seed=17, drift=-0.0003)
-    a = U.run(cs, U.P(maxLive=64), "T")
-    b = U.run(cs, U.P(maxLive=64, pinPick=U.PICK_READY), "T")
-    ka = [(x["short"], x["bar"], x["pin"]) for x in a.armed]
-    kb = [(x["short"], x["bar"], x["pin"]) for x in b.armed]
-    ok(ka == kb, f"naming it explicitly changes nothing: {len(ka)} setups")
-    ok(a.nPickAmong == 0, f"and the pick counter stays 0: {a.nPickAmong}")
+    a = U.run(cs, U.P(maxLive=64, pinPick=U.PICK_READY), "T")
+    ok(a.nPickAmong == 0,
+       f"under PICK_READY the pick counter stays 0: {a.nPickAmong}")
+    ok(len(a.armed) > 0, f"and it still arms setups: {len(a.armed)}")
+    # AND THE TWO ARE GENUINELY DIFFERENT RULES, not one name for one thing.
+    b = U.run(cs, U.P(maxLive=64, pinPick=U.PICK_BEST), "T")
+    ka = {(x["short"], x["bar"], x["pin"]) for x in a.armed}
+    kb = {(x["short"], x["bar"], x["pin"]) for x in b.armed}
+    ok(ka != kb,
+       f"and PICK_BEST is a different rule: {len(kb - ka)} setups unique to it")
 
 
 def test_the_shipped_configuration_actually_finds_setups():
@@ -789,24 +809,29 @@ def test_the_shipped_configuration_actually_finds_setups():
     cs = walk(12000, seed=41, drift=-0.0002)
     r = U.run(cs, U.P(maxLive=64), "T")
     p = U.P()
-    ok(p.pinAt == U.PIN_LOCAL and p.pinLag == 1,
-       f"the shipped anchor and candle: {p.pinAt!r}, lag {p.pinLag}")
+    ok(p.pinAt == U.PIN_LOCAL and p.pinPick == U.PICK_BEST and p.pinLag == 0,
+       f"the shipped anchor and pick: {p.pinAt!r}, {p.pinPick!r}, "
+       f"lag {p.pinLag}")
     ok(len(r.pins) > 0, f"the shipped default finds pins: {len(r.pins)}")
     ok(len(r.armed) > 0, f"and some of them arm: {len(r.armed)}")
     ok(len(r.real) > 0, f"and some of those fill: {len(r.real)}")
-    # THE LAG IS BITING RATHER THAN BEING IGNORED. If `nLagShort` were zero the
-    # rule would be costing nothing, which at lag 1 would mean it is not
-    # running at all -- the failure mode this test exists to separate from
-    # honest selectivity.
-    ok(r.nLagShort > 0,
-       f"the lag gives up the single-candle pullbacks: {r.nLagShort}")
+    # THE LAG IS OFF AND MUST COST NOTHING. `nLagShort` counts pullbacks the
+    # lag refused for want of a candle to pick; at lag 0 a non-zero value would
+    # mean the gate is running when it should not be.
+    ok(r.nLagShort == 0,
+       f"the lag imposes nothing at 0: {r.nLagShort}")
+    # AND THE PICK IS ACTUALLY CHOOSING rather than being handed its answer.
+    # Zero here would mean the shipped rule only changes the FREQUENCY, which
+    # is most of what it does but is not all of what it claims.
+    ok(r.nPickAmong > 0,
+       f"the pick chose between rivals: {r.nPickAmong} times")
     # AND IT IS NOT SO SELECTIVE THAT IT IS EFFECTIVELY OFF. A rule that arms
     # once in twelve thousand bars is not a strategy anybody can run, and the
     # frequency is the part the measurement pages cannot speak to.
     ok(len(r.armed) >= 5,
        f"it is selective, not silent: {len(r.armed)} armed in {len(cs)} bars")
     print(f"       shipped: {len(r.pins)} pins · {len(r.armed)} armed · "
-          f"{len(r.real)} filled · {r.nLagShort} pullbacks too short")
+          f"{len(r.real)} filled · pick chose {r.nPickAmong}")
 
 
 def test_slope_in_hours_survives_an_aggregation():

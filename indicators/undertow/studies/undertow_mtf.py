@@ -48,7 +48,7 @@ from research.symbols_fresh import (SYMBOLS_FRESH,               # noqa: E402
 # AS PUBLISHED, PINNED — see test_studies_pin_their_settings.py. Identical to
 # undertow_htf.py's BASE on purpose: M0 here and H0 there must agree on the
 # FRESH panel, which is the check that both studies run the same machine.
-BASE = U.P(pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_STRUCT, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
+BASE = U.P(pinPick=U.PICK_READY, pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_STRUCT, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
            swingSrc=U.SW_RANGE, msLen=6, msShortLen=2,
            endMinor=U.E_OFF, endSweep=False, endStale=False)
 

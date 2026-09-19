@@ -53,15 +53,19 @@ from research.data import SYMBOLS                                # noqa: E402
 # verified to bring nCap to exactly 0 on the loosest arm (1000 gives the
 # identical trade count, so 64 is "enough", not a tuned number).
 #
-# The port's DEFAULT stays 4 so deploy/undertow-port-check.py keeps holding the
-# port to the Pine's inputs. The override is here, in the open.
+# THE PORT'S DEFAULT WAS 4 AND IS NOW 8, moved 2026-09-19: `pinLag` and then
+# `pinPick` both skip the newest-wins supersede, so the candidate pool stops
+# collapsing to one per pullback and a cap of 4 began refusing 6.6% of pins.
+# It changes nothing here -- this study overrides the cap on every run, and
+# `maxLive=4` is now named in the baseline below so the page keeps its own
+# value whatever the default does next.
 # AS PUBLISHED, PINNED. Every setting this study's page was run under is
 # named here even where it matched P's default at the time, because a default
 # that later moves silently re-points a published study: `swingSrc` went from
 # the bar pivot to "price move" after this ran, so without these lines the
 # script would print different numbers under the same page's name. A study that
 # cannot reproduce its own measurement is not a record of anything.
-BASE = U.P(pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, rr=3.0, feeFrac=FEE,
+BASE = U.P(pinPick=U.PICK_READY, pinAt=U.PIN_PULL, pinLag=0, maxLive=4, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, rr=3.0, feeFrac=FEE,
            swingSrc=U.SW_BAR, msLen=15, msShortLen=3,
            endSweep=True, endStale=True)
 UNCAPPED = 64

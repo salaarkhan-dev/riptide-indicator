@@ -42,7 +42,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # BS_SMC here because that IS the shipped engine now; every page-reproducing
 # study pins BS_STRUCT instead, and that difference is the reason the field is
 # in the PINNED list at all.
-BASE = U.P(pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_SMC, confirmOrder=U.C_WF, maxLive=64, feeFrac=FEE,
+BASE = U.P(pinPick=U.PICK_READY, pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_SMC, confirmOrder=U.C_WF, maxLive=64, feeFrac=FEE,
            rr=3.5, swingSrc=U.SW_BAR, msLen=6, msShortLen=2,
            endSweep=False, endStale=False, endMinor=U.E_FLIP, retraceMax=70)
 

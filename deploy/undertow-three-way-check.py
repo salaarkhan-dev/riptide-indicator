@@ -102,6 +102,7 @@ MIRRORED = {
     "pinAt": ("const", "PIN_AT"),
     "pbLook": ("const", "PB_LOOK"),
     "pinLag": ("const", "PIN_LAG"),
+    "pinPick": ("const", "PIN_PICK"),
     "stopBuf": ("const", "STOP_BUF"),
     "stopTrack": ("const", "STOP_TRACK"),
     "rr": ("const", "RR"),
@@ -140,13 +141,13 @@ ABSENT = {
     # and the watcher implements it, so all three are MIRRORED above.
     "retraceLatch": (True, "the watcher latches Ending like the chart"),
     "locAtr": (0.0, "the watcher's location test counts bars"),
-    # Research-only for now, on the value the watcher behaves as: it arms
-    # whichever candidate confirms. Asserted rather than left None, because a
-    # default moving here would put the live alerts on a different candle from
-    # the chart without a line of watcher code changing -- the failure this
-    # file exists for, and the one `pinAt` walked into this morning.
-    "pinPick": ("the one that confirms",
-                "the watcher arms whichever candidate confirms"),
+    # `pinPick` WAS HERE FOR ONE COMMIT, on the value the watcher behaved as.
+    # It shipped as the default the same day and the watcher implements it, so
+    # it is MIRRORED above. The note it carried -- that a default moving would
+    # put the live alerts on a different candle from the chart without a line
+    # of watcher code changing -- is exactly what would have happened had this
+    # entry been left alone, which is the third time today this file has been
+    # the thing standing between a default move and a silent divergence.
     # the nine bias sources the watcher does not run. Guarded by biasSrc,
     # which is MIRRORED, so a switch away from SMC is caught there.
     # THESE TWO WERE IN THE HARDCODED BUCKET AND THE REASONS WERE WRONG.

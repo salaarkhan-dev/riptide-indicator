@@ -432,3 +432,53 @@ setups and it was not flagged when `pinLag` shipped. **Immediate remedy: set
 "Live setups at once" to 8.** Moving the default is a separate change and needs
 `maxLive` pinned into `undertow_sweep.py` first — the one study of twenty-two
 that does not name it.
+
+---
+
+## SHIPPED — `pinPick = best entry of those confirming`
+
+In all three copies, on the strategy author's instruction, **against the
+measurement**. Two other defaults moved with it because neither makes sense
+alone:
+
+| | | why |
+|---|---|---|
+| `pinPick` | PICK_READY → **PICK_BEST** | the rule, instead of the proxy for it |
+| `pinLag` | 1 → **0** | the lag runs FIRST, so at 1 it refuses candles the pick would choose — the proxy still deciding |
+| `maxLive` | 4 → **8** | both rules skip newest-wins, so a cap of 4 discards pins for no reason but pool size |
+
+`UNDERTOW_PINPICK.md` is a null — −0.027 / +0.041 / −0.022 R per pullback
+offered, signs disagreeing on all three timeframes. It ships because it is the
+rule he described, not because it pays. **Seven times the alert rate** reaches
+Telegram, which is the operational consequence and was stated before the ship,
+not discovered after.
+
+### THE FIFTH FIELD CAUGHT UNPINNED ON THE DAY ITS DEFAULT MOVED
+
+`maxLive` was not in `PINNED`. Twenty-one of twenty-two studies passed
+`maxLive=64` so nobody had noticed — but `undertow_sweep.py` ran at the
+**default**, and a cap change unrelated to what it measures would have
+re-pointed its page in silence. Pinned at 4 there and in `undertow_ablation.py`
+before the default moved.
+
+The count so far, all in two days: `stopSrc`, `biasGate`, `pinAt`, `pinLag`,
+`maxLive`. Every one found by the same test, and every one found *because the
+default was about to move* rather than in advance of it. **The guard works and
+the habit does not** — nothing checks that a field is pinned until someone
+tries to move it.
+
+### AND FOUR TESTS DESCRIBED THE OLD DEFAULT
+
+Moving three defaults broke four tests, none of which was testing what its name
+said any more:
+
+* the `pinLag` comparison ran both arms under the **new** pick, so "it trades
+  candles the newest-wins rule never does" read **0**
+* `test_pick_best_is_off_by_default` had a premise that was true for exactly
+  one commit — renamed rather than patched, because a test whose title lies
+  about what ships is worse than one that fails
+* the shipped-configuration test asserted `lag 1`
+
+That is the third time a test here has had to be renamed rather than fixed.
+The rule that keeps being relearned: **a test must name every setting its claim
+depends on, not just the one it is about.**

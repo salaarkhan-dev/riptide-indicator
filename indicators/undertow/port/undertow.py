@@ -518,7 +518,12 @@ class P:
     # one before it -- "let's say three qualified (n, n-1, n-2), in this case
     # choose n-1", the chart owner's own description of what his eye does.
     #
-    # SHIPPED AT 1 ON HIS INSTRUCTION, AND THE MEASUREMENT DOES NOT SUPPORT IT.
+    # SHIPPED AT 1 ON 2026-09-19 AND BACK TO 0 THE SAME DAY, when `pinPick`
+    # took over the question it was a proxy for. At 0 it imposes nothing and
+    # the pick decides; at 1 it would refuse candles the pick wants, because
+    # the lag runs FIRST and the two are different answers to one question.
+    #
+    # THE MEASUREMENT NEVER SUPPORTED 1.
     # ../measurements/UNDERTOW_PINLAG.md is a null: -0.468 / -0.056 / +0.870
     # across three timeframes, the signs disagree, and the one loud cell has
     # nine of sixteen symbols contributing two pullbacks or fewer. It also
@@ -531,10 +536,15 @@ class P:
     # and the backtest has never seen his selection or his holds. That is an
     # argument for a forward record, and the forward record is the instrument
     # that settles it.
-    pinLag: int = 1
-    # See PICK_BEST. Additive: PICK_READY is what has always happened, so every
-    # page keeps reproducing and `pinLag` still decides on its own.
-    pinPick: str = PICK_READY
+    pinLag: int = 0
+    # See PICK_BEST. SHIPPED 2026-09-19 in all three copies at the strategy
+    # author's instruction, and `pinLag` went back to 0 with it -- the two are
+    # different answers to the same question, and stacking them makes the lag
+    # filter this rule's input by refusing candles it would have chosen.
+    #
+    # Every page in ../measurements was produced under PICK_READY and all
+    # twenty-two studies now name it, so they keep reproducing.
+    pinPick: str = PICK_BEST
     # WHICH SIDES TO TRADE: both, long only, short only.
     #
     # Filtered AT THE PIN, not on the trade list afterwards, and the difference
@@ -544,7 +554,17 @@ class P:
     side: str = SIDE_BOTH
     confirmBars: int = 20
     fillBars: int = 20
-    maxLive: int = 4
+    # 4 UNTIL 2026-09-19, AND 4 BECAME WRONG THE MOMENT THE SUPERSEDE STOPPED
+    # RUNNING. `pinLag` and then `pinPick` both skip newest-wins, so the
+    # candidate pool no longer collapses to one per pullback -- and a cap of 4
+    # began turning pins away for no reason but pool size. Measured on Min15,
+    # 6 symbols: lag 0 refused 0 pins, lag 1 refused 412 (6.6% of pins, ~4% of
+    # armed setups), PICK_BEST 261. At 8 all three refuse essentially none.
+    #
+    # IT IS A CHARTING ARTEFACT BEING PAID FOR IN SETUPS. The Pine has a cap
+    # for TradingView's 500-drawing budget; nothing about the strategy wants
+    # one. Raised rather than removed because the drawing budget is real.
+    maxLive: int = 8
     # LOCATION, AND THE THREE DEFECTS SPEC.md 2.3b RECORDS. All three ship at
     # the value that reproduces current behaviour; none is endorsed and none is
     # measured yet.

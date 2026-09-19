@@ -83,13 +83,27 @@ That is the same shape as every other finding in this project, and the same
 conclusion follows: prefer it because it is the rule, not because it pays. The
 instrument that can settle whether it pays is the forward record.
 
-## Not shipped
+## SHIPPED, against this page
 
-`pinPick` defaults to `PICK_READY`, which is what has always happened;
-`undertow_anchor` re-ran bit-identical when the field was added. It is not a
-Pine input and not in the watcher, so
-[`../../../deploy/undertow-port-check.py`](../../../deploy/undertow-port-check.py)
-and the three-way check both hold it at its off value until that changes.
+`pinPick = PICK_BEST` is the default in all three copies as of 2026-09-19, on
+the strategy author's instruction and with the null above unchanged. Two other
+defaults moved with it because neither makes sense alone:
+
+* **`pinLag` 1 → 0.** They are different answers to the same question and the
+  lag runs **first**, so at 1 it refuses candles the pick would have chosen —
+  the pick would be selecting from what the proxy left, which is the proxy
+  still deciding.
+* **`maxLive` 4 → 8.** See the regression below. Both rules skip the
+  newest-wins supersede, and a cap of 4 then discards pins for no reason but
+  pool size.
+
+**The reason is the mechanism, not this page.** It is the rule he described
+when asked why he uses the proxy, it arms the setups he takes, and the backtest
+has never seen which setups he takes or how long he holds them. The instrument
+that can settle whether it pays is the forward record.
+
+**The operational consequence is the alert rate.** Seven times the armed setups
+of `pinLag 1` reaches Telegram, not just the chart.
 
 ## A regression this study found
 
@@ -104,5 +118,12 @@ is **4**. Min15, 6 symbols:
 | `PICK_BEST` | 261 — 4.2% | 0 |
 
 It costs about 4% of armed setups and was not flagged when `pinLag` shipped.
-Moving the `maxLive` default needs it pinned into `undertow_sweep.py` first —
-the one study of twenty-two that does not name it.
+**Fixed with this ship: `maxLive` 4 → 8 in all three copies.**
+
+`maxLive` was not in `PINNED` either. Twenty-one of twenty-two studies passed
+`maxLive=64` so nobody had noticed, but `undertow_sweep.py` ran at the
+**default** and its page would have been silently re-pointed by a cap change
+that has nothing to do with what it measures. Pinned there at 4 — its published
+value — and in `undertow_ablation.py`, which overrides the cap per run but
+never named it in its baseline. That is the fifth field caught unpinned on the
+day its default moved.

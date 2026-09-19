@@ -44,7 +44,7 @@ from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
 # the bar pivot to "price move" after this ran, so without these lines the
 # script would print different numbers under the same page's name. A study that
 # cannot reproduce its own measurement is not a record of anything.
-BASE = U.P(pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
+BASE = U.P(pinPick=U.PICK_READY, pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, pinNewest=False, famPriority=False, failTest=U.T_CLOSE, biasSrc=U.BS_STRUCT, confirmOrder=U.C_EITHER, maxLive=64, feeFrac=FEE, rr=3.5,
            swingSrc=U.SW_BAR, msLen=6, msShortLen=2,
            endSweep=False, endStale=False)
 LATE = dict(useBackup=True, bkWhen=U.B_LATE)

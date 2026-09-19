@@ -77,7 +77,11 @@ BASE = dict(
     # baseline has to state it or a default moving would re-point this page --
     # and `pinLag`'s default moved THIS MORNING, which is exactly why the pin
     # check refuses a baseline that leaves it out.
-    pinLag=0)
+    pinLag=0,
+    # Named here as well as in every arm, same reason as `pinLag` above:
+    # the baseline has to state it or a default moving re-points this
+    # page -- and this is the page that argues for moving it.
+    pinPick=U.PICK_READY)
 
 ARMS = [("A", "lag 0 · newest", dict(pinLag=0, pinPick=U.PICK_READY)),
         ("B", "lag 1 · SHIPS", dict(pinLag=1, pinPick=U.PICK_READY)),
