@@ -265,5 +265,29 @@ Case 1 is still refused, still on `wickEdge`, still left alone.
 
 **The lesson is the one this file keeps recording**: a rule that fails a test
 has two possible causes, and the implementation is the one to rule out first.
-`undertow_pinlag.py`'s null — -0.468 / -0.056 / +0.870 — was measured on the
-same broken counter and should be re-run before it is cited again.
+
+### AND THE SAME LESSON, IMMEDIATELY, AGAINST THIS SECTION
+
+The paragraph above originally continued: *"`undertow_pinlag.py`'s null —
+-0.468 / -0.056 / +0.870 — was measured on the same broken counter and should
+be re-run before it is cited again."* **That was wrong.** Every line the fix
+touched sits inside `if p.pinAt == PIN_LOCAL:`, and that study pins
+`pinAt=PIN_PULL`; the bug could not reach it. Re-run anyway rather than argued
+away, and it came back **bit-identical**: -0.468 / -0.056 / +0.870, same pair
+counts, same leave-one-out.
+
+So the null stands and is citable. Widening a bug's blast radius past what its
+diff can touch is the same failure as the one this case corrects, pointed the
+other way: there, an implementation fault was read as a fact about the trader;
+here, a fact about the study was nearly discarded as an implementation fault.
+The cure for both is the same and it is cheap — read the diff, then run it.
+
+**What IS stale in that study** is its header, which calls its `BASE` "AS
+SHIPPED, PINNED". The pinning works; the claim does not. Three of the values
+have moved since it was written — `msLen` 50→14, `stopSrc` swing→pullback
+extreme, `biasGate` tradeable→direction only — so the page measures the
+configuration that shipped in early September, not the one that ships now.
+That is the pinning discipline behaving exactly as designed, and it means the
+headline compares A against B under an old trend read. Re-pinning it to the
+current defaults is a NEW measurement on the spent set, not a re-run, and it
+is not worth taking until there is a reason to prefer B.

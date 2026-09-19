@@ -58,8 +58,20 @@ from indicators.undertow.studies.undertow_sweep import (         # noqa: E402
     FEE, TFS, clustered, load)
 from research.data import SYMBOLS                                # noqa: E402
 
-# AS SHIPPED, PINNED. Same discipline as every other study here: every setting
-# named, so a default moving later cannot silently re-point this page.
+# PINNED, and no longer what ships. Same discipline as every other study here:
+# every setting named, so a default moving later cannot silently re-point this
+# page -- and three of them have since moved. `msLen` 50 -> 14, `stopSrc` swing
+# -> pullback extreme, `biasGate` tradeable -> direction only. The numbers
+# below are therefore A-against-B under the EARLY-SEPTEMBER trend read, which
+# is a fair comparison (both arms see the same one) but not a current one.
+# Re-pinning to today's defaults is a NEW measurement on the spent set, not a
+# re-run, and it is not worth taking until there is a reason to prefer B.
+#
+# Re-run 2026-09-19 after the PIN_LOCAL pullback-boundary fix, on a suspicion
+# that the fix had invalidated this page. It had not -- every line it touched
+# is inside `if p.pinAt == PIN_LOCAL:` and this pins PIN_PULL -- and the output
+# came back bit-identical. Recorded so the suspicion is not raised a third
+# time.
 BASE = dict(
     biasSrc=U.BS_STRUCT, msLen=50, msShortLen=3, swingSrc=U.SW_BAR,
     msBosNeedsIdm=True, smcInternalLen=5, famStrict=True, armWins=True,
