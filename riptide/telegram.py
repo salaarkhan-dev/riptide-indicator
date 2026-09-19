@@ -7,6 +7,7 @@ careless retry duplicates an alert.
 
 from __future__ import annotations
 
+import decimal
 import asyncio
 import json
 import time
@@ -169,12 +170,24 @@ def fmt(v: float) -> str:
     the loss occurred, and changes nothing below 1, which was always printed
     at eight. Above 1000 a tenth of a unit is already far finer than any
     plausible stop, so that branch stays as it was.
+
+    AND NO SCIENTIFIC NOTATION, EVER. `%.8g` switches to it below about 1e-4,
+    so a sub-penny symbol printed "entry 3.7778e-06" in a message whose whole
+    job is to be read off and typed into an order box. Written out in full it
+    is 0.0000037778 -- longer, and the only form anybody can act on. The same
+    alert also carried "tgt 1 · stop 0", which was a separate bug in the
+    watcher's `_dp`; this half is the display and that half was the arithmetic.
     """
     if v >= 1000:
         return f"{v:,.1f}"
     if v >= 1:
         return f"{v:.6g}"
-    return f"{v:.8g}"
+    t = f"{v:.8g}"
+    if "e" in t or "E" in t:
+        # Decimal renders the exponent out rather than re-rounding it, so the
+        # digits printed are exactly the digits %.8g chose.
+        return format(decimal.Decimal(t), "f")
+    return t
 
 
 def local_clock() -> str:

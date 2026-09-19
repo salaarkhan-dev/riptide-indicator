@@ -289,9 +289,30 @@ def _dp(ref: float) -> int:
     fraction past an extreme), so they carry float noise well past any real
     tick: an entry of 0.1985 printed beside a stop of 0.19694503 is eight
     figures of a number whose last four cannot be placed.
+
+    THE EXPONENT FORM BROKE THIS AND IT REACHED A LIVE ALERT. `%.8g` switches
+    to scientific notation below about 1e-4, so on a sub-penny symbol the test
+    for "." in the string was false, this returned 0, and `_snap` rounded the
+    levels to WHOLE UNITS. The message that went out read:
+
+        PEPE 15m · W->F
+          entry 3.7778e-06 -> tgt 1
+          stop  0 · risk 100.0%
+
+    A target of 1 and a stop of 0 on a coin priced at 0.0000037778. Nothing
+    downstream could have caught it -- the risk percentage was computed from
+    those same broken levels, so every number on the row agreed with every
+    other one, which is exactly the property the snapping exists to guarantee.
     """
+    if ref <= 0:
+        return 0
     t = f"{ref:.8g}"
-    return len(t.split(".")[1]) if "." in t and "e" not in t else 0
+    if "e" in t or "E" in t:
+        mant, _, exp = t.partition("e") if "e" in t else t.partition("E")
+        frac = len(mant.split(".")[1]) if "." in mant else 0
+        # 3.7778e-06 -> four decimals in the mantissa, shifted six right.
+        return max(0, frac - int(exp))
+    return len(t.split(".")[1]) if "." in t else 0
 
 
 def _snap(v: float, entry: float, away: bool) -> float:
@@ -1095,7 +1116,18 @@ def detect(cs, symbol: str, tf: str, opts: dict) -> tuple:
         stop = _snap(a["stop"], a["entry"], True)
         target = _snap(a["target"], a["entry"], True)
         risk = abs(stop - a["entry"])
-        if risk <= 0:
+        # A DEGENERATE ROW MUST NEVER REACH A PHONE. `risk <= 0` was the whole
+        # guard and it passed the PEPE alert that printed "tgt 1 · stop 0" on a
+        # coin priced at 0.0000037778 -- the levels were nonsense but the risk
+        # was a healthy-looking positive number, because it was computed from
+        # the same nonsense. The cause is fixed in `_dp`; this is the check that
+        # would have caught it anyway, and will catch the next one.
+        #
+        # Each clause is a thing that cannot be true of a real setup: a stop at
+        # or below zero, a target on the same side of the entry as the stop, or
+        # a stop further from the entry than the entry is from zero.
+        wrongWay = (a["stop"] > a["entry"]) == (target > a["entry"])
+        if risk <= 0 or stop <= 0 or target <= 0 or wrongWay or risk >= a["entry"]:
             dropped += 1
             continue
         out.append(Hit(
@@ -1114,15 +1146,37 @@ def detect(cs, symbol: str, tf: str, opts: dict) -> tuple:
     return out, dropped
 
 
+# EVERY BIAS STATE IS NAMED. There are FOUR -- running, immature, ending and
+# none -- and this table used to carry two, so the other half of them landed in
+# a group called "other" that said nothing about what they were.
+#
+# They only started appearing the day `biasGate` went to "direction only". Until
+# then an Ending or absent bias VETOED the setup and none of these could arm;
+# now they trade and are labelled by the state they were taken in, which was the
+# whole point of dropping the veto rather than deleting the state. A digest that
+# reports them as "other" throws away the only thing that makes them worth
+# taking separately.
+#
+# ORDER IS CONFIDENCE, not alphabet: running first, then immature (a fresh CHoCH
+# with no break of structure behind it), then ending (the trend is giving back
+# its impulse), then no bias at all.
 _GROUPS = {(True, "running"): (0, "▲ LONG · running"),
            (False, "running"): (1, "▼ SHORT · running"),
            (True, "immature"): (2, "▲ long · immature"),
-           (False, "immature"): (3, "▼ short · immature")}
+           (False, "immature"): (3, "▼ short · immature"),
+           (True, "ending"): (4, "▲ long · trend ending"),
+           (False, "ending"): (5, "▼ short · trend ending"),
+           (True, "none"): (6, "▲ long · no bias"),
+           (False, "none"): (7, "▼ short · no bias")}
 
 
 def classify(h) -> tuple:
-    rank, name = _GROUPS.get((h.is_long, h.extra["state"]),
-                             (4, "other"))
+    # The fallback keeps the DIRECTION even for a state nobody has seen yet, so
+    # a future state cannot produce a row with no way to tell which way it goes.
+    rank, name = _GROUPS.get(
+        (h.is_long, h.extra["state"]),
+        (8, ("▲ long" if h.is_long else "▼ short") + " · "
+            + str(h.extra["state"])))
     return (rank, -BAR_SECONDS[h.tf], h.symbol), name
 
 
@@ -1169,8 +1223,15 @@ def row(h, group: str) -> str:
     # trailing newline here doubled it at every boundary — one blank inside a
     # block and two between them reads as a rhythm that is not there.
     head = f"<b>{group}</b>\n\n" if group else "\n"
+    # THE DIRECTION IS ON EVERY ROW, not only on the group header. The header
+    # scrolls off: on an eleven-setup digest you are looking at a row four
+    # screens below the last "▲ LONG", and "am I buying or selling this" is the
+    # first question the row has to answer. One glyph, in the space the row
+    # already had, and the header keeps it too so the blocks still read as
+    # blocks.
+    arrow = "▲" if h.is_long else "▼"
     return (head
-            + f"<a href='{tg.tv_link(h.symbol, h.tf)}'>"
+            + f"{arrow} <a href='{tg.tv_link(h.symbol, h.tf)}'>"
             f"<b>{h.symbol.replace('_USDT', '')}</b></a> "
             f"<code>{tg.tf_label(h.tf)}</code> <i>· {e['order']}</i>\n"
             f"  <code>entry {tg.fmt(h.price)} → tgt {tg.fmt(e['target'])}</code>\n"
