@@ -66,7 +66,7 @@ BASE = dict(
     stopSrc=U.S_SWING, pinNewest=True, famPriority=True, failTest=U.T_TOUCH,
     confirmOrder=U.C_WF, pinAt=U.PIN_PULL, locTol=0, endMinor=U.E_FLIP,
     endSweep=False, endStale=False, retraceMax=70, useBackup=True,
-    maxLive=64, feeFrac=FEE, rr=3.5, shortsOnly=True)
+    maxLive=64, feeFrac=FEE, rr=3.5, side=U.SIDE_SHORT)
 
 
 def arms(tf, syms, strict):

@@ -59,6 +59,12 @@ S_PIN = "Pin high / low"
 # `biasGate` -- WHAT THE BIAS IS FOR. Module level, not class level, because
 # deploy/undertow-port-check.py and the three-way check resolve a field default
 # only through a module-level CONSTANT and silently skip anything else.
+# `side` -- WHICH DIRECTIONS THE STRATEGY TAKES. Three options rather than the
+# boolean `shortsOnly` it replaces, because "long only" was unreachable and the
+# bearish leg was only ever measured on its own by accident of that boolean.
+SIDE_BOTH = "both"
+SIDE_LONG = "long only"
+SIDE_SHORT = "short only"
 BG_TRADEABLE = "tradeable"
 BG_DIRECTION = "direction only"
 S_PULL = "Pullback extreme"
@@ -469,11 +475,13 @@ class P:
     locAtr: float = 0.0
     retraceLatch: bool = True
     pinLag: int = 0
-    # Take only shorts. The chart owner asked for the bearish leg on its own
-    # first -- "just measure the shorts and bearish whether this work or not"
-    # -- and filtering AFTER the run is not the same thing, because the longs
-    # would still have consumed `maxLive` slots and changed which shorts exist.
-    shortsOnly: bool = False
+    # WHICH SIDES TO TRADE: both, long only, short only.
+    #
+    # Filtered AT THE PIN, not on the trade list afterwards, and the difference
+    # is not cosmetic: a long that never existed also never took a `maxLive`
+    # slot, so post-filtering would leave the shorts silently shaped by longs
+    # that were never traded.
+    side: str = SIDE_BOTH
     confirmBars: int = 20
     fillBars: int = 20
     maxLive: int = 4
@@ -2225,11 +2233,9 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
                     res.nLoc += 1
                     if not htfOk:
                         res.nHtf += 1
-        # THE BEARISH LEG ON ITS OWN. Filtered here rather than on the trade
-        # list afterwards, because a long that never existed also never took a
-        # `maxLive` slot -- filtering after the run would leave the shorts
-        # changed by longs that were never traded.
-        if p.shortsOnly and biasDir > 0:
+        # ONE SIDE, OR BOTH. See `side`. At the pin, for the reason given there.
+        if ((p.side == SIDE_SHORT and biasDir > 0)
+                or (p.side == SIDE_LONG and biasDir < 0)):
             famOk = False
         if famOk and biasOk and colourOk and locOk and htfOk and bosOk:
             # THE NEWEST COUNTER-TREND CANDLE SUPERSEDES THE ONES BEFORE IT,

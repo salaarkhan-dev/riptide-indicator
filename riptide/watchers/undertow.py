@@ -158,6 +158,9 @@ MS_SHORT_LEN = 3
 # never refuses a setup, so Immature, Running and Ending all alert. The state
 # rides along on every alert so the three can be scored apart later.
 BIAS_GATE = "direction only"
+# WHICH DIRECTIONS THE BOT ALERTS: "both", "long only", "short only". Filtered
+# at the pin, so an excluded setup never takes a live slot either.
+SIDE = "both"
 MS_BOS_NEEDS_IDM = True
 # THE CONFIRMATION ORDER, and it matches the port's default and the chart's.
 # v1 armed on "both lines, in either order", which was a misreading of the
@@ -889,7 +892,9 @@ def run_setups(cs, max_live: int = 4):
         # and the port has always had it after; at max_live 64 the pool never
         # reaches the cap and the two agree, which is why the parity test --
         # which ran only at 64 -- never saw it.
-        if (famOk and gate_ok and colourOk
+        side_ok = SIDE == "both" or (
+            (biasDir > 0) if SIDE == "long only" else (biasDir < 0))
+        if (famOk and gate_ok and side_ok and colourOk
                 and (i - pbExtX) <= LOC_TOL):
             # THE NEWEST PIN SUPERSEDES, AND THE PRIORITY SHAPE OUTRANKS
             # RECENCY. Hammer in a bearish trend, shooting star in a bullish

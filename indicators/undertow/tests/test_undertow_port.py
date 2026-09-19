@@ -668,7 +668,7 @@ def test_pin_lag_picks_the_second_newest_and_costs_the_singletons():
           f"{len(pb - pa)} pins unique to lag 1 · {b.nLagShort} pullbacks gave up")
 
 
-def test_shorts_only_removes_longs_without_disturbing_the_shorts():
+def test_one_sided_trading_leaves_the_other_side_untouched():
     """Filtering at the pin, not on the trade list.
 
     A long that never existed also never took a `maxLive` slot. Filtering the
@@ -677,11 +677,21 @@ def test_shorts_only_removes_longs_without_disturbing_the_shorts():
     """
     cs = walk(8000, seed=31, drift=-0.0003)
     full = U.run(cs, U.P(maxLive=64), "T")
-    sh = U.run(cs, U.P(maxLive=64, shortsOnly=True), "T")
+    sh = U.run(cs, U.P(maxLive=64, side=U.SIDE_SHORT), "T")
     ok(all(x["short"] for x in sh.armed), "every armed setup is a short")
     a = {(x["short"], x["pin"], x["bar"]) for x in full.armed if x["short"]}
     b = {(x["short"], x["pin"], x["bar"]) for x in sh.armed}
     ok(a == b, f"the shorts are the same ones: {len(a & b)}/{len(a)} at maxLive 64")
+    # AND THE LONG SIDE, which the boolean this replaced could not express at
+    # all. A mirror that is never run is a mirror nobody has looked in.
+    lo = U.run(cs, U.P(maxLive=64, side=U.SIDE_LONG), "T")
+    ok(all(not x["short"] for x in lo.armed), "every armed setup is a long")
+    la = {(x["pin"], x["bar"]) for x in full.armed if not x["short"]}
+    lb = {(x["pin"], x["bar"]) for x in lo.armed}
+    ok(la == lb, f"the longs are the same ones: {len(la & lb)}/{len(la)}")
+    ok(len(a) + len(la) == len(full.armed),
+       f"the two sides partition the whole run: {len(a)} + {len(la)} "
+       f"== {len(full.armed)}")
 
 
 def test_slope_in_hours_survives_an_aggregation():
@@ -899,7 +909,7 @@ def main():
                test_price_swing_sources_run_end_to_end,
                test_every_bias_source_can_actually_arm_a_setup,
                test_pin_lag_picks_the_second_newest_and_costs_the_singletons,
-               test_shorts_only_removes_longs_without_disturbing_the_shorts,
+               test_one_sided_trading_leaves_the_other_side_untouched,
                test_the_stop_fallback_cannot_touch_a_source_that_has_a_minor_tier,
                test_slope_in_hours_survives_an_aggregation,
                test_htf_hours_is_the_same_gate_in_a_consistent_unit):

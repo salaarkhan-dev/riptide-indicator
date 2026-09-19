@@ -106,6 +106,8 @@ smcInternalLen = input.int(5, "Internal structure", minval = 2, maxval = 50,
 // is one fewer thing to reason about. Nineteen studies pinned it and none of
 // them could be affected — every one pinned the swing tier, which is now the
 // only behaviour.
+side = input.string("both", "Trade side", options = ["both", "long only", "short only"], group = gBias,
+  tooltip = "WHICH DIRECTIONS THE CHART TAKES.\n\n'both' ships. 'long only' and 'short only' run exactly one leg — same rules, mirrored.\n\nTHE MIRROR, so it is written down somewhere: in a DOWNTREND the pullback rallies and the pin is a GREEN HAMMER at the top of it, Working is the pin's high and Failure its low. In an UPTREND the pullback dips and the pin is a RED SHOOTING STAR at the bottom of it, Working is the pin's LOW and Failure its HIGH.\n\nThe shape names who is ATTACKING the trend, not who is defending it: the hammer's lower wick is buyers pushing up against a downtrend, and the setup trades that push failing. The star's upper wick is sellers pushing down against an uptrend, same thing mirrored.\n\nIT FILTERS AT THE PIN, not at the alert. A setup on the excluded side never exists, so it never takes one of the 'Live setups at once' slots either — which is why this is a setting rather than something to ignore in the alert feed.")
 biasGate = input.string("direction only", "Bias gate", options = ["tradeable", "direction only"], group = gBias,
   tooltip = "WHAT THE BIAS IS FOR.\n\n'direction only' is what ships: the bias says WHICH WAY and never refuses a setup. Immature, Running and Ending all trade. The alert and the panel still report which state each setup was taken in, so the three can be compared later — which is the whole reason for taking them all.\n\n'tradeable' is the older behaviour: a setup is refused unless the bias is Immature or Running, so Ending and None kill it outright.\n\nWHAT THE VETO WAS COSTING. On a Min30 chart the bias is Ending roughly three quarters of the time at a 50-bar pivot, and it LATCHES — it clears only on a new CHoCH or a break of structure in the trend's direction. One of the setups that led to this change was refused while the retracement that caused the Ending had already recovered to 46% against a threshold of 70.\n\nThis is a DESIGN DECISION, not a measured one. Nothing here says the Ending state is uninformative; it says the state should be recorded rather than used as a veto until it has been scored.")
 endMinor = input.string("on the flip", "End: minor structure", group = gBias,
@@ -1099,7 +1101,9 @@ bool locOk = bar_index - anchorX <= locTol
 
 bool barOk = barstate.isconfirmed
 bool pinRaw = barOk and famOk
-bool pinFound = pinRaw and gateOk
+// ONE SIDE, OR BOTH. At the pin, so an excluded setup never takes a live slot.
+bool sideOk = side == "both" or (side == "long only" ? biasDir > 0 : biasDir < 0)
+bool pinFound = pinRaw and gateOk and sideOk
 bool pinOk = pinFound and colourOk and locOk
 
 // The grade is a LABEL and gates nothing. Free to record, and if partials later

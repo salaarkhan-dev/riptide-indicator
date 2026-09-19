@@ -84,6 +84,7 @@ MIRRORED = {
     "msLen": ("const", "MS_LEN"),
     "msShortLen": ("const", "MS_SHORT_LEN"),
     "biasGate": ("const", "BIAS_GATE"),
+    "side": ("const", "SIDE"),
     # BOTH WERE HARDCODED AND BOTH BECAME REAL. This check is what said so, the
     # moment the chart's defaults moved: it had `armWins` pinned at False and
     # `stopSrc` at the pullback extreme with the watcher's code as the reason,
@@ -137,7 +138,6 @@ ABSENT = {
     "retraceLatch": (True, "the watcher latches Ending like the chart"),
     "locAtr": (0.0, "the watcher's location test counts bars"),
     "pbLook": (10, "PIN_LOCAL only; the watcher has no local anchor"),
-    "shortsOnly": (False, "the watcher alerts both directions"),
     # the nine bias sources the watcher does not run. Guarded by biasSrc,
     # which is MIRRORED, so a switch away from SMC is caught there.
     # THESE TWO WERE IN THE HARDCODED BUCKET AND THE REASONS WERE WRONG.

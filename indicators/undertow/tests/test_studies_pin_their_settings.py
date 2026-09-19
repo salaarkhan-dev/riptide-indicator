@@ -499,7 +499,21 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # _bar_pivots -- so the check that exists to stop the chart and the bot
 # drifting apart was blind to the single largest lever on either. Moved to
 # MIRRORED with msShortLen and biasGate.
-DEFAULTS_FINGERPRINT = "be2ecc06ce36fb9a"
+# 2026-09-19: `shortsOnly` (bool) -> `side` (both / long only / short only),
+# in all three copies, with a Pine input and a watcher constant.
+#
+# The boolean could express "shorts only" and "both" and NOT "long only", which
+# is how the bearish leg came to be the only one ever measured on its own -- by
+# accident of a field's shape rather than by choice. Default "both" is exactly
+# what `shortsOnly=False` did, so nothing moves: undertow_anchor BIT-IDENTICAL.
+#
+# THE MIRROR IS NOW ASSERTED, not assumed. test_one_sided_trading_leaves_the_
+# other_side_untouched runs both legs and checks they PARTITION the whole run:
+# 94 shorts + 32 longs == 126 armed, each leg identical to its half of the
+# two-sided run. The long side had never been exercised on its own at all.
+#
+# 78 fields, and `side` is MIRRORED in the three-way check rather than ABSENT.
+DEFAULTS_FINGERPRINT = "8654fa32717c7b64"
 DEFAULTS_COUNT = 78
 
 good = []
