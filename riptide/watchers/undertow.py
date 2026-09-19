@@ -227,14 +227,21 @@ PB_LOOK = 10
 # does not support it (UNDERTOW_PINLAG.md is a null). It ships because it arms
 # the setups he takes; see ../../indicators/undertow/CASES.md.
 #
-# 1 -> 0 -> 1 IN ONE DAY. It went to 0 when PIN_PICK shipped, because the lag
+# 1 -> 0 -> 1 -> 0, and the last move settles it. The rule, stated outright:
+# "we always send the alert when both parts are done, Worked and Failed, so
+# the first candle that does these first we will choose those". A LAG OF 1
+# CANNOT IMPLEMENT THAT -- the newest qualifying candle has zero newer
+# candles and the gate demands exactly one, so the candle that completes W->F
+# first is refused and the alert fires on a later one, a median EIGHT BARS
+# late on 15m. At 0 the pick arms at the first completion. The earlier note:
+# it went to 0 when PIN_PICK shipped, because the lag
 # runs BEFORE the pick and the two are different answers to the same question:
 # at 1 the pick chooses from what the lag left rather than from the pullback.
 # Restored at the chart owner's instruction, with the cost in front of him --
 # 243 armed against 2186 on Min15 across 8 symbols -- so that these alerts and
 # his chart fire on the same candle. Consistency is the reason; it is his to
 # give and it is written down rather than absorbed.
-PIN_LAG = 1
+PIN_LAG = 0
 # WHICH OF THE CONFIRMING CANDLES ARMS, by PRICE rather than by position.
 #
 # `PIN_LAG` is a rule about position -- "the second-newest" -- and it is a
@@ -655,7 +662,7 @@ class _Cand:
         self.workBar = kw.get("workBar", -1)
 
 
-def run_setups(cs, max_live: int = 4):
+def run_setups(cs, max_live: int = 16):
     """The two moments worth alerting on: ARMED, and FILLED.
 
     Sections 3-7 of riptide-undertow.pine. The structure engine, the minor
@@ -1083,7 +1090,7 @@ def run_setups(cs, max_live: int = 4):
     return armed, filled
 
 
-def armed_setups(cs, max_live: int = 4) -> list:
+def armed_setups(cs, max_live: int = 16) -> list:
     """Just the arming events. Kept because the rate study and the detectors
     read one list at a time, and one machine must produce both."""
     return run_setups(cs, max_live)[0]

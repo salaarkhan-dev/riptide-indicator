@@ -810,20 +810,24 @@ def test_the_shipped_configuration_actually_finds_setups():
     r = U.run(cs, U.P(maxLive=64), "T")
     p = U.P()
     ok(p.pinAt == U.PIN_LOCAL and p.pinPick == U.PICK_BEST
-       and p.pinLag == 1 and p.locTol == 3 and p.maxLive == 4,
+       and p.pinLag == 0 and p.locTol == 3 and p.maxLive >= 10,
        f"the shipped config: {p.pinAt!r}, {p.pinPick!r}, lag {p.pinLag}, "
        f"tol {p.locTol}, cap {p.maxLive}")
     ok(len(r.pins) > 0, f"the shipped default finds pins: {len(r.pins)}")
     ok(len(r.armed) > 0, f"and some of them arm: {len(r.armed)}")
     ok(len(r.real) > 0, f"and some of those fill: {len(r.real)}")
-    # THE LAG IS BACK ON AND MUST BE COSTING SOMETHING. `nLagShort` counts
-    # pullbacks it refused for want of a candle to pick; at lag 1 a ZERO here
-    # would mean the gate is not running at all. This assertion has now been
-    # inverted twice in one day, once in each direction, which is what a test
-    # pinned to a contested default looks like -- and is why it names every
-    # setting it depends on above rather than reading `U.P()` and hoping.
-    ok(r.nLagShort > 0,
-       f"the lag gives up the single-candle pullbacks: {r.nLagShort}")
+    # THE LAG IS OFF AND MUST COST NOTHING. `nLagShort` counts pullbacks it
+    # refused for want of a candle to pick; at lag 0 a non-zero value would
+    # mean the gate is running when it should not be.
+    #
+    # THE CAP IS ASSERTED AT >= 10 RATHER THAN AT A VALUE, and that is the only
+    # assertion in this file with an inequality in it. Below 10 the port and
+    # the watcher stop agreeing on which pins the pool admits, so a cap that
+    # binds is not a preference -- it is the chart and the bot alerting
+    # different setups. The exact number may move; going back under the
+    # threshold must not.
+    ok(r.nLagShort == 0,
+       f"the lag imposes nothing at 0: {r.nLagShort}")
     # AND THE PICK IS ACTUALLY CHOOSING rather than being handed its answer.
     # Zero here would mean the shipped rule only changes the FREQUENCY, which
     # is most of what it does but is not all of what it claims.

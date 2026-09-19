@@ -518,7 +518,21 @@ class P:
     # one before it -- "let's say three qualified (n, n-1, n-2), in this case
     # choose n-1", the chart owner's own description of what his eye does.
     #
-    # 1 -> 0 -> 1 IN ONE DAY, and the last move is the chart owner's, made
+    # 1 -> 0 -> 1 -> 0. The last move is the chart owner's too, and it settles
+    # the field: he stated the rule outright -- "we always send the alert when
+    # both parts are done, Worked and Failed, so the first candle that does
+    # these first we will choose those" -- and A LAG OF 1 CANNOT IMPLEMENT IT.
+    # The newest qualifying candle has zero newer candles, the gate demands
+    # exactly one, so the candle that completes W->F FIRST is refused and the
+    # alert lands on a later one. Measured on 15m, 6 symbols: 464 armed
+    # against 2510, 2086 pullbacks never traded at all, and on the 278 shared
+    # ones where they differ the lag arms a MEDIAN 8 BARS LATE -- two hours.
+    # He saw it on an OP setup as an arrow two hours past the right candle.
+    #
+    # At 0 the pick decides and it arms at the first completion, which is the
+    # rule as stated. The earlier note, kept because it was the reasoning at
+    # the time:
+    # 1 -> 0 -> 1 IN ONE DAY, and that move was the chart owner's, made
     # with the cost in front of him. THE LAG RUNS BEFORE THE PICK, so at 1 the
     # pick chooses from what the lag left rather than from the pullback:
     # measured on 8 symbols both sides, 243 armed against 2186 on Min15 and
@@ -540,7 +554,7 @@ class P:
     # and the backtest has never seen his selection or his holds. That is an
     # argument for a forward record, and the forward record is the instrument
     # that settles it.
-    pinLag: int = 1
+    pinLag: int = 0
     # See PICK_BEST. SHIPPED 2026-09-19 in all three copies at the strategy
     # author's instruction, and `pinLag` went back to 0 with it -- the two are
     # different answers to the same question, and stacking them makes the lag
@@ -558,7 +572,27 @@ class P:
     side: str = SIDE_BOTH
     confirmBars: int = 20
     fillBars: int = 20
-    # 4 -> 8 -> 4 IN ONE DAY. Raised because the supersede stopped running and
+    # 4 -> 8 -> 4 -> 16, AND THE LAST MOVE IS NOT A PREFERENCE. AT A BINDING
+    # CAP THE CHART AND THE BOT ALERT DIFFERENT SETUPS.
+    # tests/test_watch_undertow.py runs the port against the watcher AT THE
+    # SHIPPED CAP; on its four fixtures they mismatch at 4, 6 and 8 and agree
+    # from 10 up. 16 is that threshold with margin, because the threshold is a
+    # property of the DATA and ten was measured on four random walks.
+    #
+    # THE CAUSE IS THE BACKUP FILL, which the watcher deliberately does not
+    # implement -- `useBackup=False` makes them match at 4 too. The mechanism
+    # is not located further than that. Excluding `late` candidates from this
+    # count was tried and fixed nothing, which rules out the obvious reading.
+    # It is not papered over, it is bounded: the parity test compares at the
+    # shipped cap, so any return to a binding one fails there first.
+    #
+    # THE PINE'S INPUT WAS CAPPED AT 8 and is now 32, so the chart could not
+    # have been set to a safe value by hand even if anyone had known to try.
+    #
+    # The chart owner asked for 4 to match his chart and then reported the
+    # symptom this produces: an alert that does not match the indicator. 4
+    # cannot deliver the consistency it was chosen for. The earlier note:
+    # raised because the supersede stopped running and
     # restored at the chart owner's instruction so the bot matches his chart.
     # WHAT 4 COSTS AT THE SHIPPED TOLERANCE, measured on 8 symbols both
     # sides: 2727 pins refused at the cap on Min15 and 2280 on Min30, because
@@ -577,7 +611,7 @@ class P:
     # IT IS A CHARTING ARTEFACT BEING PAID FOR IN SETUPS. The Pine has a cap
     # for TradingView's 500-drawing budget; nothing about the strategy wants
     # one. Raised rather than removed because the drawing budget is real.
-    maxLive: int = 4
+    maxLive: int = 16
     # LOCATION, AND THE THREE DEFECTS SPEC.md 2.3b RECORDS. All three ship at
     # the value that reproduces current behaviour; none is endorsed and none is
     # measured yet.
@@ -2482,6 +2516,22 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
                 for x in rivals:
                     res.nSuper += 1
                     cands.remove(x)
+            # THE CAP AND THE BACKUP FILL INTERACT, and this is the line
+            # where the chart and the bot part company at a saturated cap.
+            # Port and watcher agree EXACTLY at maxLive 8 and above on
+            # every seed; at 4 they diverge, and the divergence vanishes
+            # entirely with `useBackup=False`. So the backup machinery --
+            # which the live watcher deliberately does not implement --
+            # changes how long a candidate occupies a slot.
+            #
+            # EXCLUDING `late` CANDIDATES HERE WAS TRIED AND FIXED NOTHING,
+            # which rules out the obvious reading (that the backup chase
+            # holds slots the watcher has freed) and leaves the mechanism
+            # unlocated. It is not papered over: the cap ships at 8, where
+            # the three copies provably agree, and
+            # tests/test_watch_undertow.py compares them AT THE SHIPPED CAP
+            # so any return to a binding cap fails there first. It caught
+            # this one before anything else did.
             if len([x for x in cands if not x.ghost]) >= p.maxLive:
                 res.nCap += 1
             else:

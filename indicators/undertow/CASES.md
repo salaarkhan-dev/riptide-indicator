@@ -542,3 +542,68 @@ underway** — nothing checks that a field is pinned before somebody wants to
 move it. The guard is sound and the habit is missing, and the fix is a sweep
 that flags any field a live study reads without naming, run before the next
 default change rather than during it.
+
+---
+
+## Case 7 — OP_USDT Min15: "the alert doesn't match the indicator"
+
+Two complaints in one screenshot, and **both were real defects rather than
+misreadings.** Neither was found by a test; both were found by looking at a
+chart.
+
+### 1. THE ALERT MARKED A CANDLE TWO HOURS LATE
+
+> "we always send the alert when both parts are done, Worked and Failed, so the
+> first candle that does these first we will choose those"
+
+**`pinLag = 1` cannot implement that rule.** The newest qualifying candle has
+zero newer candles and the gate demands exactly one, so the candle that
+completes W→F *first* is structurally refused and the alert lands on a later
+one. Measured on 15m, 6 symbols:
+
+| | lag 1 | lag 0 |
+|---|---|---|
+| armed | 464 | **2510** |
+| pullbacks never traded | **2086** | — |
+| arm delay on shared pullbacks | **median 8 bars — two hours** | — |
+
+Shipped `pinLag = 0`.
+
+**And a measurement I got wrong first.** I was about to say lag 1 gives worse
+entries. On 424 pullbacks both rules trade they pick the *same* candle 397
+times, and of the 27 disagreements lag 0 gives the better entry only 5 times
+(19%) — lag 1 arms later, so the pick sees more confirmed candidates by then.
+The cost of lag 1 is the pullbacks it skips and the delay, **not** entry
+quality. Checked before asserting, which is the only reason the wrong version
+is in this paragraph instead of in his inbox.
+
+### 2. THE CHART AND THE BOT GENUINELY DISAGREED
+
+`test_watch_undertow` compares the port against the watcher **at the shipped
+cap**. At `maxLive 4` they mismatch on three of four fixtures; at 6 and 8 they
+still mismatch; from **10** up they agree exactly.
+
+**The cause is the backup fill**, which the watcher deliberately does not
+implement — `useBackup=False` makes them match at 4 too. It changes how long a
+candidate occupies a pool slot, so at a saturated cap the two admit different
+pins. Excluding `late` candidates from the cap count was tried and **fixed
+nothing**, which rules out the obvious reading and leaves the mechanism
+unlocated. It is bounded rather than papered over: the cap ships at **16**, and
+the parity test compares at the shipped cap so any return to a binding one
+fails there first.
+
+**The Pine's own input was capped at `maxval = 8`**, so the chart could not have
+been set to a safe value by hand even by someone who knew.
+
+### WHAT THIS SAYS ABOUT THE ENTRY ABOVE IT
+
+He asked for his screenshot verbatim so the chart and the bot would be
+consistent. **Two of those three values defeated the consistency they were
+chosen for**, and the measurement that would have shown it — the parity test at
+a binding cap — had never been run, because the cap had never bound. `locTol
+3`, the one value that was genuinely his rather than a TradingView leftover,
+stands unchanged.
+
+The lesson is not "he chose wrong". It is that **"make the code match my chart"
+is only safe when something checks that the chart's own values are mutually
+consistent**, and nothing did.

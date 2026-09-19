@@ -82,7 +82,7 @@ PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
           # the argument turns on whether the default MOVES, not on how many
           # studies read the field.
           "pinAt", "pinLag",
-          # `pinPick` -> PICK_BEST and `maxLive` 4 -> 8, shipped together on
+          # `pinPick` -> PICK_BEST and `maxLive` -> 8 -> 4 -> 16, shipped on
           # the strategy author's instruction. Both in here BEFORE either
           # moved; all twenty-two baselines name them.
           #
@@ -688,7 +688,38 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # pass alone, then the three defaults moved, then anchor re-run BIT-IDENTICAL.
 #
 # 79 fields, unchanged.
-DEFAULTS_FINGERPRINT = "d92c378ec174506b"
+# 2026-09-19: `pinLag` 1 -> 0 and `maxLive` 4 -> 16, and BOTH ARE CORRECTIONS
+# TO THE ENTRY ABOVE rather than new preferences.
+#
+# `pinLag` 0, because he stated the rule outright -- "we always send the
+# alert when both parts are done, Worked and Failed, so the first candle
+# that does these first we will choose those" -- and A LAG OF 1 CANNOT
+# IMPLEMENT IT. The newest qualifying candle has zero newer candles and the
+# gate demands exactly one, so the candle that completes W->F FIRST is
+# refused and the alert lands on a later one. Measured on 15m, 6 symbols:
+# 464 armed against 2510, 2086 pullbacks never traded at all, and on the 278
+# shared ones the lag arms a MEDIAN 8 BARS LATE -- two hours. He found it on
+# an OP setup as an arrow two hours past the right candle.
+#
+# `maxLive` 16, because AT A BINDING CAP THE CHART AND THE BOT ALERT
+# DIFFERENT SETUPS, which is the other half of what he reported. The parity
+# test compares port against watcher at the SHIPPED cap and they mismatch at
+# 4, 6 and 8 and agree from 10 up; 16 is that threshold with margin, since
+# ten was measured on four random walks and the threshold is a property of
+# the data. The cause is the backup fill, which the watcher does not
+# implement -- `useBackup=False` makes them match at 4 too -- and the
+# mechanism is not located further than that. The Pine's input was itself
+# capped at 8, so the chart could not have been set to a safe value by hand.
+#
+# WHAT THIS SAYS ABOUT YESTERDAY'S ENTRY. He asked for his screenshot
+# verbatim to make the chart and the bot consistent. Two of those three
+# values DEFEATED the consistency they were chosen for, and the measurement
+# that would have shown it -- the parity test at a binding cap -- had never
+# been run because the cap had never bound. `locTol 3`, the one value that
+# was genuinely his, stands.
+#
+# 79 fields, unchanged. undertow_anchor BIT-IDENTICAL.
+DEFAULTS_FINGERPRINT = "6d21de0815456a97"
 DEFAULTS_COUNT = 79
 
 good = []
