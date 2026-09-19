@@ -221,3 +221,49 @@ expectancy has not moved, which narrows the remaining candidates to two:
 [`label_setups.py`](label_setups.py) exists for — and **how long he holds**,
 where his 10.73R and 10.11R sit in the top 6% of a distribution the fixed 3.5R
 target caps off.
+
+---
+
+## Case 5 — VVV_USDT Min15, the FIRST LONG, and it overturns a conclusion
+
+Not in the cache (it ends 09-17 at 24.58; this is live at 28.05), so it is
+recorded from the chart rather than diagnosed from candles. Two qualifying
+candles in the dip; he was asked which he would take and answered **the earlier
+one** — the second-last qualified, mirrored to the long side exactly as stated.
+
+Entry 27.730, stop 27.132, target 29.483 — RR **2.9**, against the 8–10 on his
+shorts. Worth noting rather than explaining: the long side may simply not offer
+the same reward, and nothing here has measured that.
+
+### THE CONCLUSION IT OVERTURNS, and the bug under it
+
+CASES.md previously recorded: *"his stated rule is not the one his trades fit"*
+— `pinLag 1` armed case 2 and not case 3, while `pinNewest` off armed both.
+
+**That was a bug in `pinLag`, not a fact about his trading.** `pinSeen`, the
+per-pullback count of qualifying candles the lag reads, was reset inside the
+block that handles the STRUCTURAL pullback boundary, while `PIN_LOCAL` set its
+own boundary two hundred lines later. The counter was therefore running across
+what PIN_LOCAL treats as several separate pullbacks, and "exactly one newer
+candle" fired at the wrong moments. The rule was never fairly tested.
+
+With the boundary unified — PIN_LOCAL now computes its pullback at the top of
+the bar, where the reset happens:
+
+| rule | case 1 | case 2 | case 3 | Min30 armed |
+|---|---|---|---|---|
+| `pinNewest` on — ships | refused: shape | no arm | ARMED +3.32R | 102 |
+| `pinNewest` off | refused: shape | ARMED +3.25R | ARMED +3.32R | 202 |
+| **`pinLag 1` — his rule** | refused: shape | **ARMED +3.25R** | **ARMED +3.25R** | **41** |
+
+**His stated rule fits every case that can be tested**, and case 5 confirms it
+on the long side. It is also far the most selective — 41 armed against 102 and
+202 — which is the shape of a rule belonging to someone who takes one or two
+setups a day out of a hundred and fifty found.
+
+Case 1 is still refused, still on `wickEdge`, still left alone.
+
+**The lesson is the one this file keeps recording**: a rule that fails a test
+has two possible causes, and the implementation is the one to rule out first.
+`undertow_pinlag.py`'s null — -0.468 / -0.056 / +0.870 — was measured on the
+same broken counter and should be re-run before it is cited again.

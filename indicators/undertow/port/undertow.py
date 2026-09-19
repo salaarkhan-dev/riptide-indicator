@@ -1773,6 +1773,7 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
     pbExtX = None
     # Qualifying candles so far in the CURRENT pullback, per direction.
     pinSeen: dict = {}
+    prevLocLo = None
     pbStartX = None
     # The per-leg running extreme, for PIN_LEG. See the constant's note.
     legMax = legMin = None
@@ -1789,6 +1790,28 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         pbReset = (biasDir != prevDir
                    or (biasDir < 0 and st["msMinX"][i] != prevMinX)
                    or (biasDir > 0 and st["msMaxX"][i] != prevMaxX))
+        # PIN_LOCAL DEFINES ITS OWN PULLBACK, so it has to define its own
+        # boundary too. Computed here rather than at the anchor below, because
+        # `pinSeen` -- the per-pullback count of qualifying candles that
+        # `pinLag` reads -- is reset in the block that follows, and it was
+        # being reset on the STRUCTURAL boundary while the anchor used the
+        # local one. `pinLag` was therefore counting across what PIN_LOCAL
+        # considers several separate pullbacks, and "exactly one newer candle"
+        # fired at the wrong moments. That is a bug, and a conclusion was drawn
+        # from it: that the chart owner's stated "take the second-last
+        # qualified" did not fit his own case 3. It may simply never have been
+        # tested.
+        locLoX = locExX = None
+        if p.pinAt == PIN_LOCAL:
+            j0 = max(0, i - p.pbLook)
+            locLoX = (min(range(j0, i + 1), key=lambda k: cs[k].l)
+                      if biasDir < 0
+                      else max(range(j0, i + 1), key=lambda k: cs[k].h))
+            span = range(locLoX, i + 1)
+            locExX = (max(span, key=lambda k: cs[k].h) if biasDir < 0
+                      else min(span, key=lambda k: cs[k].l))
+            pbReset = locLoX != prevLocLo
+            prevLocLo = locLoX
         if pbReset or pbExt is None:
             pbExt = c.h if biasDir < 0 else c.l
             pbExtX = i
@@ -2154,16 +2177,10 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         # shows. See the constants at the top for why the third exists.
         anchorX = pbExtX
         if p.pinAt == PIN_LOCAL:
-            # Recomputed per bar rather than tracked, because the window slides
-            # and a running extreme cannot un-see a low that has aged out.
-            j0 = max(0, i - p.pbLook)
-            loX = min(range(j0, i + 1), key=lambda k: cs[k].l) if biasDir < 0 \
-                else max(range(j0, i + 1), key=lambda k: cs[k].h)
-            span = range(loX, i + 1)
-            exX = (max(span, key=lambda k: cs[k].h) if biasDir < 0
-                   else min(span, key=lambda k: cs[k].l))
-            pbExt = cs[exX].h if biasDir < 0 else cs[exX].l
-            pbExtX, pbStartX, anchorX = exX, loX, exX
+            # Already computed at the top of the bar, where it also decides the
+            # pullback boundary that `pinSeen` resets on.
+            pbExt = cs[locExX].h if biasDir < 0 else cs[locExX].l
+            pbExtX, pbStartX, anchorX = locExX, locLoX, locExX
         elif p.pinAt == PIN_TREND:
             anchorX = (st["msMinX"][i] if biasDir < 0 else st["msMaxX"][i])
             if anchorX is None:
