@@ -310,6 +310,16 @@ def check(path: str) -> list[str]:
                          body):
                 used += [int(x.group(1)) for x in
                          re.finditer(rf"^\s*{fn}\((\d+),", src, re.M)]
+                # A ROW INDEX CHOSEN BY A TERNARY, which the literal pass
+                # above cannot see. Undertow's panel writes its conditional
+                # last row as `rowSm(dbgOn ? 17 : 15, ...)`, and that index was
+                # invisible here -- so the one row whose position DEPENDS on a
+                # setting was the one row the overflow check did not cover.
+                # Both branches must be literals; anything else stays invisible
+                # and is still stated rather than papered over.
+                used += [max(int(a), int(b)) for a, b in
+                         re.findall(rf"^\s*{fn}\([^,()]*\?\s*(\d+)\s*:\s*"
+                                    rf"(\d+)\s*,", src, re.M)]
         if used and max(used) >= height:
             bad(decl, f"table {tname} is declared with {height} rows and row "
                       f"index {max(used)} is written -- table.cell past the "
