@@ -337,13 +337,11 @@ def main() -> int:
         # chart and the port on different admission rules without a line of
         # Pine changing.
         "locAtr": (0.0, "the Pine's location test counts bars, not ATR"),
-        # RESEARCH-ONLY FOR NOW, on the value the chart behaves as: the Pine
-        # arms whichever candidate confirms, which is PICK_READY. It exists for
-        # undertow_pinpick.py. If it ships it becomes a Pine input and moves
-        # out of here -- and the check refuses the move until both ends agree,
-        # which is how `pinLag` and `pbLook` were caught.
-        "pinPick": ("the one that confirms",
-                    "the Pine arms whichever candidate confirms"),
+        # `pinPick` WAS HERE FOR ONE COMMIT. It went on the chart as a
+        # selectable input the same day, still defaulting to PICK_READY, so it
+        # is a shared input now and not an absent one. This check refused the
+        # move until both ends agreed -- the third time today, after `pbLook`
+        # and `pinLag`.
         # THE RETIRED BIAS SOURCES. EMA cross, Slope, Donchian midpoint,
         # Supertrend and MTF EMA align were all on the chart to be measured;
         # UNDERTOW_BIAS_SOURCE.md and undertow_slope.py measured them, none
