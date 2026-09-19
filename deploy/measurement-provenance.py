@@ -119,6 +119,14 @@ def report(only: list | None = None) -> int:
         print(f"  {state:<12} {stem:<12} {kept:3}/{len(want):<3} "
               f"published at {published_at(PAGES[stem])}"
               + ("" if not missing else f"   missing {' '.join(missing[:8])}"))
+    # THE SUMMARY AND THE ROWS DO AGREE, and a 2026-09-19 commit message says
+    # they do not. They were read through `| tail -18` against a 19-line
+    # report, which drops exactly one line: the first row, `anchor`, which
+    # sorts first. The conclusion drawn was that a page had gone through the
+    # loop without printing -- a defect in this file. There was none. Recorded
+    # so nobody spends an hour looking for it, and because a tool that says
+    # "17" while sixteen rows are visible is worth two seconds of `wc -l`
+    # before it is worth a bug report.
     print(f"\n{bad} of {len(rows)} pages no longer reproduce at HEAD")
     return rows
 
