@@ -57,6 +57,11 @@ PAGES = {
     "htf": "UNDERTOW_HTF.md", "late_backup": "UNDERTOW_LATE_BACKUP.md",
     "mtf_default": "UNDERTOW_MTF_DEFAULT.md", "mtf": "UNDERTOW_MTF_EMA.md",
     "overlap": "UNDERTOW_OVERLAP.md", "pullback": "UNDERTOW_PULLBACK.md",
+    # REGISTERED THE DAY THEY WERE WRITTEN, and the reason is what they are
+    # about. UNDERTOW_PINLAG.md was cited seven times before it existed; a page
+    # outside this map is a page nothing will notice going stale, which is the
+    # same gap one step later.
+    "pinlag": "UNDERTOW_PINLAG.md", "pinpick": "UNDERTOW_PINPICK.md",
     "scale": "UNDERTOW_SCALE.md", "slope": "UNDERTOW_SLOPE_DEFAULT.md",
     "strict": "UNDERTOW_STRICT.md", "v2": "UNDERTOW_V2.md",
     "v3": "UNDERTOW_V3.md",
