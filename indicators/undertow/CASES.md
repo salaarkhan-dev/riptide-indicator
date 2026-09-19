@@ -332,3 +332,103 @@ filled over 12,000 bars, with 1228 pullbacks refused for offering only one
 qualifying candle. A new test asserts that, because a selective rule and a
 broken one look identical from the outside and the difference is whether the
 number is small or zero.
+
+---
+
+## Case 6 — RIVER_USDT Min15: why the green one, and why `pinLag` is the wrong rule
+
+Not in the cache (23 symbols, RIVER is not one), so the pullback boundaries
+cannot be checked against candles. What CAN be answered exactly is the
+mechanism, and the mechanism is the answer.
+
+### WHY IT CHOSE THAT CANDLE
+
+`pinLag = 1` arms the candidate with **exactly one newer qualifying candle in
+its pullback**. That is the whole test. It does not look at price, it does not
+look at which working lines were broken, and it cannot prefer a higher entry.
+So the candle it picked is simply the one that happened to have one qualifying
+candle after it — nothing about that candle was judged.
+
+### AND THE STATED RULE IS NOT THE STATED GOAL
+
+Asked why he takes the second-last, the chart owner gave a different rule:
+
+> "sometimes after the last candle market never closes above its working line
+> and goes straight down, that's why we choose 2nd last so the next candle will
+> go above its working line"
+
+> "the main goal is for short trend how much up possible we can enter, not that
+> much up so we miss the entry W→F"
+
+"Second-last" is a **proxy** for that goal — a good one when the pullback offers
+two candles and the newest usually fails to Work, and wrong otherwise. He said
+so himself: *"in this case we can choose the last candle as the next candle
+closes beyond the working line of it"*.
+
+### THE GOAL IS DIRECTLY COMPUTABLE, WITH NO LOOKAHEAD
+
+For a short the pin is a hammer, so **W is a close above its high and F a close
+below its low**. Both are monotone in price:
+
+* a bar closing above one candle's high closes above every **lower** candle's
+  high — W spreads **downward**
+* a bar closing below one candle's low closes below every **higher** candle's
+  low — F spreads **upward**
+
+So on any bar the set of candles that have confirmed is known exactly, and its
+**highest member is the best short entry available at the moment an entry
+exists**. Higher pin, same stop (the pullback extreme), so tighter risk and
+better R. That is `pinPick = PICK_BEST`.
+
+It handles all three cases the proxy gets wrong:
+
+| the pullback | `pinLag 1` | `PICK_BEST` |
+|---|---|---|
+| last candle's working line WAS broken | refuses it, takes a worse entry | takes it |
+| last candle's working line was NOT broken | takes the one below — correct | takes the one below — same |
+| only ONE qualifying candle | **trades nothing at all** | trades it |
+
+### WHAT IT MEASURES, on the spent 23 — R per pullback offered
+
+`R/armed` flatters `pinLag 1`, because it is the average of a minority the rule
+selected itself. The unit that decides is R per pullback **offered**, charging
+each rule for the ones it passed on.
+
+| | Min15 | Min30 | Min60 |
+|---|---|---|---|
+| lag 0 · newest | −0.044 | +0.019 | −0.005 |
+| **lag 1 · ships** | **−0.013** | **+0.013** | **+0.007** |
+| **PICK_BEST** | **−0.036** | **+0.047** | **−0.014** |
+| C − B, clustered | −0.027 ±0.033 | +0.041 ±0.040 | −0.022 ±0.028 |
+
+**Another null.** The signs disagree across timeframes and no z reaches 1.1.
+What is not null is the frequency: **3236 / 3102 / 2990 armed against 447 / 456
+/ 430** — seven times as many, because `pinLag` refuses every single-candle
+pullback.
+
+### WHAT THE PICK ACTUALLY DOES, on 72 real disagreements (Min30, 8 symbols)
+
+* **63 of 72** keep the same candle and arm it **earlier** — `PICK_BEST` fires
+  at the first confirmation, `pinLag` waits until its count comes true.
+* **9 of 72** choose a genuinely different candle, and **all nine go later and
+  higher** — exactly the case in this screenshot.
+* Mean risk per trade **1.249% → 1.168%**, a 6.5% tighter stop on the
+  disagreements, which is the mechanical benefit and the reason the rule exists.
+
+### A REGRESSION THE SHIP INTRODUCED, found here
+
+`pinLag > 0` skips the newest-wins supersede, so the candidate pool no longer
+collapses to one per pullback — and the chart's `Live setups at once` default is
+**4**. Measured on Min15, 6 symbols:
+
+| rule | maxLive 4 | maxLive 8 |
+|---|---|---|
+| lag 0 (before the ship) | 0 pins refused | 0 |
+| **lag 1 (ships now)** | **412 refused — 6.6% of pins** | 3 |
+| PICK_BEST | 261 refused — 4.2% | 0 |
+
+That is the `at cap 75` on the screenshot's panel. It costs about 4% of armed
+setups and it was not flagged when `pinLag` shipped. **Immediate remedy: set
+"Live setups at once" to 8.** Moving the default is a separate change and needs
+`maxLive` pinned into `undertow_sweep.py` first — the one study of twenty-two
+that does not name it.

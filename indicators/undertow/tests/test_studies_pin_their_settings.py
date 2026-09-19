@@ -570,8 +570,26 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # fooled, so nothing broken has shipped; the blind spot was the hand-run pytest
 # that a person uses mid-change. Fixed first, because without it this entry
 # would be a claim with no evidence behind it.
-DEFAULTS_FINGERPRINT = "e8e30fa15b18d116"
-DEFAULTS_COUNT = 78
+# 2026-09-19: `pinPick` added, PICK_READY -- the rule `pinLag` is a proxy for,
+# and the proxy's own author described the real one when asked why he uses it.
+# See PICK_BEST in ../port and Case 6 in ../CASES.md.
+#
+# PURELY ADDITIVE. PICK_READY arms whichever candidate confirms, which is what
+# has always happened and what every page in ../measurements was produced
+# under. No existing default moves and no study's arms change;
+# test_pick_best_is_off_by_default_and_changes_nothing_when_off asserts the
+# armed lists are identical with the field named explicitly, and
+# undertow_anchor re-ran BIT-IDENTICAL before this line moved.
+#
+# NOT IN PINNED, on the `emaFast` argument a few hundred lines up: one study
+# reads it and putting it above would make twenty-two declare a setting they
+# never touch. It goes in the moment its default moves -- which is the rule
+# `pinLag` was moved under this morning, three entries above, and the reason
+# this file had to state the order a fourth time.
+#
+# 78 -> 79 fields.
+DEFAULTS_FINGERPRINT = "a583e60f9bc862a8"
+DEFAULTS_COUNT = 79
 
 good = []
 # The MESSAGE of each failed check, so the pytest guard below can name what

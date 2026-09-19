@@ -197,6 +197,46 @@ PIN_LEG = "leg extreme"
 # NOT MEASURED. It reproduces two remembered setups, which is a reason to
 # measure it and not a result.
 PIN_LOCAL = "local pullback"
+# `pinPick` -- WHICH OF THE PULLBACK'S CANDLES ARMS, decided by PRICE at the
+# moment of confirmation instead of by POSITION at the moment of the pin.
+#
+# `pinLag` answers the question by counting: "the one with exactly N newer
+# qualifying candles". That was never the rule -- it is a proxy for it, and the
+# chart owner said so when he explained WHY he takes the second-last: "sometimes
+# after the last candle market never closes above its working line and goes
+# straight down, that's why we choose 2nd last so the next candle will go above
+# its working line". The goal he stated is different from the rule he stated:
+#
+#   in a downtrend, enter AS HIGH AS POSSIBLE, but not so high that the
+#   W->F confirmation never happens and the entry is missed
+#
+# and mirrored for an uptrend: as low as possible without missing it.
+#
+# THE GEOMETRY MAKES THAT DIRECTLY COMPUTABLE, with no lookahead. For a short
+# the pin is a hammer, so Working is a close ABOVE its high and Failure a close
+# BELOW its low. Both tests are monotone in price:
+#
+#   a bar closing above one candle's high closes above every LOWER candle's
+#   high, so W spreads downward -- if a high candle has Worked, all the ones
+#   under it already have
+#
+#   a bar closing below one candle's low closes below every HIGHER candle's
+#   low, so F spreads upward
+#
+# So on any bar the candidates that have confirmed are known exactly, and the
+# highest of them is the best short entry available -- higher pin, same stop
+# (the pullback extreme), therefore tighter risk and better R. Taking the
+# highest CONFIRMED candidate is the stated goal, answered directly.
+#
+# WHAT IT FIXES THAT `pinLag` GETS WRONG:
+#   - the last candle DID get its working line broken -> lag 1 refuses it and
+#     takes a worse entry; this takes it
+#   - the last candle did NOT -> both take the one below it, which is the case
+#     `pinLag` was invented for
+#   - the pullback offers ONE qualifying candle -> lag 1 trades nothing at all,
+#     which is most of its frequency cost; this trades it
+PICK_READY = "the one that confirms"
+PICK_BEST = "best entry of those confirming"
 # `slopeUnit` — whether the Slope source measures its window and its threshold
 # in bars (so it means a different thing on every chart) or in time.
 SL_BARS = "bars"
@@ -492,6 +532,9 @@ class P:
     # argument for a forward record, and the forward record is the instrument
     # that settles it.
     pinLag: int = 1
+    # See PICK_BEST. Additive: PICK_READY is what has always happened, so every
+    # page keeps reproducing and `pinLag` still decides on its own.
+    pinPick: str = PICK_READY
     # WHICH SIDES TO TRADE: both, long only, short only.
     #
     # Filtered AT THE PIN, not on the trade list afterwards, and the difference
@@ -801,6 +844,11 @@ class Result:
     # have one to pick. At lag 0 this is always 0; at lag 1 it is most of them,
     # and it is the honest cost of the rule.
     nLagShort: int = 0
+    # Arms under PICK_BEST where the bar offered MORE THAN ONE confirming
+    # candle, so the pick actually chose rather than being handed its answer.
+    # Zero would mean the rule is inert and the frequency it recovers over
+    # `pinLag` is all that it does -- which is worth knowing either way.
+    nPickAmong: int = 0
     # The bias stopped being tradeable while the candidate was still unarmed.
     nBiasDrop: int = 0
     # Fills that came from a backup zone rather than the Focus line. Counted
@@ -1646,6 +1694,51 @@ def bias(cs, st, p: P):
 # ───────────────────────────────────────────────────── the setup machine ──
 
 
+def _confirms(c, cd, p, i):
+    """Would this candidate arm on bar `c`? PURE -- it mutates nothing.
+
+    `pinPick` has to know the WHOLE set of candidates confirming on this bar
+    before any of them arms, which means asking the question ahead of the loop
+    that normally answers it by mutating as it goes. Two copies of a predicate
+    are two chances to write the rule down differently, so the loop calls this
+    one too rather than keeping its own.
+
+    THE SAME-BAR CASE IS THE SUBTLE ONE. Under C_WF a Failure must land
+    STRICTLY after a Working break, so a bar that supplies both does not arm --
+    `cd.workBar` is set to `i` and `i > i` is false. Reproduced here rather
+    than approximated: the version of this that treated "W or already W" as
+    enough armed a bar early on every candidate whose W and F landed together.
+    """
+    wHit = (_beyond_up(c, cd.hi, p.workTest) if cd.workHi
+            else _beyond_dn(c, cd.lo, p.workTest))
+    fHit = (_beyond_dn(c, cd.lo, p.failTest) if cd.workHi
+            else _beyond_up(c, cd.hi, p.failTest))
+    if p.confirmOrder == C_EITHER:
+        return (cd.workOk or wHit) and (cd.failOk or fHit)
+    wBar = cd.workBar if cd.workOk else (i if wHit else -1)
+    return fHit and wBar >= 0 and i > wBar
+
+
+def _better_entry(a, b, short):
+    """Is `a` the better entry than `b` for this side?
+
+    A short wants the HIGHEST focus and a long the lowest, and the reason is
+    the stop rather than the fill: under the shipped `stopSrc` every candle in
+    the pullback shares one stop -- the pullback extreme -- so a higher short
+    entry is a tighter risk on the same trade, not merely a nicer price.
+
+    THAT IS ONLY TRUE WHILE THE STOP IS SHARED. Under `stopSrc = "Pin extreme"`
+    the stop rides on the candle itself and a higher pin buys nothing, so this
+    comparison is the wrong one there. It is left as is and said out loud
+    rather than quietly special-cased, because a pick rule that changes meaning
+    with another setting is worse than one that is simply wrong in a corner
+    nothing uses.
+    """
+    if b is None:
+        return True
+    return a.focus > b.focus if short else a.focus < b.focus
+
+
 def _beyond_up(c, lvl, mode):
     if mode == T_TOUCH:
         return c.c >= lvl
@@ -1865,6 +1958,30 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
         elif biasDir > 0 and c.l <= pbExt:
             pbExt, pbExtX = c.l, i
 
+        # ── WHICH CANDLE THIS BAR BELONGS TO, decided before any of them arms
+        # See PICK_BEST. The loop below arms each candidate as it reaches it,
+        # so by the time the second one is examined the first has already armed
+        # and `armWins` is about to sweep the rest -- there is no later moment
+        # at which the choice can still be made. It is made here.
+        #
+        # ONE PER BAR, NOT ONE PER PULLBACK, and that is deliberate: the first
+        # bar on which anything confirms is the moment the entry exists, and
+        # waiting past it for a higher candle that may confirm later is exactly
+        # the "not so high that we miss the entry" the rule is built to avoid.
+        # ONE PICK PER SIDE. A short's best entry is the highest and a long's
+        # the lowest, so a single winner compared across both directions would
+        # rank a long against a short on a number that means opposite things --
+        # and the losing side would then be unable to arm at all.
+        pick: dict = {}
+        if p.pinPick == PICK_BEST:
+            for cd in cands:
+                # A closed bias gate removes every unarmed candidate further
+                # down, so one cannot be picked here and dropped there.
+                if cd.armed or cd.ghost or not gateOk[i]:
+                    continue
+                if (_confirms(c, cd, p, i)
+                        and _better_entry(cd, pick.get(cd.short), cd.short)):
+                    pick[cd.short] = cd
         # ── every candidate, oldest last so removal is safe ─────────────────
         armWon: set = set()
         for cd in list(cands):
@@ -1934,6 +2051,17 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
                 if ready and p.pinLag:
                     newer = pinSeen.get(cd.short, 0) - cd.pinIdx - 1
                     ready = newer == p.pinLag
+                # THE PICK GATE. See PICK_BEST: of the candidates confirming on
+                # this bar, only the best-priced one arms. Chosen above, before
+                # the loop, because arming the first one reached would leave
+                # nothing to choose from.
+                if ready and p.pinPick == PICK_BEST:
+                    if pick.get(cd.short) is not cd:
+                        ready = False
+                    elif sum(1 for x in cands
+                             if x.short == cd.short and not x.armed
+                             and not x.ghost and _confirms(c, x, p, i)) > 1:
+                        res.nPickAmong += 1
                 if ready:
                     sw = st["sTopY"][i] if cd.short else st["sBtmY"][i]
                     base = ((cd.hi if cd.short else cd.lo) if p.stopSrc == S_PIN
@@ -2301,7 +2429,10 @@ def run(cs, p: P = P(), symbol: str = "", trace: bool = False) -> Result:
             # lag 0 and destroys the rule at lag 1 -- the candle to be traded
             # is one of the ones it would remove. So the deletion is skipped
             # while lagging and the arm gate below does the selecting instead.
-            if p.pinNewest and not p.pinLag:
+            # PICK_BEST NEEDS THE RIVALS ALIVE for the same reason `pinLag`
+            # does: the candle it would choose is one of the ones this block
+            # deletes. Skipped there too.
+            if p.pinNewest and not p.pinLag and p.pinPick != PICK_BEST:
                 # THE PRIORITY SHAPE WINS, and the newest of that shape. A
                 # hammer (lower wick) in a bearish trend, a shooting star
                 # (upper wick) in a bullish one; the other shape is used only

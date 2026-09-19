@@ -140,6 +140,13 @@ ABSENT = {
     # and the watcher implements it, so all three are MIRRORED above.
     "retraceLatch": (True, "the watcher latches Ending like the chart"),
     "locAtr": (0.0, "the watcher's location test counts bars"),
+    # Research-only for now, on the value the watcher behaves as: it arms
+    # whichever candidate confirms. Asserted rather than left None, because a
+    # default moving here would put the live alerts on a different candle from
+    # the chart without a line of watcher code changing -- the failure this
+    # file exists for, and the one `pinAt` walked into this morning.
+    "pinPick": ("the one that confirms",
+                "the watcher arms whichever candidate confirms"),
     # the nine bias sources the watcher does not run. Guarded by biasSrc,
     # which is MIRRORED, so a switch away from SMC is caught there.
     # THESE TWO WERE IN THE HARDCODED BUCKET AND THE REASONS WERE WRONG.

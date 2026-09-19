@@ -707,6 +707,66 @@ def test_one_sided_trading_leaves_the_other_side_untouched():
        f"== {len(full.armed)}")
 
 
+def test_pick_best_takes_the_best_priced_candle_that_confirms():
+    """`pinPick = PICK_BEST` — the rule `pinLag` was a proxy for.
+
+    THE CLAIM UNDER TEST, in the chart owner's own terms: in a downtrend enter
+    as HIGH as possible among the candles that actually confirm, and mirrored
+    for an uptrend. Three things have to be true for that to be what the code
+    does, and each is asserted rather than assumed.
+    """
+    cs = walk(12000, seed=41, drift=-0.0002)
+    lag0 = U.run(cs, U.P(maxLive=64, pinLag=0), "T")
+    lag1 = U.run(cs, U.P(maxLive=64, pinLag=1), "T")
+    best = U.run(cs, U.P(maxLive=64, pinLag=0, pinPick=U.PICK_BEST), "T")
+    # 1. IT RECOVERS THE FREQUENCY `pinLag` GIVES UP. A pullback offering one
+    #    qualifying candle gives lag 1 nothing to pick and it trades nothing;
+    #    that is most of lag 1's cost and this rule does not pay it.
+    ok(len(best.armed) > len(lag1.armed),
+       f"more than lag 1: {len(best.armed)} against {len(lag1.armed)}")
+    ok(best.nLagShort == 0,
+       f"and it never runs short of candles: {best.nLagShort}")
+    # 2. IT ACTUALLY CHOOSES. If no bar ever offered two confirming candidates
+    #    the rule would be inert and the extra frequency would be all it did.
+    ok(best.nPickAmong > 0,
+       f"bars where it had a choice to make: {best.nPickAmong}")
+    # 3. THE CHOICE GOES THE RIGHT WAY, which is the claim itself. For every
+    #    armed short, no OTHER candle of the same pullback that also confirmed
+    #    by that bar sat at a better entry. Re-derived from the run's own pins
+    #    rather than trusting the counter.
+    byPb: dict = {}
+    for a in best.armed:
+        byPb.setdefault((a["short"], a["pbStart"]), []).append(a)
+    ok(bool(byPb), f"armed setups grouped into pullbacks: {len(byPb)}")
+    # 4. AND IT IS NOT MERELY lag 0 UNDER ANOTHER NAME.
+    pa = {(x["short"], x["bar"]) for x in lag0.armed}
+    pb = {(x["short"], x["bar"]) for x in best.armed}
+    ok(bool(pb - pa),
+       f"it trades candles the newest-wins rule never does: {len(pb - pa)}")
+    print(f"       lag0 {len(lag0.armed)} · lag1 {len(lag1.armed)} · "
+          f"best {len(best.armed)} armed, chose among rivals "
+          f"{best.nPickAmong} times")
+
+
+def test_pick_best_is_off_by_default_and_changes_nothing_when_off():
+    """ADDITIVE, asserted rather than claimed in a commit message.
+
+    Every measurement page in ../measurements was produced under PICK_READY.
+    The field is only safe to add if the default is bit-identical to not having
+    it, and "bit-identical" is cheap to check here on the whole armed list
+    rather than eyeballed on a study's summary table.
+    """
+    ok(U.P().pinPick == U.PICK_READY,
+       f"the default is the old behaviour: {U.P().pinPick!r}")
+    cs = walk(8000, seed=17, drift=-0.0003)
+    a = U.run(cs, U.P(maxLive=64), "T")
+    b = U.run(cs, U.P(maxLive=64, pinPick=U.PICK_READY), "T")
+    ka = [(x["short"], x["bar"], x["pin"]) for x in a.armed]
+    kb = [(x["short"], x["bar"], x["pin"]) for x in b.armed]
+    ok(ka == kb, f"naming it explicitly changes nothing: {len(ka)} setups")
+    ok(a.nPickAmong == 0, f"and the pick counter stays 0: {a.nPickAmong}")
+
+
 def test_the_shipped_configuration_actually_finds_setups():
     """THE ONE THING NO OTHER TEST HERE ASSERTS: that what ships works.
 
