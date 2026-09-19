@@ -194,6 +194,26 @@ def report(tf, used, fun, trades, perSym, held):
           f"median symbol {statistics.median(ms):+.3f}")
     print(f"   worst leave-one-out {loo:+.3f}   "
           f"best symbol {ms[-1]:+.3f}   worst {ms[0]:+.3f}")
+    # CLUSTERED BY SYMBOL, because 200,000 trades are not 200,000 independent
+    # observations -- they overlap, and one symbol's trades share a regime.
+    # Equal weight per symbol, so a symbol with 900 trades cannot decide it.
+    #
+    # THE SIGN MATTERS AS MUCH AS THE MAGNITUDE. A first version of this
+    # printed "inside the noise" for anything under z 2 and so labelled a
+    # z of -4.12 as noise -- a significant LOSS reported as nothing to see.
+    se = statistics.stdev(ms) / len(ms) ** 0.5 if len(ms) > 1 else 0.0
+    mu = statistics.mean(ms)
+    z = mu / se if se else 0.0
+    verdict = ("ABOVE break-even" if z >= 2 else
+               "BELOW break-even — significantly" if z <= -2 else
+               "indistinguishable from zero")
+    print(f"   symbol-weighted R {mu:+.4f} +/- {se:.4f}   z {z:+.2f}   "
+          f"{verdict}")
+    # Trade-weighted and symbol-weighted can disagree in SIGN, and where they
+    # do the answer is zero rather than either of them.
+    if (mu > 0) != (statistics.mean(rs) > 0):
+        print("   ^ trade-weighted and symbol-weighted DISAGREE ON THE SIGN, "
+              "which is zero")
     return statistics.mean(rs)
 
 
