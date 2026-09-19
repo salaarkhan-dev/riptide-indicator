@@ -41,7 +41,7 @@ from riptide.config import BAR_SECONDS                           # noqa: E402
 # AS SHIPPED, PINNED — see test_studies_pin_their_settings.py. This BASE is
 # the live configuration: SMC 14/5, W→F, the priority pairing on, the
 # inclusive failure test. The only thing the arms vary is the anchor.
-BASE = U.P(pinPick=U.PICK_READY, pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_SMC, smcSwingLen=14, smcInternalLen=5,
+BASE = U.P(locTol=0, pinPick=U.PICK_READY, pinAt=U.PIN_PULL, pinLag=0, biasGate=U.BG_TRADEABLE, famStrict=False, armWins=False, stopSrc=U.S_PULL, useBackup=False, biasSrc=U.BS_SMC, smcSwingLen=14, smcInternalLen=5,
            confirmOrder=U.C_WF, pinNewest=True, famPriority=True,
            failTest=U.T_TOUCH, workTest=U.T_CLOSE,
            maxLive=64, feeFrac=FEE, rr=3.5,

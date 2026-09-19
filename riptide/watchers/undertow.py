@@ -205,7 +205,12 @@ END_STALE = False
 STALE_BARS = 30
 RETRACE_MAX = 70
 WICK_EDGE = 0.05
-LOC_TOL = 0
+# BARS A PIN MAY SIT PAST THE ANCHOR. 0 until 2026-09-19 -- the pin had to BE
+# the anchor bar, so a doji there discarded the whole pullback. 3 is the chart
+# owner's own setting and the only one of the three moved that day that was
+# never a default: it finds 62% more pins at roughly unchanged R per armed
+# setup (-0.024 vs -0.018 on Min15, +0.052 vs +0.051 on Min30).
+LOC_TOL = 3
 # THE ANCHOR, AND THIS FILE USED TO HARDCODE IT. `pinAt` sat in the three-way
 # check's HARDCODED bucket -- "run_setups pins at pbExtX and has no anchor
 # branch" -- with a note at the top of that file saying in as many words what
@@ -222,10 +227,14 @@ PB_LOOK = 10
 # does not support it (UNDERTOW_PINLAG.md is a null). It ships because it arms
 # the setups he takes; see ../../indicators/undertow/CASES.md.
 #
-# MOVED TO 0 when PIN_PICK below shipped. The two are different answers to the
-# same question and stacking them makes the lag filter the pick's input: the
-# candle the pick wants can be one the lag has already refused.
-PIN_LAG = 0
+# 1 -> 0 -> 1 IN ONE DAY. It went to 0 when PIN_PICK shipped, because the lag
+# runs BEFORE the pick and the two are different answers to the same question:
+# at 1 the pick chooses from what the lag left rather than from the pullback.
+# Restored at the chart owner's instruction, with the cost in front of him --
+# 243 armed against 2186 on Min15 across 8 symbols -- so that these alerts and
+# his chart fire on the same candle. Consistency is the reason; it is his to
+# give and it is written down rather than absorbed.
+PIN_LAG = 1
 # WHICH OF THE CONFIRMING CANDLES ARMS, by PRICE rather than by position.
 #
 # `PIN_LAG` is a rule about position -- "the second-newest" -- and it is a
@@ -625,7 +634,7 @@ class _Cand:
         self.workBar = kw.get("workBar", -1)
 
 
-def run_setups(cs, max_live: int = 8):
+def run_setups(cs, max_live: int = 4):
     """The two moments worth alerting on: ARMED, and FILLED.
 
     Sections 3-7 of riptide-undertow.pine. The structure engine, the minor
@@ -1053,7 +1062,7 @@ def run_setups(cs, max_live: int = 8):
     return armed, filled
 
 
-def armed_setups(cs, max_live: int = 8) -> list:
+def armed_setups(cs, max_live: int = 4) -> list:
     """Just the arming events. Kept because the rate study and the detectors
     read one list at a time, and one machine must produce both."""
     return run_setups(cs, max_live)[0]

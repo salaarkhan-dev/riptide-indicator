@@ -482,3 +482,63 @@ said any more:
 That is the third time a test here has had to be renamed rather than fixed.
 The rule that keeps being relearned: **a test must name every setting its claim
 depends on, not just the one it is about.**
+
+---
+
+## SHIPPED — the chart owner's own inputs become the defaults
+
+He sent a screenshot of his Undertow settings and asked for exactly those in
+the Pine, the port and the watcher, **so the chart and the alerts fire on the
+same candle**. Fourteen of the visible inputs already matched. Three did not:
+
+| | | |
+|---|---|---|
+| `locTol` | 0 → **3** | **his.** Never a default — a real choice |
+| `pinLag` | 0 → **1** | reverted, hours after moving to 0 |
+| `maxLive` | 8 → **4** | reverted, hours after moving to 8 |
+
+### TWO OF THE THREE WERE PROBABLY NOT CHOICES, and he was told so first
+
+TradingView keeps the **saved** value for an input that already existed and
+only takes the new default for a **new** one. His screenshot showed exactly
+that pattern: `pinLag` and `maxLive` sat at the values that were default before
+that morning, while the brand-new "Which candle arms" showed `PICK_BEST`. He
+was shown the pattern, and the cost of each, and chose all three verbatim.
+
+**Consistency between the chart and the bot is the reason, it is a good one,
+and it is his to give.** Recorded here with the costs beside it so that if the
+alert rate later looks wrong, the answer is one screen away instead of a day's
+work.
+
+### WHAT THEY COST — 8 symbols, both sides, measured before he decided
+
+| config | armed | at cap | R/armed Min15 | R/armed Min30 |
+|---|---|---|---|---|
+| lag0 cap8 tol0 | 2186 | 0 | −0.018 | +0.051 |
+| **shipped now** — lag1 cap4 tol3 | **629** | **2727** | −0.088 | +0.065 |
+| lag1 only | 243 | 3 | −0.055 | −0.001 |
+| cap4 only | 2141 | 325 | −0.018 | +0.050 |
+| tol3 only | 3537 | 34 | −0.024 | +0.052 |
+
+Two things are worth keeping in view:
+
+* **`pinLag 1` runs BEFORE the pick**, so `PICK_BEST` now chooses from what the
+  lag left rather than from the pullback. The pick is not disabled, but it is
+  working on a filtered input.
+* **2727 pins refused at the cap on Min15** is the largest number anywhere in
+  this file. `locTol 3` finds 62% more pins and a pool of four cannot hold
+  them. Raising "Live setups at once" is one input away on the chart and needs
+  no code change.
+
+### `locTol` WAS THE SIXTH FIELD CAUGHT UNPINNED ON THE DAY ITS DEFAULT MOVED
+
+After `stopSrc`, `biasGate`, `pinAt`, `pinLag` and `maxLive` — **all six inside
+two days.** Thirteen of the twenty-two studies did not name `locTol`, against a
+setting that widens the funnel by 62%.
+
+Six is not six unlucky fields. Every one was found by
+`test_studies_pin_their_settings.py` **only because a move was already
+underway** — nothing checks that a field is pinned before somebody wants to
+move it. The guard is sound and the habit is missing, and the fix is a sweep
+that flags any field a live study reads without naming, run before the next
+default change rather than during it.

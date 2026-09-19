@@ -518,10 +518,14 @@ class P:
     # one before it -- "let's say three qualified (n, n-1, n-2), in this case
     # choose n-1", the chart owner's own description of what his eye does.
     #
-    # SHIPPED AT 1 ON 2026-09-19 AND BACK TO 0 THE SAME DAY, when `pinPick`
-    # took over the question it was a proxy for. At 0 it imposes nothing and
-    # the pick decides; at 1 it would refuse candles the pick wants, because
-    # the lag runs FIRST and the two are different answers to one question.
+    # 1 -> 0 -> 1 IN ONE DAY, and the last move is the chart owner's, made
+    # with the cost in front of him. THE LAG RUNS BEFORE THE PICK, so at 1 the
+    # pick chooses from what the lag left rather than from the pullback:
+    # measured on 8 symbols both sides, 243 armed against 2186 on Min15 and
+    # 215 against 1891 on Min30, with R per armed WORSE on both (-0.055 vs
+    # -0.018, -0.001 vs +0.051). He wants the chart and the bot identical and
+    # this is what his chart holds; that is a good enough reason and it is
+    # his to give.
     #
     # THE MEASUREMENT NEVER SUPPORTED 1.
     # ../measurements/UNDERTOW_PINLAG.md is a null: -0.468 / -0.056 / +0.870
@@ -536,7 +540,7 @@ class P:
     # and the backtest has never seen his selection or his holds. That is an
     # argument for a forward record, and the forward record is the instrument
     # that settles it.
-    pinLag: int = 0
+    pinLag: int = 1
     # See PICK_BEST. SHIPPED 2026-09-19 in all three copies at the strategy
     # author's instruction, and `pinLag` went back to 0 with it -- the two are
     # different answers to the same question, and stacking them makes the lag
@@ -554,7 +558,16 @@ class P:
     side: str = SIDE_BOTH
     confirmBars: int = 20
     fillBars: int = 20
-    # 4 UNTIL 2026-09-19, AND 4 BECAME WRONG THE MOMENT THE SUPERSEDE STOPPED
+    # 4 -> 8 -> 4 IN ONE DAY. Raised because the supersede stopped running and
+    # restored at the chart owner's instruction so the bot matches his chart.
+    # WHAT 4 COSTS AT THE SHIPPED TOLERANCE, measured on 8 symbols both
+    # sides: 2727 pins refused at the cap on Min15 and 2280 on Min30, because
+    # `locTol 3` finds 62% more pins and a pool of four cannot hold them.
+    # That is the single largest number on this page and it is a deliberate
+    # choice, not an oversight -- raising it is one input away on the chart.
+    #
+    # THE ORIGINAL NOTE, still true: 4 BECAME WRONG THE MOMENT THE SUPERSEDE
+    # STOPPED
     # RUNNING. `pinLag` and then `pinPick` both skip newest-wins, so the
     # candidate pool no longer collapses to one per pullback -- and a cap of 4
     # began turning pins away for no reason but pool size. Measured on Min15,
@@ -564,7 +577,7 @@ class P:
     # IT IS A CHARTING ARTEFACT BEING PAID FOR IN SETUPS. The Pine has a cap
     # for TradingView's 500-drawing budget; nothing about the strategy wants
     # one. Raised rather than removed because the drawing budget is real.
-    maxLive: int = 8
+    maxLive: int = 4
     # LOCATION, AND THE THREE DEFECTS SPEC.md 2.3b RECORDS. All three ship at
     # the value that reproduces current behaviour; none is endorsed and none is
     # measured yet.
@@ -685,7 +698,7 @@ class P:
     # waits for a prereg rather than shipping on the strength of being clearly
     # stated.
     armWins: bool = True
-    locTol: int = 0
+    locTol: int = 3
     pbMinAge: int = 0
     pbMinDepth: float = 0.0
     # 4 · Levels

@@ -93,7 +93,15 @@ PINNED = ("swingSrc", "msLen", "msShortLen", "rr", "endSweep",
           # would have been silently re-pointed by a cap change that has
           # nothing to do with what it measures. Pinned there at 4, its
           # published value, before the default moved.
-          "pinPick", "maxLive")
+          "pinPick", "maxLive",
+          # `locTol` 0 -> 3, at the strategy author's instruction. THIRTEEN of
+          # the twenty-two studies did not name it and it widens the funnel by
+          # 62%, so moving it first would have re-pointed every one of them.
+          # The sixth field caught unpinned on the day its default moved --
+          # after stopSrc, biasGate, pinAt, pinLag and maxLive, all within two
+          # days. That is not five unlucky fields; it is the absence of a check
+          # that a field is pinned BEFORE somebody wants to move it.
+          "locTol")
 # A SETTING THAT ONLY ONE SOURCE READS DOES NOT BELONG IN PINNED, because
 # PINNED makes EVERY study name it. `emaFast`/`emaSlow` moved 50/200 -> 9/21
 # when the EMA cross went on the chart, and putting them above made twelve
@@ -639,7 +647,48 @@ EXEMPT = "TRACKS THE CURRENT DEFAULT"
 # he uses the proxy. Shipped on his instruction, in all three copies.
 #
 # 79 fields, unchanged -- no field is added or removed.
-DEFAULTS_FINGERPRINT = "49a9558c80fec9de"
+# 2026-09-19: THE CHART OWNER'S OWN SETTINGS BECOME THE DEFAULTS, so the chart,
+# the port and the live watcher fire on the same candle. He sent a screenshot of
+# his inputs and asked for exactly those. Three differed:
+#
+#   locTol    0 -> 3    HIS. It was never a default; this one is a real choice.
+#   pinLag    0 -> 1    reverted, hours after moving to 0
+#   maxLive   8 -> 4    reverted, hours after moving to 8
+#
+# TWO OF THE THREE WERE PROBABLY NOT CHOICES AT ALL, and that was put to him
+# before any of this moved. TradingView keeps a saved value for an input that
+# already existed and only takes the new default for a NEW one -- which is
+# exactly the pattern his screenshot showed: `pinLag` and `maxLive` sat at the
+# values that were default before that morning, while the brand-new "Which
+# candle arms" showed PICK_BEST. He was shown that, and the cost of each, and
+# chose all three verbatim. CONSISTENCY BETWEEN THE CHART AND THE BOT IS THE
+# REASON, it is a good one, and it is his to give.
+#
+# WHAT THEY COST, measured on 8 symbols both sides before he decided:
+#
+#   pinLag 1   the lag runs BEFORE the pick, so the pick now chooses from what
+#              the lag left rather than from the pullback. 243 armed against
+#              2186 on Min15, 215 against 1891 on Min30, R per armed worse on
+#              both (-0.055 vs -0.018, -0.001 vs +0.051).
+#   maxLive 4  2727 pins refused at the cap on Min15 and 2280 on Min30, because
+#              locTol 3 finds 62% more pins and a pool of four cannot hold
+#              them. The single largest number in any of this.
+#   locTol 3   62% more pins at roughly unchanged R per armed setup: -0.024
+#              against -0.018 on Min15, +0.052 against +0.051 on Min30.
+#
+# `locTol` WAS THE SIXTH FIELD CAUGHT UNPINNED ON THE DAY ITS DEFAULT MOVED,
+# after stopSrc, biasGate, pinAt, pinLag and maxLive -- all six inside two days.
+# THIRTEEN of the twenty-two studies did not name it, against a setting that
+# widens the funnel by 62%. Six is not six unlucky fields; it is the absence of
+# a check that a field is pinned BEFORE somebody wants to move it, and every one
+# of them was found by this file only because a move was already underway.
+#
+# Procedure as always: locTol into PINNED, all twenty-two baselines updated,
+# undertow_anchor run as the reference and confirmed UNCHANGED by the pinning
+# pass alone, then the three defaults moved, then anchor re-run BIT-IDENTICAL.
+#
+# 79 fields, unchanged.
+DEFAULTS_FINGERPRINT = "d92c378ec174506b"
 DEFAULTS_COUNT = 79
 
 good = []
